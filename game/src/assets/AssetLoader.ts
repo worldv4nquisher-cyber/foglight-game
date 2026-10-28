@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
+import { DRACO_GLTF_CONFIG, DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
@@ -34,8 +34,11 @@ export class AssetLoader {
     renderer: THREE.WebGLRenderer,
     private events: EventBus,
   ) {
-    // three r18x 起 DRACO / Basis(KTX2) 解码器通过 import.meta.url 随包打包（带哈希、可离线），无需手动拷贝或设置路径
-    this.draco = new DRACOLoader();
+    // three r18x 起 DRACO / Basis(KTX2) 解码器通过 import.meta.url 随包打包（带哈希、可离线），无需手动拷贝。
+    // DRACO 只用 glTF 专用的 wasm 解码器（192KB，比通用版 286KB 小，且只支持 glTF 用到的属性）；
+    // 不再保留纯 JS 回退（719KB）：游戏要求 WebGL2，而支持 WebGL2 的浏览器都支持 WebAssembly。
+    // 构建时 vite.config.ts 的 threeDecodersWasmOnly 插件会把用不到的通用版/JS 回退从 dist 里去掉。
+    this.draco = new DRACOLoader().setDecoderPath(DRACO_GLTF_CONFIG);
     this.ktx2 = new KTX2Loader().detectSupport(renderer);
     this.gltf = new GLTFLoader().setDRACOLoader(this.draco).setKTX2Loader(this.ktx2).setMeshoptDecoder(MeshoptDecoder);
     this.textureLoader = new THREE.TextureLoader();

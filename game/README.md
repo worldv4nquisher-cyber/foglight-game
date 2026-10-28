@@ -21,6 +21,7 @@
 | `npm run test` | LOD / puzzleCritical 校验脚本（`scripts/verify-lod.mjs`） |
 | `npm run assets:test-lod` | 重新生成 LOD 测试模型 `public/assets/models/test-lod-puzzle-critical.glb` |
 | `npm run check` | typecheck + lint + test + build 一次跑完（提交前跑） |
+| `npm run smoke` | 无头 Chrome 冒烟测试：对 `dist/` 起 preview 服务，打开 `?smoke=1`，跑页面内检查并汇总控制台错误（先 `npm run build`；需本机 Chrome，可用 `CHROME=路径` 指定） |
 
 `dist/` 使用相对路径（`vite base: './'`），可以放到任意静态服务器的任意子目录，也可以被 Capacitor / Electron 以本地文件加载。
 注意：直接双击 `dist/index.html`（file://）浏览器会拦截 ES 模块和 wasm，请用 `npm run preview` 或任意静态服务器打开。
@@ -120,6 +121,9 @@ game/
 
 压缩工具（美术侧）：`npx @gltf-transform/cli optimize in.glb out.glb --compress draco --texture-compress ktx2`；单张贴图可用 KTX-Software 的 `toktx --t2 --encode uastc`（法线）/ `--encode etc1s`（颜色）。
 DRACO / Basis 解码器由 three 随包打包（带哈希文件名、可离线），无需额外配置。
+- DRACO 只用 **glTF 专用 wasm 解码器**（`draco_wasm_wrapper.js` 58KB + `draco_decoder.wasm` 192KB）。three 的 DRACOLoader 还静态引用了通用版 wasm（286KB）和纯 JS 回退（719KB），运行时只会用其中一套；`vite.config.ts` 的 `threeDecodersWasmOnly` 插件在构建时去掉另外两套（WebGL2 浏览器都支持 WebAssembly，不需要 JS 回退）。
+- KTX2 的 `basis_transcoder.js` + `basis_transcoder.wasm` 是同一套转码器的胶水代码和二进制，两个都要。
+- `npm run smoke` 会检查 dist 里两种解码器各只有一套，并在浏览器里实际跑一次。
 
 目前 manifest 里登记了 `hero`（`assets/models/hero.glb`，尚不存在），用来演示缺失回退：控制台会出现一条 info 日志，主角显示为胶囊。美术交付 `hero.glb`（脚底为原点、朝向 +Z、单位米、身高约 1.8m）后会自动替换。
 

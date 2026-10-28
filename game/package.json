@@ -15,7 +15,8 @@
     "assets:test-lod": "node scripts/gen-lod-test-asset.mjs",
     "test": "node scripts/verify-lod.mjs",
     "test:lod": "node scripts/verify-lod.mjs",
-    "check": "npm run typecheck && npm run lint && npm run test && npm run build"
+    "check": "npm run typecheck && npm run lint && npm run test && npm run build",
+    "smoke": "node scripts/smoke-browser.mjs"
   },
   "dependencies": {
     "n8ao": "^2.0.1",

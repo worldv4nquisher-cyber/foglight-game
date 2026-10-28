@@ -38,8 +38,10 @@ function bootstrap(): void {
   game.start();
   void game.scenes.change('boot');
 
-  // 开发模式下暴露到 window，方便控制台调试：__game.quality.set('ultra')
-  if (import.meta.env.DEV) (window as unknown as { __game: Game }).__game = game;
+  // 开发模式（或冒烟测试 ?smoke=1）下暴露到 window，方便控制台调试：__game.quality.set('ultra')
+  if (import.meta.env.DEV || new URLSearchParams(location.search).has('smoke')) {
+    (window as unknown as { __game: Game }).__game = game;
+  }
 
   // Vite HMR：模块热替换时释放旧实例，避免重复渲染器 / 监听器
   import.meta.hot?.dispose(() => game.dispose());
