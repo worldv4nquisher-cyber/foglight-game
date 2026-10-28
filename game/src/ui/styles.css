@@ -1,0 +1,386 @@
+/* 全局与 UI 样式。UI 风格：忧郁、克制——冷灰半透明面板 + 细字距衬线标题，暖色仅用于强调。 */
+:root {
+  --ui-bg: rgba(14, 18, 23, 0.72);
+  --ui-border: rgba(170, 186, 200, 0.18);
+  --ui-text: #d5dde4;
+  --ui-dim: #8b98a4;
+  --ui-warm: #f2b072;
+  --ui-font: system-ui, -apple-system, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --ui-serif: 'Songti SC', 'Noto Serif SC', 'Source Han Serif SC', Georgia, serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #0e1116;
+  color: var(--ui-text);
+  font-family: var(--ui-font);
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+}
+
+#app {
+  position: fixed;
+  inset: 0;
+}
+
+.game-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;
+  outline: none;
+  cursor: grab;
+}
+
+.game-canvas:active {
+  cursor: grabbing;
+}
+
+#ui-root {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+#ui-root > * {
+  pointer-events: auto;
+}
+
+/* ---------- FPS ---------- */
+.fps-counter {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  padding: 3px 8px;
+  font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: #b9f2c4;
+  background: rgba(0, 0, 0, 0.55);
+  border-radius: 4px;
+  pointer-events: none !important;
+  z-index: 50;
+}
+
+/* ---------- Loading ---------- */
+.loading-screen {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  background: radial-gradient(ellipse at 50% 60%, #1f2830 0%, #0b0e12 70%);
+  z-index: 40;
+  transition: opacity 0.4s ease;
+}
+
+.loading-screen.fade-out {
+  opacity: 0;
+}
+
+.loading-title {
+  font-family: var(--ui-serif);
+  font-size: clamp(28px, 4vw, 44px);
+  letter-spacing: 0.35em;
+  color: var(--ui-text);
+}
+
+.loading-sub {
+  font-size: 12px;
+  letter-spacing: 0.4em;
+  color: var(--ui-dim);
+  text-transform: uppercase;
+  margin-bottom: 18px;
+}
+
+.loading-track {
+  width: min(360px, 70vw);
+  height: 2px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.loading-bar {
+  width: 0;
+  height: 100%;
+  background: var(--ui-warm);
+  box-shadow: 0 0 10px var(--ui-warm);
+  transition: width 0.2s ease;
+}
+
+.loading-label {
+  font-size: 12px;
+  color: var(--ui-dim);
+  letter-spacing: 0.2em;
+}
+
+/* ---------- HUD ---------- */
+.hud {
+  position: absolute;
+  inset: 0;
+  pointer-events: none !important;
+}
+
+.hud-location {
+  position: absolute;
+  top: 14%;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-family: var(--ui-serif);
+  font-size: clamp(20px, 2.6vw, 30px);
+  letter-spacing: 0.4em;
+  color: rgba(220, 228, 235, 0.85);
+  text-shadow: 0 2px 18px rgba(0, 0, 0, 0.6);
+  opacity: 0;
+}
+
+.hud-location-in {
+  animation: hud-location 6s ease forwards;
+}
+
+@keyframes hud-location {
+  0% { opacity: 0; transform: translateY(6px); }
+  20% { opacity: 1; transform: translateY(0); }
+  75% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+.hud-hint {
+  position: absolute;
+  left: 16px;
+  bottom: 14px;
+  font-size: 12px;
+  line-height: 1.8;
+  color: var(--ui-dim);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
+}
+
+.hud-hint kbd {
+  display: inline-block;
+  min-width: 18px;
+  padding: 0 5px;
+  margin-right: 3px;
+  font: 11px/16px var(--ui-font);
+  text-align: center;
+  color: var(--ui-text);
+  border: 1px solid var(--ui-border);
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.hud-prompt {
+  position: absolute;
+  left: 50%;
+  bottom: 22%;
+  transform: translateX(-50%);
+  padding: 6px 14px;
+  font-size: 14px;
+  color: var(--ui-warm);
+  background: var(--ui-bg);
+  border: 1px solid var(--ui-border);
+  border-radius: 4px;
+}
+
+/* ---------- Pause ---------- */
+.pause-menu {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(6, 9, 12, 0.55);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  z-index: 30;
+}
+
+.pause-menu[hidden],
+.loading-screen[hidden],
+.hud[hidden] {
+  display: none;
+}
+
+.pause-panel {
+  width: min(380px, 90vw);
+  padding: 26px 26px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: var(--ui-bg);
+  border: 1px solid var(--ui-border);
+  border-radius: 6px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+.pause-panel h2 {
+  margin: 0 0 6px;
+  font-family: var(--ui-serif);
+  font-weight: normal;
+  letter-spacing: 0.5em;
+  text-align: center;
+}
+
+.menu-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 14px;
+  color: var(--ui-dim);
+}
+
+.menu-btn,
+.seg-btn {
+  font: inherit;
+  font-size: 14px;
+  color: var(--ui-text);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--ui-border);
+  border-radius: 4px;
+  padding: 9px 12px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.menu-btn:hover,
+.seg-btn:hover {
+  background: rgba(255, 255, 255, 0.09);
+}
+
+.menu-btn.primary {
+  border-color: rgba(242, 176, 114, 0.5);
+  color: var(--ui-warm);
+}
+
+.menu-btn.small {
+  min-width: 64px;
+  padding: 5px 10px;
+}
+
+.seg {
+  display: flex;
+}
+
+.seg-btn {
+  padding: 5px 12px;
+  border-radius: 0;
+}
+
+.seg-btn:first-child {
+  border-radius: 4px 0 0 4px;
+}
+
+.seg-btn:last-child {
+  border-radius: 0 4px 4px 0;
+}
+
+.seg-btn.active {
+  color: #0e1116;
+  background: var(--ui-text);
+}
+
+.menu-foot {
+  margin: 4px 0 0;
+  font-size: 11px;
+  color: var(--ui-dim);
+  text-align: center;
+  word-break: break-all;
+}
+
+/* ---------- Fatal error ---------- */
+.fatal-error {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 24px;
+  text-align: center;
+  background: #0e1116;
+  z-index: 100;
+}
+
+/* ---------- Touch（保留基础触屏支持，非主要目标） ---------- */
+.touch-controls {
+  position: absolute;
+  inset: 0;
+  pointer-events: none !important;
+}
+
+.touch-zone {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 50%;
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.touch-zone-left {
+  left: 0;
+}
+
+.touch-zone-right {
+  right: 0;
+}
+
+.joystick-base {
+  position: absolute;
+  width: 112px;
+  height: 112px;
+  margin: -56px 0 0 -56px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.06);
+  display: none;
+  pointer-events: none;
+}
+
+.joystick-base.active {
+  display: block;
+}
+
+.joystick-knob {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.35);
+  transform: translate(-50%, -50%);
+}
+
+.touch-btn {
+  position: absolute;
+  right: calc(24px + env(safe-area-inset-right));
+  bottom: calc(28px + env(safe-area-inset-bottom));
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  font-size: 18px;
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.touch-btn.pressed {
+  background: rgba(255, 255, 255, 0.25);
+}
