@@ -168,6 +168,22 @@ body {
   text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
 }
 
+.hud-toast {
+  position: absolute;
+  right: 18px;
+  bottom: 14px;
+  max-width: 46ch;
+  font-size: 12px;
+  line-height: 1.6;
+  text-align: right;
+  color: var(--ui-dim);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
+}
+
+.hud-toast[hidden] {
+  display: none;
+}
+
 .hud-hint kbd {
   display: inline-block;
   min-width: 18px;
@@ -240,6 +256,18 @@ body {
   gap: 10px;
   font-size: 14px;
   color: var(--ui-dim);
+}
+
+.menu-range {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-variant-numeric: tabular-nums;
+}
+
+.menu-range input {
+  width: 120px;
+  accent-color: var(--ui-text);
 }
 
 .menu-btn,

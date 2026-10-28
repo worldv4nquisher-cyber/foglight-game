@@ -96,7 +96,8 @@ game/
 - **场景（scenes/）**：`SceneManager.change(name)` 依次 `exit → dispose → new → enter(可异步)`。流程 Boot（启动资源）→ Loading（进度条，加载 `main` 资源组）→ Main。`usePostFX=true` 的场景走后处理。
 - **输入（systems/input/）**：玩法代码只认抽象 action（`interact/sprint/partNext/exitPuzzle/advance/skipHold/pause…` 和轴 `moveX/moveY` + 视角 / 滚轮增量），输入源只写原始按键，由 InputManager 按上下文栈（`InputContext.ts`，`input.pushContext('puzzle')` 返回弹出函数）映射。新增操作：在 `actions.ts` 加 action 并在对应上下文配键位。灵敏度 / Y 反转：`input.setLookSensitivity()` / `setInvertY()`。指针锁定默认开启（`gameConfig.input.pointerLock`）。校验：`npm run test:input`。
 - **资源（assets/）**：见下节。缺失或加载失败一律回退占位几何体/棋盘格纹理，游戏照常运行。
-- **画质（config/quality.ts）**：纯桌面三档，对应美术风格指南的「极致/高/标准」。按 GPU 名称粗判（独显 RTX 3060 级以上 → 极致；核显/软件渲染 → 标准；其余 → 高），玩家在暂停菜单切换后会记住。
+- **画质（config/quality.ts）**：纯桌面三档，对应美术风格指南的「极致/高/标准」。档位存在设置里；首次启动按 GPU 名称粗判一次（独显 RTX 3060 级以上 → 极致；核显/软件渲染 → 标准；其余 → 高）并记下，之后不再自动改（v0.1-009 换成实测基准）。玩家手动切换随时生效。URL `?quality=high` 临时覆盖。
+- **存档 / 设置（systems/save/）**：`game.save`（`foglight.save.v1`，单存档位，进入带 `savePoint` 的场景时自动存档，只记场景入口；游玩时间每 10 秒累加）与 `game.settings`（`foglight.settings.v1`，新游戏不清除，`settings.set()` 立即生效并写盘；旧键 `game.quality` 首次启动迁移后删除）。坏存档（版本不符 / JSON 坏）→ `save.status === 'corrupt'`、提示「存档无法读取」；localStorage 不可写 → `save.writable === false`、提示「进度不会保存」，游戏照常。主菜单（008）做好前，启动时有存档就直接「继续」，提示用 HUD 右下角小字显示。清档：控制台 `localStorage.clear()`。校验：`npm run test:save`。
 
   | 档位 | 像素比上限 | AO（N8AO） | 阴影贴图 | 软阴影半径 | 雨滴 | 视距 |
   |---|---|---|---|---|---|---|

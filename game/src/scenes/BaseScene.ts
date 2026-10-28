@@ -18,6 +18,8 @@ export abstract class BaseScene {
   usePostFX = false;
   /** 场景的气氛预设（后处理参数从这里读取） */
   atmosphere: AtmospherePreset | null = null;
+  /** 存档点：进入这个场景时自动存档（GDD §11）。null = 不存（启动 / 加载 / 菜单） */
+  savePoint: { chapterId: string; sceneId: string; chapterComplete?: boolean } | null = null;
   protected cleanups: Array<() => void> = [];
 
   constructor(protected game: Game) {

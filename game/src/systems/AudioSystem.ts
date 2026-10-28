@@ -12,6 +12,8 @@ export class AudioSystem {
   private musicGain: GainNode | null = null;
   private music: AudioBufferSourceNode | null = null;
   private _muted = false;
+  /** 0–1，来自玩家设置（主音量 / 音乐 / 音效） */
+  private levels = { master: 1, music: 1, sfx: 1 };
   private unlockEvents = ['pointerdown', 'keydown', 'touchend'] as const;
 
   constructor() {
@@ -42,11 +44,24 @@ export class AudioSystem {
 
   setMuted(m: boolean): void {
     this._muted = m;
-    if (this.master) this.master.gain.value = m ? 0 : 1;
+    this.applyLevels();
   }
 
   setVolume(v: number): void {
-    if (this.master && !this._muted) this.master.gain.value = v;
+    this.levels.master = v;
+    this.applyLevels();
+  }
+
+  /** 设置里的三个音量（0–1） */
+  setVolumes(v: { master: number; music: number; sfx: number }): void {
+    this.levels = { ...v };
+    this.applyLevels();
+  }
+
+  private applyLevels(): void {
+    if (this.master) this.master.gain.value = this._muted ? 0 : this.levels.master;
+    if (this.musicGain) this.musicGain.gain.value = 0.5 * this.levels.music;
+    if (this.sfxGain) this.sfxGain.gain.value = this.levels.sfx;
   }
 
   playBuffer(buffer: AudioBuffer, volume = 1, rate = 1): void {

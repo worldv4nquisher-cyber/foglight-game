@@ -139,6 +139,45 @@ const CHECKS = [
       return '锁定 ✓，视角' + turned + '，Esc→暂停 ✓，重新锁定 ✓';
     },
   },
+  {
+    name: 'v0.1-006 存档 / 设置：进场自动存档、设置刷新保留且立即生效、坏存档提示、旧画质键迁移',
+    async run({ evaluate, cdp, sleep }) {
+      const read = () =>
+        evaluate(`({
+          save: JSON.parse(localStorage.getItem('foglight.save.v1') || 'null'),
+          settings: JSON.parse(localStorage.getItem('foglight.settings.v1') || 'null'),
+          legacy: localStorage.getItem('game.quality'),
+          status: __game.save.status, startup: __game.save.startupNotice,
+          sens: __game.input.lookSensitivity, inv: __game.input.invertY, tier: __game.quality.tier,
+          toast: (() => { const t = document.querySelector('.hud-toast'); return t && !t.hidden ? t.textContent : null; })(),
+        })`);
+      let s = await read();
+      if (!s.save || s.save.version !== 1 || s.save.sceneId !== 'main') throw new Error('进场没有自动存档：' + JSON.stringify(s.save));
+      if (!s.settings || s.settings.qualityDetected !== true) throw new Error('首次启动没有记下画质检测：' + JSON.stringify(s.settings));
+      // 修改设置立即生效
+      await evaluate(`__game.settings.update({ mouseSensitivity: 2.5, invertY: true })`);
+      s = await read();
+      if (s.sens !== 2.5 || s.inv !== true) throw new Error('设置没有立即生效 ' + JSON.stringify(s));
+      // 写坏存档 + 旧画质键（模拟老版本残留），刷新
+      await evaluate(`localStorage.setItem('foglight.save.v1', JSON.stringify({ ...JSON.parse(localStorage.getItem('foglight.save.v1')), version: 0 })); 1`);
+      await cdp.reload();
+      await sleep(300);
+      s = await read();
+      if (s.sens !== 2.5 || s.inv !== true) throw new Error('刷新后设置没保留 ' + JSON.stringify(s));
+      if (s.startup !== '存档无法读取，只能开始新游戏。') throw new Error('坏存档没有提示：' + s.startup);
+      if (!s.toast || !/存档无法读取/.test(s.toast)) throw new Error('HUD 没显示坏存档提示：' + s.toast);
+      if (!s.save || s.save.version !== 1) throw new Error('坏存档后新游戏没有重新存档');
+      // 旧键迁移：清掉设置、写旧键，刷新
+      await evaluate(`localStorage.removeItem('foglight.settings.v1'); localStorage.setItem('game.quality', 'high'); 1`);
+      await cdp.reload();
+      s = await read();
+      if (s.legacy !== null || s.settings?.quality !== 'high' || s.tier !== 'high') throw new Error('旧画质键迁移不对 ' + JSON.stringify(s));
+      // 恢复干净状态
+      await evaluate(`localStorage.clear(); 1`);
+      await cdp.reload();
+      return '自动存档 ✓，设置即时生效 / 刷新保留 ✓，坏存档提示 ✓，旧键迁移 ✓';
+    },
+  },
 ];
 const extra = process.env.SMOKE_ONLY ? CHECKS.filter((c) => c.name.includes(process.env.SMOKE_ONLY)) : CHECKS;
 
@@ -235,6 +274,17 @@ const cdp = {
   },
   async move(x, y) {
     await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y }, sessionId);
+  },
+  /** 刷新页面并等主场景就绪（存档 / 设置的「刷新后仍保留」用） */
+  async reload() {
+    await send('Page.reload', { ignoreCache: false }, sessionId);
+    await new Promise((r) => setTimeout(r, 300));
+    const end = Date.now() + 60000;
+    while (Date.now() < end) {
+      if (await evaluate(`Boolean(window.__game?.scenes?.current?.name === 'main')`).catch(() => false)) return;
+      await new Promise((r) => setTimeout(r, 250));
+    }
+    throw new Error('刷新后 60 秒内主场景没有就绪');
   },
   async key(code, key = code, keyCode = 0) {
     const base = { code, key, windowsVirtualKeyCode: keyCode, nativeVirtualKeyCode: keyCode };

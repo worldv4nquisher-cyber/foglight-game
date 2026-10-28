@@ -35,6 +35,8 @@ function bootstrap(): void {
     .register('boot', (g) => new BootScene(g))
     .register('loading', (g) => new LoadingScene(g))
     .register('main', (g) => new MainScene(g));
+  // 主菜单（v0.1-008）还没做：有可读存档就当作「继续」，否则新游戏。坏存档 / 不可写的提示在进场后用 HUD 显示
+  if (!game.save.continueGame()) game.save.newGame('ch1', 'main');
   game.start();
   void game.scenes.change('boot');
 

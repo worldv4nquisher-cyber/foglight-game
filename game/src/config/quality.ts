@@ -1,6 +1,7 @@
 import type * as THREE from 'three';
 import type { EventBus } from '@/core/EventBus';
 import type { LodDistances } from '@/render/lod';
+import type { Settings } from '@/systems/save/Settings';
 
 /**
  * 画质档位（纯桌面）。与美术风格指南的「极致 / 高 / 标准」三档一一对应：
@@ -98,7 +99,6 @@ export const QUALITY_PRESETS: Record<QualityTier, QualityPreset> = {
   },
 };
 
-const STORAGE_KEY = 'game.quality';
 const TIERS: readonly QualityTier[] = ['ultra', 'high', 'standard'];
 
 function isTier(v: unknown): v is QualityTier {
@@ -137,28 +137,32 @@ export function detectQualityTier(gpu: string): QualityTier {
 }
 
 /**
- * 画质管理：优先级 URL ?quality=xx > localStorage（玩家手动选择）> GPU 粗判。
+ * 画质管理。档位存在玩家设置里（`foglight.settings.v1`，v0.1-006；旧键 game.quality 由 Settings 迁移）。
+ * 优先级：URL ?quality=xx（临时，不写盘）> 设置里的档位。
+ * 首次启动（设置里 qualityDetected=false）跑一次自动检测并记下，之后不再自动改（制作人裁定）；
+ * 目前检测是按 GPU 名称粗判，v0.1-009 换成实测基准（每降一档复测、最多降两档）。
+ * 玩家手动切换后 qualitySource='user'，随时可以改回。
  */
 export class QualityManager {
   private current: QualityTier;
+  /** 自动检测给出的推荐档位（仅供显示；不会覆盖玩家选择） */
   readonly auto: QualityTier;
   readonly gpu: string;
 
   private events: EventBus;
+  private settings: Settings;
 
   // 不用参数属性写法：本文件会被 Node（strip-types）直接导入做校验（scripts/verify-lod.mjs）
-  constructor(events: EventBus, renderer: THREE.WebGLRenderer) {
+  constructor(events: EventBus, renderer: THREE.WebGLRenderer, settings: Settings) {
     this.events = events;
+    this.settings = settings;
     this.gpu = getGpuName(renderer);
     this.auto = detectQualityTier(this.gpu);
-    const fromUrl = new URLSearchParams(location.search).get('quality');
-    let stored: string | null = null;
-    try {
-      stored = localStorage.getItem(STORAGE_KEY);
-    } catch {
-      /* 隐私模式等情况下 localStorage 不可用 */
+    if (!settings.get('qualityDetected')) {
+      settings.update({ quality: this.auto, qualityDetected: true, qualitySource: 'auto' });
     }
-    this.current = isTier(fromUrl) ? fromUrl : isTier(stored) ? stored : this.auto;
+    const fromUrl = new URLSearchParams(location.search).get('quality');
+    this.current = isTier(fromUrl) ? fromUrl : settings.get('quality');
   }
 
   get tier(): QualityTier {
@@ -172,16 +176,11 @@ export class QualityManager {
     return p;
   }
 
+  /** 切换档位。persist=true（默认，玩家手动选择）写进设置并标记为玩家选择 */
   set(tier: QualityTier, persist = true): void {
+    if (persist) this.settings.update({ quality: tier, qualitySource: 'user' });
     if (tier === this.current) return;
     this.current = tier;
-    if (persist) {
-      try {
-        localStorage.setItem(STORAGE_KEY, tier);
-      } catch {
-        /* ignore */
-      }
-    }
     this.events.emit('quality:change', { tier });
   }
 

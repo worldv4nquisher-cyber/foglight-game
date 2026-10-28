@@ -8,6 +8,8 @@ import { SceneManager } from '@/scenes/SceneManager';
 import { InputManager } from '@/systems/input/InputManager';
 import { KeyboardMouseInput } from '@/systems/input/KeyboardMouseInput';
 import { AudioSystem } from '@/systems/AudioSystem';
+import { SaveSystem } from '@/systems/save/SaveSystem';
+import { Settings } from '@/systems/save/Settings';
 import { UIManager } from '@/ui/UIManager';
 import { VisibilityWatcher } from '@/platform/visibility';
 import { nativeBridge } from '@/platform/native';
@@ -24,6 +26,10 @@ export class Game {
   readonly events = new EventBus();
   readonly time = new Time(gameConfig.fixedDelta);
   readonly renderer: THREE.WebGLRenderer;
+  /** 玩家设置（foglight.settings.v1），新游戏不清除 */
+  readonly settings = new Settings();
+  /** 存档（foglight.save.v1） */
+  readonly save = new SaveSystem();
   readonly quality: QualityManager;
   readonly input: InputManager;
   readonly assets: AssetLoader;
@@ -55,7 +61,7 @@ export class Game {
     this.renderer.domElement.classList.add('game-canvas');
     container.prepend(this.renderer.domElement);
 
-    this.quality = new QualityManager(this.events, this.renderer);
+    this.quality = new QualityManager(this.events, this.renderer, this.settings);
     this.postfx = new PostFX(this.renderer, this.quality.preset);
     this.applyQuality();
 
@@ -66,6 +72,8 @@ export class Game {
     this.input.onContextChange = (cur) => kbm.onContextChange(cur);
     this.assets = new AssetLoader(this.renderer, this.events);
     this.audio = new AudioSystem();
+    this.applySettings();
+    this.disposers.push(this.settings.onChange(() => this.applySettings()));
     this.ui = new UIManager(uiRoot, this);
     this.scenes = new SceneManager(this);
 
@@ -91,6 +99,8 @@ export class Game {
       // 场景切换：为使用后处理的场景重建管线，其他场景（启动/加载）直接渲染
       this.events.on('scene:change', () => {
         const s = this.scenes.current;
+        // 自动存档：进入带存档点的场景（GDD §11：进入 S1 / 每个新场景 / 章节结束页）
+        if (s?.savePoint) this.save.save(s.savePoint);
         if (s?.usePostFX) this.postfx.setScene(s.scene, s.camera, s.atmosphere ?? undefined);
         else this.postfx.setScene(null, null);
       }),
@@ -152,7 +162,10 @@ export class Game {
       for (let i = 0; i < steps; i++) {
         scene.fixedUpdate(time.fixedDelta);
       }
-      if (!this.paused) scene.update(time.delta, time.alpha);
+      if (!this.paused) {
+        scene.update(time.delta, time.alpha);
+        if (scene.savePoint) this.save.tick(time.delta);
+      }
       if (scene.usePostFX && this.postfx.active) {
         // 色调映射由后处理的 ToneMappingEffect(ACES) 完成，避免重复
         this.renderer.toneMapping = THREE.NoToneMapping;
@@ -165,6 +178,18 @@ export class Game {
     this.ui.update(time.unscaledDelta);
     this.input.endFrame();
   };
+
+  /** 把设置应用到各系统（启动时一次 + 每次设置变化，立即生效） */
+  private applySettings(): void {
+    const s = this.settings;
+    this.input.setLookSensitivity(s.get('mouseSensitivity'));
+    this.input.setInvertY(s.get('invertY'));
+    this.audio.setVolumes({
+      master: s.get('masterVolume') / 100,
+      music: s.get('musicVolume') / 100,
+      sfx: s.get('sfxVolume') / 100,
+    });
+  }
 
   private applyQuality(): void {
     const p = this.quality.preset;

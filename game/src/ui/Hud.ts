@@ -4,6 +4,8 @@ export class Hud {
   private hint: HTMLDivElement;
   private prompt: HTMLDivElement;
   private location: HTMLDivElement;
+  private toastEl: HTMLDivElement;
+  private toastTimer = 0;
 
   constructor(parent: HTMLElement) {
     this.el = document.createElement('div');
@@ -13,11 +15,13 @@ export class Hud {
       <div class="hud-location"></div>
       <div class="hud-prompt" hidden></div>
       <div class="hud-hint"></div>
+      <div class="hud-toast" hidden></div>
     `;
     parent.appendChild(this.el);
     this.location = this.el.querySelector<HTMLDivElement>('.hud-location')!;
     this.prompt = this.el.querySelector<HTMLDivElement>('.hud-prompt')!;
     this.hint = this.el.querySelector<HTMLDivElement>('.hud-hint')!;
+    this.toastEl = this.el.querySelector<HTMLDivElement>('.hud-toast')!;
   }
 
   show(): void {
@@ -46,7 +50,16 @@ export class Hud {
     if (text !== null) this.prompt.textContent = text;
   }
 
+  /** 右下角小字（「已保存」2.5s 等，text-ch1.md ui.save.*） */
+  toast(text: string, seconds = 2.5): void {
+    this.toastEl.textContent = text;
+    this.toastEl.hidden = false;
+    window.clearTimeout(this.toastTimer);
+    this.toastTimer = window.setTimeout(() => (this.toastEl.hidden = true), seconds * 1000);
+  }
+
   dispose(): void {
+    window.clearTimeout(this.toastTimer);
     this.el.remove();
   }
 }

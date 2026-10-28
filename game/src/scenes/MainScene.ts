@@ -44,6 +44,8 @@ export class MainScene extends BaseScene {
   private entities = new EntityManager(this.scene);
   private physics = new PhysicsSystem();
   private cameraFollow: CameraFollowSystem;
+  /** 灰盒阶段的唯一玩法场景，先当作 S1 入口存档（场景流程 010 拆出 s1/s2/s3 后各自声明） */
+  override savePoint = { chapterId: 'ch1', sceneId: 'main' };
   private player!: Entity;
   private playerBody!: KinematicBody;
   private sky = new SkyDome(170);
