@@ -178,6 +178,59 @@ const CHECKS = [
       return '自动存档 ✓，设置即时生效 / 刷新保留 ✓，坏存档提示 ✓，旧键迁移 ✓';
     },
   },
+  {
+    name: 'v0.1-002 角色控制器：测试场地速度、dev 面板读数、自动跨越、黑场送回',
+    code: `
+      const until = async (pred, ms = 8000) => { const end = Date.now() + ms; while (!pred() && Date.now() < end) await sleep(50); return pred(); };
+      await g.scenes.change('testbed');
+      if (!(await until(() => window.__testbed && window.__testbed.rig && g.scenes.current && g.scenes.current.name === 'testbed'))) throw new Error('测试场地没进去');
+      const tb = window.__testbed;
+      const body = tb.rig.body.body;
+      const ctl = tb.rig.controller;
+      const inp = g.input;
+      const hv = () => Math.hypot(body.actualVelocity.x, body.actualVelocity.z);
+      if (!(await until(() => body.onGround))) throw new Error('出生后没着地');
+      // 慢走 / 小跑（速度按固定步计算，与帧率无关）
+      // 往左走（这一排一直到场地边缘都是空的）
+      inp.setRaw('smoke', 'KeyA', true);
+      if (!(await until(() => Math.abs(hv() - 1.6) < 0.08))) throw new Error('慢走速度 ' + hv().toFixed(2));
+      inp.setRaw('smoke', 'ShiftLeft', true);
+      if (!(await until(() => Math.abs(hv() - 3.2) < 0.16))) throw new Error('小跑速度 ' + hv().toFixed(2));
+      inp.setRaw('smoke', 'ShiftLeft', false);
+      inp.setRaw('smoke', 'KeyA', false);
+      g.ui.debug.setVisible(true);
+      await until(() => /速度 .* m\\/s/.test(document.querySelector('.debug-panel').textContent) && /碰撞 .* ms/.test(document.querySelector('.debug-panel').textContent));
+      const panel = document.querySelector('.debug-panel').textContent;
+      g.ui.debug.setVisible(false);
+      if (!/碰撞 [0-9.]+ ms/.test(panel)) throw new Error('dev 面板没有碰撞耗时：' + panel);
+      // 自动跨越：站到起点按 E，跨越中按住 W 也不影响路径，结束在终点
+      tb.rig.body.teleport(tb.link.start.clone().setY(tb.link.start.y + 0.02));
+      await until(() => body.onGround);
+      if (!(await until(() => ctl.nearLink === tb.link))) throw new Error('起点没有识别到跨越点');
+      if (!/跨过/.test(document.querySelector('.hud-prompt')?.textContent ?? '')) throw new Error('没显示跨越提示');
+      inp.setRaw('smoke', 'KeyE', true);
+      const started = await until(() => ctl.busy, 3000);
+      inp.setRaw('smoke', 'KeyE', false);
+      if (!started) throw new Error('按 E 没有开始跨越');
+      inp.setRaw('smoke', 'KeyD', true);
+      await until(() => !ctl.busy, 20000);
+      inp.setRaw('smoke', 'KeyD', false);
+      const d = body.position.distanceTo(tb.link.end);
+      if (d > 0.1) throw new Error('跨越终点偏差 ' + d.toFixed(2));
+      // 黑场送回：黑场出现 → 回到出生点并着地 → 黑场消失
+      let sawBlack = false;
+      const done = ctl.teleportTo(tb.course.anchors.spawn);
+      const poll = (async () => { while (ctl.busy) { if (g.ui.fade.opacity >= 1) sawBlack = true; await sleep(30); } })();
+      await Promise.race([done, sleep(20000)]);
+      await poll;
+      if (!sawBlack) throw new Error('没有黑场');
+      if (g.ui.fade.opacity !== 0) throw new Error('黑场没退');
+      await until(() => body.onGround);
+      if (body.position.distanceTo(tb.course.anchors.spawn) > 0.05 || !body.onGround) throw new Error('送回位置不对 ' + body.position.toArray());
+      await g.scenes.change('main');
+      await until(() => g.scenes.current && g.scenes.current.name === 'main');
+      return '慢走 1.6 / 小跑 3.2 ✓，dev 面板读数 ✓，跨越（' + tb.link.duration.toFixed(2) + ' s）✓，黑场送回 ✓';`,
+  },
 ];
 const extra = process.env.SMOKE_ONLY ? CHECKS.filter((c) => c.name.includes(process.env.SMOKE_ONLY)) : CHECKS;
 

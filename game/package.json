@@ -13,7 +13,8 @@
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "assets:test-lod": "node scripts/gen-lod-test-asset.mjs",
-    "test": "node scripts/verify-lod.mjs && npm run test:input && npm run test:save",
+    "test": "node scripts/verify-lod.mjs && npm run test:input && npm run test:save && npm run test:physics",
+    "test:physics": "node --import ./scripts/register-ts-paths.mjs scripts/verify-physics.mjs",
     "test:save": "node --import ./scripts/register-ts-paths.mjs scripts/verify-save.mjs",
     "test:input": "node --import ./scripts/register-ts-paths.mjs scripts/verify-input.mjs",
     "test:lod": "node scripts/verify-lod.mjs",
@@ -23,7 +24,8 @@
   "dependencies": {
     "n8ao": "^2.0.1",
     "postprocessing": "^6.39.5",
-    "three": "^0.186.1"
+    "three": "^0.186.1",
+    "three-mesh-bvh": "^0.9.17"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

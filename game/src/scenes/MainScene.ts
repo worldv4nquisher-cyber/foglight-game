@@ -2,11 +2,9 @@ import * as THREE from 'three';
 import { BaseScene } from './BaseScene';
 import type { Game } from '@/core/Game';
 import { getAtmosphere, type AtmospherePreset } from '@/config/atmosphere';
-import { gameConfig } from '@/config/gameConfig';
 import { EntityManager } from '@/entities/EntityManager';
 import { Entity } from '@/entities/Entity';
-import { KinematicBody } from '@/entities/components/KinematicBody';
-import { PlayerController } from '@/entities/components/PlayerController';
+import { createPlayer, debugPlayerLine, type PlayerRig } from '@/entities/createPlayer';
 import { Spinner } from '@/entities/components/Spinner';
 import { PhysicsSystem } from '@/systems/PhysicsSystem';
 import { CameraFollowSystem } from '@/systems/CameraFollowSystem';
@@ -46,8 +44,7 @@ export class MainScene extends BaseScene {
   private cameraFollow: CameraFollowSystem;
   /** 灰盒阶段的唯一玩法场景，先当作 S1 入口存档（场景流程 010 拆出 s1/s2/s3 后各自声明） */
   override savePoint = { chapterId: 'ch1', sceneId: 'main' };
-  private player!: Entity;
-  private playerBody!: KinematicBody;
+  private rig!: PlayerRig;
   private sky = new SkyDome(170);
   private water!: Water;
   private rain = new Rain();
@@ -71,7 +68,8 @@ export class MainScene extends BaseScene {
     this.applyAtmosphere(a);
     this.applyQuality();
 
-    this.physics.onFallOut = (b) => b.teleport(SPAWN);
+    // 掉出世界（理论上不会发生）：黑场送回出生点
+    this.physics.onFallOut = () => void this.rig.controller.teleportTo(SPAWN);
 
     const { events, audio, ui } = this.game;
     this.cleanups.push(
@@ -143,7 +141,7 @@ export class MainScene extends BaseScene {
     this.scene.add(island);
 
     // 物理：一块大地面碰撞体（顶面 y=0），岛屿边缘用圆形边界限制（见 clampToIsland）
-    this.physics.addStaticBox(new THREE.Box3(new THREE.Vector3(-30, -5, -30), new THREE.Vector3(30, 0, 30)));
+    this.physics.addBox(new THREE.Box3(new THREE.Vector3(-30, -5, -30), new THREE.Vector3(30, 0, 30)));
   }
 
   private buildProps(): void {
@@ -151,7 +149,7 @@ export class MainScene extends BaseScene {
     const rockMat = new THREE.MeshStandardMaterial({ color: 0x6b7173, roughness: 0.92, flatShading: true });
     const occluders: THREE.Object3D[] = [];
 
-    // 散落的岩石方块（可碰撞、可跳上去）
+    // 散落的岩石方块（可碰撞；本作没有跳跃，0.3 m 以下才能迈上去）
     const rocks: Array<[number, number, number, number, number, number]> = [
       // x, z, 宽, 高, 深, 旋转
       [-6, 3, 2.2, 1.0, 1.8, 0],
@@ -161,10 +159,8 @@ export class MainScene extends BaseScene {
       [-3, -8, 4.0, 2.6, 2.5, 0],
       [11, 4, 2.5, 1.2, 3.0, 0],
       [-12, 6, 1.8, 0.9, 1.6, 0],
-      // 通往灯塔平台的踏石（逐级升高，用于测试跳跃）
-      [3.6, -3.6, 1.4, 0.6, 1.4, 0],
-      [5.2, -5.4, 1.4, 1.2, 1.4, 0],
-      [6.9, -7.0, 1.4, 1.8, 1.4, 0],
+      // 矮石（0.25 m，可以直接迈上去）
+      [2.5, 4.5, 1.2, 0.25, 1.0, 0],
     ];
     for (const [x, z, w, h, d, r] of rocks) {
       const rock = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), rockMat);
@@ -172,7 +168,7 @@ export class MainScene extends BaseScene {
       rock.rotation.y = r;
       rock.castShadow = rock.receiveShadow = true;
       this.scene.add(rock);
-      this.physics.addStaticFromObject(rock);
+      this.physics.addMesh(rock);
       occluders.push(rock);
     }
     // 岸边不可碰撞的碎石装饰
@@ -192,13 +188,24 @@ export class MainScene extends BaseScene {
     plinth.position.set(10.5, 1.2, -10.5);
     plinth.castShadow = plinth.receiveShadow = true;
     this.scene.add(plinth);
-    this.physics.addStaticFromObject(plinth);
+    this.physics.addMesh(plinth);
     occluders.push(plinth);
+
+    // 通往灯塔平台的石阶：12 级 × 0.2 m（平台西侧）
+    const steps = 12;
+    for (let i = 0; i < steps; i++) {
+      const top = (i + 1) * 0.2;
+      const step = new THREE.Mesh(new THREE.BoxGeometry(0.36, top, 1.6), rockMat);
+      step.position.set(8 - (steps - i) * 0.35 + 0.175, top / 2, -10.5);
+      step.castShadow = step.receiveShadow = true;
+      this.scene.add(step);
+      this.physics.addMesh(step);
+    }
 
     this.lighthouse.position.set(11, 2.4, -11);
     this.scene.add(this.lighthouse);
     this.lighthouse.updateWorldMatrix(true, true);
-    this.physics.addStaticFromObject(this.lighthouse.tower);
+    this.physics.addObject(this.lighthouse.tower);
     occluders.push(this.lighthouse.tower);
 
     // 中央：石座 + 自动旋转的占位立方体
@@ -206,7 +213,7 @@ export class MainScene extends BaseScene {
     pedestal.position.set(0, 0.5, 0);
     pedestal.castShadow = pedestal.receiveShadow = true;
     this.scene.add(pedestal);
-    this.physics.addStaticFromObject(pedestal);
+    this.physics.addMesh(pedestal);
 
     const cube = new Entity(
       'spinning-cube',
@@ -248,39 +255,17 @@ export class MainScene extends BaseScene {
     this.scene.add(group);
     group.updateWorldMatrix(true, true);
     for (const child of group.children) {
-      this.physics.addStaticFromObject(child);
+      // 模型里有 -collider 网格就用它，否则整个物体（LOD 取 LOD0）当碰撞体
+      if (this.physics.addFromModel(child).length === 0) this.physics.addObject(child);
       occluders.push(child);
     }
     if (import.meta.env.DEV) Object.assign(window, { __lods: () => describeLods(group) });
   }
 
   private buildPlayer(): void {
-    const visual = new THREE.Group();
-    const model = this.game.assets.getModel('hero', 'capsule', 0x9a8f80);
-    if (this.game.assets.isMissing('hero')) {
-      // 占位胶囊中心在原点，抬到脚底对齐；加一个「鼻子」标示朝向
-      model.position.y = gameConfig.player.height / 2;
-      const nose = new THREE.Mesh(
-        new THREE.BoxGeometry(0.18, 0.12, 0.25),
-        new THREE.MeshStandardMaterial({ color: 0x2d2a26, roughness: 0.8 }),
-      );
-      nose.position.set(0, 1.45, 0.38);
-      nose.castShadow = true;
-      visual.add(nose);
-    }
-    visual.add(model);
-
-    const root = new THREE.Group();
-    root.add(visual);
-    root.position.copy(SPAWN);
-    this.player = new Entity('player', root);
-    this.player.tags.add('player');
-    this.playerBody = this.player.add(new KinematicBody(gameConfig.player.radius, gameConfig.player.height));
-    this.player.add(new PlayerController(this.game.input, () => this.cameraFollow.yaw, this.game.events, visual));
-    this.entities.add(this.player);
-    this.physics.addBody(this.playerBody);
-
-    this.cameraFollow.target = root;
+    this.rig = createPlayer(this.game, this.physics, SPAWN, () => this.cameraFollow.yaw);
+    this.entities.add(this.rig.entity);
+    this.cameraFollow.target = this.rig.entity.object3D;
     // 初始视角：从岛的南侧望向中央立方体与东北方的灯塔
     this.cameraFollow.yaw = -0.3;
     this.cameraFollow.pitch = 0.22;
@@ -329,13 +314,14 @@ export class MainScene extends BaseScene {
   override fixedUpdate(dt: number): void {
     this.entities.fixedUpdate(dt);
     this.physics.step(dt);
+    this.rig.body.afterPhysics();
     this.clampToIsland();
     this.updateInteraction();
   }
 
   /** 圆形岛屿边界：不让玩家走进海里 */
   private clampToIsland(): void {
-    const p = this.playerBody.position;
+    const p = this.rig.body.position;
     const r = Math.hypot(p.x, p.z);
     const max = ISLAND_RADIUS - 0.6;
     if (r > max) {
@@ -345,7 +331,7 @@ export class MainScene extends BaseScene {
   }
 
   private updateInteraction(): void {
-    tmpV.copy(this.lighthouse.position).sub(this.playerBody.position);
+    tmpV.copy(this.lighthouse.position).sub(this.rig.body.position);
     tmpV.y = 0;
     const near = tmpV.length() < 4.2;
     if (near !== this.nearLighthouse) {
@@ -360,6 +346,7 @@ export class MainScene extends BaseScene {
 
   override update(dt: number, alpha: number): void {
     this.entities.update(dt, alpha);
+    if (this.game.ui.debug.visible) this.game.ui.debug.set('角色', debugPlayerLine(this.rig, this.physics));
     this.cameraFollow.update(dt);
     this.sky.follow(this.camera);
     this.water.update(dt);
@@ -367,7 +354,7 @@ export class MainScene extends BaseScene {
     this.lighthouse.update(dt);
     // 阴影相机跟随玩家（保证近处阴影精度），光照方向不变
     const a = this.atmosphere!;
-    const p = this.player.object3D.position;
+    const p = this.rig.entity.object3D.position;
     this.sun.target.position.set(p.x, 0, p.z);
     this.sun.position.set(p.x + a.sunDirection[0], a.sunDirection[1], p.z + a.sunDirection[2]);
   }

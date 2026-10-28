@@ -1,6 +1,6 @@
 import { isDev } from './debug';
 
-/** 全局可调参数。玩法数值（以后由策划提供）建议单独放 config/ 下的独立文件。 */
+/** 全局技术参数。玩法数值（移动速度、胶囊尺寸、坡度等）在 config/gameplay.ts。 */
 export const gameConfig = {
   /** 固定步长（秒） */
   fixedDelta: 1 / 60,
@@ -13,15 +13,6 @@ export const gameConfig = {
   input: {
     /** 点击画布进入指针锁定，鼠标移动直接转视角（GDD §3）。不支持时回退为按住左键拖拽 */
     pointerLock: true,
-  },
-  player: {
-    radius: 0.4,
-    height: 1.8,
-    moveSpeed: 6,
-    acceleration: 40,
-    airControl: 0.35,
-    gravity: 22,
-    maxFallSpeed: 40,
   },
   camera: {
     fov: 60,

@@ -412,3 +412,16 @@ body {
 .touch-btn.pressed {
   background: rgba(255, 255, 255, 0.25);
 }
+
+/* 黑场（v0.1-002 teleportTo）：盖在 HUD 之下、暂停菜单之下 */
+.screen-fade {
+  position: absolute;
+  inset: 0;
+  background: #000;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.screen-fade[hidden] {
+  display: none;
+}

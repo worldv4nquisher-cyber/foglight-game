@@ -18,7 +18,7 @@
 | `npm run preview` | 本地预览 `dist/`（http://localhost:4173） |
 | `npm run typecheck` | TypeScript 严格模式检查（src + vite.config） |
 | `npm run lint` / `lint:fix` | ESLint（flat config + typescript-eslint 类型感知规则） |
-| `npm run test` | LOD / puzzleCritical 校验脚本（`scripts/verify-lod.mjs`） |
+| `npm run test` | 全部 Node 校验：LOD / puzzleCritical、输入（`test:input`）、存档（`test:save`）、角色物理（`test:physics`） |
 | `npm run assets:test-lod` | 重新生成 LOD 测试模型 `public/assets/models/test-lod-puzzle-critical.glb` |
 | `npm run check` | typecheck + lint + test + build 一次跑完（提交前跑） |
 | `npm run smoke` | 无头 Chrome 冒烟测试：对 `dist/` 起 preview 服务，打开 `?smoke=1`，跑页面内检查并汇总控制台错误（先 `npm run build`；需本机 Chrome，可用 `CHROME=路径` 指定） |
@@ -33,6 +33,8 @@
 | `?quality=ultra\|high\|standard` | 强制画质档位（优先于玩家设置和自动检测） |
 | `?postfx=0` | 关闭后处理，直接渲染（排查渲染问题） |
 | `?atmo=lonely-night` | 切换气氛预设（默认 `melancholy-dusk`） |
+| `?scene=testbed` | 角色控制器测试场地（坡、台阶、螺旋楼梯、墙、闸门 G、升降台、跨越点、T 黑场送回），不存档 |
+| `?debug=1` | 正式构建里也打开 F3 帧率 / F4 调试面板（输入、速度、碰撞耗时） |
 
 开发模式下控制台可用 `__game`，如 `__game.quality.set('ultra')`；`__lods()` 列出 LOD 测试物体的当前层级。
 
@@ -73,13 +75,13 @@ game/
 │  ├─ main.ts               启动：WebGL2 检测 → Game → 注册场景 → Boot
 │  ├─ core/                 Game（渲染器 + 主循环）、Time（固定步长）、EventBus、dispose 工具
 │  ├─ scenes/               SceneManager、BaseScene、BootScene → LoadingScene → MainScene
-│  ├─ entities/             轻量 ECS：Entity + Component（KinematicBody、PlayerController、Spinner…）
-│  ├─ systems/              PhysicsSystem（AABB）、CameraFollowSystem（第三人称）、AudioSystem、input/
+│  ├─ entities/             轻量 ECS：Entity + Component（KinematicBody、PlayerController、TraversalLink、Spinner…）、createPlayer
+│  ├─ systems/              PhysicsSystem（胶囊 vs BVH）、locomotion、CameraFollowSystem（第三人称）、AudioSystem、input/、save/
 │  │  └─ input/             actions（抽象动作 + 键位）、InputManager、KeyboardMouseInput、TouchInput
 │  ├─ render/               PostFX 后处理管线（postprocessing + N8AO）、lod（LOD 组装 + puzzleCritical）
-│  ├─ world/                场景构件：SkyDome、Water、Rain、Lighthouse（占位）
+│  ├─ world/                场景构件：SkyDome、Water、Rain、Lighthouse（占位）、testCourse（角色测试场地）
 │  ├─ assets/               AssetLoader（GLB+DRACO+Meshopt+KTX2、纹理、音频）、manifest、placeholders
-│  ├─ config/               gameConfig（数值）、quality（画质三档）、atmosphere（气氛预设）
+│  ├─ config/               gameConfig（技术参数）、gameplay（玩法数值）、quality（画质三档）、atmosphere（气氛预设）
 │  ├─ ui/                   UIManager、LoadingScreen、Hud、PauseMenu、FpsCounter、styles.css
 │  ├─ platform/             device 检测、可见性、全屏、native（Capacitor/Electron 适配点）
 │  └─ types/                第三方库类型声明（n8ao）
@@ -107,6 +109,22 @@ game/
 
 - **后处理（render/PostFX.ts）**：`RenderPass(HalfFloat HDR) → N8AO → [Bloom → ACES 色调映射 → 色相/饱和度 → 亮度/对比度 → 暗角 → 胶片颗粒] → SMAA`。配合场景 `FogExp2` 和与雾色衔接的渐变天空穹顶。
 - **气氛预设（config/atmosphere.ts）**：雾色/浓度、天空、半球光、主光、灯塔暖光、水色、曝光、Bloom、调色、暗角、颗粒、AO、雨——**调氛围只改这个文件**。目前有 `melancholy-dusk`（默认，忧郁阴天黄昏细雨）和 `lonely-night`（孤夜浓雾）。
+
+## 角色控制器与碰撞（v0.1-002）
+
+- **选型：three-mesh-bvh + 自写 move-and-slide**，没用 Rapier。只有一个角色、没有刚体玩法，Rapier 的 wasm（约 2MB）和异步初始化不划算；BVH 只做空间查询，规则全在 `systems/PhysicsSystem.ts`，Node 里能直接单测（`npm run test:physics`）。
+- **数值**全部在 `config/gameplay.ts`：胶囊高 1.50 m、半径 0.25 m；慢走 1.6 / 小跑 3.2 m/s（Shift），0.12 s 到速，转身 540°/s；最大坡度 40°，台阶 0.3 m；没有跳跃。
+- **悬浮胶囊**：碰撞胶囊底部抬高 0.3 m（台阶高度），脚底高度由 5 根向下的探测射线决定（只认坡度 ≤ 40° 的面）。所以 ≤ 0.3 m 的台阶直接迈上、≥ 0.4 m 挡住；墙和陡坡只做水平推出（贴墙滑动不黏）；中心踩到比脚高的陡坡会撤回并沿坡脚滑开。迈台阶的竖直跳变在显示上用 0.08 s 抹平。
+- **自动跨越**：`TraversalLink`（起点、终点、可选中间点、触发半径、条件）。站在起点按 E 或朝终点方向走 → 沿路径平滑移动 1–2 s（路径长 / 1.8 m/s），期间忽略输入。场景里 `player.controller.links.push(link)`，HUD 提示读 `controller.nearLink`。
+- **强制送回**：`controller.teleportTo(point, { fade: 0.5 })`：黑场 0.2 s 淡入 → 保持 0.5 s（期间瞬移并落地）→ 0.2 s 淡出，返回 Promise。掉出世界（`physics.killY`）走这个。
+- **dev 面板（F4）**：实际水平速度、着地状态、每步碰撞耗时（ms）、碰撞体数量。
+
+### 碰撞体命名（美术 / 关卡）
+
+- 模型里名字以 **`-collider`** 结尾的网格是碰撞体（可以站、会挡）；以 **`-wall`** 结尾的是空气墙（只挡水平移动，站不上去）。Blender 的 `.001` 后缀可以保留。例：`dock-floor-collider`、`stair-collider.003`、`cliff-edge-wall`。
+- 这些网格加载后自动隐藏、不参与渲染；用简化的低面数几何（盒子、斜面、楼梯块），**不要**直接拿渲染网格当碰撞体。
+- 会动 / 会开关的碰撞体（门、升降台）加自定义属性 `dynamic = true`（glTF extras → `userData.dynamic`）；代码里 `collider.enabled = false` 立即可通过。
+- 场景代码：`physics.addFromModel(gltfRoot)` 注册约定命名的网格；灰盒占位用 `physics.addMesh(mesh)` / `addObject(group)` / `addBox(box3)`。
 
 ## 资源规范与添加方法
 
@@ -138,7 +156,7 @@ DRACO / Basis 解码器由 three 随包打包（带哈希文件名、可离线�
 - KTX2 的 `basis_transcoder.js` + `basis_transcoder.wasm` 是同一套转码器的胶水代码和二进制，两个都要。
 - `npm run smoke` 会检查 dist 里两种解码器各只有一套，并在浏览器里实际跑一次。
 
-目前 manifest 里登记了 `hero`（`assets/models/hero.glb`，尚不存在），用来演示缺失回退：控制台会出现一条 info 日志，主角显示为胶囊。美术交付 `hero.glb`（脚底为原点、朝向 +Z、单位米、身高约 1.8m）后会自动替换。
+目前 manifest 里登记了 `hero`（`assets/models/hero.glb`，尚不存在），用来演示缺失回退：控制台会出现一条 info 日志，主角显示为胶囊。美术交付 `hero.glb`（脚底为原点、朝向 +Z、单位米、身高约 1.5m，与碰撞胶囊一致）后会自动替换。
 
 ## LOD 与解谜关键物体（puzzleCritical）
 
@@ -206,7 +224,7 @@ DRACO / Basis 解码器由 three 随包打包（带哈希文件名、可离线�
 
 ## 已知限制
 
-- 物理为 AABB 简易碰撞（够做原型），旋转物体的碰撞盒会偏大；需要斜坡、精确胶囊碰撞时换 Rapier。
+- 角色物理只处理一个胶囊角色和静态 / 运动学碰撞体，没有刚体（推箱子之类需要时再加）。碰撞耗时目标 ≤ 0.5 ms / 帧：Node 里测试场地约 0.03–0.05 ms / 步，1440p 有 GPU 的机器上还没实测。
 - 水面/天空/灯塔/雨均为程序化占位，等美术正式资源。
 - LOD 目前只认「同一个 GLB 内 `_lodN` 节点」；style-guide §9 里的分文件写法（`char-xi-lod1.glb`）和远景 impostor 还没实现，超过 LOD2 距离后继续显示 LOD2。
 - `PCFSoftShadowMap` 在 three r18x 已移除，软阴影使用 `PCFShadowMap` + `shadow.radius`。

@@ -7,6 +7,7 @@ import { FpsCounter } from './FpsCounter';
 import { Hud } from './Hud';
 import { LoadingScreen } from './LoadingScreen';
 import { PauseMenu } from './PauseMenu';
+import { ScreenFade } from './ScreenFade';
 
 /**
  * DOM UI 层（叠在 canvas 上）。UI 用原生 DOM + CSS，便于做清晰的文字和响应式布局；
@@ -19,6 +20,8 @@ export class UIManager {
   readonly fps: FpsCounter;
   /** 开发调试面板（F4）；非调试模式下也存在但不会显示 */
   readonly debug: DebugPanel;
+  /** 全屏黑场（teleportTo / 场景切换） */
+  readonly fade: ScreenFade;
   private offs: Array<() => void> = [];
 
   constructor(
@@ -29,6 +32,7 @@ export class UIManager {
     this.fps = new FpsCounter(root, gameConfig.showFpsByDefault || game.settings.get('showFps'), () => this.game.quality.preset.label);
     this.debug = new DebugPanel(root, game);
     this.loading = new LoadingScreen(root);
+    this.fade = new ScreenFade(root);
     this.hud = new Hud(root);
     this.pause = new PauseMenu(root, game, () => this.toggleFps());
 
@@ -72,6 +76,7 @@ export class UIManager {
     this.fps.dispose();
     this.debug.dispose();
     this.loading.dispose();
+    this.fade.dispose();
     this.hud.dispose();
     this.pause.dispose();
     this.root.replaceChildren();

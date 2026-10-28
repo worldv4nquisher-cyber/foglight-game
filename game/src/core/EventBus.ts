@@ -14,6 +14,10 @@ export interface GameEvents {
   'viewport:resize': { width: number; height: number; pixelRatio: number };
   'ui:toggle-fps': { visible: boolean };
   'player:land': { impactSpeed: number };
+  /** 自动跨越开始 / 结束（v0.1-002 TraversalLink） */
+  'player:traverse': { phase: 'start' | 'end' };
+  /** 强制送回（teleportTo）瞬移的那一刻 */
+  'player:teleport': { x: number; y: number; z: number };
 }
 
 type Handler<T> = (payload: T) => void;
