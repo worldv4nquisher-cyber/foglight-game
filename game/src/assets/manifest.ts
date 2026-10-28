@@ -28,7 +28,7 @@ export const manifest: AssetEntry[] = [
   { key: 'test-lod-puzzle', type: 'gltf', url: 'assets/models/test-lod-puzzle-critical.glb', group: 'main', optional: true },
   // ---- 更多示例（取消注释即可登记）----
   // { key: 'ground-diffuse', type: 'ktx2', url: 'assets/textures/ground-diffuse.ktx2', group: 'main', optional: true },
-  // { key: 'sfx-jump', type: 'audio', url: 'assets/audio/sfx-jump.ogg', group: 'main', optional: true },
+  // { key: 'sfx-footstep', type: 'audio', url: 'assets/audio/sfx-footstep.ogg', group: 'main', optional: true },
 ];
 
 export function entriesForGroup(group: string): AssetEntry[] {

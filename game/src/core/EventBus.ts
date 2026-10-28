@@ -13,7 +13,6 @@ export interface GameEvents {
   'quality:change': { tier: QualityTier };
   'viewport:resize': { width: number; height: number; pixelRatio: number };
   'ui:toggle-fps': { visible: boolean };
-  'player:jump': undefined;
   'player:land': { impactSpeed: number };
 }
 

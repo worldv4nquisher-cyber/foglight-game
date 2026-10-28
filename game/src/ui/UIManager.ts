@@ -1,5 +1,7 @@
 import type { Game } from '@/core/Game';
 import { gameConfig } from '@/config/gameConfig';
+import { debugEnabled } from '@/config/debug';
+import { DebugPanel } from './DebugPanel';
 import { FpsCounter } from './FpsCounter';
 import { Hud } from './Hud';
 import { LoadingScreen } from './LoadingScreen';
@@ -14,6 +16,8 @@ export class UIManager {
   readonly hud: Hud;
   readonly pause: PauseMenu;
   readonly fps: FpsCounter;
+  /** 开发调试面板（F4）；非调试模式下也存在但不会显示 */
+  readonly debug: DebugPanel;
   private offs: Array<() => void> = [];
 
   constructor(
@@ -21,6 +25,7 @@ export class UIManager {
     private game: Game,
   ) {
     this.fps = new FpsCounter(root, gameConfig.showFpsByDefault, () => this.game.quality.preset.label);
+    this.debug = new DebugPanel(root, game);
     this.loading = new LoadingScreen(root);
     this.hud = new Hud(root);
     this.pause = new PauseMenu(root, game, () => this.toggleFps());
@@ -40,13 +45,17 @@ export class UIManager {
 
   /** 每帧调用（未缩放时间，暂停时也更新） */
   update(dt: number): void {
-    if (this.game.input.consumePressed('toggleFps')) this.toggleFps();
+    // F3 / F4 仅开发模式或 ?debug=1（正式版帧率显示走设置里的开关）
+    if (this.game.input.consumePressed('toggleFps') && debugEnabled) this.toggleFps();
+    if (this.game.input.consumePressed('toggleDebug') && debugEnabled) this.debug.toggle();
     this.fps.update(dt);
+    this.debug.update(dt);
   }
 
   dispose(): void {
     for (const off of this.offs) off();
     this.fps.dispose();
+    this.debug.dispose();
     this.loading.dispose();
     this.hud.dispose();
     this.pause.dispose();

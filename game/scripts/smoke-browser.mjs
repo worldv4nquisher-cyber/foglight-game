@@ -71,6 +71,74 @@ const CHECKS = [
       if (files.length !== 2) throw new Error('应加载 basis_transcoder .js + .wasm 各一次，实际: ' + files.join(','));
       return files.join(' + ');`,
   },
+  {
+    name: 'v0.1-001 输入：键位按上下文映射、Esc 暂停压 menu、F4 调试面板',
+    code: `
+      const inp = g.input;
+      const key = (code, type) => window.dispatchEvent(new KeyboardEvent(type, { code, bubbles: true }));
+      const tap = async (code) => { key(code, 'keydown'); key(code, 'keyup'); await sleep(50); };
+      const last = () => inp.recent[0] && inp.recent[0].context + ':' + inp.recent[0].action;
+      // SwiftShader 只有个位数帧率：按下要等下一帧 tick 才被 Game 消费，轮询等待
+      const until = async (pred, ms = 3000) => { const end = Date.now() + ms; while (!pred() && Date.now() < end) await sleep(50); };
+      if (inp.context !== 'explore') throw new Error('初始上下文 ' + inp.context);
+      if (!document.querySelector('canvas').requestPointerLock) throw new Error('无 requestPointerLock');
+      await tap('KeyE'); if (last() !== 'explore:interact') throw new Error('explore E → ' + last());
+      await tap('Space'); if (last() !== 'explore:advance') throw new Error('explore Space → ' + last());
+      const pop = inp.pushContext('puzzle');
+      await tap('KeyE'); if (last() !== 'puzzle:partNext') throw new Error('puzzle E → ' + last());
+      await tap('Tab'); if (last() !== 'puzzle:exitPuzzle') throw new Error('puzzle Tab → ' + last());
+      pop();
+      await tap('Escape'); await until(() => g.isPaused);
+      if (!g.isPaused || inp.context !== 'menu') throw new Error('Esc 后 paused=' + g.isPaused + ' ctx=' + inp.context);
+      if (document.querySelector('.pause-menu').hidden) throw new Error('暂停菜单没显示');
+      await tap('Escape'); await until(() => !g.isPaused);
+      if (g.isPaused || inp.context !== 'explore') throw new Error('再按 Esc 后 paused=' + g.isPaused + ' ctx=' + inp.context);
+      await tap('F4'); await sleep(400);
+      const panel = document.querySelector('.debug-panel');
+      const shown = panel && panel.style.display !== 'none' && /上下文/.test(panel.textContent);
+      return 'E/Space/Tab/Esc 映射正确；F4 调试面板=' + (shown ? '显示' : '未开启（非调试模式）');`,
+  },
+  {
+    name: 'v0.1-001 指针锁定：点击画面锁定、移动直接转视角、Esc 暂停、继续后再点可重新锁定',
+    async run({ evaluate, cdp, sleep }) {
+      const state = () =>
+        evaluate(`({ locked: document.pointerLockElement === document.querySelector('canvas'), paused: __game.isPaused, ctx: __game.input.context, yaw: __game.scenes.current.cameraFollow?.yaw ?? null })`);
+      const waitFor = async (pred, ms = 3000) => {
+        const end = Date.now() + ms;
+        let s = await state();
+        while (!pred(s) && Date.now() < end) {
+          await sleep(100);
+          s = await state();
+        }
+        return s;
+      };
+      await cdp.click(640, 400);
+      await waitFor((s) => s.locked);
+      let s = await state();
+      if (!s.locked) throw new Error('点击画面后没有进入指针锁定 ' + JSON.stringify(s));
+      const yaw0 = s.yaw;
+      for (let i = 1; i <= 5; i++) await cdp.move(640 + i * 20, 400);
+      await sleep(300);
+      s = await state();
+      const turned = yaw0 === null ? '（未暴露 yaw）' : Math.abs(s.yaw - yaw0) > 1e-3 ? '转动 ' + (s.yaw - yaw0).toFixed(3) + ' rad' : null;
+      if (!turned) throw new Error('锁定后移动鼠标视角没变 ' + JSON.stringify(s));
+      await cdp.key('Escape', 'Escape', 27);
+      s = await waitFor((s) => s.paused && !s.locked);
+      if (!s.paused || s.locked) throw new Error('Esc 后应解锁并暂停 ' + JSON.stringify(s));
+      const r = await evaluate(`(() => { const b = document.querySelector('.pause-menu [data-act="resume"]').getBoundingClientRect(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 }; })()`);
+      await cdp.click(r.x, r.y); // 真实点击「继续」
+      await sleep(1300); // 浏览器：解锁后约 1 秒内不能重新锁定
+      s = await state();
+      if (s.paused) throw new Error('继续后仍是暂停');
+      await cdp.click(640, 400);
+      s = await waitFor((s) => s.locked);
+      if (!s.locked) throw new Error('继续后再点画面没有重新锁定 ' + JSON.stringify(s));
+      await evaluate(`document.exitPointerLock()`);
+      s = await waitFor((s) => !s.locked && s.paused);
+      if (s.paused) await evaluate('__game.resume()');
+      return '锁定 ✓，视角' + turned + '，Esc→暂停 ✓，重新锁定 ✓';
+    },
+  },
 ];
 const extra = process.env.SMOKE_ONLY ? CHECKS.filter((c) => c.name.includes(process.env.SMOKE_ONLY)) : CHECKS;
 
@@ -157,6 +225,24 @@ const evaluate = async (expression) => {
   return r.result.value;
 };
 
+// 可信（isTrusted）输入：指针锁定等需要真实用户手势的功能用它测
+const cdp = {
+  async click(x, y, button = 'left') {
+    const buttons = { left: 1, right: 2, middle: 4 }[button];
+    await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y }, sessionId);
+    await send('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button, buttons, clickCount: 1 }, sessionId);
+    await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button, buttons: 0, clickCount: 1 }, sessionId);
+  },
+  async move(x, y) {
+    await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y }, sessionId);
+  },
+  async key(code, key = code, keyCode = 0) {
+    const base = { code, key, windowsVirtualKeyCode: keyCode, nativeVirtualKeyCode: keyCode };
+    await send('Input.dispatchKeyEvent', { type: 'rawKeyDown', ...base }, sessionId);
+    await send('Input.dispatchKeyEvent', { type: 'keyUp', ...base }, sessionId);
+  },
+};
+
 let failed = 0;
 const t0 = Date.now();
 try {
@@ -177,7 +263,9 @@ try {
 
   for (const c of extra) {
     try {
-      const out = await evaluate(`(async () => { const g = window.__game; const sleep = (ms) => new Promise((r) => setTimeout(r, ms)); ${c.code} })()`);
+      const out = c.run
+        ? await c.run({ evaluate, cdp, sleep: (ms) => new Promise((r) => setTimeout(r, ms)) })
+        : await evaluate(`(async () => { const g = window.__game; const sleep = (ms) => new Promise((r) => setTimeout(r, ms)); ${c.code} })()`);
       console.log(`  ✓ ${c.name}${out ? '：' + out : ''}`);
     } catch (e) {
       failed++;

@@ -8,7 +8,7 @@ import { KinematicBody } from './KinematicBody';
 const cfg = gameConfig.player;
 const tmp = new THREE.Vector3();
 
-/** 玩家控制：读取抽象 action，按相机朝向移动，跳跃；模型朝向移动方向 */
+/** 玩家控制：读取抽象 action，按相机朝向移动（本作不做跳跃，GDD §15）；模型朝向移动方向 */
 export class PlayerController extends Component {
   private body!: KinematicBody;
   private facing = 0;
@@ -43,12 +43,6 @@ export class PlayerController extends Component {
     const maxDelta = accel * dt;
     v.x += THREE.MathUtils.clamp(tmp.x - v.x, -maxDelta, maxDelta);
     v.z += THREE.MathUtils.clamp(tmp.z - v.z, -maxDelta, maxDelta);
-
-    if (this.input.consumePressed('jump') && this.body.onGround) {
-      v.y = cfg.jumpSpeed;
-      this.body.onGround = false;
-      this.events.emit('player:jump');
-    }
 
     if (this.body.justLanded) {
       this.events.emit('player:land', { impactSpeed: this.body.impactSpeed });

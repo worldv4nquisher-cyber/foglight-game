@@ -31,6 +31,9 @@ export class CameraFollowSystem {
     const look = this.input.getLookDelta();
     this.yaw -= look.x;
     this.pitch = THREE.MathUtils.clamp(this.pitch + look.y, cfg.minPitch, cfg.maxPitch);
+    // 滚轮调相机距离（explore 上下文才有值）
+    const zoom = this.input.getZoomDelta();
+    if (zoom !== 0) this.distance = THREE.MathUtils.clamp(this.distance + zoom * 0.5, cfg.minDistance, cfg.distance * 1.5);
     if (!this.target) return;
 
     lookTarget.copy(this.target.position);

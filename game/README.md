@@ -1,7 +1,7 @@
 # 失落灯塔群岛 · 游戏工程（game/）
 
 3D 网页游戏，Three.js + TypeScript + Vite。第三人称探索解谜，三渲二半写实，**桌面浏览器优先、极致画质、忧郁氛围**。
-手机不是目标平台，但保留了基础触屏输入抽象（虚拟摇杆 + 滑动转视角 + 跳跃键），以后需要时可以直接启用。
+手机不是目标平台，但保留了基础触屏输入抽象（虚拟摇杆 + 滑动转视角 + 交互键），默认不注册，以后需要时可以启用。
 
 > 当前是 v0.1 框架 + 占位 demo：阴暗海岛、起伏水面、岩石、自动旋转的占位立方体、胶囊占位角色、灯塔暖光、细雨、后处理氛围。
 
@@ -38,14 +38,26 @@
 
 ## 操作
 
-| 操作 | 键鼠 | 触屏（保留） |
-|---|---|---|
-| 移动 | WASD / 方向键，Shift 快走 | 左半屏浮动摇杆 |
-| 跳跃 | 空格 | 右下角「跳」 |
-| 转视角 | 按住鼠标拖拽 | 右半屏滑动 |
-| 互动 | E（灯塔附近：熄灭/点亮） | — |
-| 暂停菜单 | Esc / P | — |
-| 显示/隐藏 FPS | F3 | — |
+键位按「输入上下文」区分（`src/systems/input/actions.ts`，GDD §3）。本作不做跳跃（GDD §15）。
+
+| 操作 | 探索 explore | 机关 puzzle | 阅读 reading | 演出 cutscene |
+|---|---|---|---|---|
+| 移动 / 旋转部件 | WASD / 方向键 | A/D 旋转（W/S 预留） | — | — |
+| 小跑 / 精调 | 按住 Shift 小跑 | 按住 Shift 精调 | — | — |
+| 转视角 | 点击画面锁定鼠标后直接移动（不支持指针锁定时按住左键拖拽） | 小范围转镜头 | 显示光标 | — |
+| 交互 | E | — | — | — |
+| 切换部件 | — | Q / E，滚轮上 / 下 | — | — |
+| 相机远近 | 滚轮 | — | — | — |
+| 观察 | 按住右键 | — | — | — |
+| 退出机关 / 关闭阅读 | — | 右键 / Tab | 右键 / Tab | — |
+| 重置机关 | — | R | — | — |
+| 提示 / 日志 | H / J | H | — | — |
+| 推进字幕 | 左键 / 空格 | 空格 | 左键 / 空格 | 左键 / 空格；按住空格 1 秒跳过 |
+| 暂停 | Esc（任何时候） | Esc | Esc | Esc |
+
+- Esc 永远是暂停（制作人裁定：指针锁定时 Esc 先被浏览器用来解锁，页面不一定收到按键）。暂停后点「继续」或再按 Esc，再点一下画面重新锁定鼠标。
+- 开发模式或 URL 加 `?debug=1`：F3 帧率，F4 调试面板（输入上下文栈、指针状态、最近触发的 action）。控制台 `__game.input.pushContext('puzzle')` 可手动切上下文试键位，`__game.input.debug = true` 在控制台打印每个 action。
+- 触屏输入（`TouchInput`，摇杆 + 滑动转视角 + 交互键）保留代码但默认不注册（桌面专做）。
 
 ## 目录约定
 
@@ -82,7 +94,7 @@ game/
 
 - **主循环（core/Game.ts）**：每帧 `input.beginFrame → N 次 fixedUpdate(1/60s，逻辑/物理) → update(可变步长：相机/动画) → render → ui.update → input.endFrame`。单帧时长截断 0.25s，切后台自动暂停。KinematicBody 按 alpha 插值显示，高刷屏也平滑。
 - **场景（scenes/）**：`SceneManager.change(name)` 依次 `exit → dispose → new → enter(可异步)`。流程 Boot（启动资源）→ Loading（进度条，加载 `main` 资源组）→ Main。`usePostFX=true` 的场景走后处理。
-- **输入（systems/input/）**：玩法代码只认抽象 action（`jump/pause/interact/sprint/toggleFps` 和轴 `moveX/moveY` + 视角增量），键鼠与触屏都写入同一个 InputManager。新增操作：在 `actions.ts` 加 action 和键位即可。指针锁定（FPS 式视角）可在 `gameConfig.input.pointerLock` 开启，默认拖拽。
+- **输入（systems/input/）**：玩法代码只认抽象 action（`interact/sprint/partNext/exitPuzzle/advance/skipHold/pause…` 和轴 `moveX/moveY` + 视角 / 滚轮增量），输入源只写原始按键，由 InputManager 按上下文栈（`InputContext.ts`，`input.pushContext('puzzle')` 返回弹出函数）映射。新增操作：在 `actions.ts` 加 action 并在对应上下文配键位。灵敏度 / Y 反转：`input.setLookSensitivity()` / `setInvertY()`。指针锁定默认开启（`gameConfig.input.pointerLock`）。校验：`npm run test:input`。
 - **资源（assets/）**：见下节。缺失或加载失败一律回退占位几何体/棋盘格纹理，游戏照常运行。
 - **画质（config/quality.ts）**：纯桌面三档，对应美术风格指南的「极致/高/标准」。按 GPU 名称粗判（独显 RTX 3060 级以上 → 极致；核显/软件渲染 → 标准；其余 → 高），玩家在暂停菜单切换后会记住。
 
@@ -97,7 +109,7 @@ game/
 
 ## 资源规范与添加方法
 
-**命名**：小写英文 + 短横线，如 `hero-idle.glb`、`rock-cliff-01.glb`、`ground-diffuse.ktx2`、`sfx-jump.ogg`、`ui-button-start.webp`。
+**命名**：小写英文 + 短横线，如 `hero-idle.glb`、`rock-cliff-01.glb`、`ground-diffuse.ktx2`、`sfx-footstep.ogg`、`ui-button-start.webp`。
 **位置**：`public/assets/models|textures|audio/`。
 **格式**：模型用 GLB（推荐 Draco 或 Meshopt 压缩，贴图内嵌 KTX2）；独立贴图优先 KTX2，其次 WebP；音频 ogg（Safari 兼容可另备 mp3）。
 **来源**：外部素材必须记录到 `art/CREDITS.md`、`audio/CREDITS.md`。
@@ -109,14 +121,14 @@ game/
    ```ts
    { key: 'rock-cliff-01', type: 'gltf', url: 'assets/models/rock-cliff-01.glb', group: 'main', optional: true },
    { key: 'ground-diffuse', type: 'ktx2', url: 'assets/textures/ground-diffuse.ktx2', group: 'main' },
-   { key: 'sfx-jump', type: 'audio', url: 'assets/audio/sfx-jump.ogg', group: 'main', optional: true },
+   { key: 'sfx-footstep', type: 'audio', url: 'assets/audio/sfx-footstep.ogg', group: 'main', optional: true },
    ```
    `group` 决定在哪个加载阶段加载（`boot` 启动时、`main` 主场景加载界面）；`optional: true` 表示缺失不报错。法线/粗糙度等非颜色贴图加 `srgb: false`。
 3. 在场景里使用：
    ```ts
    const rock = this.game.assets.getModel('rock-cliff-01', 'box');   // 缺失时回退方块占位
    const tex = this.game.assets.getTexture('ground-diffuse');        // 缺失时回退棋盘格
-   this.game.audio.playSfx(this.game.assets.getAudio('sfx-jump'), { freq: 220 }); // 缺失时合成音
+   this.game.audio.playSfx(this.game.assets.getAudio('sfx-footstep'), { freq: 220 }); // 缺失时合成音
    ```
 
 压缩工具（美术侧）：`npx @gltf-transform/cli optimize in.glb out.glb --compress draco --texture-compress ktx2`；单张贴图可用 KTX-Software 的 `toktx --t2 --encode uastc`（法线）/ `--encode etc1s`（颜色）。

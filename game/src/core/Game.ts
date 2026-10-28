@@ -6,6 +6,7 @@ import { QualityManager } from '@/config/quality';
 import { gameConfig } from '@/config/gameConfig';
 import { SceneManager } from '@/scenes/SceneManager';
 import { InputManager } from '@/systems/input/InputManager';
+import { KeyboardMouseInput } from '@/systems/input/KeyboardMouseInput';
 import { AudioSystem } from '@/systems/AudioSystem';
 import { UIManager } from '@/ui/UIManager';
 import { VisibilityWatcher } from '@/platform/visibility';
@@ -58,7 +59,11 @@ export class Game {
     this.postfx = new PostFX(this.renderer, this.quality.preset);
     this.applyQuality();
 
-    this.input = new InputManager(this.renderer.domElement, uiRoot, this.events);
+    this.input = new InputManager(this.events);
+    // 桌面专做（GDD §15）：只注册键鼠；TouchInput 保留代码但默认不注册
+    const kbm = new KeyboardMouseInput(this.renderer.domElement, this.input);
+    this.input.attach(kbm);
+    this.input.onContextChange = (cur) => kbm.onContextChange(cur);
     this.assets = new AssetLoader(this.renderer, this.events);
     this.audio = new AudioSystem();
     this.ui = new UIManager(uiRoot, this);

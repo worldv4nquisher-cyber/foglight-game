@@ -6,14 +6,15 @@ const JOYSTICK_RADIUS = 56;
 const DEAD_ZONE = 0.12;
 
 /**
- * 触屏输入：左半屏浮动虚拟摇杆（在手指按下处出现），右半屏滑动转视角，右下角跳跃按钮。
+ * 触屏输入：左半屏浮动虚拟摇杆（在手指按下处出现），右半屏滑动转视角，右下角交互按钮。
+ * v0.1 起桌面优先（制作人裁定），默认不注册触屏输入；保留实现供以后移动端使用。
  * 使用 Pointer Events + touch-action:none，兼容 iOS Safari 13+ / Android Chrome。
  */
 export class TouchInput implements InputSource {
   private root: HTMLDivElement;
   private stickBase: HTMLDivElement;
   private stickKnob: HTMLDivElement;
-  private jumpBtn: HTMLButtonElement;
+  private actBtn: HTMLButtonElement;
   private moveId: number | null = null;
   private lookId: number | null = null;
   private origin = { x: 0, y: 0 };
@@ -29,12 +30,12 @@ export class TouchInput implements InputSource {
       <div class="touch-zone touch-zone-left"></div>
       <div class="touch-zone touch-zone-right"></div>
       <div class="joystick-base"><div class="joystick-knob"></div></div>
-      <button class="touch-btn touch-btn-jump" type="button" aria-label="跳跃">跳</button>
+      <button class="touch-btn touch-btn-interact" type="button" aria-label="交互">交互</button>
     `;
     uiRoot.appendChild(this.root);
     this.stickBase = this.root.querySelector<HTMLDivElement>('.joystick-base')!;
     this.stickKnob = this.root.querySelector<HTMLDivElement>('.joystick-knob')!;
-    this.jumpBtn = this.root.querySelector<HTMLButtonElement>('.touch-btn-jump')!;
+    this.actBtn = this.root.querySelector<HTMLButtonElement>('.touch-btn-interact')!;
 
     const left = this.root.querySelector<HTMLDivElement>('.touch-zone-left')!;
     const right = this.root.querySelector<HTMLDivElement>('.touch-zone-right')!;
@@ -43,10 +44,10 @@ export class TouchInput implements InputSource {
     window.addEventListener('pointermove', this.onPointerMove, { passive: false });
     window.addEventListener('pointerup', this.onPointerEnd);
     window.addEventListener('pointercancel', this.onPointerEnd);
-    this.jumpBtn.addEventListener('pointerdown', this.onJumpDown);
-    this.jumpBtn.addEventListener('pointerup', this.onJumpUp);
-    this.jumpBtn.addEventListener('pointercancel', this.onJumpUp);
-    this.jumpBtn.addEventListener('pointerleave', this.onJumpUp);
+    this.actBtn.addEventListener('pointerdown', this.onActDown);
+    this.actBtn.addEventListener('pointerup', this.onActUp);
+    this.actBtn.addEventListener('pointercancel', this.onActUp);
+    this.actBtn.addEventListener('pointerleave', this.onActUp);
   }
 
   setVisible(v: boolean): void {
@@ -58,7 +59,7 @@ export class TouchInput implements InputSource {
     this.lookId = null;
     this.sink.setAxis(SRC, 'moveX', 0);
     this.sink.setAxis(SRC, 'moveY', 0);
-    this.sink.setButton(SRC, 'jump', false);
+    this.sink.setButton(SRC, 'interact', false);
     this.stickBase.classList.remove('active');
   }
 
@@ -116,15 +117,15 @@ export class TouchInput implements InputSource {
     }
   };
 
-  private onJumpDown = (e: PointerEvent): void => {
+  private onActDown = (e: PointerEvent): void => {
     e.preventDefault();
-    this.jumpBtn.classList.add('pressed');
-    this.sink.setButton(SRC, 'jump', true);
+    this.actBtn.classList.add('pressed');
+    this.sink.setButton(SRC, 'interact', true);
   };
 
-  private onJumpUp = (): void => {
-    this.jumpBtn.classList.remove('pressed');
-    this.sink.setButton(SRC, 'jump', false);
+  private onActUp = (): void => {
+    this.actBtn.classList.remove('pressed');
+    this.sink.setButton(SRC, 'interact', false);
   };
 
   dispose(): void {

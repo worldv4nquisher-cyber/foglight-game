@@ -34,7 +34,7 @@ function mulberry32(seed: number): () => number {
 
 /**
  * 主场景（v0.1 占位 demo）：阴暗海岛。
- * 海岛地面 + 起伏水面 + 岩石 + 旋转立方体 + 胶囊主角（WASD/空格/鼠标拖拽）+ 第三人称相机 + 灯塔暖光对比 + 细雨。
+ * 海岛地面 + 起伏水面 + 岩石 + 旋转立方体 + 胶囊主角（WASD / Shift / 指针锁定转视角）+ 第三人称相机 + 灯塔暖光对比 + 细雨。
  * 氛围参数全部来自 config/atmosphere.ts。
  */
 export class MainScene extends BaseScene {
@@ -74,7 +74,6 @@ export class MainScene extends BaseScene {
     const { events, audio, ui } = this.game;
     this.cleanups.push(
       events.on('quality:change', () => this.applyQuality()),
-      events.on('player:jump', () => audio.beep(220, 0.12, 'sine', 0.05)),
       events.on('player:land', ({ impactSpeed }) => {
         if (impactSpeed > 4) audio.beep(90, 0.1, 'triangle', Math.min(0.08, impactSpeed * 0.006));
       }),
@@ -82,8 +81,8 @@ export class MainScene extends BaseScene {
 
     ui.hud.show();
     ui.hud.setHint(
-      '<kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 移动　<kbd>Shift</kbd> 快走　<kbd>空格</kbd> 跳跃　' +
-        '<kbd>鼠标拖拽</kbd> 转视角　<kbd>E</kbd> 互动　<kbd>Esc</kbd> 暂停　<kbd>F3</kbd> 帧率',
+      '<kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 移动　<kbd>Shift</kbd> 小跑　' +
+        '<kbd>点击画面</kbd> 锁定鼠标转视角　<kbd>E</kbd> 互动　<kbd>右键</kbd> 观察　<kbd>滚轮</kbd> 远近　<kbd>Esc</kbd> 暂停',
     );
     ui.hud.setLocation('雾岬 · 第一座灯塔');
   }
