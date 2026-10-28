@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import type { AtmospherePreset } from '@/config/atmosphere';
 
-const MAX_DROPS = 8000;
+/** 上限 = 极致档 rainParticles.count（style-guide §8：30k） */
+const MAX_DROPS = 30000;
 
 /**
  * 细雨：线段雨丝，全部运动在顶点着色器里完成（下落 + 围绕相机循环平铺），CPU 每帧只更新两个 uniform。

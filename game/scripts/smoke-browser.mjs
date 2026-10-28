@@ -162,6 +162,11 @@ const CHECKS = [
         })`);
       let s = await read();
       if (!s.save || s.save.version !== 1 || s.save.sceneId !== 'main') throw new Error('进场没有自动存档：' + JSON.stringify(s.save));
+      // 首次启动的画质检测（009）：建立镜头里开始，降档重测最多 3 轮 × 3 s
+      for (let i = 0; i < 120 && s.settings?.qualityDetected !== true; i++) {
+        await sleep(250);
+        s = await read();
+      }
       if (!s.settings || s.settings.qualityDetected !== true) throw new Error('首次启动没有记下画质检测：' + JSON.stringify(s.settings));
       // 修改设置立即生效
       await evaluate(`__game.settings.update({ mouseSensitivity: 2.5, invertY: true })`);
@@ -185,6 +190,109 @@ const CHECKS = [
       await evaluate(`localStorage.clear(); 1`);
       await cdp.reload();
       return '自动存档 ✓，设置即时生效 / 刷新保留 ✓，坏存档提示 ✓，旧键迁移 ✓';
+    },
+  },
+  {
+    name: 'v0.1-009 画质：默认极致、3 秒检测（simulateFps=40 连降两档）、只测一次、手动改回保存、恢复默认、运行时切档、F3 面板',
+    async run({ evaluate, cdp, sleep }) {
+      const out = [];
+      const st = () =>
+        evaluate(`({ tier: __game.quality.tier, bench: __game.benchmark.state, rounds: __game.benchmark.rounds.map((r) => r.tier + ':' + Math.round(r.fps)),
+          settings: JSON.parse(localStorage.getItem('foglight.settings.v1') || 'null') })`);
+      // 1) 实机（SwiftShader）首次检测：006 检查最后清空了设置并刷新，这里等那一次检测跑完
+      let s = await st();
+      for (let i = 0; i < 160 && s.bench === 'running'; i++) {
+        await sleep(250);
+        s = await st();
+      }
+      if (!s.settings?.qualityDetected || s.settings.qualitySource !== 'auto' || s.settings.quality !== s.tier) throw new Error('实测检测结果不对 ' + JSON.stringify(s));
+      out.push('SwiftShader 实测 → ' + s.tier + '（' + s.rounds.join(' / ') + '）');
+      // 2) 清空设置 + ?simulateFps=40：开场是极致，3 s 后高，再 3 s 后标准，之后不再降
+      await evaluate(`localStorage.clear(); 1`);
+      await cdp.goto('simulateFps=40');
+      s = await st();
+      if (s.settings?.qualityDetected) throw new Error('清空设置后应重新检测');
+      const seen = [s.tier];
+      const end = Date.now() + 40000;
+      while (Date.now() < end && s.bench !== 'done') {
+        await sleep(150);
+        s = await st();
+        if (seen.at(-1) !== s.tier) seen.push(s.tier);
+      }
+      if (seen.join('>') !== 'ultra>high>standard') throw new Error('降档顺序 ' + seen.join('>') + ' ' + JSON.stringify(s));
+      await sleep(4000);
+      s = await st();
+      if (s.tier !== 'standard' || s.rounds.length !== 3) throw new Error('应停在标准且只测 3 轮 ' + JSON.stringify(s));
+      const ss = s.settings;
+      if (!ss.qualityDetected || ss.quality !== 'standard' || ss.qualityDetectedTier !== 'standard' || ss.qualitySource !== 'auto') throw new Error('检测结果没写对 ' + JSON.stringify(ss));
+      out.push('simulateFps=40：' + seen.join(' → ') + ' ✓');
+      // 设置界面（暂停菜单）画质项下显示 quality_auto_note
+      const note = await evaluate(`(async () => { __game.pause('user'); await new Promise((r) => setTimeout(r, 300));
+        const n = document.querySelector('[data-role="quality-note"]'); const t = n && !n.hidden ? n.textContent : null; __game.resume(); return t; })()`);
+      if (note !== '已根据这台电脑自动选择画质，可以随时改回。') throw new Error('降档提示没显示：' + note);
+      out.push('降档提示 ✓');
+      // 3) 刷新：不再检测
+      await cdp.reload();
+      await sleep(4500);
+      s = await st();
+      if (s.tier !== 'standard' || s.bench !== 'idle' || s.rounds.length) throw new Error('刷新后又检测了 ' + JSON.stringify(s));
+      // 4) 手动改回极致：生效、保存、刷新后保持、提示消失
+      await evaluate(`__game.quality.set('ultra'); 1`);
+      await cdp.reload();
+      await sleep(4500);
+      s = await st();
+      if (s.tier !== 'ultra' || s.settings.quality !== 'ultra' || s.settings.qualitySource !== 'user' || s.bench !== 'idle') throw new Error('手动改回极致没保存 ' + JSON.stringify(s));
+      out.push('刷新不再检测 ✓，手动改回极致保存 ✓');
+      // 5) 恢复默认：回到检测结果（标准），不重新检测
+      await evaluate(`__game.settings.resetToDefaults(); 1`);
+      await sleep(300);
+      s = await st();
+      if (s.tier !== 'standard' || s.settings.qualitySource !== 'auto' || s.bench !== 'idle') throw new Error('恢复默认不对 ' + JSON.stringify(s));
+      out.push('恢复默认 → 检测结果 ✓');
+      // 6) 运行时切三档：不重载场景，阴影贴图 / 雨量 / 像素比跟着变，最长帧间隔 < 1 s
+      const sw = await evaluate(`(async () => {
+        const g = __game; const scene = g.scenes.current; const res = [];
+        let events = 0; const off = g.events.on('quality:changed', () => events++);
+        for (const t of ['ultra', 'high', 'standard', 'ultra']) {
+          let last = performance.now(), worst = 0, run = true;
+          const tick = (now) => { worst = Math.max(worst, now - last); last = now; if (run) requestAnimationFrame(tick); };
+          requestAnimationFrame(tick);
+          g.quality.set(t);
+          await new Promise((r) => setTimeout(r, 1500));
+          run = false;
+          const p = g.quality.preset;
+          const sun = scene.scene.getObjectByProperty('isDirectionalLight', true);
+          const rain = scene.scene.getObjectByName('rain');
+          res.push({ t, same: g.scenes.current === scene, worst: Math.round(worst), shadow: sun.shadow.mapSize.width, shadowMap: sun.shadow.map ? sun.shadow.map.width : null,
+            wantShadow: p.shadowType.mapSize, rain: rain.geometry.drawRange.count / 2, wantRain: p.rainParticles.count,
+            pr: g.renderer.getPixelRatio(), wantPr: Math.min(devicePixelRatio, p.maxPixelRatio, 2) * p.renderScale });
+        }
+        off();
+        return { res, events };
+      })()`);
+      for (const r of sw.res) {
+        if (!r.same) throw new Error('切档重载了场景');
+        if (r.shadow !== r.wantShadow || (r.shadowMap !== null && r.shadowMap !== r.wantShadow)) throw new Error('阴影贴图没重建 ' + JSON.stringify(r));
+        if (r.rain !== r.wantRain) throw new Error('雨量不对 ' + JSON.stringify(r));
+        if (Math.abs(r.pr - r.wantPr) > 1e-6) throw new Error('像素比不对 ' + JSON.stringify(r));
+        // SwiftShader（CPU 软件渲染）里着色器编译 / 渲染目标重建本身就要 1–2 s，这里只拦「卡死」；
+        // 验收的 < 1 s 要在真显卡上看（F3 面板的 max 帧时间），见 README
+        if (r.worst >= 5000) throw new Error('切档卡死 ≥ 5 s ' + JSON.stringify(r));
+      }
+      if (sw.events < 4) throw new Error('quality:changed 事件数 ' + sw.events);
+      out.push('运行时切档 ✓（最长帧间隔 ' + sw.res.map((r) => r.t + ' ' + r.worst + 'ms').join(' / ') + '）');
+      // 7) F3 性能面板
+      const panel = await evaluate(`(async () => { const f = __game.ui.fps; const was = f.visible; f.setVisible(true);
+        await new Promise((r) => setTimeout(r, 2600)); const text = f.el.textContent; const snap = f.snapshot; f.setVisible(was); return { text, snap }; })()`);
+      for (const re of [/FPS/, /ms/, /draw call \d+ \/ 2000/, /三角面 \S+ \/ 6\.00M/, /显存≈ \d+ MB/]) {
+        if (!re.test(panel.text)) throw new Error('F3 面板缺 ' + re + '：' + panel.text);
+      }
+      if (!(panel.snap?.stats?.calls > 0 && panel.snap.stats.triangles > 0)) throw new Error('renderer.info 读数为 0 ' + JSON.stringify(panel.snap));
+      out.push('F3：' + panel.text.split('\n').slice(0, 3).join(' | '));
+      // 恢复干净状态（回到无 simulateFps 的地址）
+      await evaluate(`localStorage.clear(); 1`);
+      await cdp.goto('');
+      return out.join('，');
     },
   },
   {
@@ -422,6 +530,17 @@ const cdp = {
       await new Promise((r) => setTimeout(r, 250));
     }
     throw new Error('刷新后 60 秒内主场景没有就绪');
+  },
+  /** 换 URL 参数重新打开（在 ?smoke=1 基础上追加 query），等主场景就绪 */
+  async goto(query) {
+    await send('Page.navigate', { url: url + (query ? '&' + query : '') }, sessionId);
+    await new Promise((r) => setTimeout(r, 300));
+    const end = Date.now() + 60000;
+    while (Date.now() < end) {
+      if (await evaluate(`Boolean(window.__game?.scenes?.current?.name === 'main')`).catch(() => false)) return;
+      await new Promise((r) => setTimeout(r, 250));
+    }
+    throw new Error('换地址后 60 秒内主场景没有就绪');
   },
   async key(code, key = code, keyCode = 0) {
     const base = { code, key, windowsVirtualKeyCode: keyCode, nativeVirtualKeyCode: keyCode };

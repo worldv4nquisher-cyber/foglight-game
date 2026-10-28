@@ -2,7 +2,7 @@
  * 类型安全的事件总线。事件名与负载类型在 GameEvents 中集中声明，
  * 新增事件只需扩展该接口（可在业务模块里用 declaration merging）。
  */
-import type { QualityTier } from '@/config/quality';
+import type { QualityChangeSource, QualityTier } from '@/config/quality';
 
 export interface GameEvents {
   'game:pause': { reason: 'user' | 'visibility' | 'pointerlock' | 'system' };
@@ -10,7 +10,10 @@ export interface GameEvents {
   'scene:change': { from: string | null; to: string };
   'assets:progress': { loaded: number; total: number; ratio: number; url?: string };
   'assets:complete': { missing: string[] };
-  'quality:change': { tier: QualityTier };
+  /** 画质档位运行时切换（v0.1-009）：收到后重建阴影贴图 / 渲染目标等，不重载场景 */
+  'quality:changed': { tier: QualityTier; previous: QualityTier; source: QualityChangeSource };
+  /** 首次启动的 3 秒画质自动检测完成 */
+  'quality:detected': { tier: QualityTier; drops: number; rounds: Array<{ tier: QualityTier; fps: number; simulated: boolean }> };
   'viewport:resize': { width: number; height: number; pixelRatio: number };
   'ui:toggle-fps': { visible: boolean };
   /** 观察模式（右键）开关与焦点距离（PostFX 景深用，026） */

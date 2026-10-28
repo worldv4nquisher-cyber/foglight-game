@@ -71,6 +71,9 @@ body {
   pointer-events: none !important;
   z-index: 50;
 }
+.fps-counter.detailed {
+  white-space: pre;
+}
 
 /* ---------- Loading ---------- */
 .loading-screen {
@@ -326,6 +329,13 @@ body {
   color: var(--ui-dim);
   text-align: center;
   word-break: break-all;
+}
+
+.menu-note {
+  margin: -2px 0 4px;
+  font-size: 12px;
+  color: var(--ui-dim);
+  text-align: right;
 }
 
 /* ---------- Fatal error ---------- */

@@ -1,5 +1,8 @@
 import type { Game } from '@/core/Game';
 import { QUALITY_PRESETS, QualityManager, type QualityTier } from '@/config/quality';
+
+/** 文案 text-ch1 `ui.settings.quality_auto_note`（本地化系统 / 完整设置界面在 008 接入） */
+export const QUALITY_AUTO_NOTE = '已根据这台电脑自动选择画质，可以随时改回。';
 import { isFullscreenSupported, toggleFullscreen } from '@/platform/fullscreen';
 
 /**
@@ -31,6 +34,7 @@ export class PauseMenu {
           <span>画质</span>
           <div class="seg" data-role="quality"></div>
         </div>
+        <p class="menu-note" data-role="quality-note" data-key="ui.settings.quality_auto_note" hidden></p>
         <div class="menu-row"><span>鼠标灵敏度</span><span class="menu-range"><input type="range" min="0.1" max="3" step="0.1" data-act="sens" aria-label="鼠标灵敏度"><span data-role="sens-value"></span></span></div>
         <div class="menu-row"><span>Y 轴反转</span><button type="button" class="menu-btn small" data-act="invert"></button></div>
         <div class="menu-row"><span>帧率显示</span><button type="button" class="menu-btn small" data-act="fps"></button></div>
@@ -100,9 +104,14 @@ export class PauseMenu {
     this.sensInput.value = String(sens);
     this.sensValue.textContent = sens.toFixed(1);
     this.invertBtn.textContent = this.game.settings.get('invertY') ? '开' : '关';
+    // 自动检测降过档、且玩家没手动改过时，画质项下显示提示
+    const note = this.el.querySelector<HTMLParagraphElement>('[data-role="quality-note"]')!;
+    note.hidden = !q.showAutoNote;
+    note.textContent = q.showAutoNote ? QUALITY_AUTO_NOTE : '';
     const notice = this.game.save.writable ? '' : ' · 进度不会保存';
-    this.el.querySelector('.menu-foot')!.textContent =
-      `自动推荐：${QUALITY_PRESETS[q.auto].label} · GPU：${q.gpu} · Esc 继续${notice}`;
+    const detected = q.detected;
+    const auto = q.urlOverride ? 'URL 临时档位' : detected ? `自动检测：${QUALITY_PRESETS[detected].label}` : '尚未自动检测';
+    this.el.querySelector('.menu-foot')!.textContent = `${auto} · GPU：${q.gpu} · Esc 继续${notice}`;
   }
 
   dispose(): void {

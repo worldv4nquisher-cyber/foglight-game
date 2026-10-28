@@ -18,6 +18,8 @@ export interface SettingsData {
   /** 首次启动的画质自动检测是否已经跑过（只跑一次，见 009） */
   qualityDetected: boolean;
   qualitySource: QualitySource;
+  /** 自动检测得出的档位（qualityDetected=true 时有效）：「恢复默认」回到它；降过档时设置界面显示提示 */
+  qualityDetectedTier: QualityTier;
   /** 鼠标灵敏度倍数 0.1–3.0 */
   mouseSensitivity: number;
   invertY: boolean;
@@ -35,6 +37,7 @@ export const DEFAULT_SETTINGS: Readonly<SettingsData> = Object.freeze({
   quality: 'ultra',
   qualityDetected: false,
   qualitySource: 'default',
+  qualityDetectedTier: 'ultra',
   mouseSensitivity: 1,
   invertY: false,
   masterVolume: 100,
@@ -65,6 +68,7 @@ export function sanitizeSettings(raw: unknown): SettingsData {
     quality: pickEnum<QualityTier>(r.quality, TIERS, d.quality),
     qualityDetected: pickBool(r.qualityDetected, d.qualityDetected),
     qualitySource: pickEnum<QualitySource>(r.qualitySource, ['default', 'auto', 'user'], d.qualitySource),
+    qualityDetectedTier: pickEnum<QualityTier>(r.qualityDetectedTier, TIERS, d.qualityDetectedTier),
     mouseSensitivity: pickNum(r.mouseSensitivity, 0.1, 3, d.mouseSensitivity),
     invertY: pickBool(r.invertY, d.invertY),
     masterVolume: Math.round(pickNum(r.masterVolume, 0, 100, d.masterVolume)),
@@ -140,11 +144,22 @@ export class Settings {
     }
   }
 
-  /** 恢复默认（设置界面底部按钮）。画质检测标记保留，不会因此重新跑检测 */
+  /**
+   * 恢复默认（设置界面底部按钮）。不重新跑画质检测：检测过的话画质回到检测结果（来源 auto），没检测过回到极致。
+   */
   resetToDefaults(): void {
-    const keep = { qualityDetected: this.data.qualityDetected };
-    const d = { ...DEFAULT_SETTINGS, ...keep };
-    for (const k of Object.keys(d) as Array<keyof SettingsData>) this.set(k, d[k]);
+    const detected = this.data.qualityDetected;
+    const keep: Partial<SettingsData> = {
+      qualityDetected: detected,
+      qualityDetectedTier: this.data.qualityDetectedTier,
+      qualitySource: detected ? 'auto' : 'default',
+      quality: detected ? this.data.qualityDetectedTier : DEFAULT_SETTINGS.quality,
+    };
+    const d: SettingsData = { ...DEFAULT_SETTINGS, ...keep };
+    // 先写来源再写档位（QualityManager 的设置监听据此判断事件来源）
+    const keys = Object.keys(d) as Array<keyof SettingsData>;
+    keys.sort((a, b) => Number(b === 'qualitySource') - Number(a === 'qualitySource'));
+    for (const k of keys) this.set(k, d[k]);
   }
 
   /** 订阅变化，返回取消函数 */

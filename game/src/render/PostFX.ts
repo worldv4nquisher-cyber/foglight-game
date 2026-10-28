@@ -143,7 +143,7 @@ export class PostFX {
       this.vignette.offset = a.vignette.offset;
       this.vignette.darkness = a.vignette.darkness;
     }
-    if (this.noise) this.noise.blendMode.opacity.value = a.grain;
+    if (this.noise) this.noise.blendMode.opacity.value = this.quality.filmGrain ? a.grain : 0;
     if (this.aoPass) {
       const c = this.aoPass.configuration;
       c.aoRadius = a.ao.radius;
@@ -156,15 +156,19 @@ export class PostFX {
   applyQuality(q: QualityPreset): void {
     const rebuild = q.postprocessing !== this.quality.postprocessing;
     this.quality = q;
+    // GTAO 现阶段用 N8AO 实现：off = 只用烘焙 AO
     if (this.aoPass) {
-      this.aoPass.enabled = q.ao;
+      this.aoPass.enabled = q.ao.gtao !== 'off';
       this.aoPass.setQualityMode(q.aoQuality);
-      this.aoPass.configuration.halfRes = q.aoHalfRes;
+      this.aoPass.configuration.halfRes = q.ao.gtao === 'half';
     }
-    if (this.smaaPass) this.smaaPass.enabled = q.smaa;
-    if (this.bloom) this.bloom.mipmapBlurPass.levels = q.bloomMipmapBlur ? 8 : 4;
+    // TAA 在 025/026 做，之前极致档也用 SMAA
+    if (this.smaaPass) this.smaaPass.enabled = q.antialias === 'SMAA' || q.antialias === 'TAA';
+    // 三档 bloom 都开，只差 mip 级数（6 / 5 / 4）；改级数会重建 mip 链，没变就不碰
+    if (this.bloom && this.bloom.mipmapBlurPass.levels !== q.bloom.mipLevels) this.bloom.mipmapBlurPass.levels = q.bloom.mipLevels;
+    if (this.noise) this.noise.blendMode.opacity.value = q.filmGrain ? (this.atmosphere?.grain ?? 0) : 0;
+    if (this.vignette) this.vignette.blendMode.opacity.value = q.vignette ? 1 : 0;
     if (rebuild && q.postprocessing && this.scene && !this.renderPass) this.build();
-    this.composer.setSize(this.width, this.height, false);
   }
 
   setSize(width: number, height: number): void {

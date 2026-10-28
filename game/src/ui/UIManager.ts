@@ -2,8 +2,9 @@ import type { Game } from '@/core/Game';
 import { gameConfig } from '@/config/gameConfig';
 import { debugEnabled } from '@/config/debug';
 import { DebugPanel } from './DebugPanel';
+import { estimateVram } from '@/render/vram';
 import { SAVE_TEXT } from '@/systems/save/SaveSystem';
-import { FpsCounter } from './FpsCounter';
+import { FpsCounter, type PerfStats } from './FpsCounter';
 import { Hud } from './Hud';
 import { LoadingScreen } from './LoadingScreen';
 import { PauseMenu } from './PauseMenu';
@@ -29,7 +30,14 @@ export class UIManager {
     private game: Game,
   ) {
     // 正式版按设置「显示帧率」（默认关）；开发模式默认显示
-    this.fps = new FpsCounter(root, gameConfig.showFpsByDefault || game.settings.get('showFps'), () => this.game.quality.preset.label);
+    // 开发模式 / ?debug=1 / ?smoke=1 显示完整性能面板（009：draw call、三角面、显存估算，对照 §8 预算）
+    const detailed = debugEnabled || new URLSearchParams(location.search).has('smoke');
+    this.fps = new FpsCounter(root, gameConfig.showFpsByDefault || game.settings.get('showFps'), {
+      detailed,
+      label: () => this.game.quality.preset.label,
+      stats: () => this.perfStats(),
+      vram: () => estimateVram(this.game.renderer, this.game.scenes.current?.scene ?? null),
+    });
     this.debug = new DebugPanel(root, game);
     this.loading = new LoadingScreen(root);
     this.fade = new ScreenFade(root);
@@ -60,6 +68,26 @@ export class UIManager {
     this.game.settings.set('showFps', v);
     this.game.events.emit('ui:toggle-fps', { visible: v });
     return v;
+  }
+
+  private perfStats(): PerfStats {
+    const { renderer, quality, benchmark, settings } = this.game;
+    const info = renderer.info;
+    const p = quality.preset;
+    const src = quality.urlOverride ? 'URL' : { default: '默认', auto: '自动', user: '手动' }[settings.get('qualitySource')];
+    return {
+      calls: info.render.calls,
+      triangles: info.render.triangles,
+      geometries: info.memory.geometries,
+      textures: info.memory.textures,
+      maxDrawCalls: p.maxDrawCalls,
+      sceneVisibleTris: p.sceneVisibleTris,
+      label: `${p.label}（${src}）`,
+      benchmark: benchmark.running
+        ? `自动检测中：${p.label} ${benchmark.elapsed.toFixed(1)} s` +
+          (benchmark.rounds.length ? ` · 已测 ${benchmark.rounds.map((r) => `${r.tier} ${r.fps.toFixed(0)}`).join(' / ')}` : '')
+        : null,
+    };
   }
 
   /** 每帧调用（未缩放时间，暂停时也更新） */

@@ -18,7 +18,7 @@
 | `npm run preview` | 本地预览 `dist/`（http://localhost:4173） |
 | `npm run typecheck` | TypeScript 严格模式检查（src + vite.config） |
 | `npm run lint` / `lint:fix` | ESLint（flat config + typescript-eslint 类型感知规则） |
-| `npm run test` | 全部 Node 校验：LOD / puzzleCritical、资源后处理与 GLB 自检（`test:assets`）、输入（`test:input`）、存档（`test:save`）、角色物理（`test:physics`）、相机（`test:camera`） |
+| `npm run test` | 全部 Node 校验：LOD / puzzleCritical、资源后处理与 GLB 自检（`test:assets`）、输入（`test:input`）、存档（`test:save`）、角色物理（`test:physics`）、相机（`test:camera`）、画质参数表与自动检测（`test:quality`，逐键对照 style-guide §8） |
 | `node scripts/verify-lod.mjs <a.glb> [b.glb…]` | **GLB 交付自检**（美术交付前跑，也可 `npm run verify:glb -- <文件>`）：LOD 层级与各级三角面、puzzleCritical、`-collider` / `-interact` 等特殊节点、COLOR_0 平滑法线、面数预算、材质与贴图。不带参数 = 原来的 LOD 自测。见下文「GLB 交付自检」 |
 | `npm run assets:test-lod` | 重新生成 LOD 测试模型 `public/assets/models/test-lod-puzzle-critical.glb` |
 | `npm run check` | typecheck + lint + test + build 一次跑完（提交前跑） |
@@ -31,11 +31,12 @@
 
 | 参数 | 说明 |
 |---|---|
-| `?quality=ultra\|high\|standard` | 强制画质档位（优先于玩家设置和自动检测） |
+| `?quality=ultra\|high\|standard` | 临时强制画质档位（不写设置，也不跑自动检测） |
+| `?simulateFps=40` | 画质自动检测用固定帧率代替实测（`40,60` = 第 1 轮 40、第 2 轮起 60）；需先清空设置（`localStorage.clear()`）才会检测 |
 | `?postfx=0` | 关闭后处理，直接渲染（排查渲染问题） |
 | `?atmo=lonely-night` | 切换气氛预设（默认 `melancholy-dusk`） |
 | `?scene=testbed` | 角色控制器 / 相机测试场地（坡、台阶、螺旋楼梯、墙、闸门 G、升降台、跨越点、T 黑场送回；带窄门的小屋、测试机关、观察点、C 测试镜头），不存档 |
-| `?debug=1` | 正式构建里也打开 F3 帧率 / F4 调试面板（输入、速度、碰撞耗时、相机、观察点对准度） |
+| `?debug=1` | 正式构建里也打开 F3 性能面板 / F4 调试面板（输入、速度、碰撞耗时、相机、观察点对准度） |
 
 开发模式下控制台可用 `__game`，如 `__game.quality.set('ultra')`；`__lods()` 列出 LOD 测试物体的当前层级。
 
@@ -59,7 +60,7 @@
 | 暂停 | Esc（任何时候） | Esc | Esc | Esc |
 
 - Esc 永远是暂停（制作人裁定：指针锁定时 Esc 先被浏览器用来解锁，页面不一定收到按键）。暂停后点「继续」或再按 Esc，再点一下画面重新锁定鼠标。
-- 开发模式或 URL 加 `?debug=1`：F3 帧率，F4 调试面板（输入上下文栈、指针状态、最近触发的 action）。控制台 `__game.input.pushContext('puzzle')` 可手动切上下文试键位，`__game.input.debug = true` 在控制台打印每个 action。
+- 开发模式或 URL 加 `?debug=1`：F3 性能面板，F4 调试面板（输入上下文栈、指针状态、最近触发的 action）。控制台 `__game.input.pushContext('puzzle')` 可手动切上下文试键位，`__game.input.debug = true` 在控制台打印每个 action。
 - 触屏输入（`TouchInput`，摇杆 + 滑动转视角 + 交互键）保留代码但默认不注册（桌面专做）。
 
 ## 目录约定
@@ -77,7 +78,7 @@ game/
 │  ├─ core/                 Game（渲染器 + 主循环）、Time（固定步长）、EventBus、dispose 工具
 │  ├─ scenes/               SceneManager、BaseScene、BootScene → LoadingScene → MainScene
 │  ├─ entities/             轻量 ECS：Entity + Component（KinematicBody、PlayerController、TraversalLink、ViewpointTarget、Spinner…）、createPlayer
-│  ├─ systems/              PhysicsSystem（胶囊 vs BVH）、locomotion、CameraFollowSystem（第三人称 / 机关 / 演出）、AudioSystem、camera/、input/、save/
+│  ├─ systems/              PhysicsSystem（胶囊 vs BVH）、locomotion、CameraFollowSystem（第三人称 / 机关 / 演出）、QualityBenchmark（画质 3 秒检测）、AudioSystem、camera/、input/、save/
 │  │  ├─ camera/            CameraTrack（镜头轨道：关键帧或 GLB 相机动画节点）
 │  │  └─ input/             actions（抽象动作 + 键位）、InputManager、KeyboardMouseInput、TouchInput
 │  ├─ render/               PostFX 后处理管线（postprocessing + N8AO）、lod（LOD 组装 + puzzleCritical）
@@ -100,14 +101,18 @@ game/
 - **场景（scenes/）**：`SceneManager.change(name)` 依次 `exit → dispose → new → enter(可异步)`。流程 Boot（启动资源）→ Loading（进度条，加载 `main` 资源组）→ Main。`usePostFX=true` 的场景走后处理。
 - **输入（systems/input/）**：玩法代码只认抽象 action（`interact/sprint/partNext/exitPuzzle/advance/skipHold/pause…` 和轴 `moveX/moveY` + 视角 / 滚轮增量），输入源只写原始按键，由 InputManager 按上下文栈（`InputContext.ts`，`input.pushContext('puzzle')` 返回弹出函数）映射。新增操作：在 `actions.ts` 加 action 并在对应上下文配键位。灵敏度 / Y 反转：`input.setLookSensitivity()` / `setInvertY()`。指针锁定默认开启（`gameConfig.input.pointerLock`）。校验：`npm run test:input`。
 - **资源（assets/）**：见下节。缺失或加载失败一律回退占位几何体/棋盘格纹理，游戏照常运行。
-- **画质（config/quality.ts）**：纯桌面三档，对应美术风格指南的「极致/高/标准」。档位存在设置里；首次启动按 GPU 名称粗判一次（独显 RTX 3060 级以上 → 极致；核显/软件渲染 → 标准；其余 → 高）并记下，之后不再自动改（v0.1-009 换成实测基准）。玩家手动切换随时生效。URL `?quality=high` 临时覆盖。
-- **存档 / 设置（systems/save/）**：`game.save`（`foglight.save.v1`，单存档位，进入带 `savePoint` 的场景时自动存档，只记场景入口；游玩时间每 10 秒累加）与 `game.settings`（`foglight.settings.v1`，新游戏不清除，`settings.set()` 立即生效并写盘；旧键 `game.quality` 首次启动迁移后删除）。坏存档（版本不符 / JSON 坏）→ `save.status === 'corrupt'`、提示「存档无法读取」；localStorage 不可写 → `save.writable === false`、提示「进度不会保存」，游戏照常。主菜单（008）做好前，启动时有存档就直接「继续」，提示用 HUD 右下角小字显示。清档：控制台 `localStorage.clear()`。校验：`npm run test:save`。
+- **画质（config/quality.ts，v0.1-009）**：纯桌面三档「极致 / 高 / 标准」，参数表键名与数值逐项照抄 `art/style/style-guide.md` §8（`npm run test:quality` 校验，期望值内嵌在 `scripts/verify-quality.mjs`，§8 改了两边一起改）。表里体积雾、CSM、描边、反射、TAA、AgX 等特性在 023–026 实现时直接读这里；现在已生效的是 `renderScale`、`maxPixelRatio`、`shadowType.mapSize`（单张平行光阴影）、`rainParticles.count`、`ao.gtao`（N8AO）、`bloom.mipLevels`、`filmGrain`、`vignette`、`lodDistances`。
+  - **默认极致**，不按 GPU 名称判档（GPU 名只打日志、显示在暂停菜单底部）。
+  - **3 秒自动检测（systems/QualityBenchmark.ts）**：设置里 `qualityDetected=false`（新安装 / 清空设置）时，第一次进入 S1 的 3 秒建立镜头里从极致开始测平均帧率，< 50 fps 降一档后重测 3 秒，最多连降两档；暂停 / 切后台这一轮作废重测，切档后前 5 帧不计。结果写设置（`quality`、`qualityDetectedTier`、`qualitySource='auto'`），之后刷新 / 重启都不再测。降过档且玩家没手动改过时，暂停菜单画质项下显示 `ui.settings.quality_auto_note`。
+  - 玩家手动切换（`game.quality.set(tier)`）随时生效并保存，`qualitySource='user'` 后不会再被自动改；检测中途手动改 = 停止检测、以玩家为准。「恢复默认」不重新检测，画质回到检测结果（没检测过回到极致）。
+  - **运行时切档**不重载场景：发布 `quality:changed { tier, previous, source }`，Game 改像素比并 resize（重建后处理渲染目标），PostFX 改 AO / bloom / 颗粒，场景丢掉旧阴影贴图按新尺寸重建、改雨量和 LOD 距离。检测完成另发 `quality:detected`。
+  - **F3 性能面板**（开发模式 / `?debug=1`）：FPS、帧时间（含最长帧）、draw call、三角面（整帧含后处理，`renderer.info`）、显存估算（几何 + 贴图 + 渲染目标，`render/vram.ts`），draw call 和三角面对照当前档 §8 预算（`maxDrawCalls` / `sceneVisibleTris`），超了标 ⚠。正式版「显示帧率」只显示一行 FPS。
 
-  | 档位 | 像素比上限 | AO（N8AO） | 阴影贴图 | 软阴影半径 | 雨滴 | 视距 |
-  |---|---|---|---|---|---|---|
-  | ultra 极致 | 2 | High，全分辨率 | 4096 | 3 | 6000 | 400 |
-  | high 高（默认） | 1.5 | Medium，半分辨率 | 2048 | 2.5 | 3500 | 300 |
-  | standard 标准 | 1 | 关 | 1024 | 2 | 1500 | 200 |
+  | 档位 | renderScale × 像素比上限 | AO | 阴影贴图 | 雨 | bloom mip | 胶片颗粒 | LOD 距离 | 视距 |
+  |---|---|---|---|---|---|---|---|---|
+  | ultra 极致（默认） | 1.0 × 2 | GTAO 全分辨率 | 4096 | 30k | 6 | 开 | 60 / 150 / 400 | 600 |
+  | high 高 | 1.0 × 1.5 | GTAO 半分辨率 | 2048 | 15k | 5 | 开 | 40 / 100 / 250 | 400 |
+  | standard 标准 | 0.8 × 1 | 只用烘焙 | 2048 | 6k | 4 | 关 | 25 / 60 / 150 | 250 |
 
 - **后处理（render/PostFX.ts）**：`RenderPass(HalfFloat HDR) → N8AO → [Bloom → ACES 色调映射 → 色相/饱和度 → 亮度/对比度 → 暗角 → 胶片颗粒] → SMAA`。配合场景 `FogExp2` 和与雾色衔接的渐变天空穹顶。
 - **气氛预设（config/atmosphere.ts）**：雾色/浓度、天空、半球光、主光、灯塔暖光、水色、曝光、Bloom、调色、暗角、颗粒、AO、雨——**调氛围只改这个文件**。目前有 `melancholy-dusk`（默认，忧郁阴天黄昏细雨）和 `lonely-night`（孤夜浓雾）。

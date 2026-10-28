@@ -79,7 +79,7 @@ export class MainScene extends BaseScene {
 
     const { events, audio, ui } = this.game;
     this.cleanups.push(
-      events.on('quality:change', () => this.applyQuality()),
+      events.on('quality:changed', () => this.applyQuality()),
       events.on('player:land', ({ impactSpeed }) => {
         if (impactSpeed > 4) audio.beep(90, 0.1, 'triangle', Math.min(0.08, impactSpeed * 0.006));
       }),
@@ -92,6 +92,8 @@ export class MainScene extends BaseScene {
     );
     ui.hud.setLocation('雾岬 · 第一座灯塔');
     this.cleanups.push(() => this.cameraFollow.dispose());
+    // 首次启动后第一次进入 S1：3 秒画质自动检测和建立镜头同时进行（009；开场演出做好后挪到演出最后 3 s，035）
+    this.game.benchmark.start();
     this.playEstablishing();
   }
 
@@ -319,16 +321,18 @@ export class MainScene extends BaseScene {
     const q = this.game.quality.preset;
     this.camera.far = q.viewDistance;
     this.camera.updateProjectionMatrix();
-    this.rain.setCount(q.rainCount);
+    this.rain.setCount(q.rainParticles.count);
+    // 阴影贴图尺寸 = §8 shadowType.mapSize（CSM 级数 / PCSS / 接触阴影在 023 做）；尺寸变了就丢掉旧贴图，下一帧按新尺寸重建
     const s = this.sun.shadow;
-    if (s.mapSize.width !== q.shadowMapSize) {
-      s.mapSize.set(q.shadowMapSize, q.shadowMapSize);
+    const size = q.shadowType.mapSize;
+    if (s.mapSize.width !== size) {
+      s.mapSize.set(size, size);
       s.map?.dispose();
       s.map = null;
     }
     s.radius = q.shadowRadius;
     s.blurSamples = 16;
-    this.sun.castShadow = q.shadows;
+    this.sun.castShadow = true;
     // LOD 切换距离随档位变化；puzzleCritical 物体不受影响（加载时已只剩 LOD0，这里也会兜底强制 LOD0）
     applyLodDistances(this.scene, q.lodDistances);
   }

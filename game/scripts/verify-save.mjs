@@ -264,6 +264,20 @@ test('恢复默认：保留画质检测标记', () => {
   assert.equal(s.get('qualityDetected'), true);
 });
 
+test('009：qualityDetectedTier 清洗 / 持久化；恢复默认回到检测结果（来源 auto），未检测回到极致', () => {
+  const st = new MemStorage('ok', { [SETTINGS_KEY]: JSON.stringify({ qualityDetectedTier: 'epic' }) });
+  const s = new Settings(st);
+  assert.equal(s.get('qualityDetectedTier'), 'ultra');
+  s.update({ qualityDetected: true, qualityDetectedTier: 'high', qualitySource: 'auto', quality: 'high' });
+  s.update({ qualitySource: 'user', quality: 'standard' });
+  const order = [];
+  s.onChange((k) => order.push(k));
+  s.resetToDefaults();
+  assert.deepEqual([s.get('quality'), s.get('qualitySource'), s.get('qualityDetected')], ['high', 'auto', true]);
+  assert.ok(order.indexOf('qualitySource') < order.indexOf('quality'), '应先写来源再写档位');
+  assert.equal(new Settings(st).get('qualityDetectedTier'), 'high');
+});
+
 let failed = 0;
 for (const [name, e] of results) {
   console.log(`${e ? '✗' : '✓'} ${name}`);

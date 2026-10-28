@@ -14,6 +14,7 @@ import { UIManager } from '@/ui/UIManager';
 import { VisibilityWatcher } from '@/platform/visibility';
 import { nativeBridge } from '@/platform/native';
 import { PostFX } from '@/render/PostFX';
+import { QualityBenchmark, parseSimulateFps } from '@/systems/QualityBenchmark';
 
 /**
  * 游戏根对象：持有渲染器与各全局服务，驱动主循环。
@@ -31,6 +32,8 @@ export class Game {
   /** 存档（foglight.save.v1） */
   readonly save = new SaveSystem();
   readonly quality: QualityManager;
+  /** 首次启动的 3 秒画质自动检测（第一次进入 S1 时由场景调用 start()） */
+  readonly benchmark: QualityBenchmark;
   readonly input: InputManager;
   readonly assets: AssetLoader;
   readonly audio: AudioSystem;
@@ -61,7 +64,13 @@ export class Game {
     this.renderer.domElement.classList.add('game-canvas');
     container.prepend(this.renderer.domElement);
 
+    // F3 性能面板要整帧（含后处理各 pass）的 draw call / 三角面：每帧开头手动清零
+    this.renderer.info.autoReset = false;
+
     this.quality = new QualityManager(this.events, this.renderer, this.settings);
+    this.benchmark = new QualityBenchmark(this.quality, this.settings, this.events, {
+      simulateFps: parseSimulateFps(location.search),
+    });
     this.postfx = new PostFX(this.renderer, this.quality.preset);
     this.applyQuality();
 
@@ -91,10 +100,15 @@ export class Game {
     });
 
     this.disposers.push(
-      this.events.on('quality:change', () => {
+      // 运行时切档（不重载场景）：像素比 / 阴影 / 后处理参数，resize 重建渲染目标；场景自己重建阴影贴图、雨量、LOD 距离
+      this.events.on('quality:changed', ({ tier, previous, source }) => {
+        const t0 = performance.now();
+        // 像素比没变就不 resize：重设画布尺寸会清掉绘图缓冲、重建全部渲染目标（切档卡顿的大头）
+        const ratioChanged = Math.abs(this.renderer.getPixelRatio() - this.pixelRatio) > 1e-6;
         this.applyQuality();
         this.postfx.applyQuality(this.quality.preset);
-        this.resize();
+        if (ratioChanged) this.resize();
+        if (import.meta.env.DEV) console.info(`[quality] ${previous} → ${tier}（${source}），${(performance.now() - t0).toFixed(1)} ms`);
       }),
       // 场景切换：为使用后处理的场景重建管线，其他场景（启动/加载）直接渲染
       this.events.on('scene:change', () => {
@@ -153,6 +167,7 @@ export class Game {
     this.rafId = requestAnimationFrame(this.tick);
 
     const time = this.time;
+    this.renderer.info.reset();
     this.input.beginFrame();
     if (this.input.consumePressed('pause')) this.togglePause();
 
@@ -175,6 +190,7 @@ export class Game {
         this.renderer.render(scene.scene, scene.camera);
       }
     }
+    this.benchmark.update(now, this.paused || document.hidden);
     this.ui.update(time.unscaledDelta);
     this.input.endFrame();
   };
@@ -191,11 +207,17 @@ export class Game {
     });
   }
 
-  private applyQuality(): void {
+  /** 渲染像素比 = min(设备像素比, 档位上限, 全局上限) × renderScale（标准档 0.8） */
+  get pixelRatio(): number {
     const p = this.quality.preset;
-    const ratio = Math.min(window.devicePixelRatio || 1, p.maxPixelRatio, gameConfig.maxPixelRatio);
-    this.renderer.setPixelRatio(ratio);
-    this.renderer.shadowMap.enabled = p.shadows;
+    return Math.min(window.devicePixelRatio || 1, p.maxPixelRatio, gameConfig.maxPixelRatio) * p.renderScale;
+  }
+
+  private applyQuality(): void {
+    // setPixelRatio 内部会 setSize（重建绘图缓冲），没变就不调
+    if (Math.abs(this.renderer.getPixelRatio() - this.pixelRatio) > 1e-6) this.renderer.setPixelRatio(this.pixelRatio);
+    // 三档都有阴影（style-guide §8 shadowType 全是 CSM）；CSM / PCSS 在 023 做，现在是单张平行光阴影
+    this.renderer.shadowMap.enabled = true;
     // three r18x：PCFSoftShadowMap 已移除，PCFShadowMap 配合各灯光的 shadow.radius 实现软阴影
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
     this.renderer.shadowMap.needsUpdate = true;
@@ -204,7 +226,7 @@ export class Game {
   resize(): void {
     const w = Math.max(1, this.container.clientWidth);
     const h = Math.max(1, this.container.clientHeight);
-    const ratio = Math.min(window.devicePixelRatio || 1, this.quality.preset.maxPixelRatio, gameConfig.maxPixelRatio);
+    const ratio = this.pixelRatio;
     this.renderer.setPixelRatio(ratio);
     this.renderer.setSize(w, h, false);
     this.postfx.setSize(w, h);
@@ -215,6 +237,8 @@ export class Game {
   dispose(): void {
     this.stop();
     this.scenes.dispose();
+    this.benchmark.dispose();
+    this.quality.dispose();
     this.postfx.dispose();
     this.assets.dispose();
     this.input.dispose();
