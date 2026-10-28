@@ -14,6 +14,7 @@ import { SkyDome } from '@/world/SkyDome';
 import { Water } from '@/world/Water';
 import { Rain } from '@/world/Rain';
 import { Lighthouse } from '@/world/Lighthouse';
+import { applyLodDistances, describeLods } from '@/render/lod';
 
 const ISLAND_RADIUS = 18;
 const SPAWN = new THREE.Vector3(-1.5, 0.01, 10);
@@ -224,7 +225,32 @@ export class MainScene extends BaseScene {
     cube.add(new Spinner(new THREE.Vector3(0.35, 0.8, 0.15), 0.18, 1.2));
     this.entities.add(cube);
 
+    this.buildLodTest(occluders);
     this.cameraFollow.occluders = occluders;
+  }
+
+  /**
+   * LOD / 解谜关键物体用例（出生点左前方）：test-lod-puzzle-critical.glb 走真实 GLB 加载路径。
+   * - 白石 white-stone（父级 extras.puzzleCritical）、刻度柱 tide-gauge（lod0 上标记）：三档都固定 LOD0
+   * - 对照石 rock-control：普通 3 级 LOD，按画质档位 lodDistances 切换（LOD1 偏绿、LOD2 偏红）
+   * 开发模式控制台：__lods() 查看各 LOD 当前层级。
+   */
+  private buildLodTest(occluders: THREE.Object3D[]): void {
+    if (this.game.assets.isMissing('test-lod-puzzle')) {
+      console.info('[lod] 测试模型缺失，运行 npm run assets:test-lod 生成');
+      return;
+    }
+    const group = this.game.assets.getModel('test-lod-puzzle');
+    group.name = 'lod-test';
+    group.position.set(-5.2, 0, 6.2);
+    group.rotation.y = 0.3;
+    this.scene.add(group);
+    group.updateWorldMatrix(true, true);
+    for (const child of group.children) {
+      this.physics.addStaticFromObject(child);
+      occluders.push(child);
+    }
+    if (import.meta.env.DEV) Object.assign(window, { __lods: () => describeLods(group) });
   }
 
   private buildPlayer(): void {
@@ -293,6 +319,8 @@ export class MainScene extends BaseScene {
     s.radius = q.shadowRadius;
     s.blurSamples = 16;
     this.sun.castShadow = q.shadows;
+    // LOD 切换距离随档位变化；puzzleCritical 物体不受影响（加载时已只剩 LOD0，这里也会兜底强制 LOD0）
+    applyLodDistances(this.scene, q.lodDistances);
   }
 
   // ---------------------------------------------------------------- 循环

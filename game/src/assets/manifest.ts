@@ -24,6 +24,8 @@ export interface AssetEntry {
 export const manifest: AssetEntry[] = [
   // 主角模型：美术交付前文件不存在，自动回退为胶囊占位（演示缺失回退流程）
   { key: 'hero', type: 'gltf', url: 'assets/models/hero.glb', group: 'main', optional: true },
+  // LOD / 解谜关键物体测试用例（scripts/gen-lod-test-asset.mjs 生成）：白石（puzzleCritical，固定 LOD0）+ 普通对照石
+  { key: 'test-lod-puzzle', type: 'gltf', url: 'assets/models/test-lod-puzzle-critical.glb', group: 'main', optional: true },
   // ---- 更多示例（取消注释即可登记）----
   // { key: 'ground-diffuse', type: 'ktx2', url: 'assets/textures/ground-diffuse.ktx2', group: 'main', optional: true },
   // { key: 'sfx-jump', type: 'audio', url: 'assets/audio/sfx-jump.ogg', group: 'main', optional: true },

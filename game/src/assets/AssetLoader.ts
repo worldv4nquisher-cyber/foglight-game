@@ -6,6 +6,7 @@ import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.j
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import type { EventBus } from '@/core/EventBus';
 import { disposeObject3D } from '@/core/dispose';
+import { buildLods } from '@/render/lod';
 import { entriesForGroup, type AssetEntry } from './manifest';
 import { createPlaceholderModel, createPlaceholderTexture } from './placeholders';
 
@@ -87,6 +88,13 @@ export class AssetLoader {
     switch (entry.type) {
       case 'gltf': {
         const gltf = await this.gltf.loadAsync(url, prog);
+        // 按 `_lodN` 命名组装 THREE.LOD；extras.puzzleCritical（→ userData）的物体只保留 LOD0 并释放低级 LOD
+        const lodStats = buildLods(gltf.scene, (o) => disposeObject3D(o));
+        if (import.meta.env.DEV && (lodStats.lodGroups || lodStats.criticalGroups)) {
+          console.info(
+            `[assets] ${entry.key}: LOD ${lodStats.lodGroups} 组，解谜关键(固定 LOD0) ${lodStats.criticalGroups} 个，丢弃低级 LOD ${lodStats.droppedLevels} 个`,
+          );
+        }
         gltf.scene.traverse((o) => {
           const m = o as THREE.Mesh;
           if (m.isMesh) {

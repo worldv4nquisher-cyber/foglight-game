@@ -7,7 +7,7 @@
 
 ## 环境与命令
 
-需要 Node.js ≥ 20（已在 Node 24 验证）。
+需要 Node.js ≥ 22.18（校验脚本直接运行 .ts 源码；已在 Node 24 验证）。
 
 | 命令 | 作用 |
 |---|---|
@@ -18,7 +18,9 @@
 | `npm run preview` | 本地预览 `dist/`（http://localhost:4173） |
 | `npm run typecheck` | TypeScript 严格模式检查（src + vite.config） |
 | `npm run lint` / `lint:fix` | ESLint（flat config + typescript-eslint 类型感知规则） |
-| `npm run check` | typecheck + lint + build 一次跑完（提交前跑） |
+| `npm run test` | LOD / puzzleCritical 校验脚本（`scripts/verify-lod.mjs`） |
+| `npm run assets:test-lod` | 重新生成 LOD 测试模型 `public/assets/models/test-lod-puzzle-critical.glb` |
+| `npm run check` | typecheck + lint + test + build 一次跑完（提交前跑） |
 
 `dist/` 使用相对路径（`vite base: './'`），可以放到任意静态服务器的任意子目录，也可以被 Capacitor / Electron 以本地文件加载。
 注意：直接双击 `dist/index.html`（file://）浏览器会拦截 ES 模块和 wasm，请用 `npm run preview` 或任意静态服务器打开。
@@ -31,7 +33,7 @@
 | `?postfx=0` | 关闭后处理，直接渲染（排查渲染问题） |
 | `?atmo=lonely-night` | 切换气氛预设（默认 `melancholy-dusk`） |
 
-开发模式下控制台可用 `__game`，如 `__game.quality.set('ultra')`。
+开发模式下控制台可用 `__game`，如 `__game.quality.set('ultra')`；`__lods()` 列出 LOD 测试物体的当前层级。
 
 ## 操作
 
@@ -61,13 +63,14 @@ game/
 │  ├─ entities/             轻量 ECS：Entity + Component（KinematicBody、PlayerController、Spinner…）
 │  ├─ systems/              PhysicsSystem（AABB）、CameraFollowSystem（第三人称）、AudioSystem、input/
 │  │  └─ input/             actions（抽象动作 + 键位）、InputManager、KeyboardMouseInput、TouchInput
-│  ├─ render/               PostFX 后处理管线（postprocessing + N8AO）
+│  ├─ render/               PostFX 后处理管线（postprocessing + N8AO）、lod（LOD 组装 + puzzleCritical）
 │  ├─ world/                场景构件：SkyDome、Water、Rain、Lighthouse（占位）
 │  ├─ assets/               AssetLoader（GLB+DRACO+Meshopt+KTX2、纹理、音频）、manifest、placeholders
 │  ├─ config/               gameConfig（数值）、quality（画质三档）、atmosphere（气氛预设）
 │  ├─ ui/                   UIManager、LoadingScreen、Hud、PauseMenu、FpsCounter、styles.css
 │  ├─ platform/             device 检测、可见性、全屏、native（Capacitor/Electron 适配点）
 │  └─ types/                第三方库类型声明（n8ao）
+├─ scripts/                Node 脚本：gen-lod-test-asset（生成测试 GLB）、verify-lod（校验）
 ├─ eslint.config.js / tsconfig.json / tsconfig.node.json / vite.config.ts
 └─ dist/                    构建产物（不提交）
 ```
@@ -120,6 +123,55 @@ DRACO / Basis 解码器由 three 随包打包（带哈希文件名、可离线�
 
 目前 manifest 里登记了 `hero`（`assets/models/hero.glb`，尚不存在），用来演示缺失回退：控制台会出现一条 info 日志，主角显示为胶囊。美术交付 `hero.glb`（脚底为原点、朝向 +Z、单位米、身高约 1.8m）后会自动替换。
 
+## LOD 与解谜关键物体（puzzleCritical）
+
+约定来自 `art/style/style-guide.md` §8。实现在 `src/render/lod.ts`，GLB 加载时自动处理（`AssetLoader` → `buildLods`），场景在切换画质时调用 `applyLodDistances`。
+
+### LOD 命名
+
+- 同一个模型的各级 LOD 放在**同一个 GLB 里、同一个父级下**，物体名以 `_lod0`、`_lod1`、`_lod2` 结尾（`-lod1` 也认；Blender 自动加的 `.001` 后缀会被忽略）。名字其余部分仍按资源命名规范：小写英文 + 短横线，例如 `rock-cliff-a_lod0`。
+- 每级面数约减半；各级的原点和朝向要一致（加载后会组装成一个 `THREE.LOD`，名字为 `rock-cliff-a`，放在 `_lod0` 的位置）。
+- 只有 `_lod0` 没有其他级别也可以（就当普通模型）。
+- 切换距离按画质档位，配置在 `src/config/quality.ts` 的 `lodDistances`：
+
+| 档位 | `lodDistances` [LOD0, LOD1, LOD2]（米） | 含义 |
+|---|---|---|
+| ultra | [60, 150, 400] | 60 m 内 LOD0，60–150 m LOD1，150 m 以外 LOD2 |
+| high | [40, 100, 250] | 同上 |
+| standard | [25, 60, 150] | 标准档 LOD0 只到 25 m，最容易把关键物体降级 |
+
+  第 3 个值（LOD2 的最远距离）预留给以后的 impostor，目前超过后继续显示 LOD2。
+
+### 解谜关键物体：固定 LOD0
+
+解谜时必须看清形状、图案或刻度的物体（白漆石块、潮汐钟刻度、光感锁透镜、点火口、反射镜……）要标 `puzzleCritical`。带标记的物体**及其整个子树**在三档都固定 LOD0：加载时直接丢弃并释放低级 LOD，切换画质也不会变。
+
+**Blender 里怎么设置**（Blender 3.6 / 4.x）：
+
+1. 选中物体 → 右侧「物体属性」（橙色方块图标）→ 展开「自定义属性 Custom Properties」→ 点「新建 New」。
+2. 点新属性右边的齿轮编辑：名称 `puzzleCritical`（大小写一致），类型选「布尔 Boolean」，勾选为真。（老版本只有数字类型时填 `1` 也可以。）
+3. 设在哪里都行：
+   - 设在各级 LOD 的**父级空物体**上（推荐：一次覆盖整个子树）；或者
+   - 只设在 `_lod0` 物体上（同组的其他级别会一起被视为关键物体）。
+   - 注意要设在「物体」上，不要设在「网格数据」（绿色三角图标）上，网格数据的属性不会进节点 extras。
+4. 导出：文件 → 导出 → glTF 2.0，格式选 glTF Binary（.glb），在「包含 Include → 数据 Data」里**勾选「自定义属性 Custom Properties」**。不勾的话标记不会被导出。
+5. 导出的 GLB 里该节点会有 `"extras": { "puzzleCritical": true }`，three 加载后在 `object.userData.puzzleCritical`。可以把 GLB 拖进 https://gltf.report 查看节点 extras 确认。
+
+代码里运行时才决定的关键物体，用 `markPuzzleCritical(obj)` 把它的 LOD 折叠成 LOD0；仅设置 `userData.puzzleCritical = true` 时，`applyLodDistances` 也会兜底强制 LOD0。
+
+### 用例与校验
+
+- 测试模型 `public/assets/models/test-lod-puzzle-critical.glb`（`npm run assets:test-lod` 用 @gltf-transform 生成）：
+  - `white-stone`：白石，标记在父级空物体上 → 固定 LOD0；
+  - `tide-gauge_lod0..2`：刻度柱，只在 lod0 上标记 → 固定 LOD0；
+  - `rock-control_lod0..2`：普通对照石 → 按档位切换（LOD1 偏绿、LOD2 偏红，方便肉眼看出切换）。
+- demo 场景出生点左前方摆了这组物体（`MainScene.buildLodTest`）。开发模式控制台运行 `__lods()` 查看层级；把物体推远后切换画质可以看到对照石切换、白石不变：
+  ```js
+  __game.scenes.current.scene.getObjectByName('lod-test').position.z -= 40; __lods()
+  __game.quality.set('standard'); __lods()   // rock-control:1，white-stone / tide-gauge:0
+  ```
+- `npm run test`：用真实 GLTFLoader 解析测试 GLB，校验 extras → userData、低级 LOD 被丢弃并释放、三档距离下对照石的层级，以及运行时标记的兜底。
+
 ## 以后打包成 App / PC
 
 工程已为原生壳做好准备：相对路径构建、解码器随包、无外部 CDN 依赖、`src/platform/native.ts` 为唯一原生适配点（返回键、退出、震动等，游戏代码不直接引用原生 SDK）。
@@ -139,4 +191,5 @@ DRACO / Basis 解码器由 three 随包打包（带哈希文件名、可离线�
 
 - 物理为 AABB 简易碰撞（够做原型），旋转物体的碰撞盒会偏大；需要斜坡、精确胶囊碰撞时换 Rapier。
 - 水面/天空/灯塔/雨均为程序化占位，等美术正式资源。
+- LOD 目前只认「同一个 GLB 内 `_lodN` 节点」；style-guide §9 里的分文件写法（`char-xi-lod1.glb`）和远景 impostor 还没实现，超过 LOD2 距离后继续显示 LOD2。
 - `PCFSoftShadowMap` 在 three r18x 已移除，软阴影使用 `PCFShadowMap` + `shadow.radius`。

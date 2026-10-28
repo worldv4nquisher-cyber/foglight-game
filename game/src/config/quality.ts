@@ -1,5 +1,6 @@
 import type * as THREE from 'three';
 import type { EventBus } from '@/core/EventBus';
+import type { LodDistances } from '@/render/lod';
 
 /**
  * 画质档位（纯桌面）。与美术风格指南的「极致 / 高 / 标准」三档一一对应：
@@ -35,6 +36,12 @@ export interface QualityPreset {
   viewDistance: number;
   /** 雨滴数量（氛围粒子） */
   rainCount: number;
+  /**
+   * LOD 切换距离 [LOD0, LOD1, LOD2]（米，style-guide §8 `lodDistances`）：
+   * LOD0 显示到第 1 个值，LOD1 到第 2 个，LOD2 到第 3 个（之后预留给 impostor）。
+   * puzzleCritical 物体不受影响，三档都固定 LOD0。
+   */
+  lodDistances: LodDistances;
 }
 
 export const QUALITY_PRESETS: Record<QualityTier, QualityPreset> = {
@@ -53,6 +60,7 @@ export const QUALITY_PRESETS: Record<QualityTier, QualityPreset> = {
     shadowMapSize: 4096,
     viewDistance: 400,
     rainCount: 6000,
+    lodDistances: [60, 150, 400],
   },
   high: {
     tier: 'high',
@@ -69,6 +77,7 @@ export const QUALITY_PRESETS: Record<QualityTier, QualityPreset> = {
     shadowMapSize: 2048,
     viewDistance: 300,
     rainCount: 3500,
+    lodDistances: [40, 100, 250],
   },
   standard: {
     tier: 'standard',
@@ -85,6 +94,7 @@ export const QUALITY_PRESETS: Record<QualityTier, QualityPreset> = {
     shadowMapSize: 1024,
     viewDistance: 200,
     rainCount: 1500,
+    lodDistances: [25, 60, 150],
   },
 };
 
@@ -134,10 +144,11 @@ export class QualityManager {
   readonly auto: QualityTier;
   readonly gpu: string;
 
-  constructor(
-    private events: EventBus,
-    renderer: THREE.WebGLRenderer,
-  ) {
+  private events: EventBus;
+
+  // 不用参数属性写法：本文件会被 Node（strip-types）直接导入做校验（scripts/verify-lod.mjs）
+  constructor(events: EventBus, renderer: THREE.WebGLRenderer) {
+    this.events = events;
     this.gpu = getGpuName(renderer);
     this.auto = detectQualityTier(this.gpu);
     const fromUrl = new URLSearchParams(location.search).get('quality');
