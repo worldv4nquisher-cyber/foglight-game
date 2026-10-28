@@ -14,6 +14,14 @@ export const gameConfig = {
     /** 点击画布进入指针锁定，鼠标移动直接转视角（GDD §3）。不支持时回退为按住左键拖拽 */
     pointerLock: true,
   },
+  assets: {
+    /**
+     * 美术 GLB 的 COLOR_0 是外扩描边用的平滑法线（v0.1-index §5.4），不是颜色：
+     * true（默认）→ 加载后关掉材质 vertexColors、保留几何 color 属性给描边读（src/assets/vertexColors.ts）。
+     * 单个资源的 COLOR_0 是真颜色时，在 manifest 条目写 `vertexColors: 'color'` 例外处理。
+     */
+    vertexColorsAreOutlineNormals: true as boolean,
+  },
   camera: {
     /** 原始输入 → 弧度的换算（玩家灵敏度在设置里另乘）。相机规则数值在 config/gameplay.ts */
     mouseSensitivity: 0.0025,

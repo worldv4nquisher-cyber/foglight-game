@@ -6,7 +6,9 @@ import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.j
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import type { EventBus } from '@/core/EventBus';
 import { disposeObject3D } from '@/core/dispose';
+import { gameConfig } from '@/config/gameConfig';
 import { buildLods } from '@/render/lod';
+import { prepareOutlineNormals } from './vertexColors';
 import { entriesForGroup, type AssetEntry } from './manifest';
 import { createPlaceholderModel, createPlaceholderTexture } from './placeholders';
 
@@ -97,6 +99,15 @@ export class AssetLoader {
           console.info(
             `[assets] ${entry.key}: LOD ${lodStats.lodGroups} 组，解谜关键(固定 LOD0) ${lodStats.criticalGroups} 个，丢弃低级 LOD ${lodStats.droppedLevels} 个`,
           );
+        }
+        // COLOR_0 = 描边平滑法线（v0.1-index §5.4）：关掉材质 vertexColors，几何 color 属性保留给 023 描边读
+        const asOutline = entry.vertexColors ? entry.vertexColors === 'outline' : gameConfig.assets.vertexColorsAreOutlineNormals;
+        const vc = prepareOutlineNormals(gltf.scene, asOutline);
+        for (const [mesh, reason] of vc.invalid) {
+          console.warn(`[assets] ${entry.key}: 网格 ${mesh} 的 COLOR_0 不像平滑法线（${reason}），描边可能出错；真是顶点色请在 manifest 写 vertexColors: 'color'`);
+        }
+        if (import.meta.env.DEV && vc.meshes) {
+          console.info(`[assets] ${entry.key}: COLOR_0 作描边平滑法线 ${vc.meshes} 个网格，关掉 vertexColors 的材质 ${vc.materialsFixed} 个`);
         }
         gltf.scene.traverse((o) => {
           const m = o as THREE.Mesh;

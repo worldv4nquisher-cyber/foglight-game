@@ -18,7 +18,8 @@
 | `npm run preview` | 本地预览 `dist/`（http://localhost:4173） |
 | `npm run typecheck` | TypeScript 严格模式检查（src + vite.config） |
 | `npm run lint` / `lint:fix` | ESLint（flat config + typescript-eslint 类型感知规则） |
-| `npm run test` | 全部 Node 校验：LOD / puzzleCritical、输入（`test:input`）、存档（`test:save`）、角色物理（`test:physics`）、相机（`test:camera`） |
+| `npm run test` | 全部 Node 校验：LOD / puzzleCritical、资源后处理与 GLB 自检（`test:assets`）、输入（`test:input`）、存档（`test:save`）、角色物理（`test:physics`）、相机（`test:camera`） |
+| `node scripts/verify-lod.mjs <a.glb> [b.glb…]` | **GLB 交付自检**（美术交付前跑，也可 `npm run verify:glb -- <文件>`）：LOD 层级与各级三角面、puzzleCritical、`-collider` / `-interact` 等特殊节点、COLOR_0 平滑法线、面数预算、材质与贴图。不带参数 = 原来的 LOD 自测。见下文「GLB 交付自检」 |
 | `npm run assets:test-lod` | 重新生成 LOD 测试模型 `public/assets/models/test-lod-puzzle-critical.glb` |
 | `npm run check` | typecheck + lint + test + build 一次跑完（提交前跑） |
 | `npm run smoke` | 无头 Chrome 冒烟测试：对 `dist/` 起 preview 服务，打开 `?smoke=1`，跑页面内检查并汇总控制台错误（先 `npm run build`；需本机 Chrome，可用 `CHROME=路径` 指定） |
@@ -86,7 +87,7 @@ game/
 │  ├─ ui/                   UIManager、LoadingScreen、Hud、PauseMenu、FpsCounter、styles.css
 │  ├─ platform/             device 检测、可见性、全屏、native（Capacitor/Electron 适配点）
 │  └─ types/                第三方库类型声明（n8ao）
-├─ scripts/                Node 脚本：gen-lod-test-asset（生成测试 GLB）、verify-lod（校验）
+├─ scripts/                Node 脚本：gen-lod-test-asset（生成测试 GLB）、verify-lod（LOD 自测 / GLB 交付自检）、verify-*（各系统校验）、lib/glb-audit（自检规则）
 ├─ eslint.config.js / tsconfig.json / tsconfig.node.json / vite.config.ts
 └─ dist/                    构建产物（不提交）
 ```
@@ -167,6 +168,37 @@ game/
    this.game.audio.playSfx(this.game.assets.getAudio('sfx-footstep'), { freq: 220 }); // 缺失时合成音
    ```
 
+### 顶点色 COLOR_0 = 描边平滑法线
+
+美术 GLB 的 `COLOR_0` **不是颜色**，是给外扩描边（v0.1-023）用的平滑法线：网格本地空间，`n * 0.5 + 0.5` 编码（RGBA8 归一化，A = 1），见 v0.1-index §5.4。
+GLTFLoader 看到 COLOR_0 会自动给材质开 `vertexColors`，固有色会被染花，所以 `AssetLoader` 加载后统一处理（`src/assets/vertexColors.ts` 的 `prepareOutlineNormals`）：
+
+- 关掉用到它的材质的 `vertexColors`；几何体的 `color` 属性**保留**，并标 `geometry.userData.outlineNormals = 'color'`，023 的描边着色器读它（`n = color.rgb * 2.0 - 1.0`）。
+- 抽样校验：解码后应是单位向量、且与顶点法线同向；不像平滑法线时控制台 `console.warn`（数据不改）。
+- 开关：全局 `gameConfig.assets.vertexColorsAreOutlineNormals`（默认 true）；某个资源的 COLOR_0 真的是颜色时，manifest 条目写 `vertexColors: 'color'`。
+- 校验：`npm run test:assets`。
+
+### GLB 交付自检
+
+```bash
+cd game
+node scripts/verify-lod.mjs ../art/models/props/prop-lantern-brass.glb                 # 一个文件
+node scripts/verify-lod.mjs ../art/models/props/*.glb ../art/models/characters/*.glb   # 多个
+node scripts/verify-lod.mjs ../art/models/props/prop-x.glb --budget=12000              # 手动指定 LOD0 面数上限
+node scripts/verify-lod.mjs ../art/models/props/prop-x.glb --json                      # 机器可读输出
+```
+
+先直接读 GLB 的 JSON（Meshopt 压缩也能数面），再用游戏同一套 GLTFLoader + `buildLods` + `prepareOutlineNormals` 真正加载一遍。输出 `·` 信息、`!` 警告、`✗` 错误；**有错误退出码 1**，只有警告算通过。
+
+| 检查 | 规则（v0.1-index §5、style-guide §8） | 级别 |
+|---|---|---|
+| LOD | `<名>_lodN` 分组、各级三角面、缺 `_lod0` / 层级不连续 / 下一级 > 上一级 65%（约定每级减半） | 缺 lod0 错误，其余警告 |
+| puzzleCritical | 列出带标记的节点；应在根节点；只交 LOD0（带了低级会被加载器丢弃） | 警告 |
+| 特殊节点 | 列出 `-collider` `-wall` `-interact` `-cam` `-indoor` `-emitter` `-socket` `-receiver` `-mirror-plane` `-waterline`；puzzleCritical 物体必须有 `-collider` 和 `-interact`（白石组的 `-interact` 只警告）；`-collider` 要有网格；`-interact` 应为空节点 | 错误 / 警告 |
+| COLOR_0 | 每个渲染网格是否带；puzzleCritical 缺了是错误、角色 / 道具缺了警告；加载后抽样校验是平滑法线，且没有材质还开着 vertexColors | 错误 / 警告 |
+| 面数预算 | puzzleCritical：风灯 8k、潮汐钟 20k、白石组 20k、钥匙 3k、其余 15k（LOD0）；角色：`char-xi` 120k / 50k / 25k，`char-father` 60k / 25k，其余 NPC 60k / 40k / 25k（逐级）；环境物体只显示占场景静态份额（LOD0 4M / LOD1 2.3M / LOD2 1M）的百分比。`--budget=N` 覆盖 | 错误 |
+| 其他 | 没用 Meshopt；材质 > 3 个或不按 `mat-char/env/prop-*` 命名；贴图尺寸（角色 ≤ 4096，其余 ≤ 2048）和非 KTX2 格式 | 尺寸超限错误，其余警告 |
+
 压缩工具（美术侧）：`npx @gltf-transform/cli optimize in.glb out.glb --compress draco --texture-compress ktx2`；单张贴图可用 KTX-Software 的 `toktx --t2 --encode uastc`（法线）/ `--encode etc1s`（颜色）。
 DRACO / Basis 解码器由 three 随包打包（带哈希文件名、可离线），无需额外配置。
 - DRACO 只用 **glTF 专用 wasm 解码器**（`draco_wasm_wrapper.js` 58KB + `draco_decoder.wasm` 192KB）。three 的 DRACOLoader 还静态引用了通用版 wasm（286KB）和纯 JS 回退（719KB），运行时只会用其中一套；`vite.config.ts` 的 `threeDecodersWasmOnly` 插件在构建时去掉另外两套（WebGL2 浏览器都支持 WebAssembly，不需要 JS 回退）。
@@ -222,6 +254,7 @@ DRACO / Basis 解码器由 three 随包打包（带哈希文件名、可离线�
   __game.scenes.current.scene.getObjectByName('lod-test').position.z -= 40; __lods()
   __game.quality.set('standard'); __lods()   // rock-control:1，white-stone / tide-gauge:0
   ```
+- 美术交付的 GLB 用 `node scripts/verify-lod.mjs <文件>` 自检（见「GLB 交付自检」）。
 - `npm run test`：用真实 GLTFLoader 解析测试 GLB，校验 extras → userData、低级 LOD 被丢弃并释放、三档距离下对照石的层级，以及运行时标记的兜底。
 
 ## 以后打包成 App / PC

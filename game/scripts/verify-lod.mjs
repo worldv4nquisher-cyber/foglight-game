@@ -1,5 +1,10 @@
 // LOD / puzzleCritical 校验脚本：走真实 GLTFLoader 解析测试 GLB → buildLods → 三档距离逐一验证。
 // 用法：npm run test:lod（需要 Node ≥ 22.18，直接导入 .ts 源码）
+//
+// 带文件参数时改为「GLB 交付自检」（美术交付前跑，规则见 docs/tasks/v0.1-index.md §5、scripts/lib/glb-audit.mjs）：
+//   node scripts/verify-lod.mjs <a.glb> [b.glb ...] [--budget=8000] [--json]
+//   检查 LOD 层级与各级三角面、puzzleCritical、-collider / -interact 等特殊节点、COLOR_0 平滑法线、面数预算、材质与贴图。
+//   有错误退出码 1；只有警告退出码 0。
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
@@ -10,6 +15,41 @@ import { applyLodDistances, buildLods, describeLods, isPuzzleCritical, markPuzzl
 import { QUALITY_PRESETS } from '../src/config/quality.ts';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+
+// ---- 文件模式：node scripts/verify-lod.mjs <文件...>
+const fileArgs = process.argv.slice(2).filter((a) => !a.startsWith('--'));
+if (fileArgs.length) {
+  const { auditGlb, printReport } = await import('./lib/glb-audit.mjs');
+  const flags = process.argv.slice(2).filter((a) => a.startsWith('--'));
+  const budgetFlag = flags.find((f) => f.startsWith('--budget='));
+  const budget = budgetFlag ? Number(budgetFlag.slice('--budget='.length)) : undefined;
+  if (budgetFlag && !(budget > 0)) {
+    console.error(`--budget 需要正整数：${budgetFlag}`);
+    process.exit(2);
+  }
+  const unknown = flags.filter((f) => f !== '--json' && !f.startsWith('--budget='));
+  if (unknown.length) {
+    console.error(`未知参数：${unknown.join(' ')}（支持 --budget=N、--json）`);
+    process.exit(2);
+  }
+  let allOk = true;
+  const reports = [];
+  for (const f of fileArgs) {
+    try {
+      const r = await auditGlb(resolve(process.cwd(), f), { budget });
+      reports.push(r);
+      if (!flags.includes('--json')) allOk = printReport(r) && allOk;
+      else allOk = r.errors.length === 0 && allOk;
+    } catch (err) {
+      allOk = false;
+      reports.push({ file: f, errors: [String(err?.message ?? err)], warnings: [], info: [] });
+      if (!flags.includes('--json')) console.log(`\n■ ${f}\n  ✗ 读取失败：${err?.message ?? err}`);
+    }
+  }
+  if (flags.includes('--json')) console.log(JSON.stringify(reports, null, 2));
+  else console.log(`\n${allOk ? '全部通过' : '有不通过的文件'}（${fileArgs.length} 个）`);
+  process.exit(allOk ? 0 : 1);
+}
 const file = resolve(root, 'public/assets/models/test-lod-puzzle-critical.glb');
 
 const buf = readFileSync(file);

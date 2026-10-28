@@ -19,6 +19,11 @@ export interface AssetEntry {
   optional?: boolean;
   /** 纹理是否为颜色贴图（决定 sRGB 色彩空间），默认 true */
   srgb?: boolean;
+  /**
+   * 仅 gltf：COLOR_0 的含义。默认跟随 gameConfig.assets.vertexColorsAreOutlineNormals（美术约定 = 描边平滑法线，
+   * 加载后关掉材质 vertexColors）；'color' = 这个资源的 COLOR_0 是真顶点色，保留 vertexColors。
+   */
+  vertexColors?: 'outline' | 'color';
 }
 
 export const manifest: AssetEntry[] = [
