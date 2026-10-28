@@ -15,14 +15,8 @@ export const gameConfig = {
     pointerLock: true,
   },
   camera: {
-    fov: 60,
-    distance: 6,
-    minDistance: 2,
-    height: 1.4,
-    minPitch: -0.35,
-    maxPitch: 1.2,
+    /** 原始输入 → 弧度的换算（玩家灵敏度在设置里另乘）。相机规则数值在 config/gameplay.ts */
     mouseSensitivity: 0.0025,
     touchSensitivity: 0.005,
-    followLerp: 12,
   },
 } as const;

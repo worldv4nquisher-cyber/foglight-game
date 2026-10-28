@@ -157,6 +157,11 @@ const start = new THREE.Vector3();
 const moveH = new THREE.Vector3();
 const normalM = new THREE.Matrix3();
 const hitNormal = new THREE.Vector3();
+const castP = new THREE.Vector3();
+const castL = new THREE.Vector3();
+const castBox = new THREE.Box3();
+const castCands: Collider[] = [];
+const closest = { point: new THREE.Vector3(), distance: 0, faceIndex: 0 };
 const PROBE_OFFSETS: ReadonlyArray<readonly [number, number]> = [
   [0, 0],
   [0.6, 0],
@@ -271,6 +276,59 @@ export class PhysicsSystem {
       if (b.position.y < this.killY) this.onFallOut?.(b);
     }
     this.lastStepMs = performance.now() - t0;
+  }
+
+  // ------------------------------------------------------------------ 查询（相机等）
+
+  /**
+   * 球形扫掠：半径 radius 的球从 origin 沿 dir（单位向量）移动，返回第一次碰到碰撞体时走过的距离；
+   * 没碰到返回 maxDist；起点已经重叠返回 0。只检测 kind = 'collider'（空气墙不挡相机）。
+   * 实现为 sphere tracing（每步前进「到最近表面的距离 - 半径」），精确且不会漏掉薄墙。
+   */
+  sphereCast(origin: THREE.Vector3, dir: THREE.Vector3, radius: number, maxDist: number): number {
+    castBox.makeEmpty().expandByPoint(origin);
+    castP.copy(origin).addScaledVector(dir, maxDist);
+    castBox.expandByPoint(castP).expandByScalar(radius + 0.01);
+    castCands.length = 0;
+    for (const c of this.colliders) if (c.enabled && c.kind === 'collider' && c.bounds.intersectsBox(castBox)) castCands.push(c);
+    if (castCands.length === 0) return maxDist;
+    let t = 0;
+    for (let i = 0; i < 48; i++) {
+      castP.copy(origin).addScaledVector(dir, t);
+      const d = this.distanceToSurface(castP, castCands, maxDist - t + radius + 0.01) - radius;
+      if (d < 1e-3) return Math.max(0, t);
+      t += d;
+      if (t >= maxDist) return maxDist;
+    }
+    return t;
+  }
+
+  /** 射线检测（kind = 'collider'），返回命中距离；没命中返回 null */
+  raycast(origin: THREE.Vector3, dir: THREE.Vector3, far: number): number | null {
+    let best: number | null = null;
+    castP.copy(origin).addScaledVector(dir, far);
+    castBox.makeEmpty().expandByPoint(origin).expandByPoint(castP);
+    for (const c of this.colliders) {
+      if (!c.enabled || c.kind !== 'collider' || !c.bounds.intersectsBox(castBox)) continue;
+      tmpA.copy(origin).applyMatrix4(c.inverse);
+      tmpB.copy(dir).transformDirection(c.inverse);
+      ray.set(tmpA, tmpB);
+      const h = c.bvh.raycastFirst(ray, THREE.DoubleSide, 0, far / c.scale);
+      if (!h) continue;
+      const d = h.distance * c.scale;
+      if (best === null || d < best) best = d;
+    }
+    return best;
+  }
+
+  private distanceToSurface(p: THREE.Vector3, list: Collider[], maxDist: number): number {
+    let best = maxDist;
+    for (const c of list) {
+      castL.copy(p).applyMatrix4(c.inverse);
+      const hit = c.bvh.closestPointToPoint(castL, closest, 0, best / c.scale);
+      if (hit) best = Math.min(best, hit.distance * c.scale);
+    }
+    return best;
   }
 
   // ------------------------------------------------------------------ 单个角色

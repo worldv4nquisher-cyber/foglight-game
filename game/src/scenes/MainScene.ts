@@ -1,13 +1,14 @@
 import * as THREE from 'three';
 import { BaseScene } from './BaseScene';
 import type { Game } from '@/core/Game';
+import { gameplay } from '@/config/gameplay';
 import { getAtmosphere, type AtmospherePreset } from '@/config/atmosphere';
 import { EntityManager } from '@/entities/EntityManager';
 import { Entity } from '@/entities/Entity';
 import { createPlayer, debugPlayerLine, type PlayerRig } from '@/entities/createPlayer';
 import { Spinner } from '@/entities/components/Spinner';
 import { PhysicsSystem } from '@/systems/PhysicsSystem';
-import { CameraFollowSystem } from '@/systems/CameraFollowSystem';
+import { CameraFollowSystem, CameraTrack } from '@/systems/CameraFollowSystem';
 import { SkyDome } from '@/world/SkyDome';
 import { Water } from '@/world/Water';
 import { Rain } from '@/world/Rain';
@@ -56,7 +57,12 @@ export class MainScene extends BaseScene {
   constructor(game: Game) {
     super(game);
     this.atmosphere = getAtmosphere();
-    this.cameraFollow = new CameraFollowSystem(this.camera, game.input);
+    this.cameraFollow = new CameraFollowSystem(this.camera, game.input, {
+      physics: this.physics,
+      events: game.events,
+      isRunning: () => this.rig.controller.running,
+      autoRecenter: () => game.settings.all.autoRecenter,
+    });
   }
 
   override enter(): void {
@@ -85,6 +91,22 @@ export class MainScene extends BaseScene {
         '<kbd>点击画面</kbd> 锁定鼠标转视角　<kbd>E</kbd> 互动　<kbd>右键</kbd> 观察　<kbd>滚轮</kbd> 远近　<kbd>Esc</kbd> 暂停',
     );
     ui.hud.setLocation('雾岬 · 第一座灯塔');
+    this.cleanups.push(() => this.cameraFollow.dispose());
+    this.playEstablishing();
+  }
+
+  /** 建立镜头（GDD §4：进入场景 3 s 低速推轨，从海面高处缓慢推向角色身后，结束交还控制；按住空格可跳过） */
+  private playEstablishing(): void {
+    const p = SPAWN;
+    const track = new CameraTrack({
+      name: 'establishing',
+      duration: gameplay.camera.establishingTime,
+      keys: [
+        { time: 0, position: new THREE.Vector3(p.x + 6, 6.5, p.z + 12), lookAt: new THREE.Vector3(8, 4, -10), fov: 50 },
+        { time: gameplay.camera.establishingTime, position: new THREE.Vector3(p.x + 1.6, 2.6, p.z + 5), lookAt: new THREE.Vector3(p.x, 1.2, p.z - 2), fov: 55 },
+      ],
+    });
+    void this.cameraFollow.playEstablishing(track);
   }
 
   // ---------------------------------------------------------------- 搭建
@@ -234,7 +256,7 @@ export class MainScene extends BaseScene {
     this.entities.add(cube);
 
     this.buildLodTest(occluders);
-    this.cameraFollow.occluders = occluders;
+    // 相机遮挡改走 physics.sphereCast（同一套碰撞体），occluders 列表只用于登记碰撞
   }
 
   /**
@@ -268,7 +290,9 @@ export class MainScene extends BaseScene {
     this.cameraFollow.target = this.rig.entity.object3D;
     // 初始视角：从岛的南侧望向中央立方体与东北方的灯塔
     this.cameraFollow.yaw = -0.3;
-    this.cameraFollow.pitch = 0.22;
+    this.cameraFollow.pitch = -0.22;
+    // 推荐构图（自动回正的目标）：望向中央立方体与灯塔
+    this.cameraFollow.recommended = { yaw: -0.3, pitch: -0.22 };
   }
 
   // ---------------------------------------------------------------- 参数应用
@@ -346,8 +370,11 @@ export class MainScene extends BaseScene {
 
   override update(dt: number, alpha: number): void {
     this.entities.update(dt, alpha);
-    if (this.game.ui.debug.visible) this.game.ui.debug.set('角色', debugPlayerLine(this.rig, this.physics));
     this.cameraFollow.update(dt);
+    if (this.game.ui.debug.visible) {
+      this.game.ui.debug.set('角色', debugPlayerLine(this.rig, this.physics));
+      this.game.ui.debug.set('相机', this.cameraFollow.debugLine());
+    }
     this.sky.follow(this.camera);
     this.water.update(dt);
     this.rain.update(dt, this.camera);

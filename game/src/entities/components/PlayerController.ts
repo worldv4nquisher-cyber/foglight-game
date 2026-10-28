@@ -73,6 +73,11 @@ export class PlayerController extends Component {
     return this.mode.kind !== 'free';
   }
 
+  /** 是否在小跑（水平速度超过慢走；相机 FOV +3° 用） */
+  get running(): boolean {
+    return Math.hypot(this.loco.vx, this.loco.vz) > gameplay.player.walkSpeed + 0.2;
+  }
+
   get facing(): number {
     return this.loco.facing;
   }

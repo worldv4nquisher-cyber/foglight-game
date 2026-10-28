@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type { Game } from '@/core/Game';
 import { disposeObject3D } from '@/core/dispose';
-import { gameConfig } from '@/config/gameConfig';
+import { gameplay } from '@/config/gameplay';
 import type { AtmospherePreset } from '@/config/atmosphere';
 
 /**
@@ -24,7 +24,7 @@ export abstract class BaseScene {
 
   constructor(protected game: Game) {
     const { clientWidth: w, clientHeight: h } = game.container;
-    this.camera = new THREE.PerspectiveCamera(gameConfig.camera.fov, w / Math.max(1, h), 0.1, 500);
+    this.camera = new THREE.PerspectiveCamera(gameplay.camera.fov, w / Math.max(1, h), 0.1, 500);
   }
 
   enter(): void | Promise<void> {}

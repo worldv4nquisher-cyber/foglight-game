@@ -24,6 +24,12 @@ export interface TestCourse {
     gate: { before: THREE.Vector3; after: THREE.Vector3 };
     lift: { center: THREE.Vector3 };
     link: { start: THREE.Vector3; end: THREE.Vector3; mid: THREE.Vector3 };
+    /** v0.1-003：带窄门的小屋（内部 -indoor 触发体） */
+    room: { outside: THREE.Vector3; door: THREE.Vector3; inside: THREE.Vector3 };
+    /** v0.1-003：测试机关（底座 + -cam 机位空节点） */
+    mechanism: { stand: THREE.Vector3; center: THREE.Vector3; cam: THREE.Object3D };
+    /** v0.1-003：观察点（站在 center 半径 radius 内看向 target） */
+    viewpoint: { center: THREE.Vector3; radius: number; target: THREE.Vector3 };
   };
 }
 
@@ -133,6 +139,28 @@ export function buildTestCourse(material: THREE.Material = new THREE.MeshStandar
   box('link-b-collider', 2, 0.8, 2, 10, 0.4, 7.6);
   box('link-pit-wall', 2.4, 3, 1.6, 10, -0.4, 5.8);
 
+  // v0.1-003 相机：小屋（内部 4 × 4、高 2.6，北墙中间 1.0 m 窄门），内部放 -indoor 触发体
+  const roomX = 15;
+  const roomZ = 13;
+  box('room-wall-s-collider', 4.6, 2.6, 0.3, roomX, 1.3, roomZ + 2.15);
+  box('room-wall-w-collider', 0.3, 2.6, 4.6, roomX - 2.15, 1.3, roomZ);
+  box('room-wall-e-collider', 0.3, 2.6, 4.6, roomX + 2.15, 1.3, roomZ);
+  box('room-wall-n1-collider', 1.8, 2.6, 0.3, roomX - 1.4, 1.3, roomZ - 2.15);
+  box('room-wall-n2-collider', 1.8, 2.6, 0.3, roomX + 1.4, 1.3, roomZ - 2.15);
+  box('room-lintel-collider', 1.0, 0.6, 0.3, roomX, 2.3, roomZ - 2.15);
+  box('room-roof-collider', 4.6, 0.2, 4.6, roomX, 2.7, roomZ);
+  box('room-indoor', 4, 2.6, 4, roomX, 1.3, roomZ);
+
+  // v0.1-003 相机：测试机关（底座）与机位空节点（看向节点 -Z = 底座顶面）
+  box('mech-collider', 0.8, 1, 0.8, -14, 0.5, 1);
+  const mechCam = new THREE.Object3D();
+  mechCam.name = 'mech-cam';
+  mechCam.position.set(-14, 2, 3.2);
+  mechCam.lookAt(-14, 1, 1);
+  // Object3D.lookAt 让 +Z 指向目标；相机约定看 -Z，转 180°
+  mechCam.rotateY(Math.PI);
+  root.add(mechCam);
+
   root.updateWorldMatrix(true, true);
   return {
     root,
@@ -149,6 +177,9 @@ export function buildTestCourse(material: THREE.Material = new THREE.MeshStandar
       gate: { before: new THREE.Vector3(-2, 0, 10), after: new THREE.Vector3(-2, 0, 6) },
       lift: { center: new THREE.Vector3(6, 0.3, 6) },
       link: { start: new THREE.Vector3(10, 0.8, 4.4), end: new THREE.Vector3(10, 0.8, 7.2), mid: new THREE.Vector3(10, 1.3, 5.8) },
+      room: { outside: new THREE.Vector3(roomX, 0, roomZ - 4), door: new THREE.Vector3(roomX, 0, roomZ - 2.15), inside: new THREE.Vector3(roomX, 0, roomZ) },
+      mechanism: { stand: new THREE.Vector3(-14, 0, 2.2), center: new THREE.Vector3(-14, 1, 1), cam: mechCam },
+      viewpoint: { center: new THREE.Vector3(-8, 0, 12), radius: 0.8, target: new THREE.Vector3(-8, 3, 0) },
     },
   };
 }

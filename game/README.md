@@ -18,7 +18,7 @@
 | `npm run preview` | 本地预览 `dist/`（http://localhost:4173） |
 | `npm run typecheck` | TypeScript 严格模式检查（src + vite.config） |
 | `npm run lint` / `lint:fix` | ESLint（flat config + typescript-eslint 类型感知规则） |
-| `npm run test` | 全部 Node 校验：LOD / puzzleCritical、输入（`test:input`）、存档（`test:save`）、角色物理（`test:physics`） |
+| `npm run test` | 全部 Node 校验：LOD / puzzleCritical、输入（`test:input`）、存档（`test:save`）、角色物理（`test:physics`）、相机（`test:camera`） |
 | `npm run assets:test-lod` | 重新生成 LOD 测试模型 `public/assets/models/test-lod-puzzle-critical.glb` |
 | `npm run check` | typecheck + lint + test + build 一次跑完（提交前跑） |
 | `npm run smoke` | 无头 Chrome 冒烟测试：对 `dist/` 起 preview 服务，打开 `?smoke=1`，跑页面内检查并汇总控制台错误（先 `npm run build`；需本机 Chrome，可用 `CHROME=路径` 指定） |
@@ -33,8 +33,8 @@
 | `?quality=ultra\|high\|standard` | 强制画质档位（优先于玩家设置和自动检测） |
 | `?postfx=0` | 关闭后处理，直接渲染（排查渲染问题） |
 | `?atmo=lonely-night` | 切换气氛预设（默认 `melancholy-dusk`） |
-| `?scene=testbed` | 角色控制器测试场地（坡、台阶、螺旋楼梯、墙、闸门 G、升降台、跨越点、T 黑场送回），不存档 |
-| `?debug=1` | 正式构建里也打开 F3 帧率 / F4 调试面板（输入、速度、碰撞耗时） |
+| `?scene=testbed` | 角色控制器 / 相机测试场地（坡、台阶、螺旋楼梯、墙、闸门 G、升降台、跨越点、T 黑场送回；带窄门的小屋、测试机关、观察点、C 测试镜头），不存档 |
+| `?debug=1` | 正式构建里也打开 F3 帧率 / F4 调试面板（输入、速度、碰撞耗时、相机、观察点对准度） |
 
 开发模式下控制台可用 `__game`，如 `__game.quality.set('ultra')`；`__lods()` 列出 LOD 测试物体的当前层级。
 
@@ -75,8 +75,9 @@ game/
 │  ├─ main.ts               启动：WebGL2 检测 → Game → 注册场景 → Boot
 │  ├─ core/                 Game（渲染器 + 主循环）、Time（固定步长）、EventBus、dispose 工具
 │  ├─ scenes/               SceneManager、BaseScene、BootScene → LoadingScene → MainScene
-│  ├─ entities/             轻量 ECS：Entity + Component（KinematicBody、PlayerController、TraversalLink、Spinner…）、createPlayer
-│  ├─ systems/              PhysicsSystem（胶囊 vs BVH）、locomotion、CameraFollowSystem（第三人称）、AudioSystem、input/、save/
+│  ├─ entities/             轻量 ECS：Entity + Component（KinematicBody、PlayerController、TraversalLink、ViewpointTarget、Spinner…）、createPlayer
+│  ├─ systems/              PhysicsSystem（胶囊 vs BVH）、locomotion、CameraFollowSystem（第三人称 / 机关 / 演出）、AudioSystem、camera/、input/、save/
+│  │  ├─ camera/            CameraTrack（镜头轨道：关键帧或 GLB 相机动画节点）
 │  │  └─ input/             actions（抽象动作 + 键位）、InputManager、KeyboardMouseInput、TouchInput
 │  ├─ render/               PostFX 后处理管线（postprocessing + N8AO）、lod（LOD 组装 + puzzleCritical）
 │  ├─ world/                场景构件：SkyDome、Water、Rain、Lighthouse（占位）、testCourse（角色测试场地）
@@ -125,6 +126,22 @@ game/
 - 这些网格加载后自动隐藏、不参与渲染；用简化的低面数几何（盒子、斜面、楼梯块），**不要**直接拿渲染网格当碰撞体。
 - 会动 / 会开关的碰撞体（门、升降台）加自定义属性 `dynamic = true`（glTF extras → `userData.dynamic`）；代码里 `collider.enabled = false` 立即可通过。
 - 场景代码：`physics.addFromModel(gltfRoot)` 注册约定命名的网格；灰盒占位用 `physics.addMesh(mesh)` / `addObject(group)` / `addBox(box3)`。
+
+## 第三人称相机（v0.1-003）
+
+`systems/CameraFollowSystem.ts`（在原有类上扩展），数值在 `config/gameplay.ts` 的 `camera` 段（GDD §4）。四种状态：
+
+- **探索**：跟随角色头部 1.35 m、肩后偏右 0.4 m；距离默认 4.0 m，滚轮 2.5–6.0 m；俯仰 -35°（俯视）到 +55°（仰视）。代码里 `cameraFollow.pitch` 现在就是这个俯仰角（负 = 往下看，弧度）。
+  - 遮挡：半径 0.2 m 的球形扫掠（`physics.sphereCast`，和角色共用 `-collider` 碰撞体；`-wall` 空气墙不挡相机）。被挡住立即前拉，解除后 0.25 s 缓入缓出恢复。
+  - 室内：网格名以 **`-indoor`** 结尾的盒子是室内触发体（`collectIndoorVolumes(root)` 收集并隐藏），角色在里面时最大距离 2.0 m。
+  - FOV 55°，小跑 58°（0.3 s 过渡）；按住右键观察 30°，鼠标灵敏度 ×0.5，发 `camera:observe { active, focusDistance }`（焦点 = 屏幕中心射线命中，给 026 景深用）。
+  - 自动回正（设置 `autoRecenter`，默认关）：静止 8 s 后以 4°/s 漂向场景的 `cameraFollow.recommended`。
+- **机关**：`cameraFollow.enterPuzzleView(node, { freeLook })`，0.6 s 过渡到 **`-cam`** 空节点的位置和朝向（节点 -Z 是视线，Blender 里放一个相机或空物体即可；`userData.fov` 可指定 FOV），默认可 ±20° 小范围转动，机关自己要用鼠标时传 `freeLook: false`。`exitPuzzleView()` 0.6 s 回到进入前的 yaw / pitch。输入上下文（`pushContext('puzzle')`）和锁角色（`controller.locked`）由机关代码负责，参考 `TestbedScene.enterMechanism()`。
+- **演出**：`cameraFollow.playCutscene(new CameraTrack({ keys: [{ time, position, lookAt | quaternion, fov }], duration }))`，或 `new CameraTrack({ node })` 跟随 GLB 里由 AnimationMixer 驱动的相机节点。期间输入切到 cutscene（不能移动 / 转视角，按住空格 1 s 跳过），结束后 0.8 s 平滑交还，朝向保持演出前；交还完成时 Promise resolve。换场景时自动中断并交还输入。
+- **建立镜头**：`playEstablishing(track)`，主场景进入时 3 s（`MainScene.playEstablishing()` 里配轨道）。
+- **观察点**：`ViewpointTarget`（区域中心 + 半径 + 目标点或方向），每帧算 `alignment`：偏差 ≤ 6° 为 1，≥ 12° 为 0，中间线性；不在区域内为 0。谜题和材质直接读它。
+- **dev 面板（F4）**：相机模式、当前 / 设定距离、室内、FOV、俯仰；测试场地另有观察点对准度。
+- **测试场地**（`?scene=testbed`）：东南角带 1.0 m 窄门的小屋（室内 ≤ 2 m）、西侧底座是测试机关（站旁边按 E，右键 / Tab 退出）、西南侧地面黄圈是观察点（看向立柱顶的光球，对准时变亮）、C 播放 5 s 测试镜头。校验：`npm run test:camera`。
 
 ## 资源规范与添加方法
 
@@ -225,6 +242,7 @@ DRACO / Basis 解码器由 three 随包打包（带哈希文件名、可离线�
 ## 已知限制
 
 - 角色物理只处理一个胶囊角色和静态 / 运动学碰撞体，没有刚体（推箱子之类需要时再加）。碰撞耗时目标 ≤ 0.5 ms / 帧：Node 里测试场地约 0.03–0.05 ms / 步，1440p 有 GPU 的机器上还没实测。
+- 相机遮挡只对 `-collider` 碰撞体做球形扫掠（渲染网格不参与），美术模型的遮挡体要靠碰撞网格覆盖；建立镜头轨道是占位构图，等关卡定稿后由策划 / 美术调。
 - 水面/天空/灯塔/雨均为程序化占位，等美术正式资源。
 - LOD 目前只认「同一个 GLB 内 `_lodN` 节点」；style-guide §9 里的分文件写法（`char-xi-lod1.glb`）和远景 impostor 还没实现，超过 LOD2 距离后继续显示 LOD2。
 - `PCFSoftShadowMap` 在 three r18x 已移除，软阴影使用 `PCFShadowMap` + `shadow.radius`。

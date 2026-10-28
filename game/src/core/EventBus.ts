@@ -13,6 +13,8 @@ export interface GameEvents {
   'quality:change': { tier: QualityTier };
   'viewport:resize': { width: number; height: number; pixelRatio: number };
   'ui:toggle-fps': { visible: boolean };
+  /** 观察模式（右键）开关与焦点距离（PostFX 景深用，026） */
+  'camera:observe': { active: boolean; focusDistance: number };
   'player:land': { impactSpeed: number };
   /** 自动跨越开始 / 结束（v0.1-002 TraversalLink） */
   'player:traverse': { phase: 'start' | 'end' };

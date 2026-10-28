@@ -72,6 +72,15 @@ const CHECKS = [
       return files.join(' + ');`,
   },
   {
+    name: 'v0.1-003 建立镜头：进场 3 s 演出（cutscene 上下文），结束交还 explore',
+    code: `
+      const until = async (pred, ms = 20000) => { const end = Date.now() + ms; while (!pred() && Date.now() < end) await sleep(50); return pred(); };
+      const cam = g.scenes.current.cameraFollow;
+      const first = cam.modeName;
+      if (!(await until(() => g.input.context === 'explore' && cam.modeName === 'explore' && !cam.blending))) throw new Error('建立镜头没有结束：' + g.input.context + ' ' + cam.modeName);
+      return (first === 'cutscene' ? '开场是演出 ✓' : '（检查开始时已结束）') + '，已交还 explore ✓';`,
+  },
+  {
     name: 'v0.1-001 输入：键位按上下文映射、Esc 暂停压 menu、F4 调试面板',
     code: `
       const inp = g.input;
@@ -230,6 +239,81 @@ const CHECKS = [
       await g.scenes.change('main');
       await until(() => g.scenes.current && g.scenes.current.name === 'main');
       return '慢走 1.6 / 小跑 3.2 ✓，dev 面板读数 ✓，跨越（' + tb.link.duration.toFixed(2) + ' s）✓，黑场送回 ✓';`,
+  },
+  {
+    name: 'v0.1-003 相机：室内 ≤ 2 m、观察 FOV 30°、机关机位进出、观察点对准、测试镜头交还',
+    code: `
+      const until = async (pred, ms = 15000) => { const end = Date.now() + ms; while (!pred() && Date.now() < end) await sleep(50); return pred(); };
+      await g.scenes.change('testbed');
+      if (!(await until(() => window.__testbed && window.__testbed.rig && g.scenes.current && g.scenes.current.name === 'testbed'))) throw new Error('测试场地没进去');
+      const tb = window.__testbed;
+      const cam = tb.cameraFollow;
+      const camera = g.scenes.current.camera;
+      const inp = g.input;
+      const a = tb.course.anchors;
+      const out = [];
+      // 室内
+      tb.rig.body.teleport(a.room.inside.clone().setY(0.02));
+      if (!(await until(() => cam.indoor && cam.currentDistance <= 2.0001))) throw new Error('室内距离 ' + cam.currentDistance.toFixed(2) + ' indoor=' + cam.indoor);
+      out.push('室内 ' + cam.currentDistance.toFixed(2) + ' m ✓');
+      tb.rig.body.teleport(a.spawn.clone().setY(0.02));
+      if (!(await until(() => !cam.indoor && cam.currentDistance > 3.5))) throw new Error('出屋后距离没恢复 ' + cam.currentDistance.toFixed(2));
+      // 观察
+      inp.setRaw('smoke', 'Mouse2', true);
+      const obs = await until(() => Math.abs(camera.fov - 30) < 0.01 && inp.lookScale === 0.5);
+      inp.setRaw('smoke', 'Mouse2', false);
+      if (!obs) throw new Error('观察 FOV ' + camera.fov.toFixed(1) + ' lookScale ' + inp.lookScale);
+      if (!(await until(() => Math.abs(camera.fov - 55) < 0.01 && inp.lookScale === 1))) throw new Error('松开后 FOV ' + camera.fov.toFixed(1));
+      out.push('观察 30° ✓');
+      // 机关机位
+      const yaw0 = cam.yaw, pitch0 = cam.pitch;
+      tb.rig.body.teleport(a.mechanism.stand.clone().setY(0.02));
+      if (!(await until(() => /查看机关/.test(document.querySelector('.hud-prompt')?.textContent ?? '')))) throw new Error('机关旁没有提示');
+      inp.setRaw('smoke', 'KeyE', true);
+      const entered = await until(() => inp.context === 'puzzle', 3000);
+      inp.setRaw('smoke', 'KeyE', false);
+      if (!entered) throw new Error('按 E 没进机关');
+      const nodePos = a.mechanism.cam.getWorldPosition(camera.position.clone());
+      if (!(await until(() => !cam.blending && camera.position.distanceTo(nodePos) < 0.01))) throw new Error('没到机位');
+      inp.setRaw('smoke', 'Tab', true);
+      const left = await until(() => inp.context === 'explore', 3000);
+      inp.setRaw('smoke', 'Tab', false);
+      if (!left) throw new Error('Tab 没退出机关');
+      if (!(await until(() => cam.modeName === 'explore' && !cam.blending))) throw new Error('没回到探索相机');
+      if (cam.yaw !== yaw0 || cam.pitch !== pitch0) throw new Error('退出后朝向变了');
+      out.push('机关进出 ✓');
+      // 观察点：站上去，把视线对准立柱顶
+      tb.rig.body.teleport(a.viewpoint.center.clone().setY(0.02));
+      await until(() => tb.viewpoint.inRegion);
+      for (let i = 0; i < 6; i++) {
+        const d = a.viewpoint.target.clone().sub(camera.position).normalize();
+        cam.yaw = Math.atan2(-d.x, -d.z);
+        cam.pitch = Math.asin(d.y);
+        await sleep(150);
+      }
+      if (!(await until(() => tb.viewpoint.alignment === 1, 3000))) throw new Error('对准度 ' + tb.viewpoint.alignment.toFixed(2) + ' 偏差 ' + tb.viewpoint.angleDeg.toFixed(1));
+      cam.yaw += (9 * Math.PI) / 180;
+      await until(() => tb.viewpoint.alignment < 0.9, 3000);
+      const half = tb.viewpoint.alignment;
+      if (!(half > 0 && half < 1)) throw new Error('偏 9° 时对准度 ' + half.toFixed(2));
+      out.push('观察点对准 1.00 / 偏 9° ' + half.toFixed(2) + ' ✓');
+      // 测试镜头
+      const yaw1 = cam.yaw;
+      const done = tb.playTestCutscene();
+      if (inp.context !== 'cutscene') throw new Error('演出没切到 cutscene 上下文');
+      let resolved = false;
+      void done.then(() => (resolved = true));
+      if (!(await until(() => resolved, 60000))) throw new Error('测试镜头没结束');
+      if (inp.context !== 'explore' || cam.yaw !== yaw1) throw new Error('演出后没交还 / 朝向变了');
+      out.push('测试镜头交还 ✓');
+      g.ui.debug.setVisible(true);
+      await until(() => /相机/.test(document.querySelector('.debug-panel').textContent));
+      const panel = document.querySelector('.debug-panel').textContent;
+      g.ui.debug.setVisible(false);
+      if (!/FOV/.test(panel)) throw new Error('dev 面板没有相机读数');
+      await g.scenes.change('main');
+      await until(() => g.scenes.current && g.scenes.current.name === 'main');
+      return out.join('，');`,
   },
 ];
 const extra = process.env.SMOKE_ONLY ? CHECKS.filter((c) => c.name.includes(process.env.SMOKE_ONLY)) : CHECKS;
