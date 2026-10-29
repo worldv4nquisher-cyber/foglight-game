@@ -6,6 +6,8 @@ import * as THREE from 'three';
 import { S3, S3_FRAME, toWorld, toLocal, treadSpan, treadTop, cameraYawFacing, alongDoor } from '@/levels/s3/layout';
 import { bearingFrom } from '@/levels/s1/layout';
 import { buildS3Greybox, defaultS3GreyboxMaterials } from '@/levels/s3/greybox';
+import { collectIndoorVolumes } from '@/systems/CameraFollowSystem';
+import { xiWetTarget } from '@/entities/xi/XiLook';
 import { buildS3Beam, S3_BEAM, rayPointDist } from '@/levels/s3/beam';
 import { PhysicsSystem, CharacterBody } from '@/systems/PhysicsSystem';
 import { IGNITE_MONO_DELAY, IGNITE_MONO_SEC, OUTRO_CUT_SEC } from '@/levels/s3/puzzles';
@@ -422,6 +424,17 @@ out.push('动线：桥尾 → 门外平台（门关进不去）→ 门内 → �
   assert.ok(last < OUTRO_CUT_SEC && last >= 3.5 - 1 / 30, `独白应在 3.5 s 消失（最后显示 ${last}）`);
   assert.ok(seen.has(ID), '显示后记为已看过（只一次）');
   out.push(`点灯独白 ${ID}：ignited 后 ${first.toFixed(2)}–${(last + 1 / 60).toFixed(2)} s 锁定显示、不可点掉、只一次；0:04 切远景前已消失 ✓`);
+}
+
+// 017 收尾：塔内不淋湿（s3-tower-indoor，y 0–24.5）
+{
+  const vols = collectIndoorVolumes(gb.root);
+  assert.ok(vols.length >= 1, 'S3 塔内体积');
+  for (const y of [0.05, 8, 20]) assert.equal(xiWetTarget(true, toWorld([0.5, y, 0.5]), vols), 0, `塔内 y ${y} 不淋湿`);
+  const [sx, sy, sz] = S3.points.spawnFromS2;
+  assert.equal(xiWetTarget(true, { x: sx, y: sy, z: sz }, vols), 1, '塔外（从 S2 过来的出生点）淋湿');
+  assert.equal(xiWetTarget(true, toWorld([0, 0.05, -S3.tower.rBase - 1.5]), vols), 1, '塔门外淋湿');
+  out.push('室内判定：塔内一层 / 中段 / 顶层不淋湿、塔外淋湿 ✓');
 }
 
 for (const l of out) console.log(`✓ ${l}`);

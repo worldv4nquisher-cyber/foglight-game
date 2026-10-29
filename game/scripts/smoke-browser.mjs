@@ -2015,7 +2015,15 @@ const CHECKS = [
       if (!(await until(`!__s2.rig.controller.locked && !__s2.interaction.animState`, 4000))) throw new Error('xi-pickup-shelf 播完没解锁');
       const hidden = await evaluate(`(() => { const b = __s2.rig.visual.getObjectByName('middle_03_r'); return b.children.filter((c) => c.visible).length; })()`);
       if (hidden) throw new Error('clip 播完钥匙应收起');
-      return `xi-place-table ${dt.toFixed(2)} s 后开日志、风灯上桌 ✓；钥匙 xi-pickup-shelf、socket 上 → grab 帧挂 middle_03_r（${att.kids.join('/')}，跳动 ${(jump * 100).toFixed(1)} cm，LOD0）、播完收起解锁 ✓`;
+      // 室内不淋湿：地窖里有雨也是 0，出到小院 = 1
+      const wetIn = await evaluate(`({ rain: !!__s2.rain?.visible, w: __s2.rig.look?.wetTarget ?? null })`);
+      if (wetIn.w === null) throw new Error('art=1 没有 look 组件');
+      if (wetIn.w !== 0) throw new Error('地窖里不该淋湿 ' + JSON.stringify(wetIn));
+      await tp(-10.6, 0.2, 0.75);
+      await until(`false`, 300);
+      const wetOut = await evaluate(`__s2.rig.look.wetTarget`);
+      if (wetIn.rain && wetOut !== 1) throw new Error('小院下雨应淋湿 ' + wetOut);
+      return `xi-place-table ${dt.toFixed(2)} s 后开日志、风灯上桌 ✓；钥匙 xi-pickup-shelf、socket 上 → grab 帧挂 middle_03_r（${att.kids.join('/')}，跳动 ${(jump * 100).toFixed(1)} cm，LOD0）、播完收起解锁 ✓；地窖 wetTarget 0 / 小院 ${wetOut}（雨 ${wetIn.rain ? '开' : '关'}）✓`;
     },
   },
   {

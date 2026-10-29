@@ -4,6 +4,8 @@ import * as THREE from 'three';
 import { S2, S2_FAR, s2ToWorld, worldToS2, farthestStoneDistance } from '@/levels/s2/layout';
 import { bearingFrom, S1 } from '@/levels/s1/layout';
 import { buildS2Greybox } from '@/levels/s2/greybox';
+import { collectIndoorVolumes } from '@/systems/CameraFollowSystem';
+import { xiWetTarget } from '@/entities/xi/XiLook';
 import { PhysicsSystem, CharacterBody } from '@/systems/PhysicsSystem';
 import { buildS2Beam, S2_BEAM } from '@/levels/s2/beam';
 
@@ -141,5 +143,22 @@ out.push('动线：二层观察点 / 书桌 / 地窖（门开才进得去）/ �
     assert.ok(Math.abs(S2.beamY - art.keyHeights.beamPlane) <= 0.01, 'beamPlane');
     out.push('与美术 s2-layout.json 核对 deskInteract / 钥匙 / 草图 / 木架站位 / 镜子 / 光感锁 ✓');
   }
+}
+// 017 收尾：室内不淋湿（-indoor 触发体：小屋一 / 二层 + 地窖）
+{
+  const vols = collectIndoorVolumes(gb.root);
+  assert.ok(vols.length >= 2, 'S2 室内体积（小屋 + 地窖）');
+  const at = (p) => ({ x: p[0], y: p[1], z: p[2] });
+  for (const [tag, p] of [
+    ['灶台前（一层）', S2.points.stove],
+    ['书桌（二层）', S2.points.deskInteract],
+    ['地窖木架', S2.points.cellarShelfInteract],
+  ])
+    assert.equal(xiWetTarget(true, at(p), vols), 0, `${tag} 下雨也不淋湿`);
+  const yard = [(S2.yard.x[0] + S2.yard.x[1]) / 2, 0, (S2.yard.z[0] + S2.yard.z[1]) / 2];
+  assert.equal(xiWetTarget(true, at(yard), vols), 1, '小院淋湿');
+  const door = S2.openings.frontDoor;
+  assert.equal(xiWetTarget(true, { x: (door.a + door.b) / 2, y: 0, z: S2.house.z0 - 0.8 }, vols), 1, '门外淋湿');
+  out.push(`室内判定：${vols.length} 个 -indoor 体积，一层 / 二层 / 地窖不淋湿、小院 / 门外淋湿 ✓`);
 }
 console.log('verify-s2 ✓ ' + out.join('；'));

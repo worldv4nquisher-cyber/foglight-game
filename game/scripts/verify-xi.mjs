@@ -30,7 +30,7 @@ import { buildLods, setForceLod0, applyLodDistances } from '@/render/lod';
 import { findXiClip, makeTurnTail } from '@/entities/xi/XiAnimator';
 import { xiActionTiming, XiActions } from '@/entities/xiActions';
 import { applyXiMaterials, xiFaceSdfParams, xiFaceLit, xiWetColor, xiWetRoughness, xiMaterialKind, XI_SHADOW_TINT } from '@/render/xiMaterials';
-import { stepWetness } from '@/entities/xi/XiLook';
+import { stepWetness, xiWetTarget, isIndoor } from '@/entities/xi/XiLook';
 
 const out = [];
 const near = (a, b, tol, tag) => assert.ok(Math.abs(a - b) <= tol, `${tag}：${a} vs ${b}（容差 ${tol}）`);
@@ -147,6 +147,20 @@ const glbJson = (file) => {
   assert.equal(xiMaterialKind('mat-env-wood'), null);
   near(stepWetness(0, 1, 40), 1, 1e-9, '雨里 40 s 湿透');
   near(stepWetness(1, 0, 75), 0.5, 1e-9, '避雨 150 s 干透');
+  {
+    const room = [new THREE.Box3(new THREE.Vector3(0, -2.4, 0), new THREE.Vector3(4, 0, 4))];
+    assert.ok(isIndoor({ x: 2, y: -2.4, z: 2 }, room), '站在室内地面（探测点脚底 +0.5）算室内');
+    assert.equal(xiWetTarget(true, { x: 2, y: -2.4, z: 2 }, room), 0, '室内有雨不淋湿');
+    assert.equal(xiWetTarget(true, { x: 6, y: 0, z: 2 }, room), 1, '室外有雨淋湿');
+    assert.equal(xiWetTarget(false, { x: 6, y: 0, z: 2 }, room), 0, '无雨不湿');
+    assert.equal(xiWetTarget(true, { x: 2, y: 0, z: 2 }, []), 1, '没有室内体积 = 全室外');
+    // 室内照常变干：外面淋 20 s 再进屋 75 s
+    let w = 0;
+    for (let i = 0; i < 20 * 60; i++) w = stepWetness(w, xiWetTarget(true, { x: 6, y: 0, z: 2 }, room), 1 / 60);
+    near(w, 0.5, 1e-6, '室外淋 20 s');
+    for (let i = 0; i < 75 * 60; i++) w = stepWetness(w, xiWetTarget(true, { x: 2, y: -2.4, z: 2 }, room), 1 / 60);
+    near(w, 0, 1e-6, '进室内 75 s 干透');
+  }
   out.push('材质：湿痕 ×(1 − 0.22·wet) / 粗糙度 → 0.28、脸 SDF θ / 左右翻转、暗部冷色、淋湿 / 晾干 ✓');
   out.push('交互动作：事件帧（shelf grab 22、ring 30、place-table release 34、阀门 16–76 = 2 s）、节点 anim 优先 / 别名 / fallback、XiActions 计时 ✓');
   out.push('速度混合：0.5–4 m/s 脚下速度 = 实际速度、1.6 纯 walk / 3.2 纯 jog 播放率 1、走跑相位锁定；楼梯 0.7091→1、推 0.812→1.015 ✓');
