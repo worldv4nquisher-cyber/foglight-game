@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { gameplay } from '@/config/gameplay';
 import { CharacterBody, PhysicsSystem } from '@/systems/PhysicsSystem';
-import { stepLocomotion } from '@/systems/locomotion';
+import { StairGait, stepLocomotion } from '@/systems/locomotion';
 import { buildTestCourse } from '@/world/testCourse';
 import { TraversalLink } from '@/entities/components/TraversalLink';
 
@@ -131,6 +131,75 @@ test('螺旋楼梯（半径 2.5、每级 0.2 m）连续爬升，无卡顿、无�
   assert.ok(env.body.position.y > 3.2, `y=${env.body.position.y.toFixed(2)}，期望约 ${expect.toFixed(2)}`);
   assert.ok(maxDy <= s.riser + 0.01, `单步最大竖直跳变 ${maxDy.toFixed(3)}`);
   assert.ok(stuckFrames < 5, `卡住 ${stuckFrames} 帧`);
+});
+
+/** 按控制器的方式走螺旋楼梯：StairGait → stepLocomotion → 物理；dir = +1 上楼 / −1 下楼；返回中段竖直 / 水平平均速度 */
+function stairRun(sprint, dir, seconds = 8) {
+  const env = setup();
+  const s = env.course.anchors.spiral;
+  const angleOf = (p) => Math.atan2(p.z - s.center.z, p.x - s.center.x);
+  const gait = new StairGait();
+  const loco = { vx: 0, vz: 0, facing: 0 };
+  // 下楼：先走到上面一圈再往回走
+  const a0 = dir > 0 ? -s.stepAngle : Math.PI * 1.6;
+  place(env, new THREE.Vector3(s.center.x + Math.cos(a0) * s.walkRadius, dir > 0 ? 0 : 8, s.center.z + Math.sin(a0) * s.walkRadius));
+  const tangent = new THREE.Vector3();
+  const rec = [];
+  for (let i = 0; i < Math.round(seconds / DT); i++) {
+    const b = env.body;
+    const sp = gait.update(DT, b.position.y - b.prevPosition.y, Math.hypot(b.position.x - b.prevPosition.x, b.position.z - b.prevPosition.z), b.onGround);
+    const a = angleOf(b.position);
+    const rr = Math.hypot(b.position.x - s.center.x, b.position.z - s.center.z);
+    tangent.set(-Math.sin(a) * dir, 0, Math.cos(a) * dir).addScaledVector(new THREE.Vector3(Math.cos(a), 0, Math.sin(a)), (s.walkRadius - rr) * 2).normalize();
+    stepLocomotion(loco, { moveX: 0, moveY: 1, sprint, cameraYaw: Math.atan2(-tangent.x, -tangent.z), fixedSpeed: sp }, DT);
+    b.velocity.x = loco.vx;
+    b.velocity.z = loco.vz;
+    env.physics.step(DT);
+    rec.push({ y: b.position.y, x: b.position.x, z: b.position.z, on: sp != null });
+  }
+  // 1.5 s 之后（已进入稳定步态）：竖直速度按「第一次到最后一次迈台阶」算，避免台阶离散造成的 ±1 级误差
+  const i0 = Math.round(1.5 / DT);
+  const steps = [];
+  for (let i = i0 + 1; i < rec.length; i++) {
+    if (Math.abs(rec[i].y - rec[i - 1].y) <= 0.08) continue;
+    // 走到楼梯尽头（之后在顶层平台上乱撞的不算）：两级间隔超过 0.6 s 就截止
+    if (steps.length && (i - steps.at(-1)) * DT > 0.6) break;
+    steps.push(i);
+  }
+  const i1 = steps.at(-1);
+  const ia = steps[0];
+  let h = 0;
+  for (let i = ia + 1; i <= i1; i++) h += Math.hypot(rec[i].x - rec[i - 1].x, rec[i].z - rec[i - 1].z);
+  const T = (i1 - ia) * DT;
+  return { vy: (rec[i1].y - rec[ia].y) / T, vh: h / T, onFrac: rec.slice(ia, i1).filter((r) => r.on).length / (i1 - ia), n: steps.length };
+}
+
+test('楼梯步态：竖直速度固定 0.5455 m/s（017 xi-stairs 22 帧周期），上下楼一样，Shift 不加速', () => {
+  const V = gameplay.player.stairs.verticalSpeed;
+  assert.equal(V, 0.5455);
+  const up = stairRun(false, 1);
+  const upRun = stairRun(true, 1);
+  const down = stairRun(true, -1);
+  for (const [tag, r, sign] of [['上楼慢走', up, 1], ['上楼按 Shift', upRun, 1], ['下楼按 Shift', down, -1]]) {
+    assert.ok(r.onFrac > 0.95, `${tag}：楼梯步态只占 ${(r.onFrac * 100).toFixed(0)}%`);
+    assert.ok(Math.abs(r.vy * sign - V) < 0.03, `${tag}：竖直 ${r.vy.toFixed(3)} m/s，期望 ±${V}`);
+  }
+  assert.ok(Math.abs(up.vh - upRun.vh) < 0.03, `Shift 不应影响楼梯速度：${up.vh.toFixed(3)} / ${upRun.vh.toFixed(3)}`);
+  // 30° 坡不是楼梯：按 Shift 照常小跑
+  const env = setup();
+  const a = env.course.anchors.ramp30;
+  place(env, a.foot);
+  const gait = new StairGait();
+  let any = false;
+  for (let i = 0; i < 60; i++) {
+    const b = env.body;
+    if (gait.update(DT, b.position.y - b.prevPosition.y, Math.hypot(b.position.x - b.prevPosition.x, b.position.z - b.prevPosition.z), b.onGround) != null) any = true;
+    b.velocity.x = a.dir.x * RUN;
+    b.velocity.z = a.dir.z * RUN;
+    env.physics.step(DT);
+  }
+  assert.ok(!any, '30° 坡不应当成楼梯');
+  results.push([`  楼梯：上楼 ${up.vy.toFixed(3)} / Shift ${upRun.vy.toFixed(3)} / 下楼 ${down.vy.toFixed(3)} m/s，水平 ${up.vh.toFixed(3)} m/s`]);
 });
 
 test('斜着撞墙：沿墙滑动，不穿、不黏', () => {

@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { gameplay } from '@/config/gameplay';
 import type { EventBus } from '@/core/EventBus';
 import type { InputManager } from '@/systems/input/InputManager';
-import { stepLocomotion, type LocomotionState } from '@/systems/locomotion';
+import { StairGait, stepLocomotion, type LocomotionState } from '@/systems/locomotion';
 import { Component } from '../Component';
 import { KinematicBody } from './KinematicBody';
 import type { TraversalLink } from './TraversalLink';
@@ -55,6 +55,8 @@ export class PlayerController extends Component {
   private body!: KinematicBody;
   private readonly opts: PlayerControllerOptions;
   private readonly loco: LocomotionState = { vx: 0, vz: 0, facing: 0 };
+  /** 楼梯步态：在楼梯上时水平速度固定（竖直 0.5455 m/s），跑步键不加速 */
+  readonly stairs = new StairGait();
   private mode: Mode = { kind: 'free' };
   private _nearLink: TraversalLink | null = null;
 
@@ -128,18 +130,27 @@ export class PlayerController extends Component {
     const body = this.body.body;
     const mode = this.mode;
     if (mode.kind === 'traverse') {
+      this.stairs.reset();
       this.stepTraversal(mode, dt);
       return;
     }
     if (mode.kind === 'teleport') {
+      this.stairs.reset();
       this.stepTeleport(mode, dt);
       return;
     }
+    // 上一个物理步的实际位移 → 楼梯检测
+    const stairSpeed = this.stairs.update(
+      dt,
+      body.position.y - body.prevPosition.y,
+      Math.hypot(body.position.x - body.prevPosition.x, body.position.z - body.prevPosition.z),
+      body.onGround,
+    );
 
     const input = this.opts.input;
     const move = this.locked ? { x: 0, y: 0 } : input.getMove();
     const sprint = !this.locked && input.isDown('sprint');
-    stepLocomotion(this.loco, { moveX: move.x, moveY: move.y, sprint, cameraYaw: this.opts.cameraYaw() }, dt);
+    stepLocomotion(this.loco, { moveX: move.x, moveY: move.y, sprint, cameraYaw: this.opts.cameraYaw(), fixedSpeed: stairSpeed }, dt);
     body.velocity.x = this.loco.vx;
     body.velocity.z = this.loco.vz;
 
