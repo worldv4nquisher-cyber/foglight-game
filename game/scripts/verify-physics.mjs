@@ -7,6 +7,7 @@ import { CharacterBody, PhysicsSystem } from '@/systems/PhysicsSystem';
 import { StairGait, stepLocomotion } from '@/systems/locomotion';
 import { buildTestCourse } from '@/world/testCourse';
 import { TraversalLink } from '@/entities/components/TraversalLink';
+import { buildS1Greybox } from '@/levels/s1/greybox';
 
 const DT = 1 / 60;
 const results = [];
@@ -387,6 +388,54 @@ test('瞬移后落地站稳，不穿地、不下落（平台上 / 楼梯上）',
     assert.ok(env.body.onGround, `${p.toArray()} onGround`);
     assert.ok(Math.abs(env.body.position.y - (p.y - 0.02)) < 0.03, `${p.toArray()} → y=${env.body.position.y.toFixed(3)}`);
   }
+});
+
+test('013 S1 退潮后走下礁石台阶（smoke 同一起点 x −9.7 → −8.4）：按控制器走法（楼梯步态 + 加速 + 转身）不卡、游戏时间 < 2.5 s', () => {
+  const gb = buildS1Greybox();
+  const ph = new PhysicsSystem();
+  for (const m of gb.colliders) ph.addMesh(m);
+  for (const m of gb.walls) {
+    const c = ph.addMesh(m, { kind: 'wall' });
+    if (m.userData.walkableWhen === 'low') c.enabled = false; // 退潮：入口空气墙关
+  }
+  const worst = { t: 0, stall: 0 };
+  for (const [x0, z, sprint] of [
+    [-9.7, -3.0, false],
+    [-9.62, -3.0, false],
+    [-9.78, -2.6, false],
+    [-9.7, -3.4, false],
+    [-9.7, -3.0, true],
+  ]) {
+    const b = new CharacterBody();
+    ph.addBody(b);
+    b.teleport(new THREE.Vector3(x0, 2.42, z));
+    for (let i = 0; i < 10; i++) ph.step(DT);
+    const gait = new StairGait();
+    const loco = { vx: 0, vz: 0, facing: Math.PI / 2 };
+    let t = 0;
+    let best = b.position.x;
+    let since = 0;
+    while (b.position.x <= -8.4 && t < 8) {
+      const sp = gait.update(DT, b.position.y - b.prevPosition.y, Math.hypot(b.position.x - b.prevPosition.x, b.position.z - b.prevPosition.z), b.onGround);
+      // 相机朝 +X（yaw −π/2），按住 W
+      stepLocomotion(loco, { moveX: 0, moveY: 1, sprint, cameraYaw: -Math.PI / 2, fixedSpeed: sp }, DT);
+      b.velocity.x = loco.vx;
+      b.velocity.z = loco.vz;
+      ph.step(DT);
+      t += DT;
+      if (b.position.x > best + 1e-4) {
+        best = b.position.x;
+        since = 0;
+      } else since += DT;
+      worst.stall = Math.max(worst.stall, since);
+    }
+    ph.removeBody(b);
+    assert.ok(b.position.x > -8.4, `起点 ${x0},${z}${sprint ? ' 跑' : ''}：8 s 游戏时间停在 ${b.position.toArray().map((v) => v.toFixed(2))}`);
+    worst.t = Math.max(worst.t, t);
+  }
+  assert.ok(worst.t < 2.5, `走下 1.3 m 台阶用了 ${worst.t.toFixed(2)} s 游戏时间`);
+  assert.ok(worst.stall < 0.25, `中途停住 ${worst.stall.toFixed(2)} s（卡点）`);
+  console.log(`  （S1 礁石台阶：最慢 ${worst.t.toFixed(2)} s 游戏时间、最长停顿 ${worst.stall.toFixed(2)} s）`);
 });
 
 let failed = 0;

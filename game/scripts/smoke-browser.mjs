@@ -8,6 +8,7 @@ import { tmpdir } from 'node:os';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { preview } from 'vite';
+import { s1StepLinks } from '@/levels/s1/layout';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 /** 文本表原文（005 检查对照显示的文字） */
@@ -1609,9 +1610,35 @@ const CHECKS = [
       await tp(-9.7, 2.42, -3.0, Math.PI / 2);
       await evaluate(`${S}.cameraFollow.yaw = -Math.PI / 2; 1`); // 相机朝 +X（台阶往下的方向）
       await evaluate(`__game.input.setRaw('smoke', 'KeyW', true); 1`);
-      const walked = await until(`${S}.rig.body.position.x > -8.4`, 8000);
+      // 013 偶发「停在 x −8.74」根因：原来按真实时间等 8 s；台阶上楼梯步态把水平速度压到 ~0.87 m/s，
+      // 走完 1.3 m 要 ~1.4 s 游戏时间（verify-physics 同起点锁住），负载高时每帧最多 5 个固定步，8 s 真实时间不够。
+      // 改按游戏时间判定：4 s 游戏时间内到 x > −8.4 才算过；连续 1 s 游戏时间 x 不前进 = 真卡点，带轨迹报错。
+      const walkClock = () =>
+        evaluate(`(() => { const b = ${S}.rig.body; return { g: __game.time.fixedTick * __game.time.fixedDelta, x: b.position.x, y: b.position.y, on: b.onGround }; })()`);
+      const w0 = await walkClock();
+      const walkTrace = [];
+      let walked = false;
+      let wBest = w0.x;
+      let wBestG = w0.g;
+      const wDeadline = Date.now() + 180000;
+      for (;;) {
+        const c = await walkClock();
+        const g = c.g - w0.g;
+        if (!walkTrace.length || g - walkTrace[walkTrace.length - 1].g >= 0.2) walkTrace.push({ g: +g.toFixed(2), x: +c.x.toFixed(2), y: +c.y.toFixed(2), on: c.on });
+        if (c.x > -8.4) {
+          walked = true;
+          out.push(`退潮后走下台阶：${g.toFixed(2)} s 游戏时间到 x ${c.x.toFixed(2)}`);
+          break;
+        }
+        if (c.x > wBest + 0.01) {
+          wBest = c.x;
+          wBestG = c.g;
+        }
+        if (g > 4 || c.g - wBestG > 1 || Date.now() > wDeadline) break;
+        await new Promise((r) => setTimeout(r, 100));
+      }
       await evaluate(`__game.input.setRaw('smoke', 'KeyW', false); 1`);
-      if (!walked) throw new Error('退潮后走不下台阶 ' + JSON.stringify(await st()));
+      if (!walked) throw new Error('退潮后走不下台阶（游戏时间轨迹 ' + JSON.stringify(walkTrace) + '） ' + JSON.stringify(await st()));
       // 小径尽头
       await tp(1.8, 0.14, 3.4);
       if (!(await until(`${S}.puzzles.p1Solved && __game.narrative.goal === 'ch1.s1.goal.cross_channel'`, 6000))) throw new Error('小径尽头没解开谜题 1 ' + JSON.stringify(await st()));
@@ -1688,13 +1715,15 @@ const CHECKS = [
         if (!(await until(`${S}.rig.controller.busy`, 4000))) throw new Error(label + '：E 没开始跨越');
         if (!(await until(`!${S}.rig.controller.busy`, 15000))) throw new Error(label + '：跨越没结束');
       };
-      await cross(-0.9, 1.87, 8.15, 0, '近岸平台 → 浮台');
+      // 跨越端点按 step-across translateM 0.85 从 layout 算（017 收尾三：8.3 → 9.15、11.8 → 12.65）
+      const stepLinks = s1StepLinks();
+      await cross(-0.9, 1.87, stepLinks[0].start - 0.15, 0, '近岸平台 → 浮台');
       s = await st();
-      if (Math.abs(s.pos[2] - 9.45) > 0.15 || Math.abs(s.pos[1] - 1.85) > 0.1) throw new Error('没站到浮台上 ' + JSON.stringify(s));
+      if (Math.abs(s.pos[2] - stepLinks[0].end) > 0.15 || Math.abs(s.pos[1] - 1.85) > 0.1) throw new Error('没站到浮台上 ' + JSON.stringify(s));
       await sleep(500);
       s = await st();
       if (Math.abs(s.pos[1] - 1.85) > 0.1 || s.tide !== 'high') throw new Error('站在浮台上不稳 / 被送回 ' + JSON.stringify(s));
-      await cross(-0.9, 1.87, 11.55, 0, '浮台 → 远侧台阶');
+      await cross(-0.9, 1.87, stepLinks[2].start - 0.25, 0, '浮台 → 远侧台阶');
       if (!(await until(`${S}.puzzles.p2Solved`, 6000))) throw new Error('到远侧台阶没解开谜题 2 ' + JSON.stringify(await st()));
       out.push('两次跨越 → 远侧台阶解开谜题 2 ✓');
       // 013 补充（制作人裁定）：谜题 2 解开后 R 不再生效、提示不再显示——即使把潮汐 / 浮台条件都伪造成满足
