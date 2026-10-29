@@ -333,6 +333,22 @@ test('浮物：锚位里随潮浮起到 1.6 + offset，与岸台齐平；站在�
   assert.equal(y0, 1.75);
 });
 
+test('浮物（BUG-010）：没离开原位就涨潮 → 原地浮起，不进 drifting', () => {
+  const env = setup({ initial: 'low' });
+  const { area } = env;
+  const raft = area.raft;
+  assert.ok(!raft.inAnchor);
+  assert.ok(raft.object.position.distanceTo(area.anchors.raftHome) < 1e-6, '在原位');
+  assert.ok(area.tide.toggle());
+  const states = [];
+  env.step(Math.round(cfg.transitionSec / DT) + 2, { onStep: () => states.push(raft.state) });
+  assert.ok(!states.includes('drifting'), '不演出漂回');
+  assert.equal(raft.state, 'floating');
+  assert.ok(!env.fired.some(([e, q]) => e === 'float:state' && q.state === 'drifting'), '不发 drifting');
+  const p = raft.object.position;
+  assert.ok(Math.hypot(p.x - 5, p.z - 28.5) < 1e-6, '还在原位');
+});
+
 test('浮物：不在锚位涨潮 → 2 s 漂回原位、推动进度归零；退潮搁浅后可再推', () => {
   const env = setup({ initial: 'low' });
   const { area } = env;

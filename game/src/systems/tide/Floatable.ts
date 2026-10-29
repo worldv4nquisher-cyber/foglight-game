@@ -27,6 +27,8 @@ export interface FloatableOptions {
 
 const cfg = gameplay.tide;
 const tmp = new THREE.Vector3();
+/** 离原位多远（m，水平）才算「被推走了」，涨潮时才演出漂回 */
+const HOME_EPS = 0.05;
 
 /**
  * 浮物（v0.1-011，GDD §8「浮物」、谜题 2 浮台）：
@@ -90,9 +92,14 @@ export class Floatable {
     const pos = this.object.position;
 
     if (floating && this.state === 'grounded') {
-      // 刚离开地面：在锚位里原地浮起，否则漂回原位
+      // 刚离开地面：在锚位里原地浮起；不在锚位但没离开原位（水平 < 5 cm）也原地浮起，不演出漂回（BUG-010）；否则漂回原位
       if (this.inAnchor) this.setState('floating');
-      else {
+      else if (Math.hypot(pos.x - this.home.x, pos.z - this.home.z) < HOME_EPS) {
+        pos.x = this.home.x;
+        pos.z = this.home.z;
+        this.resetPush();
+        this.setState('floating');
+      } else {
         this.drift = { from: pos.clone(), t: 0 };
         this.resetPush();
         this.setState('drifting');

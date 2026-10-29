@@ -259,6 +259,7 @@ export function buildS1Puzzles(o: S1PuzzleOptions): S1Puzzles {
   let footprintsShown = false;
   let channelShown = false;
   let prevFloat = raft.state;
+  let driftBackSaid = false;
   const say = (id: TextId): void => void ui.subtitles.play([id]);
   const home = v3(rf.home);
   const tmpRaft = new THREE.Vector3();
@@ -281,7 +282,11 @@ export function buildS1Puzzles(o: S1PuzzleOptions): S1Puzzles {
     }),
     events.on('float:state', ({ id, state }) => {
       if (id !== S1_IDS.raft) return;
-      if (prevFloat === 'drifting' && state !== 'drifting') say('ch1.s1.raft.drift_back');
+      // 「它漂回去了。」只在真的被推走又漂回原位时说，整局只说第一次（text-ch1.md:61，BUG-010）；没离开原位的浮起 Floatable 不会进 drifting
+      if (prevFloat === 'drifting' && state !== 'drifting' && !driftBackSaid) {
+        driftBackSaid = true;
+        say('ch1.s1.raft.drift_back');
+      }
       prevFloat = state;
     }),
   ];

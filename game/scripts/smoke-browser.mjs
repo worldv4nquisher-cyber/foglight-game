@@ -1570,7 +1570,9 @@ const CHECKS = [
       if (!(await until(`${S}.puzzles.p1Solved && __game.narrative.goal === 'ch1.s1.goal.cross_channel'`, 6000))) throw new Error('小径尽头没解开谜题 1 ' + JSON.stringify(await st()));
       out.push('台阶可走、小径尽头解开谜题 1 → 目标过沟 ✓');
 
-      // 浮台：不在石槽里涨潮 → 漂回
+      // 浮台：不在石槽里涨潮 → 漂回（BUG-010：「它漂回去了。」只在真的被推走又漂回时说、只说一次）
+      await evaluate(`(() => { window.__s1subs = []; __game.events.on('subtitle:show', (p) => __s1subs.push(p.id)); return 1; })()`);
+      const driftSaid = () => evaluate(`__s1subs.filter((i) => i === 'ch1.s1.raft.drift_back').length`);
       await evaluate(`(() => { const p = ${S}.puzzles; p.raft.object.position.set(5, 0.4, 10.5); p.raft.object.updateMatrixWorld(true); p.raftPush.pushT = 0.4; return 1; })()`);
       await tp(-12.5, 2.42, -4.5);
       await tp(-14.45, 2.42, -6.2, -Math.PI / 2);
@@ -1579,7 +1581,12 @@ const CHECKS = [
       if (!(await until(`${tide}.state === 'high' && !${tide}.transitioning && ${S}.puzzles.raft.state !== 'drifting'`, TIDE_WAIT))) throw new Error('漂回没结束 ' + JSON.stringify(await st()));
       s = await st();
       if (Math.hypot(s.raftPos[0] - 9.1, s.raftPos[2] - 10.5) > 0.05) throw new Error('漂回位置不对 ' + JSON.stringify(s));
-      out.push('不在石槽涨潮 → 漂回原位 ✓');
+      if (!(await until(`__s1subs.includes('ch1.s1.raft.drift_back')`, 8000))) throw new Error('漂回后应说「它漂回去了。」 ' + JSON.stringify(await evaluate('__s1subs')));
+      // 再来一次漂回（直接发事件模拟）：不应再说
+      await evaluate(`(() => { __game.events.emit('float:state', { id: 'raft-s1', state: 'drifting' }); __game.events.emit('float:state', { id: 'raft-s1', state: 'floating' }); return 1; })()`);
+      await sleep(3000);
+      if ((await driftSaid()) !== 1) throw new Error('「它漂回去了。」应只说一次 ' + JSON.stringify(await evaluate('__s1subs')));
+      out.push('不在石槽涨潮 → 漂回原位、「它漂回去了。」只说一次 ✓');
 
       // 落水送回：涨潮时站到沙地上
       await tp(5, 0.14, 0);
