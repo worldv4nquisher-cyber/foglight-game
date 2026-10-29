@@ -782,8 +782,9 @@ const CHECKS = [
       if (st.title !== TEXT['ui.doc_title.journal'] || st.ctx !== 'reading' || !st.frozen) throw new Error('阅读状态不对 ' + JSON.stringify(st));
       const readerBlur = await evaluate(`getComputedStyle(document.querySelector('.reader')).backdropFilter`);
       if (readerBlur !== 'blur(6px) brightness(0.6)') throw new Error('阅读界面遮罩没有背景模糊（BUG-003）backdropFilter=' + readerBlur);
-      const toast = await until(`(() => { const t = document.querySelector('.toast-left'); return t && !t.hidden ? t.textContent : ''; })()`, 2000);
-      if (toast !== TEXT['ch1.common.journal_updated']) throw new Error('首次阅读没弹「日志已更新」：' + toast);
+      // BUG-004：阅读界面开着时提示挂起（已排队、不显示），关掉之后才露出来
+      const toastQueued = await until(`__game.ui.toastLeft.pending && document.querySelector('.toast-left').hidden`, 2000);
+      if (!toastQueued) throw new Error('首次阅读应排队「日志已更新」且阅读期间不显示 ' + JSON.stringify(await evaluate(`({ pending: __game.ui.toastLeft.pending, hidden: document.querySelector('.toast-left').hidden })`)));
       // 不能移动：按住 W 1 s，角色不动
       const p0 = await evaluate(`(() => { const b = __testbed.rig.body.position; return [b.x, b.z]; })()`);
       await evaluate(`__game.input.setRaw('smoke', 'KeyW', true); 1`);
@@ -811,12 +812,22 @@ const CHECKS = [
       const arrow = await evaluate(`(() => { const r = document.querySelector('.reader-arrow[data-act="next"]').getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; })()`);
       await cdp.click(arrow.x, arrow.y);
       if (!(await until(`__game.ui.reader.page === 4 && document.querySelector('.reader-page').textContent === '5 / 5'`, 6000))) throw new Error('点箭头没翻页');
-      out.push('5 页翻阅（A/D + 箭头）✓，打开时不能移动 ✓，日志已更新 ✓');
+      out.push('5 页翻阅（A/D + 箭头）✓，打开时不能移动 ✓，日志已更新阅读时挂起 ✓');
       // 右键关闭
       await cdp.click(640, 600, 'right');
       if (!(await until(`!__game.ui.reader.isOpen && __game.input.context === 'explore' && !__game.isFrozen`, 3000))) throw new Error('右键没关阅读界面');
+      const toast = await until(`(() => { const t = document.querySelector('.toast-left'); return t && !t.hidden ? t.textContent : ''; })()`, 3000);
+      if (toast !== TEXT['ch1.common.journal_updated']) throw new Error('关掉阅读界面后没显示「日志已更新」：' + toast);
+      // 不和左下角操作提示重叠，且没有别的界面盖着
+      const tg = await evaluate(`(() => { const a = document.querySelector('.toast-left').getBoundingClientRect(); const h = document.querySelector('.hud-hint'); const b = h && !h.hidden && h.textContent ? h.getBoundingClientRect() : null;
+        const overlap = b ? !(a.right <= b.left || b.right <= a.left || a.bottom <= b.top || b.bottom <= a.top) : false;
+        return { overlap, toast: [a.left, a.top, a.right, a.bottom].map(Math.round), hint: b && [b.left, b.top, b.right, b.bottom].map(Math.round), covered: __game.ui.reader.isOpen || __game.ui.journal.isOpen || __game.ui.pause.isOpen }; })()`);
+      if (tg.overlap || tg.covered) throw new Error('「日志已更新」和操作提示重叠 / 被盖住 ' + JSON.stringify(tg));
+      await sleep(1000);
+      if (await evaluate(`document.querySelector('.toast-left').hidden`)) throw new Error('「日志已更新」关掉阅读界面后不到 1 s 就消失了');
       const toastGone = await until(`document.querySelector('.toast-left').hidden`, 15000);
       if (!toastGone) throw new Error('「日志已更新」没有消失');
+      out.push('关掉后显示「日志已更新」、不压操作提示 ✓');
 
       // ---- 6. 再次阅读：不重复添加、不再提示；Esc 暂停 → 继续 → 第一下右键直接关闭
       const upd0 = await evaluate(`__nx.filter(([n]) => n === 'journal:updated').length`);
@@ -826,7 +837,7 @@ const CHECKS = [
       if (!(await until(`__game.ui.reader.isOpen`, 3000))) throw new Error('第二次 E 没打开');
       await sleep(300);
       const upd1 = await evaluate(`__nx.filter(([n]) => n === 'journal:updated').length`);
-      const toast2 = await evaluate(`!document.querySelector('.toast-left').hidden`);
+      const toast2 = await evaluate(`!document.querySelector('.toast-left').hidden || __game.ui.toastLeft.pending`);
       if (upd1 !== upd0 || toast2) throw new Error('再次阅读不该再提示 / 添加');
       if ((await evaluate(`__game.narrative.journal.length`)) !== 1) throw new Error('日志条目重复了');
       await cdp.key('Escape', 'Escape', 27);

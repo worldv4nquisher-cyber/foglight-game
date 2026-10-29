@@ -97,6 +97,7 @@ export class UIManager {
       // 换场景：字幕清掉，阅读界面 / 日志关掉（解冻）
       game.events.on('scene:change', () => {
         this.subtitles.track.clear();
+        this.toastLeft.clear();
         this.journal.close();
         this.reader.close(false);
       }),
@@ -162,7 +163,10 @@ export class UIManager {
     const ctx = this.game.input.context;
     if (this.subtitles.current && ctx !== 'reading' && this.game.input.consumePressed('advance')) this.subtitles.advance();
     this.subtitles.update(this.game.isPaused || this.game.isFrozen ? 0 : dt);
-    this.toastLeft.update(dt);
+    // BUG-004：阅读界面 / 日志 / 暂停 / 菜单 / 结束页 / 黑场盖在提示上面时先挂起，露出来再显示满 2 s
+    const covered =
+      this.reader.isOpen || this.journal.isOpen || this.pause.isOpen || this.mainMenu.isOpen || this.chapterEnd.isOpen || this.game.flow.transitioning;
+    this.toastLeft.update(dt, covered);
   }
 
   dispose(): void {
