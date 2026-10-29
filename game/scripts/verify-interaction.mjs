@@ -491,9 +491,22 @@ test('push：按住沿轨道 0.8 m/s 移动、角色跟随，到端点发 pushEn
   assert.equal(env.ix.actionKind, 'push');
   const z0 = raft.position.z;
   const b0 = env.body.position.z;
-  env.step(60);
+  // batch8 小点：白盒（无 push-start）按住即推，前 pushEaseIn 秒 smoothstep 缓入，不再 0 → 0.8 m/s 一步跳
+  const ease = gameplay.interaction.pushEaseIn;
+  const zs = [z0];
+  for (let i = 0; i < 60; i++) {
+    env.step(1);
+    zs.push(raft.position.z);
+  }
+  const vs = zs.slice(1).map((z, i) => (zs[i] - z) / DT);
+  assert.ok(vs[0] > 0 && vs[0] < 0.8 * 0.1, `第 1 步就动、但远小于满速：${vs[0].toFixed(3)} m/s`);
+  for (let i = 1; i < vs.length; i++) {
+    assert.ok(vs[i] >= vs[i - 1] - 1e-9, `缓入段第 ${i} 步变慢`);
+    assert.ok(vs[i] - vs[i - 1] <= 0.8 * 0.1 + 1e-9, `第 ${i} 步加速过大 ${vs[i - 1].toFixed(3)} → ${vs[i].toFixed(3)}`);
+  }
+  assert.ok(Math.abs(vs[Math.ceil(ease / DT)] - 0.8) < 1e-6, `${ease} s 后满速`);
   const moved = z0 - raft.position.z;
-  assert.ok(Math.abs(moved - 0.8) < 0.03, `1 s 推了 ${moved.toFixed(3)} m`);
+  assert.ok(Math.abs(moved - 0.8 * (1 - ease / 2)) < 0.03, `1 s 推了 ${moved.toFixed(3)} m（缓入少走 ${(0.8 * ease / 2).toFixed(2)} m）`);
   assert.ok(Math.abs(b0 - env.body.position.z - moved) < 0.03, '角色跟着走');
   env.step(1, { release: ['KeyE'] });
   const zr = raft.position.z;

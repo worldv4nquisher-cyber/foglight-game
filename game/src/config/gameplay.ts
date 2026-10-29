@@ -202,6 +202,8 @@ export const gameplay = {
      * push-start 后半段与移动重叠，速度按 smoothstep 从 0 加到 pushSpeed（到 push-start 末帧满速，接 push-loop 不跳速）
      */
     pushStartMoveAt: 0.5,
+    /** push（没有 xi-push-start 时，白盒 / art=0）：按住即推，速度 smoothstep 缓入到 pushSpeed 的时间（s）（batch8 小点：不再 0 → 满速一步跳） */
+    pushEaseIn: 0.25,
     /** 高亮默认时长（s，提示系统二级提示） */
     highlightSeconds: 3,
   },

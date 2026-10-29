@@ -2144,8 +2144,8 @@ const CHECKS = [
       await evaluate(standAt('__s1', '__s1.puzzles.raftPush'));
       await sleep(200);
       // 页面侧记录：按住 E（trigger）那一刻的游戏时间、浮台第一次 pushMoved 的游戏时间与当时阶段
-      await evaluate(`(() => { const g = () => __game.time.fixedTick * __game.time.fixedDelta; const r = (window.__push = { t0: g(), move: null, phase: null, n: 0 });
-        if (!window.__pushOff) window.__pushOff = __game.events.on('interact:pushMoved', ({ id }) => { const q = window.__push; if (id !== 'raft-s1' || !q) return; q.n++; if (q.move === null) { q.move = g(); q.phase = __s1.interaction.pushPhase; } });
+      await evaluate(`(() => { const g = () => __game.time.fixedTick * __game.time.fixedDelta; const r = (window.__push = { t0: g(), move: null, phase: null, n: 0, ts: [__s1.puzzles.raftPush.pushT] });
+        if (!window.__pushOff) window.__pushOff = __game.events.on('interact:pushMoved', ({ id, t }) => { const q = window.__push; if (id !== 'raft-s1' || !q) return; q.n++; q.ts.push(t); if (q.move === null) { q.move = g(); q.phase = __s1.interaction.pushPhase; } });
         return r.t0; })()`);
       await key(true);
       // t0 与 trigger 在页面同一段同步代码里取（不含 CDP 往返时间）
@@ -2174,6 +2174,13 @@ const CHECKS = [
         throw new Error('push-loop 中浮台没前进 ' + (await evaluate(`__s1.puzzles.raftPush.pushT`)));
       }
       await key(false);
+      // 缓入（batch8 小点）：每个 pushMoved = 一个固定步，逐步速度 = ΔpushT · 轨道长 / fixedDelta；第一步远小于满速、每步加速 ≤ 满速 5 %、末段到满速
+      const vs = await evaluate(`(() => { const q = window.__push; const tr = __s1.puzzles.raftPush.track; const len = tr.from.distanceTo(tr.to); const dt = __game.time.fixedDelta; return q.ts.slice(1).map((t, i) => ((t - q.ts[i]) * len) / dt); })()`);
+      const vFull = await evaluate(`__s1.puzzles.raftPush.track.speed ?? 0.8`);
+      const jumps = vs.slice(1).map((v, i) => v - vs[i]);
+      if (!(vs[0] < vFull * 0.1) || Math.max(...jumps) > vFull * 0.05 + 1e-6 || Math.abs(vs.at(-1) - vFull) > 1e-3)
+        throw new Error(`推浮台没有缓入：前几步 ${vs.slice(0, 6).map((v) => v.toFixed(3)).join(' / ')}，最大单步加速 ${Math.max(...jumps).toFixed(3)} m/s，末步 ${vs.at(-1)?.toFixed(3)}`);
+      out.push(`S1 推浮台缓入：第 1 步 ${vs[0].toFixed(3)} m/s，单步加速 ≤ ${Math.max(...jumps).toFixed(3)} m/s，满速 ${vFull} ✓`);
       if (!(await until(`__s1.interaction.animState?.clip === 'xi-push-end'`, 2000))) throw new Error('松手没播 xi-push-end ' + JSON.stringify(await evaluate(`__s1.interaction.animState`)));
       const pT = await evaluate(`__s1.puzzles.raftPush.pushT`);
       if (!(await until(`!__s1.interaction.animState && !__s1.rig.controller.locked && !__s1.rig.animator.looping`, 4000))) throw new Error('xi-push-end 播完没解锁');

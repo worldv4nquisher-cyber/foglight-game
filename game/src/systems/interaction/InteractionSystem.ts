@@ -579,6 +579,11 @@ export class InteractionSystem {
         b.velocity.x = b.velocity.z = 0;
         return;
       }
+    } else if (a.start <= 0 && a.t < cfg.pushEaseIn) {
+      // 没有 push-start（白盒）：按住即推，前 pushEaseIn 秒 smoothstep 缓入（a.t 只在这段累加）
+      const t0 = a.t;
+      a.t = Math.min(cfg.pushEaseIn, a.t + dt);
+      k = pushStartRamp((t0 + a.t) / 2, 0, cfg.pushEaseIn);
     }
     const len = track.from.distanceTo(track.to);
     const speed = track.speed ?? cfg.pushSpeed;
