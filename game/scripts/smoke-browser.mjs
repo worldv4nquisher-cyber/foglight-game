@@ -48,7 +48,9 @@ const CHECKS = [
   {
     name: '主场景运行、渲染循环在走',
     code: `
-      const f0 = g.time.frame; await sleep(500);
+      // 无头 SwiftShader 进场头几帧在编译着色器，单帧可达 2–3 s：最多等 8 s 看到帧数增加
+      const f0 = g.time.frame;
+      for (let i = 0; i < 16 && g.time.frame < f0 + 2; i++) await sleep(500);
       if (g.time.frame <= f0) throw new Error('帧计数没有增加');
       return 'scene=' + g.scenes.current.name + ' frames+' + (g.time.frame - f0);`,
   },
@@ -163,7 +165,7 @@ const CHECKS = [
           toast: (() => { const t = document.querySelector('.hud-toast'); return t && !t.hidden ? t.textContent : null; })(),
         })`);
       let s = await read();
-      if (!s.save || s.save.version !== 1 || s.save.sceneId !== 'main') throw new Error('进场没有自动存档：' + JSON.stringify(s.save));
+      if (!s.save || s.save.version !== 1 || s.save.sceneId !== 's1') throw new Error('进场没有自动存档：' + JSON.stringify(s.save));
       // 首次启动的画质检测（009）：建立镜头里开始，降档重测最多 3 轮 × 3 s
       for (let i = 0; i < 120 && s.settings?.qualityDetected !== true; i++) {
         await sleep(250);
@@ -386,8 +388,8 @@ const CHECKS = [
       if (g.ui.fade.opacity !== 0) throw new Error('黑场没退');
       await until(() => body.onGround);
       if (body.position.distanceTo(tb.course.anchors.spawn) > 0.05 || !body.onGround) throw new Error('送回位置不对 ' + body.position.toArray());
-      await g.scenes.change('main');
-      await until(() => g.scenes.current && g.scenes.current.name === 'main');
+      await g.scenes.change('s1-ebb-shore');
+      await until(() => g.scenes.current && g.scenes.current.name === 's1-ebb-shore');
       return '慢走 1.6 / 小跑 3.2 ✓，dev 面板读数 ✓，跨越（' + tb.link.duration.toFixed(2) + ' s）✓，黑场送回 ✓';`,
   },
   {
@@ -463,8 +465,8 @@ const CHECKS = [
       const panel = document.querySelector('.debug-panel').textContent;
       g.ui.debug.setVisible(false);
       if (!/FOV/.test(panel)) throw new Error('dev 面板没有相机读数');
-      await g.scenes.change('main');
-      await until(() => g.scenes.current && g.scenes.current.name === 'main');
+      await g.scenes.change('s1-ebb-shore');
+      await until(() => g.scenes.current && g.scenes.current.name === 's1-ebb-shore');
       return out.join('，');`,
   },
   {
@@ -476,10 +478,16 @@ const CHECKS = [
         await cdp.click(640, 400);
         await sleep(400);
         await cdp.key('Escape', 'Escape', 27);
-        const end = Date.now() + 3000;
+        // 指针锁定时第一下 Esc 可能被浏览器用来解锁（页面收不到，走 pointerlock 暂停）；无头低帧率偶发吞键：1.5 s 没暂停再补按一次
+        const end = Date.now() + 4000;
         let st = null;
+        let retried = false;
         while (Date.now() < end) {
-          st = await evaluate(`(() => { const shown = !document.querySelector('.pause-menu').hidden; if (shown) __game.ui.pause.openSettings(); return { paused: __game.isPaused, foot: document.querySelector('.pause-menu .settings-status')?.textContent ?? '', shown }; })()`);
+          if (!retried && Date.now() > end - 2500 && !(await evaluate('__game.isPaused'))) {
+            retried = true;
+            await cdp.key('Escape', 'Escape', 27);
+          }
+          st = await evaluate(`(() => { const shown = !document.querySelector('.pause-menu').hidden; if (shown) __game.ui.pause.openSettings(); return { paused: __game.isPaused, foot: document.querySelector('.pause-menu .settings-status')?.textContent ?? '', shown, scene: __game.scenes.current?.name, tr: __game.flow.transitioning, ctx: __game.input.context, lock: document.pointerLockElement != null }; })()`);
           if (st.paused && st.shown) break;
           await sleep(100);
         }
@@ -834,8 +842,13 @@ const CHECKS = [
         readPrompt = await until(`/E\\s*阅读/.test(${promptText})`, 5000);
       }
       if (!readPrompt) throw new Error('告示旁没有「E 阅读」：' + (await evaluate(promptText)));
-      await cdp.key('KeyE', 'e', 69);
-      if (!(await until(`__game.ui.reader.isOpen && __game.ui.reader.docId === 'ch1.s1.notice.doc'`, 3000))) throw new Error('E 没打开告示');
+      // 无头低帧率偶发吞键：2 s 没打开再补按一次
+      let noticeOpen = false;
+      for (let tries = 0; tries < 3 && !noticeOpen; tries++) {
+        await cdp.key('KeyE', 'e', 69);
+        noticeOpen = await until(`__game.ui.reader.isOpen && __game.ui.reader.docId === 'ch1.s1.notice.doc'`, 2000);
+      }
+      if (!noticeOpen) throw new Error('E 没打开告示 ' + JSON.stringify(await evaluate(`({ prompt: ${promptText}, ctx: __game.input.context, paused: __game.isPaused, frozen: __game.isFrozen, reader: __game.ui.reader.docId })`)));
       await cdp.key('Tab', 'Tab', 9);
       if (!(await until(`!__game.ui.reader.isOpen`, 3000))) throw new Error('Tab 没关告示');
       const groups = await evaluate(`__game.narrative.journal.map((e) => e.group + ':' + e.docId).join(',')`);
@@ -920,7 +933,7 @@ const CHECKS = [
 
       // ---- 3. 新游戏（无存档直接开始）→ 加载 → 主场景；记下开头位置
       await clickSel('.main-menu [data-act="new"]');
-      if (!(await until(`__game.scenes.current?.name === 'main'`, 60000))) throw new Error('新游戏没进主场景');
+      if (!(await until(`__game.scenes.current?.name === 's1-ebb-shore'`, 60000))) throw new Error('新游戏没进主场景');
       await sleep(1500);
       const pos = `(() => { const p = __game.scenes.current.rig.body.position; return { x: p.x, y: p.y, z: p.z }; })()`;
       const p0 = await evaluate(pos);
@@ -941,7 +954,7 @@ const CHECKS = [
       const cb = await evaluate(`document.querySelector('.pause-menu .confirm-body').textContent`);
       if (cb !== TEXT['ui.pause.to_menu_confirm']) throw new Error('确认文字不对 ' + cb);
       await clickSel('.pause-menu .confirm-dialog [data-act="cancel"]');
-      if (!(await until(`__game.ui.pause.view === 'main' && __game.isPaused && __game.scenes.current?.name === 'main'`, 3000))) throw new Error('取消后应回暂停菜单');
+      if (!(await until(`__game.ui.pause.view === 'main' && __game.isPaused && __game.scenes.current?.name === 's1-ebb-shore'`, 3000))) throw new Error('取消后应回暂停菜单');
       await clickSel('.pause-menu [data-act="to-menu"]');
       await until(`__game.ui.pause.view === 'confirm'`, 3000);
       await clickSel('.pause-menu .confirm-dialog [data-act="confirm"]');
@@ -963,7 +976,7 @@ const CHECKS = [
 
       // ---- 6. 继续 → 回到场景开头
       await clickSel('.main-menu [data-act="continue"]');
-      if (!(await until(`__game.scenes.current?.name === 'main'`, 60000))) throw new Error('继续没进主场景');
+      if (!(await until(`__game.scenes.current?.name === 's1-ebb-shore'`, 60000))) throw new Error('继续没进主场景');
       await sleep(1500);
       const p1 = await evaluate(pos);
       const d = Math.hypot(p1.x - p0.x, p1.z - p0.z);
@@ -994,8 +1007,126 @@ const CHECKS = [
       return out.join('，');
     },
   },
+  {
+    name: 'v0.1-010 场景流程：启动只加载 boot+menu、字体子集、新游戏加载 common+s1、S1 预加载 s2、S1→S2→S3 黑场 ≤ 1.0 s 并存档、释放上一场景、慢加载显示细线进度、S3 点灯→结束页、沙盒仅 debug',
+    async run({ evaluate, cdp, sleep }) {
+      const out = [];
+      const until = async (expr, ms = 8000) => {
+        const end = Date.now() + ms;
+        while (Date.now() < end) {
+          if (await evaluate(expr).catch(() => false)) return true;
+          await sleep(60);
+        }
+        return false;
+      };
+      const st = () =>
+        evaluate(`({ scene: __game.scenes.current?.name, groups: __game.assets.loadedGroups, save: JSON.parse(localStorage.getItem('foglight.save.v1') || 'null'),
+          tr: __game.flow.lastTransition, busy: __game.flow.transitioning, entry: __game.scenes.current?.entryId,
+          mem: { ...__game.renderer.info.memory } })`);
+      /** 把角色放进当前场景出口（出口是「外 → 内」触发：先放到外面一步再放进去） */
+      const walkIntoExit = (i = 0) =>
+        evaluate(`(async () => { const s = __game.scenes.current; const ex = s.exits[${i}]; const c = ex.opts.center.clone();
+          s.rig.body.teleport(c.clone().add(new c.constructor(3, 0.02, 3)));
+          // 等两帧（无头软件渲染一帧可能上百 ms）：出口要先看到「在外面」的一步，进去才算走进
+          for (let k = 0; k < 2; k++) await new Promise((r) => requestAnimationFrame(r));
+          s.rig.body.teleport(c.clone().setY(0.02)); return ex.target; })()`);
+
+      // ---- 1. 启动：只加载 boot + menu（字体子集），主菜单出现时间
+      await evaluate(`localStorage.clear(); 1`);
+      await cdp.gotoMenu();
+      let m = await evaluate(`({ groups: __game.assets.loadedGroups, ready: __game.flow.menuReadyMs, boot: __game.flow.bootStartMs,
+        glb: performance.getEntriesByType('resource').filter((e) => /\\.(glb|ktx2)$/.test(e.name)).length,
+        woff: performance.getEntriesByType('resource').filter((e) => /\\.woff2$/.test(e.name)).map((e) => e.name.split('/').pop()),
+        fontOk: document.fonts.check('32px "Foglight Serif"', '雾灯') && document.fonts.check('16px "Foglight Sans"', '继续'),
+        family: getComputedStyle(document.querySelector('.main-title')).fontFamily })`);
+      if (m.groups.join() !== 'boot,menu') throw new Error('启动应只加载 boot+menu：' + m.groups.join());
+      if (m.glb) throw new Error('主菜单阶段不应下载模型 / 贴图');
+      if (m.woff.length !== 2 || !m.fontOk || !/Foglight Serif/.test(m.family)) throw new Error('字体子集没加载 / 没用上 ' + JSON.stringify(m));
+      // 无头 SwiftShader 下 JS 初始化 / WebGL 着色器编译本身就要数秒（与资源无关），所以这里只卡「boot+menu 加载 → 主菜单」≤ 3 s；
+      // 从导航开始的总时间只报告不断言，真机（RTX 3060）上要人工确认 ≤ 3 s
+      const loadMs = m.ready - m.boot;
+      if (!(m.boot > 0 && loadMs >= 0 && loadMs <= 3000)) throw new Error('boot+menu 加载到主菜单用了 ' + loadMs + ' ms');
+      out.push(`主菜单：加载 ${Math.round(loadMs)} ms，导航起 ${Math.round(m.ready)} ms（无头软件渲染，仅供参考；boot+menu、字体 ${m.woff.join('/')}）✓`);
+
+      // ---- 2. 新游戏：加载页（common + s1）→ S1；建立镜头后后台预加载 s2
+      await evaluate(`__game.flow.newGame(); 1`);
+      if (!(await until(`__game.scenes.current?.name === 's1-ebb-shore'`, 60000))) throw new Error('新游戏没进 S1');
+      let s = await st();
+      if (s.groups.slice().sort().join() !== 'boot,common,menu,s1') throw new Error('进 S1 时应已加载 boot/menu/common/s1：' + s.groups.join());
+      if (s.save?.sceneId !== 's1') throw new Error('进 S1 没存档 ' + JSON.stringify(s.save));
+      if (!(await until(`__game.assets.isGroupLoaded('s2')`, 30000))) throw new Error('S1 没有后台预加载 s2');
+      out.push('新游戏 common+s1 → S1、存档 s1、预加载 s2 ✓');
+
+      // ---- 3. S1 → S2：黑场预算 0.96 s（淡出 + 至少 0.3 s 全黑 + 淡入；无头下按「每段最多超一帧」核对）、换场景时全黑、存档 s2、释放 s1、显存对象减少
+      await sleep(300);
+      const before = (await st()).mem;
+      await evaluate(`window.__fadeLog = []; (function poll() { if (!__game.flow.transitioning && window.__fadeLog.length > 5) return; window.__fadeLog.push([__game.scenes.current?.name, __game.ui.fade.opacity, __game.ui.fade.progress]); requestAnimationFrame(poll); })(); 1`);
+      await walkIntoExit(0);
+      if (!(await until(`__game.scenes.current?.name === 's2-keeper-house' && !__game.flow.transitioning`, 40000))) throw new Error('走进出口没去 S2 ' + JSON.stringify(await evaluate(`(() => { const s = __game.scenes.current; const ex = s.exits?.[0]; return { scene: s.name, paused: __game.isPaused, tr: __game.flow.transitioning, ex: ex && { inside: ex.inside, primed: ex.primed, enabled: ex.enabled, c: ex.opts.center, contains: ex.contains(s.rig.body.position) }, pos: s.rig.body.position, ctrl: s.rig.controller.locked }; })()`)));
+      s = await st();
+      const log = await evaluate(`window.__fadeLog`);
+      const firstS2 = log.find((l) => l[0] === 's2-keeper-house');
+      if (!firstS2 || firstS2[1] < 1) throw new Error('换场景时画面应是全黑：' + JSON.stringify(firstS2));
+      if (log.some((l) => l[2] !== null)) throw new Error('已预加载不应显示进度线');
+      if (s.tr.waitedForLoad) throw new Error('S1→S2 已预加载却在等加载 ' + JSON.stringify(s.tr));
+      {
+        // 黑场时间预算：淡出 330 + 至少全黑 300 + 淡入 330 = 960 ms ≤ 1.0 s。无头 SwiftShader 一帧可达数百 ms~2 s，
+        // 所以按「每段最多超出一帧」核对；帧时间正常（< 50 ms）时直接要求总时长 ≤ 1000 ms
+        const { phases: p, maxFrameMs: f } = s.tr;
+        const slack = f + 20;
+        if (p.fadeOut > 330 + slack || p.fadeIn > 330 + slack || s.tr.holdMs > Math.max(300, p.swap) + slack)
+          throw new Error('S1→S2 切换分段超预算 ' + JSON.stringify(s.tr));
+        if (f < 50 && s.tr.ms > 1000) throw new Error('S1→S2 切换超过 1.0 s ' + JSON.stringify(s.tr));
+      }
+      if (s.save?.sceneId !== 's2') throw new Error('进 S2 没存档 ' + JSON.stringify(s.save));
+      if (s.entry !== 'from-s1') throw new Error('入口不对 ' + s.entry);
+      if (s.groups.includes('s1')) throw new Error('s1 没释放：' + s.groups.join());
+      await sleep(400);
+      const after = (await st()).mem;
+      if (!(after.geometries < before.geometries)) throw new Error(`几何体没减少 ${before.geometries} → ${after.geometries}`);
+      out.push(`S1→S2 ${Math.round(s.tr.ms)} ms（全黑 ${Math.round(s.tr.holdMs)} ms、最长帧 ${Math.round(s.tr.maxFrameMs)} ms，无头软件渲染）、存档 s2、释放 s1、几何体 ${before.geometries}→${after.geometries} 纹理 ${before.textures}→${after.textures} ✓`);
+
+      // ---- 4. 慢加载（?slowLoad=4000）：直接进 S2（?scene=s2&debug=1），马上走进出口 → s3 没加载完：黑场里显示细线进度，加载完才换场景
+      await cdp.goto('slowLoad=4000&debug=1&scene=s2', 's2-keeper-house');
+      s = await st();
+      if (s.groups.includes('s1')) throw new Error('继续 / 直接进 S2 不该加载 s1：' + s.groups.join());
+      await evaluate(`window.__fadeLog = []; (function poll() { if (!__game.flow.transitioning && window.__fadeLog.length > 5) return; window.__fadeLog.push([__game.scenes.current?.name, __game.ui.fade.opacity, __game.ui.fade.progress]); requestAnimationFrame(poll); })(); 1`);
+      await walkIntoExit(0);
+      if (!(await until(`__game.scenes.current?.name === 's3-lighthouse' && !__game.flow.transitioning`, 40000))) throw new Error('S2 出口没去 S3');
+      s = await st();
+      const slog = await evaluate(`window.__fadeLog`);
+      const withBar = slog.filter((l) => l[2] !== null);
+      if (!s.tr.waitedForLoad || !s.tr.progressShown || withBar.length < 3) throw new Error('慢加载没显示进度线 ' + JSON.stringify(s.tr));
+      // 进度线只在全黑时出现；没加载满（< 1）时一定还是旧场景（加载完才换场景，满格的线保留到淡入前）
+      if (withBar.some((l) => l[1] < 1 || (l[2] < 1 && l[0] !== 's2-keeper-house')))
+        throw new Error('进度线应在全黑、旧场景还没换的时候显示 ' + JSON.stringify(withBar));
+      if (s.save?.sceneId !== 's3' || s.groups.includes('s2')) throw new Error('S3 存档 / 释放 s2 不对 ' + JSON.stringify({ save: s.save, groups: s.groups }));
+      out.push(`慢加载 S2→S3 ${Math.round(s.tr.ms)} ms、进度线 ${withBar.length} 帧（${withBar[0][2].toFixed(2)}→${withBar.at(-1)[2].toFixed(2)}）✓`);
+
+      // ---- 5. S3 点灯 → 章节结束页（存档 chapterComplete），场景组全部释放
+      await evaluate(`__game.scenes.current.lightTheLamp(); 1`);
+      if (!(await until(`__game.scenes.current?.name === 'chapter-end'`, 30000))) throw new Error('点灯后没进章节结束页');
+      s = await st();
+      if (!s.save?.chapterComplete) throw new Error('结束页没存 chapterComplete');
+      if (s.groups.some((x) => /^s\d$/.test(x))) throw new Error('结束页应释放场景组：' + s.groups.join());
+      out.push('S3 点灯 → 结束页、释放场景组 ✓');
+
+      // ---- 6. 沙盒：正式版不带 debug 打不开；带 ?debug=1 能进，不存档
+      await evaluate(`localStorage.clear(); 1`);
+      await cdp.goto('scene=sandbox', 's1-ebb-shore');
+      await cdp.goto('scene=sandbox&debug=1', 'sandbox');
+      await sleep(300);
+      s = await st();
+      if (s.save?.sceneId === 'sandbox' || s.groups.includes('s2')) throw new Error('沙盒不该存档 / 预加载 ' + JSON.stringify(s));
+      out.push('沙盒仅 debug ✓');
+
+      await evaluate(`localStorage.clear(); 1`);
+      await cdp.goto('');
+      return out.join('，');
+    },
+  },
 ];
-const extra = process.env.SMOKE_ONLY ? CHECKS.filter((c) => c.name.includes(process.env.SMOKE_ONLY)) : CHECKS;
+const extra = process.env.SMOKE_ONLY ? CHECKS.filter((c) => process.env.SMOKE_ONLY.split('|').some((k) => c.name.includes(k))) : CHECKS;
 
 // ---------------------------------------------------------------- 起服务 + 浏览器
 const server = await preview({ root, preview: { host: '127.0.0.1', port: 0, strictPort: false, open: false }, logLevel: 'silent' });
@@ -1097,13 +1228,13 @@ const cdp = {
     await new Promise((r) => setTimeout(r, 300));
     const end = Date.now() + 60000;
     while (Date.now() < end) {
-      if (await evaluate(`Boolean(window.__game?.scenes?.current?.name === 'main')`).catch(() => false)) return;
+      if (await evaluate(`Boolean(window.__game?.scenes?.current?.name === 's1-ebb-shore')`).catch(() => false)) return;
       await new Promise((r) => setTimeout(r, 250));
     }
     throw new Error('刷新后 60 秒内主场景没有就绪');
   },
   /** 换 URL 参数重新打开（在 ?smoke=1 基础上追加 query），等场景（默认主场景）就绪 */
-  async goto(query, scene = 'main') {
+  async goto(query, scene = 's1-ebb-shore') {
     await send('Page.navigate', { url: url + (query ? '&' + query : '') }, sessionId);
     await new Promise((r) => setTimeout(r, 300));
     const end = Date.now() + 60000;
@@ -1137,7 +1268,7 @@ try {
   // 等主场景
   let ready = false;
   while (Date.now() - t0 < 60000) {
-    ready = await evaluate(`Boolean(window.__game?.scenes?.current?.name === 'main')`).catch(() => false);
+    ready = await evaluate(`Boolean(window.__game?.scenes?.current?.name === 's1-ebb-shore')`).catch(() => false);
     if (ready) break;
     await new Promise((r) => setTimeout(r, 250));
   }

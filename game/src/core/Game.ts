@@ -180,6 +180,8 @@ export class Game {
 
   pause(reason: 'user' | 'visibility' | 'pointerlock' | 'system' = 'user'): void {
     if (this.paused || !this.scenes.current?.pausable) return;
+    // 场景切换黑场（1.0 s）里不弹暂停菜单（切到后台照常暂停）
+    if (this.flow.transitioning && reason !== 'visibility') return;
     this.paused = true;
     this.audio.suspend();
     this.events.emit('game:pause', { reason });

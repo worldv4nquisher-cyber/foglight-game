@@ -9,9 +9,9 @@
   --ui-warm: #f2b072;
   --ui-amber: #f2b072;
   --ui-amber-glow: rgba(242, 176, 114, 0.35);
-  /* 正文 / 字幕：思源黑体；标题：思源宋体；西文数字 Cormorant Garamond / Noto Serif（字体子集化 WOFF2 在 010 打包，之前用本机已装字体） */
-  --ui-font: 'Source Han Sans SC', 'Noto Sans CJK SC', 'Noto Sans SC', system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
-  --ui-serif: 'Source Han Serif SC', 'Noto Serif CJK SC', 'Noto Serif SC', 'Cormorant Garamond', 'Songti SC', Georgia, serif;
+  /* 正文 / 字幕：思源黑体；标题：思源宋体。Foglight Sans / Serif = 按文本表子集化的 WOFF2（v0.1-010，npm run fonts，菜单包里加载）；后面是本机字体兜底 */
+  --ui-font: 'Foglight Sans', 'Source Han Sans SC', 'Noto Sans CJK SC', 'Noto Sans SC', system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --ui-serif: 'Foglight Serif', 'Source Han Serif SC', 'Noto Serif CJK SC', 'Noto Serif SC', 'Cormorant Garamond', 'Songti SC', Georgia, serif;
 }
 
 /* 所有 UI 层：hidden 一律不显示（面板本身是 flex 布局，不加 !important 会被覆盖） */
@@ -530,6 +530,28 @@ body {
   display: none;
 }
 
+/* 场景切换黑场里的细线进度（v0.1-010）：1 px、屏幕下方三分之一处，暖灰，不打扰 */
+.screen-fade-progress {
+  position: absolute;
+  left: 50%;
+  top: 66%;
+  width: min(28vw, 360px);
+  height: 1px;
+  transform: translateX(-50%);
+  background: rgba(200, 190, 170, 0.12);
+}
+
+.screen-fade-progress[hidden] {
+  display: none;
+}
+
+.screen-fade-bar {
+  height: 100%;
+  width: 0;
+  background: rgba(220, 200, 160, 0.6);
+  transition: width 0.12s linear;
+}
+
 /* ---------- 字幕 / 阅读界面 / 日志（v0.1-005） ---------- */
 /* 字幕：底部居中、无底框、浅阴影（style-guide §6）；字号由 --subtitle-size 控制（设置 小 / 中 / 大） */
 .subtitles {
@@ -541,7 +563,7 @@ body {
   text-align: center;
   pointer-events: none !important;
   z-index: 10;
-  font-family: 'Source Han Sans SC', 'Noto Sans SC', var(--ui-font);
+  font-family: 'Foglight Sans', 'Source Han Sans SC', 'Noto Sans SC', var(--ui-font);
 }
 
 .subtitle-line {

@@ -124,7 +124,7 @@ test('同一时刻只一条：新 play 顶掉旧的；暂停（dt = 0）时不�
 
 test('只一次：显示时记进 seenLines（存档），再 play 跳过；非只一次的照常', () => {
   const save = new SaveSystem(new MemStorage());
-  save.newGame('ch1', 'main');
+  save.newGame('ch1', 's1');
   const n = new NarrativeState(new EventBus(), save);
   const tr = new SubtitleTrack(n);
   const once = 'ch1.s1.tide_bell.mono_seen';
@@ -139,7 +139,7 @@ test('只一次：显示时记进 seenLines（存档），再 play 跳过；非�
   tr.clear();
   assert.equal(tr.play(['ch1.s1.boat.inspect']), 1);
   // 存档写盘再读回：仍跳过
-  save.save({ chapterId: 'ch1', sceneId: 'main' });
+  save.save({ chapterId: 'ch1', sceneId: 's1' });
   const s2 = new SaveSystem(save['storage']);
   s2.continueGame();
   assert.equal(new SubtitleTrack(new NarrativeState(null, s2)).play([once]), 0);
@@ -199,11 +199,11 @@ test('已读文档交给存档：写盘 / 读回顺序不变；没有进度时�
   const n0 = new NarrativeState(null, save);
   n0.markRead('ch1.s1.notice.doc');
   assert.equal(save.hasReadDoc('ch1.s1.notice.doc'), false, '没有进度：不写存档');
-  save.newGame('ch1', 'main');
+  save.newGame('ch1', 's1');
   const n = new NarrativeState(null, save);
   n.markRead(FATHER_JOURNAL_ID);
   n.markRead('ch1.s1.notice.doc');
-  save.save({ chapterId: 'ch1', sceneId: 'main' });
+  save.save({ chapterId: 'ch1', sceneId: 's1' });
   const s2 = new SaveSystem(save['storage']);
   assert.deepEqual(s2.lastSave.readDocs, [FATHER_JOURNAL_ID, 'ch1.s1.notice.doc']);
   s2.continueGame();
@@ -223,7 +223,7 @@ test('文档都有标题和分组：doc → 信与纸条，journal → 父亲的
 
 test('父亲日志 5 页可翻；结尾演出后第 6 页 = ch1.outro.journal_entry（进存档）', () => {
   const save = new SaveSystem(new MemStorage());
-  save.newGame('ch1', 'main');
+  save.newGame('ch1', 's1');
   const n = new NarrativeState(new EventBus(), save);
   assert.equal(n.docPages(FATHER_JOURNAL_ID).length, 5);
   assert.equal(textPages(FATHER_JOURNAL_ID).length, 5);

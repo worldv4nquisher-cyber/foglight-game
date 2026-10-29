@@ -22,7 +22,9 @@
 | `npm run text:import` | 从 `docs/gdd/text-ch1.json` 重新生成 `src/content/text/zh-CN.ts`（文案改了跑一次；`test:text` 会检查生成结果是否已提交） |
 | `node scripts/verify-lod.mjs <a.glb> [b.glb…]` | **GLB 交付自检**（美术交付前跑，也可 `npm run verify:glb -- <文件>`）：LOD 层级与各级三角面、puzzleCritical、`-collider` / `-interact` 等特殊节点、COLOR_0 平滑法线、面数预算、材质与贴图。不带参数 = 原来的 LOD 自测。见下文「GLB 交付自检」 |
 | `npm run assets:test-lod` | 重新生成 LOD 测试模型 `public/assets/models/test-lod-puzzle-critical.glb` |
-| `npm run check` | typecheck + lint + test + build 一次跑完（提交前跑） |
+| `npm run check` | typecheck + lint + test + build + size 一次跑完（提交前跑） |
+| `npm run size` | 分包体积（v0.1-010）：按 manifest 分组统计 `dist/`，主菜单包 ≤ 15 MB、首场景包（common+s1）≤ 150 MB、字体子集 ≤ 2 MB；同时按文件名预估 `../art` 已交付但还没登记的美术。`--json` 输出机器可读结果 |
+| `npm run fonts` | 重新生成字体子集（v0.1-010）：收集文本表 + 代码 + index.html 用到的字，从 `../art/source/fonts/`（或 `FONT_SRC_DIR`）的思源黑体 / 宋体生成 `public/assets/fonts/foglight-{sans,serif}.woff2`。**加了新中文文案后要跑**，`test:fonts` 会检查缺字 |
 | `npm run smoke` | 无头 Chrome 冒烟测试：对 `dist/` 起 preview 服务，打开 `?smoke=1`，跑页面内检查并汇总控制台错误（先 `npm run build`；需本机 Chrome，可用 `CHROME=路径` 指定） |
 
 `dist/` 使用相对路径（`vite base: './'`），可以放到任意静态服务器的任意子目录，也可以被 Capacitor / Electron 以本地文件加载。
@@ -37,6 +39,9 @@
 | `?postfx=0` | 关闭后处理，直接渲染（排查渲染问题） |
 | `?atmo=lonely-night` | 切换气氛预设（默认 `melancholy-dusk`） |
 | `?autostart=1` | 跳过主菜单：有存档直接继续、没有就新游戏（冒烟测试 / 开发用；存档提示改在进场后用 HUD 显示 8 s） |
+| `?scene=s1\|s2\|s3` | 直接进第 1 章某个场景（S1 退潮海岸 / S2 守塔人小屋 / S3 灯塔；开发服务器或带 `?debug=1`），进场即在该场景入口存档 |
+| `?scene=sandbox` | 沙盒：v0.1 demo 岛（原主场景，含画质检测以外的全部样例；开发服务器或带 `?debug=1`），不存档、没有出口 |
+| `?slowLoad=1500` | 模拟慢网：除 boot/menu 外每个资源组至少加载 1500 ms（进度按时间线性），用来看加载页和切换黑场里的细线进度 |
 | `?scene=testbed` | 角色控制器 / 相机测试场地（坡、台阶、螺旋楼梯、墙、闸门 G、升降台、跨越点、T 黑场送回；带窄门的小屋、测试机关、观察点、C 测试镜头），不存档 |
 | `?debug=1` | 正式构建里也打开 F3 性能面板 / F4 调试面板（输入、速度、碰撞耗时、相机、观察点对准度） |
 
@@ -80,7 +85,7 @@ game/
 ├─ src/
 │  ├─ main.ts               启动：WebGL2 检测 → Game → 注册场景 → Boot
 │  ├─ core/                 Game（渲染器 + 主循环）、Time（固定步长）、EventBus、dispose 工具
-│  ├─ scenes/               SceneManager、BaseScene、BootScene → LoadingScene → MainScene
+│  ├─ scenes/               SceneManager、BaseScene、BootScene → MenuScene / LoadingScene → LevelScene（S1EbbShore / S2KeeperHouse / S3Lighthouse、Sandbox）、levels.ts（场景链）
 │  ├─ entities/             轻量 ECS：Entity + Component（KinematicBody、PlayerController、TraversalLink、ViewpointTarget、Spinner…）、createPlayer
 │  ├─ systems/              PhysicsSystem（胶囊 vs BVH）、locomotion、CameraFollowSystem（第三人称 / 机关 / 演出）、QualityBenchmark（画质 3 秒检测）、AudioSystem、camera/、input/、save/、interaction/（交互与机关，004）
 │  │  ├─ camera/            CameraTrack（镜头轨道：关键帧或 GLB 相机动画节点）
@@ -104,7 +109,7 @@ game/
 ## 核心架构
 
 - **主循环（core/Game.ts）**：每帧 `input.beginFrame → N 次 fixedUpdate(1/60s，逻辑/物理) → update(可变步长：相机/动画) → render → ui.update → input.endFrame`。单帧时长截断 0.25s，切后台自动暂停。KinematicBody 按 alpha 插值显示，高刷屏也平滑。
-- **场景（scenes/）**：`SceneManager.change(name)` 依次 `exit → dispose → new → enter(可异步)`。流程 Boot（启动资源）→ Loading（进度条，加载 `main` 资源组）→ Main。`usePostFX=true` 的场景走后处理。
+- **场景（scenes/）**：`SceneManager.change(name)` 依次 `exit → dispose → new → enter(可异步)`。流程 Boot（boot + menu 资源组）→ Menu →（新游戏 / 继续）Loading（进度条，加载 common + 场景组）→ S1 / S2 / S3（场景间走出口切换，见「场景流程与分包」）。`usePostFX=true` 的场景走后处理。
 - **输入（systems/input/）**：玩法代码只认抽象 action（`interact/sprint/partNext/exitPuzzle/advance/skipHold/pause…` 和轴 `moveX/moveY` + 视角 / 滚轮增量），输入源只写原始按键，由 InputManager 按上下文栈（`InputContext.ts`，`input.pushContext('puzzle')` 返回弹出函数）映射。新增操作：在 `actions.ts` 加 action 并在对应上下文配键位。灵敏度 / Y 反转：`input.setLookSensitivity()` / `setInvertY()`。指针锁定默认开启（`gameConfig.input.pointerLock`）。校验：`npm run test:input`。
 - **资源（assets/）**：见下节。缺失或加载失败一律回退占位几何体/棋盘格纹理，游戏照常运行。
 - **画质（config/quality.ts，v0.1-009）**：纯桌面三档「极致 / 高 / 标准」，参数表键名与数值逐项照抄 `art/style/style-guide.md` §8（`npm run test:quality` 校验，期望值内嵌在 `scripts/verify-quality.mjs`，§8 改了两边一起改）。表里体积雾、CSM、描边、反射、TAA、AgX 等特性在 023–026 实现时直接读这里；现在已生效的是 `renderScale`、`maxPixelRatio`、`shadowType.mapSize`（单张平行光阴影）、`rainParticles.count`、`ao.gtao`（N8AO）、`bloom.mipLevels`、`filmGrain`、`vignette`、`lodDistances`。
@@ -151,7 +156,7 @@ game/
   - 自动回正（设置 `autoRecenter`，默认关）：静止 8 s 后以 4°/s 漂向场景的 `cameraFollow.recommended`。
 - **机关**：`cameraFollow.enterPuzzleView(node, { freeLook })`，0.6 s 过渡到 **`-cam`** 空节点的位置和朝向（节点 -Z 是视线，Blender 里放一个相机或空物体即可；`userData.fov` 可指定 FOV），默认可 ±20° 小范围转动，机关自己要用鼠标时传 `freeLook: false`。`exitPuzzleView()` 0.6 s 回到进入前的 yaw / pitch。输入上下文（`pushContext('puzzle')`）和锁角色（`controller.locked`）由机关代码负责，参考 `TestbedScene.enterMechanism()`。
 - **演出**：`cameraFollow.playCutscene(new CameraTrack({ keys: [{ time, position, lookAt | quaternion, fov }], duration }))`，或 `new CameraTrack({ node })` 跟随 GLB 里由 AnimationMixer 驱动的相机节点。期间输入切到 cutscene（不能移动 / 转视角，按住空格 1 s 跳过），结束后 0.8 s 平滑交还，朝向保持演出前；交还完成时 Promise resolve。换场景时自动中断并交还输入。
-- **建立镜头**：`playEstablishing(track)`，主场景进入时 3 s（`MainScene.playEstablishing()` 里配轨道）。
+- **建立镜头**：`playEstablishing(track)`，主场景进入时 3 s（`LevelScene.establishingKeys()` 里配轨道，S1 覆盖）。
 - **观察点**：`ViewpointTarget`（区域中心 + 半径 + 目标点或方向），每帧算 `alignment`：偏差 ≤ 6° 为 1，≥ 12° 为 0，中间线性；不在区域内为 0。谜题和材质直接读它。
 - **dev 面板（F4）**：相机模式、当前 / 设定距离、室内、FOV、俯仰；测试场地另有观察点对准度。
 - **测试场地**（`?scene=testbed`）：东南角带 1.0 m 窄门的小屋（室内 ≤ 2 m）、西侧底座是测试机关（面向它按 E，右键 / Tab 退出；004 起是 puzzle 交互，见下节）、西南侧地面黄圈是观察点（看向立柱顶的光球，对准时变亮）、C 播放 5 s 测试镜头。校验：`npm run test:camera`。
@@ -192,8 +197,21 @@ game.events.on('interact:used', ({ id }) => { if (id === 'bell') ring(); });
 - **暂停菜单**（`ui/PauseMenu.ts`）：继续 / 设置 / 回到主菜单。回到主菜单不额外存档，进度停在最近的场景入口，「继续」回到那里。
 - **章节结束页**（`ui/ChapterEnd.ts`，场景 `chapter-end`）：同一个菜单背景但灯塔亮着；进入时存档写 `chapterComplete`（零头秒数一起记上），之后不再计时。
 - 所有菜单都压 `menu` 输入上下文（自由光标），指针锁定自动释放；进入游戏场景后才恢复。
-- 样式（美术规范 §6）：面板 `rgba(26,33,40,0.8)`、琥珀色描边 / 光晕表示悬停与焦点，字体思源黑体 / 思源宋体（标题），字体文件随 010 子集化后打包，现在用系统已装字体回退。
+- 样式（美术规范 §6）：面板 `rgba(26,33,40,0.8)`、琥珀色描边 / 光晕表示悬停与焦点，字体思源黑体 / 思源宋体（标题），010 起子集化打包（`Foglight Sans` / `Foglight Serif`，见「场景流程与分包」）。
 - 校验：`npm run test:save`（结束页用时、零头记入）、`npm run test:quality`；smoke「v0.1-008」走一遍真实点击流程（无存档无继续、覆盖确认取消、设置即时生效 + 刷新保留、恢复默认、暂停 → 回到主菜单 → 继续回场景开头、结束页、样式、菜单内不锁指针）。
+
+## 场景流程与分包（v0.1-010）
+
+第 1 章按 GDD 分三个场景：**S1 退潮海岸 → S2 守塔人小屋 → S3 灯塔**（`src/scenes/levels.ts`）。三个场景都继承 `LevelScene`（共用雾 / 天空 / 光照 / 水 / 雨 / 角色 / 交互 / 建立镜头）。S1 现在是原 demo 岛内容 + 通往 S2 的出口（西北两根石柱间的冷光）；**S2、S3 是灰盒占位**（014 / 015 / 035 换成正式场景）：S2 一栋房子 + 东北出口，S3 灯塔，面向灯塔按 E「点灯」→ 章节结束页（035 结尾演出前的临时结尾）。
+
+- **出口**：`SceneExit` 组件（盒子或圆形区域），角色从外面走进去才触发（出生在出口里不触发）。正式场景在 GLB 里放节点即可：`xxx-spawn-<入口名>`（入口点，节点 +Z 朝向 = 角色朝向）、`xxx-exit-<s1|s2|s3>`（出口区域，自动隐藏；`userData.entry` 指定对方入口），`collectSceneMarkers()` 读取。
+- **切换**：淡出 0.33 s → 全黑（至少 0.3 s；换场景、在黑场里存档、释放上一场景资源组、预编译着色器、新场景先画两帧）→ 淡入 0.33 s，合计 0.96 s ≤ 1.0 s。下一场景没加载完时黑场里显示一条 1 px 细线进度，加载完才换。切换期间角色停住、不能暂停。
+- **分组加载**：启动只加载 `boot` + `menu`（主菜单 + 字体子集）；新游戏 / 继续加载 `common` + 当前场景组；场景内建立镜头结束后（最晚进场 8 s）后台预加载下一个场景组；切换后释放上一场景组（GPU 资源一起释放）。`?slowLoad=ms` 可模拟慢网。
+- **体积预算**：`npm run size`（`check` 里也跑）：主菜单包 ≤ 15 MB、首场景包 common + s1 ≤ 150 MB、首次进入 S1 总下载 ≤ 150 MB、字体子集 ≤ 2 MB。美术还没登记进 manifest（034），脚本按 `../art` 里的文件名预估：首场景包约 79 MB。
+- **字体子集**：`npm run fonts` 从思源黑体 / 宋体（`../art/source/fonts/`，不在仓库里）生成只含本作用字的 WOFF2（现在约 685 字，216 KB + 304 KB），以 `Foglight Sans` / `Foglight Serif` 注册在 CSS 字体栈最前面；许可证 `public/assets/fonts/OFL.txt` 随包发布。`npm run test:fonts` 检查文本表 / 代码里的每个字都在子集里——加了中文文案后它会失败，跑一次 `npm run fonts` 并提交生成的字体。
+- **存档**：存的是场景 ID（`s1` / `s2` / `s3`），旧存档里的 `main` 视为 `s1`。
+- 校验：`npm run test:flow`（manifest 分组、场景链、存档映射、切换时长、出口触发、模型命名、模拟切换已加载 / 慢加载）、`npm run size`；smoke「v0.1-010」走一遍：启动只加载主菜单包和字体、新游戏 → S1 → 预加载 S2 → 走进出口到 S2（全黑时换、存档、释放 S1）→ 慢加载到 S3（细线进度）→ 点灯 → 结束页、沙盒仅 debug。
+- 本机试玩：`npm run dev` → 主菜单「新游戏」，在 S1 往西北走到两根石柱之间；`http://localhost:5173/?slowLoad=1500` 看进度线；`?scene=s2` / `?scene=s3` 直接进某个场景（正式构建加 `&debug=1`）。
 
 ## 字幕、阅读界面与日志（v0.1-005）
 
@@ -220,11 +238,11 @@ game.events.on('interact:used', ({ id }) => { if (id === 'bell') ring(); });
 1. 把文件放进 `public/assets/<类型>/`。
 2. 在 `src/assets/manifest.ts` 登记（url 不要以 `/` 开头）：
    ```ts
-   { key: 'rock-cliff-01', type: 'gltf', url: 'assets/models/rock-cliff-01.glb', group: 'main', optional: true },
-   { key: 'ground-diffuse', type: 'ktx2', url: 'assets/textures/ground-diffuse.ktx2', group: 'main' },
-   { key: 'sfx-footstep', type: 'audio', url: 'assets/audio/sfx-footstep.ogg', group: 'main', optional: true },
+   { key: 'rock-cliff-01', type: 'gltf', url: 'assets/models/rock-cliff-01.glb', group: 's1', optional: true },
+   { key: 'ground-diffuse', type: 'ktx2', url: 'assets/textures/ground-diffuse.ktx2', group: 'common' },
+   { key: 'sfx-footstep', type: 'audio', url: 'assets/audio/sfx-footstep.ogg', group: 'common', optional: true },
    ```
-   `group` 决定在哪个加载阶段加载（`boot` 启动时、`main` 主场景加载界面）；`optional: true` 表示缺失不报错。法线/粗糙度等非颜色贴图加 `srgb: false`。
+   `group` 决定什么时候加载、什么时候释放（v0.1-010）：`boot` / `menu` 启动时（主菜单包，≤ 15 MB）；`common` 新游戏 / 继续时加载、常驻（角色、通用材质、音效）；`s1` / `s2` / `s3` 各场景独有，进场前加载、离开后释放，上一场景建立镜头结束后后台预加载下一个。登记后跑 `npm run size` 看预算；`optional: true` 表示缺失不报错。法线/粗糙度等非颜色贴图加 `srgb: false`。
 3. 在场景里使用：
    ```ts
    const rock = this.game.assets.getModel('rock-cliff-01', 'box');   // 缺失时回退方块占位
@@ -314,7 +332,7 @@ DRACO / Basis 解码器由 three 随包打包（带哈希文件名、可离线�
   - `white-stone`：白石，标记在父级空物体上 → 固定 LOD0；
   - `tide-gauge_lod0..2`：刻度柱，只在 lod0 上标记 → 固定 LOD0；
   - `rock-control_lod0..2`：普通对照石 → 按档位切换（LOD1 偏绿、LOD2 偏红，方便肉眼看出切换）。
-- demo 场景出生点左前方摆了这组物体（`MainScene.buildLodTest`）。开发模式控制台运行 `__lods()` 查看层级；把物体推远后切换画质可以看到对照石切换、白石不变：
+- demo 场景出生点左前方摆了这组物体（`S1EbbShoreScene.buildLodTest`；现在也在 `?scene=sandbox`）。开发模式控制台运行 `__lods()` 查看层级；把物体推远后切换画质可以看到对照石切换、白石不变：
   ```js
   __game.scenes.current.scene.getObjectByName('lod-test').position.z -= 40; __lods()
   __game.quality.set('standard'); __lods()   // rock-control:1，white-stone / tide-gauge:0

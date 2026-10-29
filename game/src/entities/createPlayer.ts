@@ -14,13 +14,13 @@ export interface PlayerRig {
 }
 
 /**
- * 创建玩家实体（MainScene / TestbedScene 共用）：模型 + KinematicBody（胶囊 1.5 × 0.25）+ PlayerController。
+ * 创建玩家实体（LevelScene / TestbedScene 共用）：模型 + KinematicBody（胶囊 1.5 × 0.25）+ PlayerController。
  * 没有 hero 模型时用与碰撞胶囊同尺寸的占位胶囊 + 「鼻子」标示朝向。
  */
 export function createPlayer(game: Game, physics: PhysicsSystem, spawn: THREE.Vector3, cameraYaw: () => number): PlayerRig {
   const { height, radius } = gameplay.player;
   const visual = new THREE.Group();
-  if (game.assets.isMissing('hero')) {
+  if (!game.assets.has('hero')) {
     const mat = new THREE.MeshStandardMaterial({ color: 0x9a8f80, roughness: 0.8 });
     const capsule = new THREE.Mesh(new THREE.CapsuleGeometry(radius, height - 2 * radius, 6, 16), mat);
     capsule.position.y = height / 2;

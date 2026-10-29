@@ -13,7 +13,7 @@
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "assets:test-lod": "node scripts/gen-lod-test-asset.mjs",
-    "test": "node scripts/verify-lod.mjs && npm run test:assets && npm run test:input && npm run test:save && npm run test:physics && npm run test:camera && npm run test:quality && npm run test:text && npm run test:interaction && npm run test:narrative",
+    "test": "node scripts/verify-lod.mjs && npm run test:assets && npm run test:input && npm run test:save && npm run test:physics && npm run test:camera && npm run test:quality && npm run test:text && npm run test:interaction && npm run test:narrative && npm run test:flow && npm run test:fonts",
     "test:assets": "node scripts/verify-assets.mjs",
     "test:camera": "node --import ./scripts/register-ts-paths.mjs scripts/verify-camera.mjs",
     "test:physics": "node --import ./scripts/register-ts-paths.mjs scripts/verify-physics.mjs",
@@ -26,8 +26,12 @@
     "test:input": "node --import ./scripts/register-ts-paths.mjs scripts/verify-input.mjs",
     "test:lod": "node scripts/verify-lod.mjs",
     "verify:glb": "node scripts/verify-lod.mjs",
-    "check": "npm run typecheck && npm run lint && npm run test && npm run build",
-    "smoke": "node scripts/smoke-browser.mjs"
+    "check": "npm run typecheck && npm run lint && npm run test && npm run build && npm run size",
+    "smoke": "node scripts/smoke-browser.mjs",
+    "size": "node --import ./scripts/register-ts-paths.mjs scripts/check-size.mjs",
+    "fonts": "node scripts/subset-fonts.mjs",
+    "test:fonts": "node scripts/subset-fonts.mjs --check",
+    "test:flow": "node --import ./scripts/register-ts-paths.mjs scripts/verify-flow.mjs"
   },
   "dependencies": {
     "n8ao": "^2.0.1",
@@ -42,6 +46,7 @@
     "@types/three": "^0.186.0",
     "eslint": "^10.13.0",
     "globals": "^17.13.0",
+    "subset-font": "^2.9.0",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.72.1",
     "vite": "^8.3.5"

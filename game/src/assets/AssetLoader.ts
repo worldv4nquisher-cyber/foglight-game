@@ -9,10 +9,27 @@ import { disposeObject3D } from '@/core/dispose';
 import { gameConfig } from '@/config/gameConfig';
 import { buildLods } from '@/render/lod';
 import { prepareOutlineNormals } from './vertexColors';
-import { entriesForGroup, type AssetEntry } from './manifest';
+import { entriesForGroup, type AssetEntry, type AssetGroup } from './manifest';
 import { createPlaceholderModel, createPlaceholderTexture } from './placeholders';
 
 const BASE = import.meta.env.BASE_URL;
+
+/** 一个资源组的加载状态（同一组只加载一次；预加载中途再请求就挂上进度回调一起等） */
+interface GroupState {
+  promise: Promise<void>;
+  ratio: number;
+  done: boolean;
+  listeners: Set<(ratio: number) => void>;
+}
+
+/**
+ * `?slowLoad=毫秒`：模拟慢网速（开发 / 冒烟测试用，v0.1-010）。boot / menu 以外的每个组至少花这么久才算加载完，
+ * 进度按时间线性走。用来看场景切换黑场里的细线进度，也可以用 DevTools 网络限速代替。
+ */
+export function parseSlowLoad(search: string): number {
+  const v = Number(new URLSearchParams(search).get('slowLoad'));
+  return Number.isFinite(v) && v > 0 ? Math.min(v, 60000) : 0;
+}
 
 /**
  * 资源加载器：GLTF/GLB（DRACO + KTX2 + Meshopt）、普通纹理、KTX2 纹理、音频。
@@ -30,7 +47,11 @@ export class AssetLoader {
   private models = new Map<string, GLTF>();
   private textures = new Map<string, THREE.Texture>();
   private audio = new Map<string, AudioBuffer>();
+  private fonts = new Map<string, FontFace>();
   private missing = new Set<string>();
+  private groups = new Map<string, GroupState>();
+  /** 模拟慢网速（?slowLoad=ms），见 parseSlowLoad */
+  simulateLoadMs = typeof location === 'undefined' ? 0 : parseSlowLoad(location.search);
 
   constructor(
     renderer: THREE.WebGLRenderer,
@@ -47,9 +68,93 @@ export class AssetLoader {
     this.audioLoader = new THREE.AudioLoader();
   }
 
-  /** 加载某个分组的所有资源 */
-  loadGroup(group: string, onProgress?: (ratio: number) => void): Promise<void> {
-    return this.loadEntries(entriesForGroup(group), onProgress);
+  /**
+   * 加载某个分组的所有资源。同一组只加载一次：已在加载（比如后台预加载）就挂上进度回调等它完成；
+   * 已加载完立即 resolve（进度回调收到 1）。
+   */
+  loadGroup(group: AssetGroup, onProgress?: (ratio: number) => void): Promise<void> {
+    let g = this.groups.get(group);
+    if (!g) {
+      const state: GroupState = { promise: Promise.resolve(), ratio: 0, done: false, listeners: new Set() };
+      const emit = (r: number): void => {
+        state.ratio = Math.max(state.ratio, Math.min(1, r));
+        for (const l of state.listeners) l(state.ratio);
+      };
+      const slow = group === 'boot' || group === 'menu' ? 0 : this.simulateLoadMs;
+      state.promise = (async () => {
+        const t0 = performance.now();
+        let fileRatio = 0;
+        const timeRatio = (): number => (slow ? Math.min(1, (performance.now() - t0) / slow) : 1);
+        await this.loadEntries(entriesForGroup(group), (r) => {
+          fileRatio = r;
+          emit(Math.min(fileRatio, timeRatio()));
+        });
+        while (timeRatio() < 1) {
+          emit(Math.min(fileRatio, timeRatio()));
+          await new Promise((r) => setTimeout(r, 50));
+        }
+        state.done = true;
+        emit(1);
+      })();
+      this.groups.set(group, state);
+      g = state;
+    }
+    if (onProgress) {
+      const state = g;
+      state.listeners.add(onProgress);
+      onProgress(state.ratio);
+      void state.promise.finally(() => state.listeners.delete(onProgress));
+    }
+    return g.promise;
+  }
+
+  /** 依次（并发）加载多个组，进度按组数平均（加载页：common + 场景组） */
+  async loadGroups(groups: readonly AssetGroup[], onProgress?: (ratio: number) => void): Promise<void> {
+    const ratios = groups.map(() => 0);
+    const report = (): void => onProgress?.(ratios.reduce((a, b) => a + b, 0) / Math.max(1, groups.length));
+    await Promise.all(
+      groups.map((grp, i) =>
+        this.loadGroup(grp, (r) => {
+          ratios[i] = r;
+          report();
+        }),
+      ),
+    );
+    onProgress?.(1);
+  }
+
+  /** 组是否已加载完 */
+  isGroupLoaded(group: AssetGroup): boolean {
+    return this.groups.get(group)?.done ?? false;
+  }
+
+  /** 组的加载进度（0–1；没开始为 0） */
+  groupProgress(group: AssetGroup): number {
+    return this.groups.get(group)?.ratio ?? 0;
+  }
+
+  /** 已加载完的组（冒烟测试 / 调试面板） */
+  get loadedGroups(): string[] {
+    return [...this.groups.entries()].filter(([, g]) => g.done).map(([k]) => k);
+  }
+
+  /**
+   * 释放一个组的全部资源（离开场景后，v0.1-010）。场景对象应已先 dispose（场景 dispose 会跳过缓存里的共享资源，
+   * 这里才真正释放）。组还在加载中：等加载完再释放（除非期间又被重新请求）。
+   */
+  unloadGroup(group: AssetGroup): void {
+    const g = this.groups.get(group);
+    if (!g) return;
+    this.groups.delete(group);
+    const release = (): void => {
+      if (this.groups.has(group)) return; // 期间又被重新请求了
+      for (const e of entriesForGroup(group)) {
+        this.unload(e.key);
+        this.missing.delete(e.key);
+      }
+    };
+    if (g.done) release();
+    else void g.promise.then(release);
   }
 
   async loadEntries(entries: AssetEntry[], onProgress?: (ratio: number) => void): Promise<void> {
@@ -136,11 +241,23 @@ export class AssetLoader {
         this.audio.set(entry.key, buf);
         break;
       }
+      case 'font': {
+        // 字体子集（WOFF2）：注册为 FontFace，CSS 的 --ui-font / --ui-serif 里排在最前；不支持 FontFace 的环境跳过
+        if (typeof FontFace === 'undefined' || typeof document === 'undefined') break;
+        // 先 fetch 字节再交给 FontFace：比 url() 来源更可控（错误带 HTTP 状态，且能失败重试一次）
+        const bytes = await fetchBytes(url);
+        const face = new FontFace(entry.family ?? entry.key, bytes, { display: 'swap' });
+        await face.load();
+        document.fonts.add(face);
+        this.fonts.set(entry.key, face);
+        onProgress(1);
+        break;
+      }
     }
   }
 
   has(key: string): boolean {
-    return this.models.has(key) || this.textures.has(key) || this.audio.has(key);
+    return this.models.has(key) || this.textures.has(key) || this.audio.has(key) || this.fonts.has(key);
   }
 
   isMissing(key: string): boolean {
@@ -191,11 +308,27 @@ export class AssetLoader {
     this.models.delete(key);
     this.textures.delete(key);
     this.audio.delete(key);
+    const face = this.fonts.get(key);
+    if (face) document.fonts.delete(face);
+    this.fonts.delete(key);
   }
 
   dispose(): void {
-    for (const key of [...this.models.keys(), ...this.textures.keys(), ...this.audio.keys()]) this.unload(key);
+    for (const key of [...this.models.keys(), ...this.textures.keys(), ...this.audio.keys(), ...this.fonts.keys()]) this.unload(key);
+    this.groups.clear();
     this.draco.dispose();
     this.ktx2.dispose();
+  }
+}
+
+async function fetchBytes(url: string, retries = 1): Promise<ArrayBuffer> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return await res.arrayBuffer();
+    } catch (err) {
+      if (attempt >= retries) throw err;
+    }
   }
 }

@@ -2,11 +2,13 @@ import './ui/styles.css';
 import { Game } from '@/core/Game';
 import { BootScene } from '@/scenes/BootScene';
 import { LoadingScene } from '@/scenes/LoadingScene';
-import { MainScene } from '@/scenes/MainScene';
+import { S1EbbShoreScene, SandboxScene } from '@/scenes/S1EbbShoreScene';
+import { S2KeeperHouseScene } from '@/scenes/S2KeeperHouseScene';
+import { S3LighthouseScene } from '@/scenes/S3LighthouseScene';
 import { ChapterEndScene, MenuScene } from '@/scenes/MenuScene';
 import { TestbedScene } from '@/scenes/TestbedScene';
 
-/** 入口：检测 WebGL2 → 创建 Game → 注册场景 → Boot → 主菜单 →（新游戏 / 继续）Loading → Main（流程见 core/GameFlow） */
+/** 入口：检测 WebGL2 → 创建 Game → 注册场景 → Boot → 主菜单 →（新游戏 / 继续）Loading → S1 → S2 → S3（流程见 core/GameFlow） */
 function showFatal(message: string): void {
   const el = document.createElement('div');
   el.className = 'fatal-error';
@@ -38,7 +40,12 @@ function bootstrap(): void {
     .register('loading', (g) => new LoadingScene(g))
     .register('menu', (g) => new MenuScene(g))
     .register('chapter-end', (g) => new ChapterEndScene(g))
-    .register('main', (g) => new MainScene(g))
+    // 第一章三个场景（v0.1-010）：S1 → S2 → S3，出口触发黑场切换（GameFlow.goToLevel）
+    .register('s1-ebb-shore', (g) => new S1EbbShoreScene(g))
+    .register('s2-keeper-house', (g) => new S2KeeperHouseScene(g))
+    .register('s3-lighthouse', (g) => new S3LighthouseScene(g))
+    // 沙盒（v0.1 demo 岛，dev 专用：?scene=sandbox，正式版要加 ?debug=1）
+    .register('sandbox', (g) => new SandboxScene(g))
     .register('testbed', (g) => new TestbedScene(g));
   game.start();
   void game.scenes.change('boot');

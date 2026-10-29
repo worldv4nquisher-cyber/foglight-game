@@ -283,8 +283,8 @@ test('009：qualityDetectedTier 清洗 / 持久化；恢复默认回到检测结
 test('008：章节完成时把不满 10 秒的零头记进用时；之后不再累计；结束页用时 m:ss', () => {
   const st = new MemStorage();
   const s = new SaveSystem(st);
-  s.newGame('ch1', 'main');
-  s.save({ chapterId: 'ch1', sceneId: 'main' });
+  s.newGame('ch1', 's1');
+  s.save({ chapterId: 'ch1', sceneId: 's1' });
   s.tick(25.5); // 20 秒记入内存，5.5 秒零头
   s.addHintUsed();
   s.save({ chapterId: 'ch1', sceneId: 'end', chapterComplete: true });
