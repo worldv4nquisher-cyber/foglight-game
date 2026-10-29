@@ -1,4 +1,4 @@
-// v0.1-012 光线反射系统校验（纯逻辑，无 DOM）：反射角、4 次反射上限、镜背挡光、碰撞体挡光、接收器半径与 1.5 / 2 s 计时、
+// v0.1-012 光线反射系统校验（纯逻辑，无 DOM）：反射角、4 次反射上限、镜背挡光、碰撞体挡光、接收器半径与 1.5 s 计时、015 C 点火口 manual（1.0 s 可点灯 / 0.3 s 容差 / 20 s 提醒 / 四态颜色 / 测试场按 E）、
 // 中途移开进度归零、前置条件未满足 → receiver:blocked、天光 40 s / 25 s 周期与常亮、暖 / 冷白切换、事件驱动重算、3 镜 4 反射 ≤ 1 ms。
 // 运行：npm run test:beam
 import assert from 'node:assert/strict';
@@ -132,7 +132,7 @@ test('接收器半径判定（默认 0.3 m）：0.29 m 偏移命中，0.31 m 不
   assert.equal(new BeamReceiver({ id: 'x', node: new THREE.Object3D() }).radius, 0.3);
 });
 
-test('持续命中 1.5 s 触发 receiver:activated（点火口可配 2 s）；中途移开进度归零', () => {
+test('持续命中 1.5 s 触发 receiver:activated（光感锁）；中途移开进度归零', () => {
   const events = new EventBus();
   const ev = [];
   for (const n of ['receiver:activated', 'receiver:reset', 'receiver:blocked']) events.on(n, (p) => ev.push([n, p.id]));
@@ -156,16 +156,158 @@ test('持续命中 1.5 s 触发 receiver:activated（点火口可配 2 s）；�
   run(tr, 0.1);
   assert.ok(r.activated);
   assert.equal(ev.filter(([n]) => n === 'receiver:activated').length, 1);
-  // 2 s 点火口
-  const tr2 = new BeamTracer();
-  tr2.addEmitter(emitter([0, 0, 0], [0, 0, -1]));
-  const ig = tr2.addReceiver(new BeamReceiver({ id: 'ig', node: node([0, 0, -5], [0, 0, 1]), holdSec: cfg.igniterHoldSec }));
-  run(tr2, 1.9);
-  assert.ok(!ig.activated);
-  run(tr2, 0.15);
-  assert.ok(ig.activated);
   assert.equal(cfg.lockHoldSec, 1.5);
-  assert.equal(cfg.igniterHoldSec, 2);
+  // 015 C：点火口 1.0 s 进入可点灯，断光容差 0.3 s，20 s 提醒
+  assert.equal(cfg.igniterHoldSec, 1.0);
+  assert.equal(cfg.igniterGraceSec, 0.3);
+  assert.equal(cfg.igniterReminderSec, 20);
+});
+
+// ---- 015 C 点火口 manual 模式（只发 ready / lost，按 E 由脚本 activate）
+const manualRig = (oil = { v: true }) => {
+  const events = new EventBus();
+  const ev = [];
+  for (const n of ['receiver:ready', 'receiver:lost', 'receiver:activated', 'receiver:blocked', 'ignition:reminder']) events.on(n, () => ev.push(n));
+  const tr = new BeamTracer();
+  const e = tr.addEmitter(emitter([0, 0, 0], [0, 0, -1], { color: 'coldWhite' }));
+  const lens = new THREE.Mesh(new THREE.SphereGeometry(0.1), new THREE.MeshStandardMaterial());
+  const r = tr.addReceiver(
+    new BeamReceiver({
+      id: 'ig',
+      node: node([0, 0, -5], [0, 0, 1]),
+      holdSec: cfg.igniterHoldSec,
+      requires: () => oil.v,
+      lens,
+      mode: 'manual',
+      graceSec: cfg.igniterGraceSec,
+      reminderSec: cfg.igniterReminderSec,
+    }),
+  );
+  tr.bind(events);
+  const aim = (on) => {
+    e.node.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), on ? new THREE.Vector3(0, 0, -1) : new THREE.Vector3(1, 0, -1).normalize());
+    e.node.updateMatrixWorld(true);
+    tr.invalidate();
+  };
+  return { events, ev, tr, e, r, lens, aim, oil };
+};
+
+test('点火口 manual：连续受光 1.0 s 进入可点灯（receiver:ready），不自动点燃；activate() 只在可点灯时生效', () => {
+  const { ev, tr, r, aim } = manualRig();
+  assert.equal(r.mode, 'manual');
+  assert.equal(r.activate(), false, '待命时 activate 无效');
+  run(tr, 0.95);
+  assert.equal(r.state, 'charging');
+  run(tr, 0.1);
+  assert.equal(r.state, 'ready');
+  assert.ok(r.ready && !r.activated);
+  assert.deepEqual(ev, ['receiver:ready']);
+  run(tr, 5);
+  assert.equal(r.state, 'ready', '一直受光也不会自己点燃');
+  assert.ok(!ev.includes('receiver:activated'));
+  assert.equal(r.activate(), true);
+  assert.ok(r.activated);
+  assert.equal(r.activate(), false, '只生效一次');
+  // 点燃后光路不再影响它
+  aim(false);
+  run(tr, 2);
+  assert.ok(r.activated);
+  assert.equal(ev.filter((n) => n === 'receiver:activated').length, 1);
+});
+
+test('点火口断光容差：≤ 0.3 s 不算断（可点灯保持、累计阶段不清零），> 0.3 s 发 receiver:lost 并重新计 1.0 s', () => {
+  const { ev, tr, r, aim } = manualRig();
+  // 累计阶段：0.6 s 受光 + 0.25 s 断光 + 0.45 s 受光 = 可点灯（总受光 1.05 s）
+  run(tr, 0.6);
+  aim(false);
+  run(tr, 0.25);
+  assert.equal(r.state, 'charging', '容差内不清零');
+  aim(true);
+  run(tr, 0.45);
+  assert.equal(r.state, 'ready');
+  // 可点灯阶段：断 0.3 s 保持（且容差内 activate 仍生效的前提 = ready）
+  aim(false);
+  run(tr, 0.3);
+  assert.equal(r.state, 'ready', '断光 0.3 s 不退出');
+  assert.ok(!ev.includes('receiver:lost'));
+  aim(true);
+  run(tr, DT);
+  // 断 0.35 s → 退出
+  aim(false);
+  run(tr, 0.35);
+  assert.equal(r.state, 'idle');
+  assert.equal(r.progress, 0);
+  assert.equal(ev.filter((n) => n === 'receiver:lost').length, 1);
+  assert.equal(r.activate(), false, '退出后按 E 无效');
+  // 重新受光要再连续 1.0 s
+  aim(true);
+  run(tr, 0.95);
+  assert.equal(r.state, 'charging');
+  run(tr, 0.1);
+  assert.equal(r.state, 'ready');
+  assert.equal(ev.filter((n) => n === 'receiver:ready').length, 2);
+});
+
+test('点火口未开阀：只红光（blocked）+ receiver:blocked，不进可点灯；开阀后从开阀那一刻起 1.0 s', () => {
+  const oil = { v: false };
+  const { ev, tr, r, lens } = manualRig(oil);
+  run(tr, 3);
+  assert.equal(r.state, 'blocked');
+  assert.ok(ev.includes('receiver:blocked'));
+  assert.ok(!ev.includes('receiver:ready'));
+  const rend = new WhiteboxBeamRenderer();
+  rend.update(DT, tr);
+  assert.equal(lens.material.emissive.getHex(), cfg.igniterPort.noOil, '没油 = #C8382A');
+  assert.ok(Math.abs(lens.material.emissiveIntensity - cfg.igniterPort.noOilIntensity) < 1e-9);
+  oil.v = true; // 不调 resetState：受阻 → 满足时 receiver 自己从这一刻重新计时
+  run(tr, 0.95);
+  assert.equal(r.state, 'charging', '开阀后 0.95 s 还不该可点灯（不吃开阀前的受光时间）');
+  run(tr, 0.1);
+  assert.equal(r.state, 'ready');
+  // 冷白呼吸 0.15–0.35
+  for (let i = 0; i < 60; i++) {
+    run(tr, 0.05);
+    rend.update(0.05, tr);
+    assert.equal(lens.material.emissive.getHex(), cfg.igniterPort.cold, '可点灯 = #DCE6EE');
+    assert.ok(lens.material.emissiveIntensity >= 0.15 - 1e-6 && lens.material.emissiveIntensity <= 0.35 + 1e-6);
+  }
+  r.activate();
+  rend.update(DT, tr);
+  assert.equal(lens.material.emissive.getHex(), cfg.igniterPort.lit, '点燃 = #FFB25E');
+  rend.dispose();
+});
+
+test('点火口 20 s 提醒：可点灯 20 s 没点 → ignition:reminder 一次 + 脉冲（0.2 s 升 / 0.8 s 落）；退出再进入重新计时', () => {
+  const { ev, tr, r, aim } = manualRig();
+  run(tr, 1.0 + DT);
+  assert.equal(r.state, 'ready');
+  run(tr, 19.8);
+  assert.ok(!ev.includes('ignition:reminder'));
+  run(tr, 0.3);
+  assert.equal(ev.filter((n) => n === 'ignition:reminder').length, 1);
+  assert.ok(r.reminderPulse > 0.5, `脉冲 ${r.reminderPulse}`);
+  run(tr, 1.2);
+  assert.equal(r.reminderPulse, 0, '脉冲 1 s 后落回');
+  run(tr, 30);
+  assert.equal(ev.filter((n) => n === 'ignition:reminder').length, 1, '每次进入可点灯最多一次');
+  assert.equal(r.state, 'ready', '提醒后不自动点燃');
+  aim(false);
+  run(tr, 0.4);
+  aim(true);
+  run(tr, 1.0 + DT + 20.1);
+  assert.equal(ev.filter((n) => n === 'ignition:reminder').length, 2, '重新进入后重新计时');
+});
+
+test('点火口可点灯时前置条件失效（测试场地关阀）：退出可点灯', () => {
+  const oil = { v: true };
+  const { ev, tr, r } = manualRig(oil);
+  run(tr, 1.1);
+  assert.equal(r.state, 'ready');
+  oil.v = false;
+  run(tr, DT);
+  assert.ok(ev.includes('receiver:lost'));
+  run(tr, 0.5);
+  assert.equal(r.state, 'blocked');
 });
 
 test('点火口前置条件未满足：命中只发红光（blocked）并发 receiver:blocked 一次；满足后正常触发', () => {
@@ -307,6 +449,38 @@ test('测试场地光路：光源 → 镜 A → 镜 B → 接收器（转对后 
   const p2 = area.tracer.paths.find((x) => x.emitter.id === area.lamp.id);
   assert.notEqual(p2.end, 'receiver');
   area.dispose();
+});
+
+test('测试场地点火口（015 C 同一套按 E）：开阀 + 天光 1.0 s → 可点灯不自动点燃，tryIgnite 点燃转暖；I 调试开关 autoIgnite', () => {
+  const events = new EventBus();
+  const physics = new PhysicsSystem();
+  const scene = new THREE.Scene();
+  const area = buildBeamTestArea({ scene, physics, events });
+  const step = (sec) => {
+    for (let i = 0; i < Math.round(sec / DT); i++) area.fixedUpdate(DT);
+  };
+  assert.equal(area.autoIgnite, false, '默认按 E');
+  assert.equal(area.tryIgnite(), false, '没开阀按 E 无效');
+  step(1.5);
+  assert.equal(area.igniter.state, 'blocked', '未开阀：红光');
+  area.setOil(true);
+  step(1.1);
+  assert.equal(area.igniter.state, 'ready');
+  step(3);
+  assert.equal(area.igniter.state, 'ready', '不自动点燃');
+  assert.equal(area.sky.color, 'coldWhite', '可点灯仍是冷白');
+  assert.equal(area.tryIgnite(), true);
+  assert.ok(area.igniter.activated);
+  assert.equal(area.sky.color, 'warm', '点燃后天光转暖');
+  area.dispose();
+  // 调试开关：可点灯即自动点燃
+  const events2 = new EventBus();
+  const area2 = buildBeamTestArea({ scene: new THREE.Scene(), physics: new PhysicsSystem(), events: events2 });
+  area2.autoIgnite = true;
+  area2.setOil(true);
+  for (let i = 0; i < 70; i++) area2.fixedUpdate(DT);
+  assert.ok(area2.igniter.activated);
+  area2.dispose();
 });
 
 test('性能：3 面镜子 + 4 次反射的光路重算单次 ≤ 1 ms（取 200 次中位数）', () => {

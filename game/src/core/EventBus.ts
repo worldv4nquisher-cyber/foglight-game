@@ -79,6 +79,13 @@ export interface GameEvents {
   'receiver:activated': { id: string; emitter: string };
   'receiver:blocked': { id: string; emitter: string };
   'receiver:reset': { id: string };
+  /** 015 点火口 manual 模式：连续受光满 holdSec 进入可点灯状态 / 断光超过 graceSec 退出 */
+  'receiver:ready': { id: string; emitter: string };
+  'receiver:lost': { id: string };
+  /** 015 可点灯状态 20 s 没按 E：嗡鸣 + 微光加强一次（每次进入可点灯状态最多一次） */
+  'ignition:reminder': { id: string };
+  /** 015 点灯（xi-ignite-lever 的 ignite 事件帧，全局只发一次） */
+  'lighthouse:ignited': undefined;
   /** 光源开关（lit = 逻辑上亮着，淡入过半算亮）/ 换颜色 / 天光切常亮（谜题 5 开油阀后） */
   'beam:emitter': { id: string; lit: boolean };
   'beam:setColor': { id: string; color: 'warm' | 'coldWhite' };

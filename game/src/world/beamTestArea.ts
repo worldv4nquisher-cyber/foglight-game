@@ -18,6 +18,9 @@ import { WhiteboxBeamRenderer } from '@/systems/light/BeamRenderer';
  *   风灯灯台（带聚光罩）(−18, 0.85, 4) → +Z ── 镜 A (−18, 0.85, 10) ── +X → 镜 B (−15, 0.85, 10) ── +Z → 光感锁 (−15, 0.85, 16)
  *   镜 A 初始偏 30°（光打到旁边），机关台 (−16.5, 8) 上 E 进机位：A / D 转镜（15° 档，Shift 精调 7.5°），Q / E 换镜。
  *   云缝天光 (−19, 4, 15) 竖直向下 → 点火口 (−19, 0.8, 15)：40 s 一周期亮 25 s；没开油阀时命中只发红光（receiver:blocked）。
+ *   点火口 manual 模式（015 C，与 S3 同一套）：阀已开 + 连续受光 1.0 s 进入可点灯（receiver:ready），断光 ≤ 0.3 s 不算断、超过退出（receiver:lost）；
+ *   可点灯时在点火口 1.8 m、±60° 内出「E 点灯」，按 E 那一刻仍可点灯才点燃（测试场地没有拉杆 / 动作，直接锁存）；20 s 没点发 ignition:reminder。
+ *   调试开关 autoIgnite（I 键，默认关）：开着时一进可点灯就自动点燃（012 旧行为，回归测光路用）。
  *   点火口触发后天光转暖（谜题 5「点火瞬间转暖」）。
  * 颜色规则（style-guide §0）：暖光只来自风灯（灯台光束）；天光 / 环境保持冷白。
  */
@@ -34,6 +37,12 @@ export interface BeamTestArea {
   /** 机关台交互（没给 interaction 时为 null） */
   console: Interactable | null;
   readonly oilOpen: boolean;
+  /** 点火口「E 点灯」交互（没给 interaction 时为 null） */
+  igniteIx: Interactable | null;
+  /** 调试：可点灯即自动点燃（默认关 = 按 E；测试场地 I 键切换） */
+  autoIgnite: boolean;
+  /** 按 E 点灯的判定（smoke 也直接调）：阀已开 + 可点灯（含 0.3 s 容差）才生效 */
+  tryIgnite(): boolean;
   /** 开 / 关油阀（测试场地 U 键）：开 = 点火口前置条件满足 + 天光常亮 */
   setOil(open: boolean): void;
   /** 把两面镜子转到正解（测试 / 冒烟用） */
@@ -133,7 +142,18 @@ export function buildBeamTestArea(opts: {
   igNode.name = 'beam-igniter-receiver';
   igNode.position.set(-19, 0.8, 15);
   root.add(igNode);
-  const igniter = new BeamReceiver({ id: 'beam-igniter', node: igNode, holdSec: gameplay.beam.igniterHoldSec, requires: () => oilOpen, lens: igLens });
+  const igniter = new BeamReceiver({
+    id: 'beam-igniter',
+    node: igNode,
+    holdSec: gameplay.beam.igniterHoldSec,
+    requires: () => oilOpen,
+    lens: igLens,
+    mode: 'manual',
+    graceSec: gameplay.beam.igniterGraceSec,
+    reminderSec: gameplay.beam.igniterReminderSec,
+  });
+  let autoIgnite = false;
+  const tryIgnite = (): boolean => oilOpen && igniter.ready && igniter.activate();
 
   const tracer = new BeamTracer(physics);
   tracer.addEmitter(lamp);
@@ -145,6 +165,12 @@ export function buildBeamTestArea(opts: {
   const offs: Array<() => void> = [tracer.bind(events)];
   // 谜题 5：点火瞬间光转暖
   offs.push(
+    events.on('receiver:ready', ({ id }) => {
+      if (id === igniter.id && autoIgnite) igniter.activate();
+    }),
+    events.on('interact:used', ({ id }) => {
+      if (id === 'beam-igniter-ignite') tryIgnite();
+    }),
     events.on('receiver:activated', ({ id }) => {
       if (id === igniter.id) events.emit('beam:setColor', { id: sky.id, color: 'warm' });
     }),
@@ -167,6 +193,20 @@ export function buildBeamTestArea(opts: {
     consoleIx = new Interactable({ id: 'beam-console', kind: 'puzzle', object: consoleMesh, puzzle, focus: new THREE.Vector3(-16.5, 0.9, 7), reach: 0.4 });
     opts.interaction.add(consoleIx);
   }
+  let igniteIx: Interactable | null = null;
+  if (opts.interaction) {
+    igniteIx = new Interactable({
+      id: 'beam-igniter-ignite',
+      kind: 'use',
+      prompt: 'ui.prompt.ignite',
+      object: igniterBase,
+      focus: new THREE.Vector3(-19, 0.68, 15),
+      reach: 0.3,
+      approach: false,
+    });
+    igniteIx.enabled = false;
+    opts.interaction.add(igniteIx);
+  }
   root.updateMatrixWorld(true);
 
   return {
@@ -180,8 +220,17 @@ export function buildBeamTestArea(opts: {
     igniter,
     puzzle,
     console: consoleIx,
+    igniteIx,
+    tryIgnite,
     get oilOpen() {
       return oilOpen;
+    },
+    get autoIgnite() {
+      return autoIgnite;
+    },
+    set autoIgnite(v: boolean) {
+      autoIgnite = v;
+      if (v && igniter.ready) igniter.activate();
     },
     setOil(open: boolean): void {
       oilOpen = open;
@@ -193,6 +242,7 @@ export function buildBeamTestArea(opts: {
     },
     fixedUpdate(dt: number): void {
       tracer.fixedUpdate(dt);
+      if (igniteIx) igniteIx.enabled = oilOpen && igniter.ready;
     },
     update(dt: number): void {
       renderer.update(dt, tracer);

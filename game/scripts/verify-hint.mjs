@@ -163,6 +163,76 @@ test('分步骤（谜题 5）：二、三级取第一个未完成的步骤；高
   assert.deepEqual(log.used, ['p5:1', 'p5:2', 'p5:3']);
 });
 
+test('015 C stepTimed：谜题 5 二、三级按当前步骤计时（一级解锁后才走，换步骤清零回一级）', () => {
+  const { h, log } = make();
+  h.add({
+    id: 'p5',
+    zone: circleZone({ x: 0, z: 0 }, 5),
+    l1: 'ch1.hint.p5.l1',
+    stepTimed: true,
+    steps: [
+      { id: 'valve', l2: 'ch1.hint.p5.valve.l2', l3: 'ch1.hint.p5.valve.l3', highlight: ['oil-valve-s3'] },
+      { id: 'window_mirror', l2: 'ch1.hint.p5.window_mirror.l2', l3: 'ch1.hint.p5.window_mirror.l3', highlight: ['guide-mirror-s3-window'] },
+    ],
+  });
+  run(h, 180.1);
+  assert.equal(h.level('p5'), 1);
+  assert.ok(h.stepTime('p5') < 0.2, '一级解锁前步骤计时不走');
+  run(h, 180);
+  assert.equal(h.level('p5'), 2);
+  run(h, 240);
+  assert.equal(h.level('p5'), 3);
+  h.reveal();
+  assert.deepEqual(log.used, ['p5:1', 'p5:2', 'p5:3']);
+  h.completeStep('p5', 'valve');
+  assert.equal(h.level('p5'), 1, '换步骤回一级');
+  assert.equal(h.stepTime('p5'), 0);
+  assert.equal(h.iconFresh, false, '一级已看过');
+  let v = h.reveal();
+  assert.deepEqual(v.lines.map((l) => l.textId), ['ch1.hint.p5.l1', null, null]);
+  run(h, 179.8);
+  assert.equal(h.level('p5'), 1);
+  run(h, 0.3);
+  assert.equal(h.level('p5'), 2, '新步骤 180 s 后二级');
+  assert.equal(h.iconFresh, true, '新步骤的新层级 = 新');
+  v = h.reveal();
+  assert.equal(v.step, 'window_mirror');
+  assert.deepEqual(v.lines.map((l) => l.textId), ['ch1.hint.p5.l1', 'ch1.hint.p5.window_mirror.l2', null]);
+  assert.deepEqual(log.hl.at(-1), ['guide-mirror-s3-window', 3]);
+  // 离开区域暂停
+  run(h, 500, OUT);
+  assert.equal(h.level('p5'), 2);
+});
+
+test('015 C override（可点灯）：提示已解锁时按 H 只显示 ch1.hint.p5.ignite.l3、不高亮；未解锁仍 locked；退出后回原步骤', () => {
+  const { h, log } = make();
+  let ready = false;
+  h.add({
+    id: 'p5',
+    zone: circleZone({ x: 0, z: 0 }, 5),
+    l1: 'ch1.hint.p5.l1',
+    stepTimed: true,
+    override: () => (ready ? 'ch1.hint.p5.ignite.l3' : null),
+    steps: [{ id: 'mid_b', l2: 'ch1.hint.p5.mid_b.l2', l3: 'ch1.hint.p5.mid_b.l3', highlight: ['ignition-port-s3'] }],
+  });
+  ready = true;
+  run(h, 10);
+  assert.deepEqual(h.reveal().lines.map((l) => l.textId), [null, null, null], '提示未解锁前不显示');
+  run(h, 600);
+  assert.equal(h.level('p5'), 3);
+  const hl0 = log.hl.length;
+  const v = h.reveal();
+  assert.equal(v.step, 'override');
+  assert.deepEqual(v.lines.map((l) => l.textId), ['ch1.hint.p5.ignite.l3']);
+  assert.equal(log.hl.length, hl0, '不高亮');
+  assert.ok(t('ch1.hint.p5.ignite.l3').length > 0);
+  ready = false;
+  const v2 = h.reveal();
+  assert.equal(v2.step, 'mid_b');
+  assert.deepEqual(v2.lines.map((l) => l.textId), ['ch1.hint.p5.l1', 'ch1.hint.p5.mid_b.l2', 'ch1.hint.p5.mid_b.l3']);
+  assert.deepEqual(log.hl.at(-1), ['ignition-port-s3', 3]);
+});
+
 test('两道谜题：在哪个区域就显示哪个；没进过的不计时', () => {
   const { h } = make();
   h.add(P1);

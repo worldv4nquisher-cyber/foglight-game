@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { gameplay } from '@/config/gameplay';
 import type { BeamColor } from './BeamEmitter';
 import type { BeamTracer } from './BeamTracer';
+import type { BeamReceiver } from './BeamReceiver';
 
 /**
  * 光束画面接口（v0.1-012）：白盒版用发光圆柱 + 末端光斑；024 换成体积光束时实现同一个接口即可，BeamTracer 不变。
@@ -212,6 +213,10 @@ export class WhiteboxBeamRenderer implements BeamRenderer {
       const m = r.lens?.material as THREE.MeshStandardMaterial | undefined;
       if (!m || !('emissive' in m)) continue;
       const pulse = 0.8 + 0.2 * Math.sin(this.time * 8);
+      if (r.mode === 'manual') {
+        this.igniterLens(r, m);
+        continue;
+      }
       if (r.state === 'activated') {
         m.emissive.setHex(beamColors(r.hitColor ?? 'warm').core);
         m.emissiveIntensity = 2.2;
@@ -225,6 +230,32 @@ export class WhiteboxBeamRenderer implements BeamRenderer {
         m.emissive.setHex(0x000000);
         m.emissiveIntensity = 0;
       }
+    }
+  }
+
+  /**
+   * manual 接收器（点火口）四态，颜色只认 gameplay.beam.igniterPort（不跟光的颜色走：点燃前永远冷 / 红，点燃后才暖）：
+   * idle = off；blocked = 没油红常亮；charging = 冷白随进度从 0 升到呼吸下限；ready = 冷白呼吸 + 提醒脉冲；activated = 暖
+   */
+  private igniterLens(r: BeamReceiver, m: THREE.MeshStandardMaterial): void {
+    const P = gameplay.beam.igniterPort;
+    if (r.state === 'activated') {
+      m.emissive.setHex(P.lit);
+      m.emissiveIntensity = P.litIntensity;
+    } else if (r.state === 'ready') {
+      const [lo, hi] = P.coldBreath;
+      const breath = lo + (hi - lo) * (0.5 + 0.5 * Math.sin((this.time * Math.PI * 2) / P.coldPeriodSec));
+      m.emissive.setHex(P.cold);
+      m.emissiveIntensity = breath + (P.pulsePeak - breath) * r.reminderPulse;
+    } else if (r.state === 'blocked') {
+      m.emissive.setHex(P.noOil);
+      m.emissiveIntensity = P.noOilIntensity;
+    } else if (r.state === 'charging') {
+      m.emissive.setHex(P.cold);
+      m.emissiveIntensity = P.coldBreath[0] * r.progress;
+    } else {
+      m.emissive.setHex(0x000000);
+      m.emissiveIntensity = 0;
     }
   }
 

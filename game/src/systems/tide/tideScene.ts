@@ -36,6 +36,10 @@ const FALLBACK: Record<string, { freq: number; duration: number; type: Oscillato
   'sfx-oil-flow': { freq: 90, duration: 1.2, type: 'sine' },
   'sfx-glass-resonance': { freq: 1760, duration: 0.9, type: 'sine' },
   'sfx-ignite-fail': { freq: 160, duration: 0.3, type: 'square' },
+  // 015 C：可点灯嗡鸣（032 sfx-ignite-ready-loop 到之前每次进入可点灯响一次）、20 s 提醒脉冲、点燃
+  'sfx-ignite-ready-loop': { freq: 110, duration: 1.6, type: 'sine' },
+  'sfx-ignite-ready-pulse': { freq: 165, duration: 2.0, type: 'sine' },
+  'sfx-ignite': { freq: 262, duration: 1.8, type: 'triangle' },
 };
 
 /** `sfx:play` → 有资源播资源，否则合成占位音。返回取消订阅 */

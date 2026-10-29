@@ -219,7 +219,16 @@ export function buildS3Beam(physics: PhysicsSystem | null, parent: THREE.Object3
   portNode.name = 'ignition-port-s3-receiver';
   portNode.position.copy(PORT);
   root.add(portNode);
-  const igniter = new BeamReceiver({ id: 'ignition-port-s3', node: portNode, holdSec: gameplay.beam.igniterHoldSec, lens: igniterLens });
+  // manual（015 C）：连续受光 1.0 s 进入可点灯（receiver:ready），断光 ≤ 0.3 s 不算断，20 s 没点发 ignition:reminder；按 E 由谜题脚本 activate()
+  const igniter = new BeamReceiver({
+    id: 'ignition-port-s3',
+    node: portNode,
+    holdSec: gameplay.beam.igniterHoldSec,
+    lens: igniterLens,
+    mode: 'manual',
+    graceSec: gameplay.beam.igniterGraceSec,
+    reminderSec: gameplay.beam.igniterReminderSec,
+  });
 
   // ---- 光源：节点 +Z 指向目标（Object3D.lookAt 吃世界坐标）
   root.updateMatrixWorld(true);

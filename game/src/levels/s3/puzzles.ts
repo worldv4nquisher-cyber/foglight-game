@@ -1,7 +1,9 @@
 import * as THREE from 'three';
 import type { Game } from '@/core/Game';
+import { gameplay } from '@/config/gameplay';
 import type { TextId } from '@/content/text';
 import type { PlayerRig } from '@/entities/createPlayer';
+import { PlaceholderXiActions, igniteLeverAngleAt, XI_IGNITE_LEVER_ALIGN, type XiActionPlayer } from '@/entities/xiActions';
 import type { CameraFollowSystem } from '@/systems/CameraFollowSystem';
 import type { HintSystem } from '@/systems/HintSystem';
 import type { Collider, PhysicsSystem } from '@/systems/PhysicsSystem';
@@ -77,6 +79,11 @@ export interface S3State {
   flashes: number;
   noOilSaid: number;
   ignited: boolean;
+  /** 按 E 生效（演出开始，之后光路不再影响结果）；ignited = 到了 ignite 帧 */
+  igniting: boolean;
+  /** 本次可点灯状态里是否已提醒（ignition:reminder）；进入可点灯次数（测试读） */
+  reminders: number;
+  readyCount: number;
   said: Set<string>;
 }
 
@@ -87,7 +94,16 @@ export interface S3Puzzles {
   tide: TideController;
   bell: TideBell;
   lever: THREE.Group;
+  /** 拉杆转动节点（绕局部 +X，pullSign × 017 逐帧角度） */
+  leverSwing: THREE.Group;
+  leverKnob: THREE.Mesh;
   leverIx: Interactable;
+  /** 「E 点灯」当前能不能生效（阀已开 + 可点灯状态，含 0.3 s 断光容差） */
+  canIgnite(): boolean;
+  /** 按 E 生效：锁输入 → 走到拉杆交互点 → xi-ignite-lever → 第 34 帧点燃。返回是否生效 */
+  startIgnite(): boolean;
+  /** 立即点燃（ignite 帧；smoke / 测试也可直接调）。全局只生效一次 */
+  igniteNow(): void;
   doorIx: Interactable;
   valveIx: Interactable;
   mirrorIx: Record<S3MirrorKey, Interactable>;
@@ -180,7 +196,18 @@ export function buildS3Puzzles(d: S3PuzzleDeps): S3Puzzles {
   const metal = new THREE.MeshStandardMaterial({ name: 'gb-metal', color: 0x5f6b70, metalness: 0.6, roughness: 0.45 });
   const copper = new THREE.MeshStandardMaterial({ name: 'gb-bell-copper', color: 0x5f746b, metalness: 0.85, roughness: 0.26, side: THREE.DoubleSide });
 
-  const state: S3State = { doorOpen: 0, valveOpen: false, reached: 0, flashes: 0, noOilSaid: -Infinity, ignited: false, said: new Set() };
+  const state: S3State = {
+    doorOpen: 0,
+    valveOpen: false,
+    reached: 0,
+    flashes: 0,
+    noOilSaid: -Infinity,
+    ignited: false,
+    igniting: false,
+    reminders: 0,
+    readyCount: 0,
+    said: new Set(),
+  };
   const once = (id: TextId): boolean => {
     if (state.said.has(id)) return false;
     state.said.add(id);
@@ -382,26 +409,37 @@ export function buildS3Puzzles(d: S3PuzzleDeps): S3Puzzles {
   const stepOf = ['window_mirror', 'mid_a', 'mid_b'] as const;
 
   // ======================================================== 灯室：点火拉杆（白盒：枢轴 = ignite-lever-socket，杆长 0.3）、纸条、透镜
+  // 拉杆节点坐标系 = 汐站在 -interact 面向拉杆时的局部系（+Z 朝 −X、+X 朝 S3 +Z），017 对位数据按这个系给：绕 +X 转 −60°
   const L = S3.igniteLever;
+  const standYaw = Math.atan2(L.facing[0], L.facing[2]);
   const lever = new THREE.Group();
   lever.name = S3_IDS.lever;
   lever.position.copy(v3(L.pivot));
+  lever.rotation.y = standYaw;
   root.add(lever);
-  const grip = v3(L.gripRest).sub(v3(L.pivot));
+  const leverSwing = new THREE.Group();
+  leverSwing.name = `${S3_IDS.lever}-swing`;
+  lever.add(leverSwing);
+  const grip = v3(L.gripRest).sub(v3(L.pivot)).applyAxisAngle(new THREE.Vector3(0, 1, 0), -standYaw);
   const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, L.len, 8), metal);
   arm.name = `${S3_IDS.lever}-arm`;
   arm.position.copy(grip.clone().multiplyScalar(0.5));
   arm.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), grip.clone().normalize());
-  lever.add(arm);
+  leverSwing.add(arm);
   const knob = new THREE.Mesh(new THREE.SphereGeometry(0.045, 12, 8), metal);
+  knob.name = `${S3_IDS.lever}-grip`;
   knob.position.copy(grip);
-  lever.add(knob);
+  leverSwing.add(knob);
+  const leverBase = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.12, 0.12), metal);
+  leverBase.name = `${S3_IDS.lever}-base`;
+  lever.add(leverBase);
   const stand = new THREE.Object3D();
   stand.name = `${S3_IDS.lever}-interact`;
   stand.position.copy(v3(L.interact));
-  stand.rotation.y = Math.atan2(L.facing[0], L.facing[2]);
+  stand.rotation.y = standYaw;
   root.add(stand);
   root.updateMatrixWorld(true);
+  // 004 通用判定：焦点 = 握把（1.8 m、±60°）；approach:false —— 按 E 那一刻就判定，走位由点灯演出自己做（锁输入后）
   const leverIx = new Interactable({
     id: S3_IDS.lever,
     kind: 'use',
@@ -410,26 +448,110 @@ export function buildS3Puzzles(d: S3PuzzleDeps): S3Puzzles {
     interactPoint: stand,
     focus: knob.getWorldPosition(new THREE.Vector3()),
     approach: false,
+    priority: 20,
   });
-  // part B 过渡：点火口锁存（开阀 + 持续受光）后才可点；part C 换成可点灯状态（ready / lost）
   leverIx.enabled = false;
   interaction.add(leverIx);
+  const igniter = beam.igniter;
+  const canIgnite = (): boolean => state.valveOpen && igniter.ready && !state.igniting && !state.ignited;
+
+  // ---- 点灯演出：锁输入（cutscene 上下文）→ 走到 -interact（017 walk 1.6 m/s）→ xi-ignite-lever（第 34 帧点燃）
+  let actions: XiActionPlayer | null = null;
+  let popInput: (() => void) | null = null;
+  let walk: { from: THREE.Vector3; to: THREE.Vector3; fromYaw: number; toYaw: number; t: number; dur: number } | null = null;
+  const angleDiff = (a: number, b: number): number => {
+    let x = (b - a) % (Math.PI * 2);
+    if (x > Math.PI) x -= Math.PI * 2;
+    if (x < -Math.PI) x += Math.PI * 2;
+    return x;
+  };
+  const setLeverAngle = (deg: number): void => {
+    leverSwing.rotation.x = XI_IGNITE_LEVER_ALIGN.pullSign * deg * (Math.PI / 180);
+  };
+  const igniteNow = (): void => {
+    if (state.ignited) return;
+    state.ignited = true;
+    state.igniting = true;
+    leverIx.enabled = false;
+    setLeverAngle(XI_IGNITE_LEVER_ALIGN.pullDeg);
+    // 点火口切暖（manual 接收器锁存）；不是 ready（smoke 直接调）时强制锁存
+    if (!igniter.activate()) {
+      igniter.state = 'activated';
+      igniter.progress = 1;
+    }
+    events.emit('beam:setColor', { id: beam.sky.id, color: 'warm' });
+    events.emit('beam:setColor', { id: beam.preview.id, color: 'warm' });
+    sfx('sfx-ignite');
+    hints.solve('p5');
+    lamp.setOn(true);
+    events.emit('lighthouse:ignited');
+    d.onIgnite();
+  };
+  const startIgnite = (): boolean => {
+    if (!canIgnite()) return false;
+    const rig = d.rig();
+    state.igniting = true;
+    leverIx.enabled = false;
+    // 从这一刻起光路不再影响结果
+    if (!rig) {
+      igniteNow();
+      return true;
+    }
+    popInput = game.input.pushContext('cutscene');
+    rig.controller.halt();
+    rig.controller.locked = true;
+    const sp = leverIx.standPoint(new THREE.Vector3());
+    const from = rig.body.body.position.clone();
+    const to = new THREE.Vector3(sp.position.x, from.y, sp.position.z);
+    const dist = Math.hypot(to.x - from.x, to.z - from.z);
+    const turn = Math.abs(angleDiff(rig.controller.facing, sp.facing));
+    const dur = dist < 0.02 && turn < 0.05 ? 0 : Math.min(1.5, Math.max(0.2, dist / gameplay.player.walkSpeed, (turn / Math.PI) * 0.6));
+    walk = { from, to, fromYaw: rig.controller.facing, toYaw: sp.facing, t: 0, dur };
+    return true;
+  };
+  const playLever = (rig: PlayerRig): void => {
+    actions ??= new PlaceholderXiActions(rig.controller);
+    void actions.play('xi-ignite-lever', { onTick: (t) => setLeverAngle(igniteLeverAngleAt(t)), onMarker: igniteNow }).then(() => {
+      rig.controller.locked = true;
+    });
+  };
+  const stepWalk = (rig: PlayerRig, dt: number): void => {
+    const w = walk;
+    if (!w) return;
+    w.t += dt;
+    const u = w.dur <= 0 ? 1 : Math.min(1, w.t / w.dur);
+    const k = u * u * (3 - 2 * u);
+    const body = rig.body.body;
+    body.velocity.x = body.velocity.z = 0;
+    body.position.x = w.from.x + (w.to.x - w.from.x) * k;
+    body.position.z = w.from.z + (w.to.z - w.from.z) * k;
+    rig.controller.facing = w.fromYaw + angleDiff(w.fromYaw, w.toYaw) * k;
+    if (u < 1) return;
+    rig.controller.facing = w.toYaw;
+    walk = null;
+    playLever(rig);
+  };
   offs.push(
-    events.on('receiver:activated', ({ id }) => {
-      if (id === beam.igniter.id && !state.ignited) leverIx.enabled = true;
+    () => popInput?.(),
+    events.on('receiver:ready', ({ id }) => {
+      if (id !== igniter.id || state.igniting) return;
+      state.readyCount++;
+      sfx('sfx-ignite-ready-loop');
+    }),
+    events.on('ignition:reminder', ({ id }) => {
+      if (id !== igniter.id || state.igniting) return;
+      state.reminders++;
+      sfx('sfx-ignite-ready-pulse');
     }),
     events.on('receiver:blocked', ({ id }) => {
-      if (id !== beam.igniter.id || time - state.noOilSaid < NO_OIL_INTERVAL) return;
+      if (id !== igniter.id || time - state.noOilSaid < NO_OIL_INTERVAL) return;
       state.noOilSaid = time;
       sfx('sfx-ignite-fail');
       say('ch1.s3.ignition.no_oil');
     }),
+    // E：以按下那一刻为准（InteractionSystem 在按下的那一步发 interact:used，approach:false 不先走位）
     events.on('interact:used', ({ id }) => {
-      if (id !== S3_IDS.lever || state.ignited) return;
-      state.ignited = true;
-      leverIx.enabled = false;
-      hints.solve('p5');
-      d.onIgnite();
+      if (id === S3_IDS.lever) startIgnite();
     }),
   );
   const note = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.01, 0.22), paper);
@@ -454,6 +576,9 @@ export function buildS3Puzzles(d: S3PuzzleDeps): S3Puzzles {
       return s >= S3.doorPlatform.s[0] && s <= S3.doorPlatform.s[1] + 1 && Math.abs(t) <= S3.doorPlatform.t[1] + 0.3;
     },
     l1: 'ch1.hint.p5.l1',
+    stepTimed: true,
+    // 步骤 5「点灯」：可点灯状态下按 H 只显示这一条（不高亮、不走二三级计时）；退出可点灯回到步骤 4
+    override: () => (canIgnite() ? 'ch1.hint.p5.ignite.l3' : null),
     steps: [
       { id: 'valve', l2: 'ch1.hint.p5.valve.l2', l3: 'ch1.hint.p5.valve.l3', highlight: () => (tide.state === 'high' ? [S3_IDS.bell, S3_IDS.valve] : [S3_IDS.valve]) },
       { id: 'window_mirror', l2: 'ch1.hint.p5.window_mirror.l2', l3: 'ch1.hint.p5.window_mirror.l3', highlight: [S3_IDS.mirror.window] },
@@ -472,7 +597,12 @@ export function buildS3Puzzles(d: S3PuzzleDeps): S3Puzzles {
     tide,
     bell,
     lever,
+    leverSwing,
+    leverKnob: knob,
     leverIx,
+    canIgnite,
+    startIgnite,
+    igniteNow,
     doorIx,
     valveIx,
     mirrorIx,
@@ -489,6 +619,10 @@ export function buildS3Puzzles(d: S3PuzzleDeps): S3Puzzles {
       }
       tracer.fixedUpdate(dt);
       const rig = d.rig();
+      // 点灯演出（走位 → 动作）；「E 点灯」只在可点灯状态开放
+      if (rig && walk) stepWalk(rig, dt);
+      actions?.fixedUpdate(dt);
+      leverIx.enabled = canIgnite();
       // 光路进度（上升沿反馈；天光刚亮起那一步不算，避免 40 s 周期里每次亮起都响）
       const reached = traceReached();
       const skyLit = beam.sky.lit;

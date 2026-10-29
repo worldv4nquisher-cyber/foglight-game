@@ -306,5 +306,54 @@ must('灯室 → 眺望站位 / 书桌', walk([S3.igniteLever.interact, P.standG
 doorCol.enabled = true;
 out.push('动线：桥尾 → 门外平台（门关进不去）→ 门内 → 底层油阀 / 窗口镜 → 108 级 → 灯室拉杆 / 眺望 ✓');
 
+// ---- 015 C 点火拉杆：017 对位数据 ↔ char-xi-anims.glb extras；S3 局部几何；与纸条间距
+{
+  const { XI_IGNITE_LEVER_ALIGN: AL, igniteLeverAngleAt, xiActionTiming } = await import('@/entities/xiActions');
+  const L = S3.igniteLever;
+  const glbUrl = new URL('../../art/models/characters/char-xi-anims.glb', import.meta.url);
+  if (existsSync(glbUrl)) {
+    const buf = readFileSync(glbUrl);
+    const json = JSON.parse(buf.subarray(20, 20 + buf.readUInt32LE(12)).toString('utf8'));
+    const clip = json.animations.find((x) => x.name === 'xi-ignite-lever');
+    assert.ok(clip, 'char-xi-anims.glb 缺 xi-ignite-lever');
+    const ex = clip.extras;
+    const g = ex.align.igniteLever;
+    assert.equal(ex.frames, AL.frames);
+    assert.equal(ex.fps, AL.fps);
+    assert.ok(Math.abs(ex.durationS - xiActionTiming('xi-ignite-lever').duration) < 1e-6, '时长 1.5 s');
+    assert.deepEqual(ex.eventFrames, AL.eventFrames);
+    assert.deepEqual(g.pivot, [...AL.pivot]);
+    assert.equal(g.lengthM, AL.lengthM);
+    assert.equal(g.pullDeg, AL.pullDeg);
+    assert.equal(g.pullSign, AL.pullSign);
+    assert.deepEqual(g.angleDegPerFrame, [...AL.angleDegPerFrame]);
+    // 汐局部（以 -interact 为原点、面朝 +Z）→ S3 局部：面朝 facing = −X ⇒ yaw −90°
+    const yaw = Math.atan2(L.facing[0], L.facing[2]);
+    const xi2s3 = (v) => new THREE.Vector3(...v).applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw).add(new THREE.Vector3(...L.interact)).toArray();
+    near3(xi2s3(g.pivot), L.pivot, 0.002, '拉杆枢轴（017 对位 → S3）');
+    near3(xi2s3(g.gripAtRest), L.gripRest, 0.002, '静止握点（017 对位 → S3）');
+    near3(xi2s3(g.gripPulled), L.gripPulled, 0.002, '拉到底握点（017 对位 → S3）');
+    out.push(`拉杆对位：char-xi-anims.glb extras（46 帧 / 30 fps / ignite 第 ${ex.eventFrames.ignite} 帧 / angleDegPerFrame）与代码一致，枢轴 / 握点换到 S3 ≤ 2 mm ✓`);
+  }
+  // 握点绕枢轴（汐 +X 轴）按逐帧角度转：第 34 帧到底 = gripPulled
+  const axis = new THREE.Vector3(1, 0, 0).applyAxisAngle(new THREE.Vector3(0, 1, 0), Math.atan2(L.facing[0], L.facing[2]));
+  const gripAt = (t) =>
+    new THREE.Vector3(...L.gripRest)
+      .sub(new THREE.Vector3(...L.pivot))
+      .applyAxisAngle(axis, AL.pullSign * THREE.MathUtils.degToRad(igniteLeverAngleAt(t)))
+      .add(new THREE.Vector3(...L.pivot))
+      .toArray();
+  near3(gripAt(0), L.gripRest, 1e-6, '第 0 帧握点');
+  assert.ok(Math.abs(igniteLeverAngleAt(22 / 30)) < 1e-9 && igniteLeverAngleAt(23 / 30) > 0, 'pullStart 第 22 帧后才动');
+  assert.ok(Math.abs(igniteLeverAngleAt(34 / 30) - 60) < 1e-9, '第 34 帧到底 60°');
+  near3(gripAt(34 / 30), L.gripPulled, 0.002, '第 34 帧握点 = 拉到底');
+  assert.ok(Math.abs(xiActionTiming('xi-ignite-lever').markerSec - 34 / 30) < 1e-9, 'lighthouse:ignited 在 1.133 s');
+  // 与纸条：枢轴到纸条、-interact 到 ignition-note-read 都 ≥ 1.5 m（制作人 2026-10-29）
+  const dPivot = new THREE.Vector3(...L.pivot).distanceTo(new THREE.Vector3(...S3.points.noteRead));
+  const dIx = new THREE.Vector3(...L.interact).distanceTo(new THREE.Vector3(...S3.points.noteRead));
+  assert.ok(dPivot >= 1.5 && dIx >= 1.5, `拉杆离纸条太近：枢轴 ${dPivot.toFixed(2)} m / 交互点 ${dIx.toFixed(2)} m`);
+  out.push(`拉杆 −60° 逐帧转动：第 34 帧握点到底 ✓；拉杆 ↔ 纸条 枢轴 ${dPivot.toFixed(2)} m / 交互点 ${dIx.toFixed(2)} m（≥ 1.5）✓`);
+}
+
 for (const l of out) console.log(`✓ ${l}`);
 console.log('verify-s3 通过');

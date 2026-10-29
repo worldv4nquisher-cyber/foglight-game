@@ -136,8 +136,26 @@ export const gameplay = {
     receiverRadius: 0.3,
     /** 光感锁持续命中多久触发（s） */
     lockHoldSec: 1.5,
-    /** 点火口持续命中多久触发（s） */
-    igniterHoldSec: 2,
+    /** 点火口连续受光多久进入可点灯状态（s，015：2 → 1.0） */
+    igniterHoldSec: 1.0,
+    /** 点火口断光容差（s）：断开 ≤ 此值不算断（累计受光阶段同样适用，不清零） */
+    igniterGraceSec: 0.3,
+    /** 可点灯状态持续多久没按 E 提醒一次（s） */
+    igniterReminderSec: 20,
+    /**
+     * 点火口四态（美术 022 / README-s3-layout「点火口四态」）：off 不发光；没油 = 红常亮 ~0.6；
+     * 可点灯 = 冷白 0.15–0.35 呼吸（4 s 一周期），提醒脉冲升到 ~1.0；点燃 = 暖 ~2.0（只在按 E 点燃之后）
+     */
+    igniterPort: {
+      noOil: 0xc8382a,
+      noOilIntensity: 0.6,
+      cold: 0xdce6ee,
+      coldBreath: [0.15, 0.35] as const,
+      coldPeriodSec: 4,
+      pulsePeak: 1.0,
+      lit: 0xffb25e,
+      litIntensity: 2.0,
+    },
     /** 云缝天光：周期 / 每周期亮多久 / 开关淡入淡出（s） */
     skyPeriodSec: 40,
     skyOnSec: 25,

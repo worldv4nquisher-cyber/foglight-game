@@ -166,7 +166,7 @@ export class TestbedScene extends BaseScene {
       '<kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 移动　<kbd>Shift</kbd> 小跑　<kbd>E</kbd> 交互 / 跨越（东侧 x = 16 交互走廊）　' +
         '<kbd>G</kbd> 开关闸门　<kbd>T</kbd> 送回起点（黑场）　<kbd>C</kbd> 测试镜头　<kbd>右键</kbd> 观察　<kbd>F4</kbd> 调试读数　' +
         '潮汐区在起点往南坡道上（<kbd>E</kbd> 敲钟，<kbd>Y</kbd> 遥控切潮）　' +
-        '光路区在西南（机关台 <kbd>E</kbd> 转镜，<kbd>U</kbd> 开关油阀，<kbd>O</kbd> 灯台冷暖）',
+        '光路区在西南（机关台 <kbd>E</kbd> 转镜，<kbd>U</kbd> 开关油阀，点火口 <kbd>E</kbd> 点灯（<kbd>I</kbd> 调试：可点灯时自动点灯），<kbd>O</kbd> 灯台冷暖）',
     );
 
     // 测试快捷键（只在这个场景）：G 闸门、T 送回
@@ -176,6 +176,7 @@ export class TestbedScene extends BaseScene {
       else if (e.code === 'KeyT') void this.rig.controller.teleportTo(anchors.spawn);
       else if (e.code === 'KeyY') this.tideArea.bell.ring();
       else if (e.code === 'KeyU') this.beamArea.setOil(!this.beamArea.oilOpen);
+      else if (e.code === 'KeyI') this.beamArea.autoIgnite = !this.beamArea.autoIgnite;
       else if (e.code === 'KeyO') {
         const lamp = this.beamArea.lamp;
         this.game.events.emit('beam:setColor', { id: lamp.id, color: lamp.color === 'warm' ? 'coldWhite' : 'warm' });

@@ -8,7 +8,8 @@ import type { TextId } from '@/content/text';
  * - 计时走游戏固定步长（暂停 / 阅读 / 日志冻结时不走）：进区域 180 s → 一级，再 180 s → 二级，再 240 s → 三级
  *   （gameplay.hint；`?hintScale=0.05` 开发 / 调试时整体缩短）。
  * - 「当前谜题」= 玩家所在区域里没解开的那道；不在任何区域时 = 最近进过、还没解开的那道。右下角风灯图标、H 弹窗都只看它。
- * - 谜题可以分步骤（谜题 5）：二、三级取第一个未完成的步骤。
+ * - 谜题可以分步骤（谜题 5）：二、三级取第一个未完成的步骤。`stepTimed` 时二、三级按当前步骤计时（015）：
+ *   一级仍按区域累计时间；一级解锁后每个步骤从 0 计（换步骤时回到一级），满 level2Delay → 二级，再满 level3Delay → 三级。
  * - H 弹窗打开（reveal）时：每个第一次看到的层级记一次 hintsUsed（006；同一谜题同一层级只记一次，换步骤不重复记），
  *   二级已解锁则调用 highlight() 高亮关键物体 3 s（每次打开都高亮）。
  */
@@ -56,6 +57,13 @@ export interface PuzzleHintDef {
   highlight?: IdList;
   /** 分步骤：二、三级取第一个未完成的步骤 */
   steps?: readonly HintStepDef[];
+  /**
+   * 临时覆盖（015 谜题 5「点灯」）：返回文本 ID 时，只要提示已解锁（≥ 一级），H 弹窗只显示这一条（记作三级），
+   * 不高亮、不走二三级计时；返回 null 回到原步骤提示。
+   */
+  override?: () => TextId | null;
+  /** 二、三级按当前步骤计时（015 谜题 5）；默认 false = 按区域累计时间 */
+  stepTimed?: boolean;
 }
 
 export interface HintLine {
@@ -93,6 +101,10 @@ interface PuzzleState {
   seen: HintLevel;
   level: HintLevel;
   lastEnter: number;
+  /** stepTimed：当前步骤 id / 一级解锁后在这一步上的区域内时间 / 这一步在弹窗里看过的最高层级 */
+  stepId: string | null;
+  stepTime: number;
+  stepSeen: HintLevel;
 }
 
 const ids = (l: IdList | undefined): readonly string[] => (typeof l === 'function' ? l() : (l ?? []));
@@ -129,7 +141,7 @@ export class HintSystem {
   add(def: PuzzleHintDef): void {
     if (this.puzzles.has(def.id)) throw new Error(`[hint] 重复的谜题 id ${def.id}`);
     if (!def.steps?.length && (!def.l2 || !def.l3)) throw new Error(`[hint] ${def.id} 没有步骤时必须有 l2 / l3`);
-    this.puzzles.set(def.id, { def, time: 0, entered: false, solved: false, doneSteps: new Set(), seen: 0, level: 0, lastEnter: -1 });
+    this.puzzles.set(def.id, { def, time: 0, entered: false, solved: false, doneSteps: new Set(), seen: 0, level: 0, lastEnter: -1, stepId: def.steps?.[0]?.id ?? null, stepTime: 0, stepSeen: 0 });
   }
 
   /** 谜题解开：提示失效，图标消失，H 不再显示它 */
@@ -142,7 +154,26 @@ export class HintSystem {
 
   /** 分步骤谜题完成一步（二、三级切到下一个未完成的步骤） */
   completeStep(id: string, stepId: string): void {
-    this.puzzles.get(id)?.doneSteps.add(stepId);
+    const s = this.puzzles.get(id);
+    if (!s || s.doneSteps.has(stepId)) return;
+    s.doneSteps.add(stepId);
+    this.syncStep(s);
+  }
+
+  /** stepTimed：当前步骤变了 → 步骤计时清零，层级回到一级（已解锁的话） */
+  private syncStep(s: PuzzleState): void {
+    if (!s.def.stepTimed) return;
+    const id = this.stepOf(s)?.id ?? null;
+    if (id === s.stepId) return;
+    s.stepId = id;
+    s.stepTime = 0;
+    if (s.level > 1) s.level = 1;
+    if (s.stepSeen > s.level) s.stepSeen = s.level;
+  }
+
+  /** stepTimed：当前步骤上的计时（s，一级解锁后才走） */
+  stepTime(id: string): number {
+    return this.puzzles.get(id)?.stepTime ?? 0;
   }
 
   isSolved(id: string): boolean {
@@ -158,6 +189,7 @@ export class HintSystem {
       if (!s.entered) s.entered = true;
       if (s.lastEnter < 0 || this.lastInside !== s) s.lastEnter = ++this.enterSeq;
       s.time += dt;
+      if (s.def.stepTimed && s.time >= this.thresholds[0]) s.stepTime += Math.min(dt, s.time - this.thresholds[0]);
       this.recompute(s);
     }
     this.lastInside = this.inZone;
@@ -165,7 +197,13 @@ export class HintSystem {
 
   private recompute(s: PuzzleState): void {
     const th = this.thresholds;
-    const lv: HintLevel = s.time >= th[2] ? 3 : s.time >= th[1] ? 2 : s.time >= th[0] ? 1 : 0;
+    let lv: HintLevel;
+    if (s.def.stepTimed) {
+      const h = gameplay.hint;
+      const a = h.level2Delay * this.scale;
+      const b = a + h.level3Delay * this.scale;
+      lv = s.time < th[0] ? 0 : s.stepTime >= b - 1e-9 ? 3 : s.stepTime >= a - 1e-9 ? 2 : 1;
+    } else lv = s.time >= th[2] ? 3 : s.time >= th[1] ? 2 : s.time >= th[0] ? 1 : 0;
     while (s.level < lv) {
       s.level = (s.level + 1) as HintLevel;
       this.opts.onUnlock?.(s.def.id, s.level as 1 | 2 | 3);
@@ -203,7 +241,7 @@ export class HintSystem {
   /** 有还没在弹窗里看过的新层级（图标亮一点） */
   get iconFresh(): boolean {
     const s = this.currentState;
-    return !!s && s.level > s.seen;
+    return !!s && s.level > (s.def.stepTimed ? s.stepSeen : s.seen);
   }
 
   private stepOf(s: PuzzleState): HintStepDef | null {
@@ -216,6 +254,8 @@ export class HintSystem {
   view(): HintView {
     const s = this.currentState;
     if (!s) return { puzzleId: null, level: 0, step: null, lines: [1, 2, 3].map((level) => ({ level: level as 1 | 2 | 3, textId: null })) };
+    const ov = s.level >= 1 ? (s.def.override?.() ?? null) : null;
+    if (ov) return { puzzleId: s.def.id, level: s.level, step: 'override', lines: [{ level: 3, textId: ov }] };
     const step = this.stepOf(s);
     const texts: [TextId, TextId, TextId] = [s.def.l1, step ? step.l2 : s.def.l2!, step ? step.l3 : s.def.l3!];
     return {
@@ -243,7 +283,8 @@ export class HintSystem {
       s.seen = (s.seen + 1) as HintLevel;
       this.opts.onUsed?.(s.def.id, s.seen as 1 | 2 | 3);
     }
-    if (s.level >= 2) {
+    if (s.stepSeen < s.level) s.stepSeen = s.level;
+    if (s.level >= 2 && v.step !== 'override') {
       const list = this.highlightIds();
       if (list.length) this.opts.highlight?.(list, gameplay.hint.highlightSeconds);
     }
@@ -256,6 +297,8 @@ export class HintSystem {
     if (!s) return;
     s.time = seconds;
     s.entered = true;
+    // stepTimed：把超出一级的部分算到当前步骤上（测试直接跳层级用）
+    if (s.def.stepTimed) s.stepTime = Math.max(0, seconds - this.thresholds[0]);
     if (s.lastEnter < 0) s.lastEnter = ++this.enterSeq;
     this.recompute(s);
   }
@@ -264,6 +307,6 @@ export class HintSystem {
     const cur = this.currentState;
     if (!cur) return '无';
     const th = this.thresholds;
-    return `${cur.def.id} ${cur.time.toFixed(1)}s / ${th.map((x) => x.toFixed(0)).join('·')} · L${cur.level} 看过 L${cur.seen}${this.stepOf(cur) ? ' · 步骤 ' + this.stepOf(cur)!.id : ''}${this.inZone ? '' : '（区域外，暂停）'}`;
+    return `${cur.def.id} ${cur.time.toFixed(1)}s / ${th.map((x) => x.toFixed(0)).join('·')} · L${cur.level} 看过 L${cur.seen}${this.stepOf(cur) ? ' · 步骤 ' + this.stepOf(cur)!.id + (cur.def.stepTimed ? ` ${cur.stepTime.toFixed(1)}s` : '') : ''}${this.inZone ? '' : '（区域外，暂停）'}`;
   }
 }

@@ -91,14 +91,14 @@ export class S3Scene extends LevelScene {
     this.cleanups.push(() => this.puzzles.dispose());
   }
 
-  /** 点灯：灯亮 → END_DELAY 秒后章节结束页（035 结尾演出接在这里）。smoke / 测试也直接调用 */
+  /**
+   * 点灯：xi-ignite-lever 第 34 帧（puzzles.igniteNow → onIgnite）调到这里；灯亮 → END_DELAY 秒后章节结束页（035 结尾演出接在这里）。
+   * smoke / 测试也可直接调用（跳过按 E 演出，同样只发一次 lighthouse:ignited）
+   */
   lightTheLamp(): void {
     if (this.ending) return;
     this.ending = true;
-    this.puzzles.state.ignited = true;
-    this.puzzles.leverIx.enabled = false;
-    this.hints.solve('p5');
-    this.puzzles.lamp.setOn(true);
+    this.puzzles.igniteNow();
     window.setTimeout(() => {
       if (this.game.scenes.current === this) void this.game.flow.completeChapter();
     }, END_DELAY * 1000);
