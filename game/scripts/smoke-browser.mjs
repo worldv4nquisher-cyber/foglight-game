@@ -2005,9 +2005,9 @@ const CHECKS = [
       const clip = await until(`__s2.interaction.animState?.clip`, 2000);
       if (clip !== 'xi-pickup-shelf') throw new Error('钥匙应播 xi-pickup-shelf：' + clip);
       if (!(await until(`__s2.puzzles.state.hasKey`, 4000))) throw new Error('grab 帧没拿到钥匙');
-      const att = await evaluate(`(() => { const b = __s2.rig.visual.getObjectByName('middle_03_r'); return { kids: b ? b.children.filter((c) => c.visible).map((c) => c.name) : null, t: __s2.interaction.animState?.t ?? null }; })()`);
+      const att = await evaluate(`(() => { const b = __s2.rig.visual.getObjectByName('middle_03_r'); return { kids: b ? b.children.filter((c) => c.visible).map((c) => c.name) : null, t: __s2.puzzles.state.keyAttachT }; })()`);
       if (!att.kids?.length) throw new Error('钥匙没挂到 middle_03_r ' + JSON.stringify(att));
-      if (att.t !== null && Math.abs(att.t - 22 / 30) > 0.12) throw new Error('钥匙不在 grab 帧生效 ' + JSON.stringify(att));
+      if (att.t === null || Math.abs(att.t - 22 / 30) > 1 / 30 + 1e-3) throw new Error('钥匙不在 grab 帧生效 ' + JSON.stringify(att));
       const held = await evaluate(`(() => { const k = __s2.art.cellarKey; const p = k.getWorldPosition(new k.position.constructor()); return { parent: k.parent?.name, lod0: k.userData.forceLod0 === true, p: p.toArray() }; })()`);
       if (held.parent !== 'middle_03_r' || !held.lod0) throw new Error('美术钥匙没挂 middle_03_r / 没强制 LOD0 ' + JSON.stringify(held));
       const jump = Math.hypot(held.p[0] - rest.p[0], held.p[1] - rest.p[1], held.p[2] - rest.p[2]);

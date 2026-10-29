@@ -83,6 +83,8 @@ export interface S2Puzzles {
     hasKey: boolean;
     /** 钥匙正挂在汐手上（xi-pickup-shelf grab → 播完） */
     keyInHand: boolean;
+    /** 钥匙挂手那一刻的 clip 时间（s；smoke 核对 grab 帧 22 = 0.733 s）；没挂 = null */
+    keyAttachT: number | null;
     digitsSeen: boolean;
     gateOpen: boolean;
     westBlockedSaid: boolean;
@@ -160,6 +162,7 @@ export function buildS2Puzzles(d: S2PuzzleDeps): S2Puzzles {
     doorOpen: 0,
     hasKey: false,
     keyInHand: false,
+    keyAttachT: null as number | null,
     digitsSeen: false,
     gateOpen: false,
     westBlockedSaid: false,
@@ -389,6 +392,7 @@ export function buildS2Puzzles(d: S2PuzzleDeps): S2Puzzles {
           bone.attach(key);
         }
         state.keyInHand = true;
+        state.keyAttachT = interaction.animState?.t ?? null;
         after(xiClipDuration('xi-pickup-shelf') - xiInteractEventSec('xi-pickup-shelf'), () => {
           shown.visible = false;
           state.keyInHand = false;
