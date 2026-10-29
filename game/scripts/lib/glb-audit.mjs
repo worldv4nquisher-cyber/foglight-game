@@ -1,13 +1,15 @@
 // GLB 交付自检（node scripts/verify-lod.mjs <文件...>）。规则来自 docs/tasks/v0.1-index.md §5 与 art/style/style-guide.md §8。
 //
 // 两步：
-//  1. 直接读 GLB 的 JSON 块（不解压）：节点树、LOD 层级、各级三角面（accessor.count，Meshopt 压缩也能数）、
+//  1. 直接读 GLB 的 JSON 块（不解压）：节点树（一律按默认场景 scene.nodes 往下遍历，和 GLTFLoader 的 gltf.scene 一致；
+//     只在 nodes 数组里、没挂在场景树上的节点加载后拿不到，不算数，BUG-001）、LOD 层级、各级三角面（accessor.count，Meshopt 压缩也能数）、
 //     puzzleCritical、特殊节点（-collider / -interact / -wall / -cam …）、COLOR_0、材质、贴图尺寸；
 //  2. 用游戏同一套 GLTFLoader（+ Meshopt）真正解析一遍，跑 buildLods + prepareOutlineNormals（与 AssetLoader 相同），
 //     确认加载后的结果，并抽样校验 COLOR_0 确实是编码后的平滑法线。
 // 结果分 ✗ 错误（退出码 1）/ ! 警告 / · 信息。
 import { readFileSync } from 'node:fs';
 import { basename } from 'node:path';
+import { CompressedTexture } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { buildLods, parseLodName } from '../../src/render/lod.ts';
@@ -117,31 +119,64 @@ export async function auditGlb(file, opts = {}) {
   // 父子关系
   const parent = new Array(nodes.length).fill(-1);
   nodes.forEach((n, i) => (n.children ?? []).forEach((c) => (parent[c] = i)));
-  const sceneRoots = (json.scenes?.[json.scene ?? 0]?.nodes ?? []).map((i) => nodes[i]?.name ?? `#${i}`);
-  const critOf = (i) => {
-    for (let p = i; p >= 0; p = parent[p]) if (flagOn(nodes[p].extras?.puzzleCritical)) return true;
-    return false;
+  const sceneRootIdx = json.scenes?.[json.scene ?? 0]?.nodes ?? [];
+  const sceneRoots = sceneRootIdx.map((i) => nodes[i]?.name ?? `#${i}`);
+  // 场景树：从默认场景的根节点往下遍历（BUG-001：只在 nodes 数组里、不在树上的节点加载后不存在）
+  const inScene = new Array(nodes.length).fill(false);
+  const stack = [...sceneRootIdx];
+  while (stack.length) {
+    const i = stack.pop();
+    if (!nodes[i] || inScene[i]) continue;
+    inScene[i] = true;
+    stack.push(...(nodes[i].children ?? []));
+  }
+  const nodeName = (i) => nodes[i]?.name ?? `#${i}`;
+  /** 最靠上的 puzzleCritical 祖先（含自己），没有返回 -1；只对场景树上的节点有意义 */
+  const critRootOf = (i) => {
+    let root = -1;
+    for (let p = i; p >= 0; p = parent[p]) if (flagOn(nodes[p].extras?.puzzleCritical)) root = p;
+    return root;
   };
-  const criticalNodes = nodes.map((n, i) => (flagOn(n.extras?.puzzleCritical) ? n.name ?? `#${i}` : null)).filter(Boolean);
+  const critOf = (i) => critRootOf(i) >= 0;
+  const orphans = nodes.map((_, i) => i).filter((i) => !inScene[i]);
+  // puzzleCritical 根：场景树上标了 puzzleCritical、且上面没有别的 puzzleCritical 祖先的节点
+  const critRoots = nodes.map((_, i) => i).filter((i) => inScene[i] && critRootOf(i) === i);
+  const criticalNodes = critRoots.map(nodeName);
+  const orphanCritical = orphans.filter((i) => flagOn(nodes[i].extras?.puzzleCritical));
   const isCritical = criticalNodes.length > 0;
   const isChar = /^char-/.test(assetName) || nodes.some((n) => n.skin !== undefined);
 
   info.push(`扩展：${(json.extensionsUsed ?? []).join(', ') || '无'}${json.extensionsRequired?.length ? `（必需：${json.extensionsRequired.join(', ')}）` : ''}`);
+  // extras.pivot：three r18x 的 GLTFLoader 把带 userData.pivot 的节点当成 GLTFExporter 的「枢轴容器」重建
+  // （node.pivot = fromArray(pivot)、位置减 pivot、第一个子节点归零），美术随手填的 pivot 会让位置变成 NaN / 子节点错位。
+  // 美术约定改用 originAt；任何节点 extras 出现 pivot 键一律报错（不论有没有子节点）。
+  nodes.forEach((n, i) => {
+    const ex = n.extras;
+    if (ex && typeof ex === 'object' && !Array.isArray(ex) && Object.prototype.hasOwnProperty.call(ex, 'pivot'))
+      errors.push(`${nodeName(i)}：节点 extras 里有键 pivot（${JSON.stringify(ex.pivot)}），GLTFLoader 会把它当枢轴容器、位置可能变成 NaN；改用 originAt`);
+  });
+  if (orphanCritical.length) errors.push(`标了 puzzleCritical 但不在场景树上（加载后不存在）：${orphanCritical.map(nodeName).join(', ')}`);
   if (!(json.extensionsUsed ?? []).includes('EXT_meshopt_compression')) warnings.push('没用 Meshopt 压缩（§5.7：GLB 用 Meshopt）');
   info.push(`场景根节点：${sceneRoots.join(', ') || '（无）'}；节点 ${nodes.length}，网格 ${meshes.length}，材质 ${(json.materials ?? []).length}，蒙皮 ${(json.skins ?? []).length}，动画 ${(json.animations ?? []).length}`);
 
-  // ---- 特殊节点
+  // ---- 特殊节点（只数场景树上的；不在树上的报错，BUG-001）
   const special = {};
   nodes.forEach((n, i) => {
     const m = SPECIAL_RE.exec(n.name ?? '');
     if (!m) return;
     const kind = m[1].toLowerCase();
-    (special[kind] ??= []).push({ i, name: n.name, hasMesh: n.mesh !== undefined });
+    if (!inScene[i]) {
+      errors.push(`${n.name}：-${kind} 节点在 nodes 列表里但没挂在场景树上（不在任何父节点 children / scene.nodes 里），加载后拿不到`);
+      return;
+    }
+    (special[kind] ??= []).push({ i, name: n.name, hasMesh: n.mesh !== undefined, critRoot: critRootOf(i) });
   });
   const colliders = special.collider ?? [];
   const interacts = special.interact ?? [];
   const specialLine = Object.entries(special).map(([kind, list]) => `-${kind}×${list.length}`).join('  ');
-  info.push(`特殊节点：${specialLine || '无'}`);
+  info.push(`特殊节点（场景树上）：${specialLine || '无'}`);
+  const orphanMeshes = orphans.filter((i) => nodes[i].mesh !== undefined && !SPECIAL_RE.test(nodes[i].name ?? ''));
+  if (orphanMeshes.length) warnings.push(`不在场景树上的网格节点（加载后不存在，白占包体）：${orphanMeshes.map(nodeName).join(', ')}`);
   for (const c of colliders) if (!c.hasMesh) errors.push(`${c.name}：-collider 节点没有网格`);
   for (const c of special.wall ?? []) if (!c.hasMesh) errors.push(`${c.name}：-wall 节点没有网格`);
   for (const c of interacts) if (c.hasMesh) warnings.push(`${c.name}：-interact 应是空节点（只要位置和朝向），却带了网格，会被渲染`);
@@ -149,7 +184,7 @@ export async function auditGlb(file, opts = {}) {
   // ---- 渲染网格：按 LOD 层级统计三角面、COLOR_0
   const renderNodes = []; // { i, name, tris, level, base, colorPrims, prims }
   nodes.forEach((n, i) => {
-    if (n.mesh === undefined || SPECIAL_RE.test(n.name ?? '')) return;
+    if (!inScene[i] || n.mesh === undefined || SPECIAL_RE.test(n.name ?? '')) return;
     const mesh = meshes[n.mesh];
     let tris = 0;
     let colorPrims = 0;
@@ -211,11 +246,19 @@ export async function auditGlb(file, opts = {}) {
     if (!criticalNodes.some((n) => sceneRoots.includes(n))) warnings.push('puzzleCritical 没设在场景根节点上（§5.4 约定设在根节点）');
     const extraLevels = renderNodes.filter((r) => r.level !== null && r.level > 0 && critOf(r.i));
     if (extraLevels.length) warnings.push(`puzzleCritical 物体只交 LOD0（§5.4），带了 ${extraLevels.map((r) => r.name).join(', ')}：加载时会被丢弃，白占包体`);
-    if (!colliders.length) errors.push('puzzleCritical 物体缺 -collider（§5.4 必须）');
-    if (!interacts.length) {
-      // 白石组按 021 只给大块碰撞、本身不是交互物，-interact 不强制
-      if (/^prop-white-stones/.test(assetName)) warnings.push('没有 -interact（白石组按 021 可以不做交互点，确认即可）');
-      else errors.push('puzzleCritical 物体缺 -interact 交互点（§5.4 必须）');
+    // -collider / -interact 必须在 puzzleCritical 根节点的子树里（BUG-001：挂在树外 / 别的根下都不算）
+    for (const c of [...colliders, ...interacts]) {
+      if (c.critRoot < 0) errors.push(`${c.name}：不在任何 puzzleCritical 根节点（${criticalNodes.join(', ')}）的子树里，不算这件关键物体的${c.name.match(SPECIAL_RE)?.[1] === 'collider' ? '碰撞体' : '交互点'}`);
+    }
+    const multi = critRoots.length > 1;
+    for (const r of critRoots) {
+      const label = multi ? `puzzleCritical 物体 ${nodeName(r)} ` : 'puzzleCritical 物体';
+      if (!colliders.some((c) => c.critRoot === r)) errors.push(`${label}缺 -collider（§5.4 必须）`);
+      if (!interacts.some((c) => c.critRoot === r)) {
+        // 白石组按 021 只给大块碰撞、本身不是交互物，-interact 不强制
+        if (/^prop-white-stones/.test(assetName)) warnings.push(`${multi ? `${nodeName(r)} ` : ''}没有 -interact（白石组按 021 可以不做交互点，确认即可）`);
+        else errors.push(`${label}缺 -interact 交互点（§5.4 必须）`);
+      }
     }
   } else {
     info.push('puzzleCritical：无（按画质档位正常切 LOD）');
@@ -293,6 +336,7 @@ export async function auditGlb(file, opts = {}) {
   for (const [mesh, reason] of runtime.vc.invalid) errors.push(`COLOR_0 数据不像平滑法线：${mesh}（${reason}）`);
   if (runtime.vertexColorsLeft.length) errors.push(`加载后仍有材质开着 vertexColors：${runtime.vertexColorsLeft.join(', ')}`);
   if (isCritical && runtime.lodLeft.length) errors.push(`puzzleCritical 子树加载后仍是 THREE.LOD：${runtime.lodLeft.join(', ')}`);
+  if (runtime.nanNodes.length) errors.push(`加载后位置 / 旋转 / 缩放含 NaN：${runtime.nanNodes.join(', ')}`);
   for (const w of runtime.loaderWarnings) warnings.push(`GLTFLoader：${w}`);
 
   return {
@@ -314,7 +358,9 @@ async function loadLikeGame(buf) {
   console.warn = (...a) => loaderWarnings.push(a.map(String).join(' '));
   try {
     const ab = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
-    const gltf = await new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).parseAsync(ab, '');
+    // KTX2（KHR_texture_basisu）贴图在 Node 里不转码，给一个只回空压缩纹理的 loader（只关心几何 / 节点 / 材质开关；尺寸已从文件头读）
+    const ktx2Stub = { load: (_url, onLoad) => onLoad(new CompressedTexture([], 1, 1)) };
+    const gltf = await new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).setKTX2Loader(ktx2Stub).parseAsync(ab, '');
     const lod = buildLods(gltf.scene, () => {});
     const vc = prepareOutlineNormals(gltf.scene, true);
     // 加载后实际渲染的三角面：THREE.LOD 只数第 0 级，碰撞体 / 空气墙不算
@@ -333,7 +379,12 @@ async function loadLikeGame(buf) {
       if (skip.has(o) || isHelper(o) || isHelper(o.parent)) return;
       renderTris += triCount(o.geometry);
     });
-    return { lod, vc, renderTris, vertexColorsLeft: [...new Set(vertexColorsLeft)], lodLeft, loaderWarnings };
+    const nanNodes = [];
+    gltf.scene.traverse((o) => {
+      const v = [...o.position.toArray(), ...o.quaternion.toArray(), ...o.scale.toArray()];
+      if (v.some((x) => !Number.isFinite(x))) nanNodes.push(o.name || '(无名)');
+    });
+    return { lod, vc, renderTris, nanNodes, vertexColorsLeft: [...new Set(vertexColorsLeft)], lodLeft, loaderWarnings };
   } finally {
     console.warn = realWarn;
     if (realCIB) globalThis.createImageBitmap = realCIB;

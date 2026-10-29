@@ -18,12 +18,13 @@ const ok = (msg) => {
 };
 
 /** 用 gltf-transform 拼一个小 GLB。colorMode：'outline' 正确编码的平滑法线 / 'random' 普通顶点色 / null 不带 COLOR_0 */
-async function makeGlb({ name = 'prop-test-crate', colorMode = 'outline', critical = true, collider = true, interact = true, lods = 1, tris = 12 } = {}) {
+/** collider / interact：true 挂在根节点下；'scene' 直接挂在场景根（puzzleCritical 子树外）；'orphan' 只建节点不挂任何父节点（BUG-001） */
+async function makeGlb({ name = 'prop-test-crate', colorMode = 'outline', critical = true, collider = true, interact = true, lods = 1, tris = 12, extraRoot = null, rootExtras = null } = {}) {
   const doc = new Document();
   const buffer = doc.createBuffer();
   const scene = doc.createScene(name);
   const root = doc.createNode(name);
-  if (critical) root.setExtras({ puzzleCritical: true });
+  if (critical || rootExtras) root.setExtras({ ...(critical ? { puzzleCritical: true } : {}), ...(rootExtras ?? {}) });
   scene.addChild(root);
   const mat = doc.createMaterial('mat-prop-test').setBaseColorFactor([0.6, 0.5, 0.4, 1]);
   const addMesh = (nodeName, geo, withColor) => {
@@ -50,14 +51,40 @@ async function makeGlb({ name = 'prop-test-crate', colorMode = 'outline', critic
     }
     const node = doc.createNode(nodeName).setMesh(doc.createMesh(nodeName).addPrimitive(prim));
     root.addChild(node);
+    return node;
+  };
+  /** 按 where 放置特殊节点 */
+  const place = (node, where) => {
+    if (where === true) return;
+    root.removeChild(node);
+    if (where === 'scene') scene.addChild(node);
+    // 'orphan'：不挂任何父节点，只留在 nodes 数组里
   };
   const seg = Math.max(1, Math.round(Math.sqrt(tris / 12)));
   for (let l = 0; l < lods; l++) {
     const s = Math.max(1, seg >> l);
     addMesh(`${name}_lod${l}`, new THREE.BoxGeometry(1, 1, 1, s, s, s), colorMode !== null);
   }
-  if (collider) addMesh(`${name}-collider`, new THREE.BoxGeometry(1, 1, 1), false);
-  if (interact) root.addChild(doc.createNode(`${name}-interact`).setTranslation([0, 0, 1]));
+  if (collider) place(addMesh(`${name}-collider`, new THREE.BoxGeometry(1, 1, 1), false), collider);
+  if (interact) {
+    const it = doc.createNode(`${name}-interact`).setTranslation([0, 0, 1]);
+    root.addChild(it);
+    place(it, interact);
+  }
+  if (extraRoot) {
+    // 第二个 puzzleCritical 根（只有渲染网格；extraRoot.collider/interact 为 true 时各带一个）
+    const r2 = doc.createNode(extraRoot.name).setExtras({ puzzleCritical: true });
+    scene.addChild(r2);
+    const box = addMesh(`${extraRoot.name}_lod0`, new THREE.BoxGeometry(1, 1, 1), colorMode !== null);
+    root.removeChild(box);
+    r2.addChild(box);
+    if (extraRoot.collider) {
+      const c = addMesh(`${extraRoot.name}-collider`, new THREE.BoxGeometry(1, 1, 1), false);
+      root.removeChild(c);
+      r2.addChild(c);
+    }
+    if (extraRoot.interact) r2.addChild(doc.createNode(`${extraRoot.name}-interact`));
+  }
   return new NodeIO().writeBinary(doc);
 }
 
@@ -138,6 +165,62 @@ try {
   assert.ok(r.errors.some((e) => /缺 -interact/.test(e)));
   assert.ok(r.errors.some((e) => /缺 COLOR_0/.test(e)));
   ok('puzzleCritical 缺 -collider / -interact / COLOR_0 → 错误');
+
+  // BUG-001：按场景树判断特殊节点
+  {
+    // QA 用例的做法（mk-nocollider.mjs）：直接改 GLB JSON，把 -collider 从父节点 children / scene.nodes 里摘掉，节点本身留在 nodes 数组
+    const bytes = Buffer.from(await makeGlb());
+    const jsonLen = bytes.readUInt32LE(12);
+    const json = JSON.parse(bytes.subarray(20, 20 + jsonLen).toString('utf8'));
+    const rest = bytes.subarray(20 + jsonLen);
+    const idx = json.nodes.findIndex((n) => /-collider$/.test(n.name ?? ''));
+    for (const n of json.nodes) if (n.children) n.children = n.children.filter((c) => c !== idx);
+    for (const sc of json.scenes) sc.nodes = sc.nodes.filter((c) => c !== idx);
+    let js = Buffer.from(JSON.stringify(json), 'utf8');
+    js = Buffer.concat([js, Buffer.alloc((4 - (js.length % 4)) % 4, 0x20)]);
+    const head = Buffer.alloc(20);
+    head.write('glTF', 0);
+    head.writeUInt32LE(2, 4);
+    head.writeUInt32LE(20 + js.length + rest.length, 8);
+    head.writeUInt32LE(js.length, 12);
+    head.write('JSON', 16);
+    const p = join(dir, 'prop-test-crate-detached.glb');
+    writeFileSync(p, Buffer.concat([head, js, rest]));
+    assert.ok(json.nodes[idx], '前提：节点仍在 nodes 数组里');
+    r = await auditGlb(p);
+    assert.ok(r.errors.includes('puzzleCritical 物体缺 -collider（§5.4 必须）'), r.errors.join('\n'));
+    assert.ok(r.errors.some((e) => /prop-test-crate-collider：-collider 节点在 nodes 列表里但没挂在场景树上/.test(e)), r.errors.join('\n'));
+    assert.equal(r.summary.colliders, 0);
+  }
+  r = await auditGlb(await write('prop-test-crate.glb', { collider: 'orphan', interact: 'orphan' }));
+  assert.ok(r.errors.includes('puzzleCritical 物体缺 -collider（§5.4 必须）'), r.errors.join('\n'));
+  assert.ok(r.errors.includes('puzzleCritical 物体缺 -interact 交互点（§5.4 必须）'), r.errors.join('\n'));
+  assert.ok(r.errors.some((e) => /-interact 节点在 nodes 列表里但没挂在场景树上/.test(e)));
+  assert.deepEqual([r.summary.colliders, r.summary.interacts], [0, 0]);
+  ok('BUG-001：-collider / -interact 只在 nodes 数组里、没挂在场景树上（QA 改 JSON 的做法 + gltf-transform 孤立节点）→ 报「缺 -collider / -interact」并指出孤立节点');
+
+  r = await auditGlb(await write('prop-test-crate.glb', { collider: 'scene', interact: 'scene' }));
+  assert.ok(r.errors.includes('puzzleCritical 物体缺 -collider（§5.4 必须）'), r.errors.join('\n'));
+  assert.ok(r.errors.includes('puzzleCritical 物体缺 -interact 交互点（§5.4 必须）'), r.errors.join('\n'));
+  assert.ok(r.errors.some((e) => /prop-test-crate-collider：不在任何 puzzleCritical 根节点（prop-test-crate）的子树里/.test(e)), r.errors.join('\n'));
+  r = await auditGlb(await write('prop-test-crate.glb', { extraRoot: { name: 'prop-test-crate-b', collider: false, interact: true } }));
+  assert.ok(r.errors.includes('puzzleCritical 物体 prop-test-crate-b 缺 -collider（§5.4 必须）'), r.errors.join('\n'));
+  assert.ok(!r.errors.some((e) => /prop-test-crate 缺|-interact 交互点/.test(e)), r.errors.join('\n'));
+  r = await auditGlb(await write('prop-test-crate.glb', { extraRoot: { name: 'prop-test-crate-b', collider: true, interact: true } }));
+  assert.deepEqual(r.errors, []);
+  r = await auditGlb(await write('env-rock-test.glb', { critical: false, collider: 'orphan', interact: false }));
+  assert.ok(r.errors.some((e) => /-collider 节点在 nodes 列表里但没挂在场景树上/.test(e)), '非关键物体的孤立 -collider 也报错（加载后没有碰撞）');
+  ok('BUG-001：-collider / -interact 在场景树上但不在 puzzleCritical 根的子树里 → 错误；多个 puzzleCritical 根各自要有；非关键物体的孤立 -collider 也报错');
+
+  // extras.pivot 拦截：GLTFLoader 会把带 pivot 的节点当枢轴容器（位置减 pivot、子节点归零），值不合法时位置变 NaN
+  r = await auditGlb(await write('prop-test-crate.glb', { rootExtras: { pivot: 'bottom' } }));
+  assert.ok(r.errors.some((e) => /prop-test-crate：节点 extras 里有键 pivot/.test(e)), r.errors.join('\n'));
+  assert.ok(r.errors.some((e) => /加载后位置.*NaN/.test(e)), '字符串 pivot 加载后应出现 NaN：' + r.errors.join('\n'));
+  r = await auditGlb(await write('prop-test-crate.glb', { rootExtras: { pivot: [0, 0, 0] } }));
+  assert.ok(r.errors.some((e) => /节点 extras 里有键 pivot/.test(e)), '合法数组的 pivot 也拦（会被重建成枢轴容器）');
+  r = await auditGlb(await write('prop-test-crate.glb', { rootExtras: { originAt: 'bottom' } }));
+  assert.deepEqual(r.errors, [], 'originAt 不报错');
+  ok('extras 键名 pivot → 错误（加载后 NaN 也报）；originAt 正常通过');
 
   r = await auditGlb(await write('prop-test-crate.glb', { colorMode: 'random' }));
   assert.ok(r.errors.some((e) => /COLOR_0 数据不像平滑法线/.test(e)));

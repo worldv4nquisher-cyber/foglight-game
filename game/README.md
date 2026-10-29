@@ -230,13 +230,14 @@ node scripts/verify-lod.mjs ../art/models/props/prop-x.glb --budget=12000       
 node scripts/verify-lod.mjs ../art/models/props/prop-x.glb --json                      # 机器可读输出
 ```
 
-先直接读 GLB 的 JSON（Meshopt 压缩也能数面），再用游戏同一套 GLTFLoader + `buildLods` + `prepareOutlineNormals` 真正加载一遍。输出 `·` 信息、`!` 警告、`✗` 错误；**有错误退出码 1**，只有警告算通过。
+先直接读 GLB 的 JSON（Meshopt 压缩也能数面），再用游戏同一套 GLTFLoader + `buildLods` + `prepareOutlineNormals` 真正加载一遍。KTX2（`KHR_texture_basisu`）贴图在 Node 里不转码（尺寸从文件头读），加载时给一个空纹理占位。输出 `·` 信息、`!` 警告、`✗` 错误；**有错误退出码 1**，只有警告算通过。
 
 | 检查 | 规则（v0.1-index §5、style-guide §8） | 级别 |
 |---|---|---|
 | LOD | `<名>_lodN` 分组、各级三角面、缺 `_lod0` / 层级不连续 / 下一级 > 上一级 65%（约定每级减半） | 缺 lod0 错误，其余警告 |
 | puzzleCritical | 列出带标记的节点；应在根节点；只交 LOD0（带了低级会被加载器丢弃） | 警告 |
-| 特殊节点 | 列出 `-collider` `-wall` `-interact` `-cam` `-indoor` `-emitter` `-socket` `-receiver` `-mirror-plane` `-waterline`；puzzleCritical 物体必须有 `-collider` 和 `-interact`（白石组的 `-interact` 只警告）；`-collider` 要有网格；`-interact` 应为空节点 | 错误 / 警告 |
+| 特殊节点 | 列出 `-collider` `-wall` `-interact` `-cam` `-indoor` `-emitter` `-socket` `-receiver` `-mirror-plane` `-waterline`；**一律按场景树判断**（从默认场景 `scene.nodes` 往下遍历，和游戏加载后的 `gltf.scene` 一致，BUG-001）：只在 JSON `nodes` 数组里、没挂在场景树上的特殊节点报错且不算数；每个 puzzleCritical 根节点的**子树里**必须有 `-collider` 和 `-interact`（挂在子树外的不算，报错；白石组的 `-interact` 只警告）；`-collider` 要有网格；`-interact` 应为空节点；树外的普通网格节点警告（白占包体） | 错误 / 警告 |
+| extras `pivot` | 任何节点的 extras（Blender 自定义属性）里出现键名 `pivot` 一律报错：three 的 GLTFLoader 会把带 `userData.pivot` 的节点当成 GLTFExporter 的枢轴容器重建（位置减 pivot、第一个子节点归零），值不是数组时位置直接变 NaN。美术约定改用 `originAt`。加载后任何节点位置 / 旋转 / 缩放含 NaN 也报错 | 错误 |
 | COLOR_0 | 每个渲染网格是否带；puzzleCritical 缺了是错误、角色 / 道具缺了警告；加载后抽样校验是平滑法线，且没有材质还开着 vertexColors | 错误 / 警告 |
 | 面数预算 | puzzleCritical：风灯 8k、潮汐钟 20k、白石组 20k、钥匙 3k、其余 15k（LOD0）；角色：`char-xi` 120k / 50k / 25k，`char-father` 60k / 25k，其余 NPC 60k / 40k / 25k（逐级）；环境物体只显示占场景静态份额（LOD0 4M / LOD1 2.3M / LOD2 1M）的百分比。`--budget=N` 覆盖 | 错误 |
 | 其他 | 没用 Meshopt；材质 > 3 个或不按 `mat-char/env/prop-*` 命名；贴图尺寸（角色 ≤ 4096，其余 ≤ 2048）和非 KTX2 格式 | 尺寸超限错误，其余警告 |
