@@ -2056,6 +2056,130 @@ const CHECKS = [
     },
   },
   {
+    name: 'v0.1-017 交互动作 art=1（S1 / S3）：S1 推浮台 xi-push-start → push-loop → xi-push-end；S3 敲钟 xi-ring-bell、开阀 xi-valve-hold、拉杆 xi-ignite-lever',
+    async run({ evaluate, cdp, sleep }) {
+      const clock = () => evaluate(`({ e: __game.time.fixedTick * __game.time.fixedDelta, f: __game.time.frame })`);
+      // 等待按游戏时间（负载高时真实时间不可靠），真实时间封顶 180 s
+      const until = async (expr, ms = 8000) => {
+        const c0 = await clock();
+        const end = Date.now() + 180000;
+        let v;
+        while (Date.now() < end) {
+          v = await evaluate(expr);
+          if (v) return v;
+          await sleep(50);
+          const c = await clock();
+          if (c.e - c0.e > ms / 1000 && c.f - c0.f > 3) return await evaluate(expr);
+        }
+        return v;
+      };
+      const out = [];
+      const key = (down) => evaluate(`__game.input.setRaw('smoke', 'KeyE', ${down}); 1`);
+      // 站到交互物站位上，然后按住 E + trigger（approach 走完时 E 仍按着 → hold / push 生效）
+      const standAt = (S, ix) => `(() => { const s = ${S}; const sp = ${ix}.standPoint(s.rig.body.position.clone()); s.rig.body.teleport(sp.position.clone().setY(sp.position.y + 0.05)); s.rig.controller.facing = sp.facing; return 1; })()`;
+
+      // ---------------- S1：推浮台
+      await evaluate(`localStorage.removeItem('foglight.save.v1'); 1`);
+      await cdp.goto('art=1');
+      if (!(await until(`!!window.__s1?.art?.loaded && !!__s1.rig.animator`, 60000))) throw new Error('art=1 没进 S1 / 没有 XiAnimator');
+      if (!(await until(`__game.input.context === 'explore' && !__s1.rig.controller.busy`, 40000))) throw new Error('S1 建立镜头后没回到 explore');
+      for (const c of ['xi-push-start', 'xi-push-loop', 'xi-push-end']) if (!(await evaluate(`__s1.rig.animator.has('${c}')`))) throw new Error('缺 clip ' + c);
+      // 退潮：直接发敲钟 + 快进潮汐（这里只测动作，潮汐流程在 013 项）
+      await evaluate(`(() => { __game.events.emit('interact:used', { id: 'tide-bell-s1', kind: 'use' }); __s1.tides.fixedUpdate(7); return 1; })()`);
+      if (!(await until(`__s1.puzzles.raft.state === 'grounded' && __s1.puzzles.raftPush.enabled`, 6000))) throw new Error('退潮后浮台没搁浅 / 不能推 ' + (await evaluate(`__s1.puzzles.raft.state`)));
+      await evaluate(standAt('__s1', '__s1.puzzles.raftPush'));
+      await sleep(200);
+      const raftPos = `__s1.puzzles.raft.object.position.toArray()`;
+      const r0 = await evaluate(raftPos);
+      await key(true);
+      await evaluate(`(__s1.interaction.trigger(__s1.puzzles.raftPush), 1)`);
+      if (!(await until(`__s1.interaction.pushPhase === 'start' && __s1.rig.animator.posing === 'xi-push-start'`, 4000))) {
+        await key(false);
+        throw new Error('推浮台没先播 xi-push-start ' + JSON.stringify(await evaluate(`({ ph: __s1.interaction.pushPhase, pose: __s1.rig.animator.posing })`)));
+      }
+      // push-start 期间逐次采样浮台位置（游戏时间等待），最后一个 start 采样必须还在原位
+      let startMove = 0;
+      let samples = 0;
+      for (const c0 = await clock(), end = Date.now() + 180000; Date.now() < end; ) {
+        const v = await evaluate(`({ ph: __s1.interaction.pushPhase, pose: __s1.rig.animator.posing, loop: __s1.rig.animator.looping, r: ${raftPos} })`);
+        if (v.ph === 'start') {
+          samples++;
+          startMove = Math.max(startMove, Math.hypot(v.r[0] - r0[0], v.r[2] - r0[2]));
+        } else if (v.ph === 'loop' && v.loop === 'xi-push-loop' && !v.pose) break;
+        else {
+          await key(false);
+          throw new Error('xi-push-start 后没进 push-loop ' + JSON.stringify(v));
+        }
+        if ((await clock()).e - c0.e > 3) {
+          await key(false);
+          throw new Error('push-start 3 s 游戏时间没结束 ' + JSON.stringify(v));
+        }
+        await sleep(30);
+      }
+      if (startMove > 1e-3) throw new Error(`push-start 期间浮台不该动（${(startMove * 100).toFixed(1)} cm，${samples} 次采样）`);
+      if (!(await until(`__s1.puzzles.raftPush.pushT > 0.08`, 6000))) {
+        await key(false);
+        throw new Error('push-loop 中浮台没前进 ' + (await evaluate(`__s1.puzzles.raftPush.pushT`)));
+      }
+      await key(false);
+      if (!(await until(`__s1.interaction.animState?.clip === 'xi-push-end'`, 2000))) throw new Error('松手没播 xi-push-end ' + JSON.stringify(await evaluate(`__s1.interaction.animState`)));
+      const pT = await evaluate(`__s1.puzzles.raftPush.pushT`);
+      if (!(await until(`!__s1.interaction.animState && !__s1.rig.controller.locked && !__s1.rig.animator.looping`, 4000))) throw new Error('xi-push-end 播完没解锁');
+      if (Math.abs((await evaluate(`__s1.puzzles.raftPush.pushT`)) - pT) > 1e-6) throw new Error('push-end 期间浮台不该再动');
+      out.push(`S1 推浮台：push-start（${samples} 次采样浮台不动）→ push-loop（推到 ${pT.toFixed(2)}）→ 松手 xi-push-end → 解锁 ✓`);
+
+      // ---------------- S3：敲钟 / 开阀 / 拉杆
+      await evaluate(`localStorage.removeItem('foglight.save.v1'); 1`);
+      await cdp.goto('debug=1&scene=s3&art=1', 's3-lighthouse');
+      if (!(await until(`!!window.__s3?.puzzles && !!__s3.rig.animator`, 60000))) throw new Error('?scene=s3&art=1 没进 S3 / 没有 XiAnimator');
+      if (!(await until(`__game.input.context === 'explore' && !__s3.rig.controller.busy`, 40000))) throw new Error('S3 建立镜头后没回到 explore');
+      const nodeAnims = await evaluate(`({ bell: __s3.puzzles.bell.interactable.resolveAnim(), lever: __s3.puzzles.leverIx.resolveAnim() })`);
+      if (nodeAnims.bell !== 'xi-ring-bell' || nodeAnims.lever !== 'xi-ignite-lever') throw new Error('S3 交互 clip 不对 ' + JSON.stringify(nodeAnims));
+      // 敲钟（use + clip）
+      await evaluate(standAt('__s3', '__s3.puzzles.bell.interactable'));
+      await sleep(200);
+      await evaluate(`(__s3.interaction.trigger(__s3.puzzles.bell.interactable), 1)`);
+      if ((await until(`__s3.interaction.animState?.clip`, 3000)) !== 'xi-ring-bell') throw new Error('敲钟没播 xi-ring-bell ' + JSON.stringify(await evaluate(`__s3.interaction.animState`)));
+      if (!(await until(`__s3.rig.animator.posing === 'xi-ring-bell'`, 1000))) throw new Error('敲钟时 animator 没在 xi-ring-bell');
+      if (!(await until(`__s3.puzzles.bell.rings === 1`, 4000))) throw new Error('xi-ring-bell 播到触发帧没敲响');
+      if (!(await until(`!__s3.interaction.animState && !__s3.rig.controller.locked`, 4000))) throw new Error('xi-ring-bell 播完没解锁');
+      await evaluate(`__s3.tides.fixedUpdate(7), 1`);
+      if (!(await until(`__s3.puzzles.tide.state === 'low' && !__s3.puzzles.tide.transitioning`, 3000))) throw new Error('敲钟没退潮');
+      out.push('S3 敲钟 xi-ring-bell（节点 anim）→ 敲响、解锁 ✓');
+      // 开阀（hold + clip：握住段圆环不动，turnStart–turnEnd 同步转，满了生效后播完松手段）
+      await evaluate(standAt('__s3', `__s3.interaction.get('oil-valve-s3')`));
+      await sleep(200);
+      await key(true);
+      await evaluate(`(__s3.interaction.trigger(__s3.interaction.get('oil-valve-s3')), 1)`);
+      if ((await until(`__s3.interaction.animState?.clip`, 3000)) !== 'xi-valve-hold') {
+        await key(false);
+        throw new Error('开阀没播 xi-valve-hold ' + JSON.stringify(await evaluate(`__s3.interaction.animState`)));
+      }
+      if (!(await until(`__s3.rig.animator.posing === 'xi-valve-hold'`, 1000))) {
+        await key(false);
+        throw new Error('开阀时 animator 没在 xi-valve-hold');
+      }
+      const opened = await until(`__s3.puzzles.state.valveOpen`, 6000);
+      await key(false);
+      if (!opened) throw new Error('按住 E 开阀没生效 ' + JSON.stringify(await evaluate(`__s3.interaction.animState`)));
+      if (!(await until(`!__s3.interaction.animState && !__s3.rig.controller.locked`, 4000))) throw new Error('xi-valve-hold 松手段播完没解锁');
+      out.push('S3 开阀 xi-valve-hold（按住 → 生效 → 松手段播完）✓');
+      // 拉杆：光路直接解开 → 可点灯 → startIgnite（锁输入 → 走位 → xi-ignite-lever 第 34 帧点燃）
+      await evaluate(`(() => { const b = __s3.puzzles.beam; b.solve(); for (let i = 0; i < 50; i++) __s3.puzzles.fixedUpdate(0.05); return 1; })()`);
+      if (!(await until(`__s3.puzzles.leverIx.enabled && __s3.puzzles.canIgnite()`, 4000))) throw new Error('开阀 + 光路解开后拉杆没开放 ' + (await evaluate(`__s3.puzzles.beam.igniter.state`)));
+      await evaluate(standAt('__s3', '__s3.puzzles.leverIx'));
+      await sleep(200);
+      if (!(await evaluate(`__s3.puzzles.startIgnite()`))) throw new Error('startIgnite 没生效');
+      if (!(await until(`__s3.rig.animator.posing === 'xi-ignite-lever'`, 6000))) throw new Error('点灯没播 xi-ignite-lever ' + (await evaluate(`__s3.rig.animator.posing`)));
+      if (!(await until(`__s3.puzzles.state.ignited`, 4000))) throw new Error('xi-ignite-lever 没在第 34 帧点燃');
+      if (!(await until(`!__s3.rig.animator.posing`, 4000))) throw new Error('xi-ignite-lever 播完没 clearPose');
+      const rot = await evaluate(`__s3.puzzles.leverSwing.rotation.x * 180 / Math.PI`);
+      if (Math.abs(rot + 60) > 0.5) throw new Error('拉杆没转到 −60° ' + rot);
+      out.push(`S3 拉杆 xi-ignite-lever → 点燃、拉杆 ${rot.toFixed(1)}° ✓`);
+      return out.join('；');
+    },
+  },
+  {
     name: 'v0.1-015 S3 白盒：?scene=s3 桥尾入口 / 世界摆位（塔心 39.73, −122.75，转 135°）/ 海面挪到塔心 / 室内触发体、点灯前无暖光、光路正解到点火口；?art=1 美术 020 七件 + 门扇挂合页',
     async run({ evaluate, cdp, sleep }) {
       const out = [];
