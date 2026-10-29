@@ -446,7 +446,7 @@ export function buildS3Puzzles(d: S3PuzzleDeps): S3Puzzles {
     prompt: 'ui.prompt.ignite',
     object: lever,
     interactPoint: stand,
-    focus: knob.getWorldPosition(new THREE.Vector3()),
+    focus: W(L.gripRest),
     approach: false,
     priority: 20,
   });

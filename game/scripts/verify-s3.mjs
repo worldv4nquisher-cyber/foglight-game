@@ -302,9 +302,41 @@ const spiral = (k0, k1) => {
 must('门内平台 → 下楼 → 底层 → 油阀前', walk([P.doorLanding, ...spiral(10, 1), P.stairBottom, [0.855, 0.2, 2.349]], 2.4), S3.groundFloorY);
 must('底层 → 窗口镜前', walk([P.stairBottom, [1.6, 0.2, -0.3]], 0.2), S3.groundFloorY);
 must('门内平台 → 上楼 → 5 m 平台 → A → B → 灯室', walk([P.doorLanding, ...spiral(12, 108), P.lampRoomArrive, S3.igniteLever.interact], 2.4), S3.lampRoom.floorY);
+must('门内平台 → 上楼 → y 5 窗台平台 → 窗前观景点', walk([P.doorLanding, ...spiral(12, 24), P.view5m], 2.4), 5);
 must('灯室 → 眺望站位 / 书桌', walk([S3.igniteLever.interact, P.standGaze, [0.9, 22, -1.2]], 22), S3.lampRoom.floorY);
 doorCol.enabled = true;
 out.push('动线：桥尾 → 门外平台（门关进不去）→ 门内 → 底层油阀 / 窗口镜 → 108 级 → 灯室拉杆 / 眺望 ✓');
+
+// ---- y 5 窗台平台：窗（θ320 朝外）里看不到远处灯塔 F1 / F2、石桥、S2 一侧；光路在 y 5 离平台很远
+{
+  const v = S3.points.view5m;
+  const w = [Math.cos((320 * Math.PI) / 180), Math.sin((320 * Math.PI) / 180)];
+  const offAxis = (q) => {
+    const dx = q[0] - v[0];
+    const dz = q[2] - v[2];
+    return (Math.acos((dx * w[0] + dz * w[1]) / Math.hypot(dx, dz)) * 180) / Math.PI;
+  };
+  // 窗宽 0.8、观景点离窗约 0.5 m → 水平半视角约 39°；留余量按 60° 判
+  const targets = { 远塔F1: S3.silhouettes.F1, 远塔F2: S3.silhouettes.F2, 石桥头: S3.points.bridgeHead, 桥尾_S2侧: S3.points.spawnFromS2 };
+  const offs = Object.entries(targets).map(([n, q]) => [n, offAxis(q)]);
+  for (const [n, a] of offs) assert.ok(a > 60, `y 5 窗里能看到 ${n}（离窗轴 ${a.toFixed(1)}°）`);
+  const span = S3.stair.landings.window5m.span;
+  const lp = S3.lightPath;
+  let cross = null;
+  for (let i = 0; i < lp.length - 1; i++) {
+    const [a, b] = [lp[i], lp[i + 1]];
+    if ((a[1] - 5) * (b[1] - 5) <= 0) {
+      const u = (5 - a[1]) / (b[1] - a[1]);
+      const x = a[0] + (b[0] - a[0]) * u;
+      const z = a[2] + (b[2] - a[2]) * u;
+      cross = { r: Math.hypot(x, z), th: (((Math.atan2(z, x) * 180) / Math.PI) % 360 + 360) % 360 };
+    }
+  }
+  assert.ok(cross, '光路应穿过 y 5');
+  const inSpan = cross.th >= span[0] - 10 && cross.th <= span[1] + 10;
+  assert.ok(!inSpan || cross.r < S3.stair.r - 1.0, `y 5 处光路 r ${cross.r.toFixed(2)} θ ${cross.th.toFixed(1)} 离平台太近`);
+  out.push(`y 5 窗台平台：走得到窗前；窗轴离 ${offs.map(([n, a]) => `${n} ${a.toFixed(0)}°`).join(' / ')}（> 60°）；光路在 y 5 处 r ${cross.r.toFixed(2)} θ ${cross.th.toFixed(1)}，平台 θ${span[0]}–${span[1]} ✓`);
+}
 
 // ---- 015 C 点火拉杆：017 对位数据 ↔ char-xi-anims.glb extras；S3 局部几何；与纸条间距
 {

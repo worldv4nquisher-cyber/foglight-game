@@ -2047,15 +2047,17 @@ const CHECKS = [
       out.push('可点灯 20 s 未按 E：ignition:reminder 一次、不自动点灯 ✓');
       // 提示范围：拉杆 1.8 m、±60° 内才出「E 点灯」
       const prompt = `((p) => (p && !p.hidden ? p.textContent : ''))(document.querySelector('.hud-prompt'))`;
-      const stand = (dx, yawOff) => `(() => { const s = __s3; const sp = s.puzzles.leverIx.standPoint(s.rig.body.position.clone()); s.rig.body.position.set(sp.position.x + ${dx} * Math.sin(sp.facing), sp.position.y + 0.1, sp.position.z + ${dx} * Math.cos(sp.facing)); s.rig.body.velocity.set(0, 0, 0); s.rig.controller.facing = sp.facing + ${yawOff}; return 1; })()`;
-      await evaluate(stand(-3.5, 0));
+      const stand = (dx, yawOff) => `(() => { const s = __s3; const sp = s.puzzles.leverIx.standPoint(s.rig.body.position.clone()); s.rig.body.position.set(sp.position.x + ${dx} * Math.sin(sp.facing), sp.position.y + 0.02, sp.position.z + ${dx} * Math.cos(sp.facing)); s.rig.body.velocity.set(0, 0, 0); s.rig.controller.facing = sp.facing + ${yawOff}; return 1; })()`;
+      // 灯室半径有限：往室内（面朝方向）退 3.2 m、回头面向拉杆 = 只测距离
+      await evaluate(stand(3.2, Math.PI));
       await sleep(500);
-      if (/点灯/.test(await evaluate(prompt))) throw new Error('离拉杆 3.5 m 不应显示「E 点灯」');
+      if (/点灯/.test(await evaluate(prompt))) throw new Error('离拉杆 3.2 m 不应显示「E 点灯」');
       await evaluate(stand(0, Math.PI));
       await sleep(500);
       if (/点灯/.test(await evaluate(prompt))) throw new Error('背对拉杆不应显示「E 点灯」');
-      await evaluate(stand(-0.4, 0));
-      if (!(await until(`/E\\s*点灯/.test(${prompt})`, 5000))) throw new Error('拉杆前没显示「E 点灯」：' + (await evaluate(prompt)));
+      await evaluate(stand(0, 0));
+      await until(`!__s3.rig.controller.busy`, 5000);
+      if (!(await until(`/E\\s*点灯/.test(${prompt})`, 5000))) throw new Error('拉杆前没显示「E 点灯」：' + (await evaluate(prompt)) + JSON.stringify(await evaluate(`(() => { const s = __s3; const ix = s.puzzles.leverIx; const it = s.interaction ?? s.game.interaction; const f = ix.focus(s.rig.body.position.clone()); return { en: ix.enabled, av: ix.available, ctx: s.game.input.context, pos: s.rig.body.position.toArray(), f: f.toArray(), facing: s.rig.controller.facing, can: it?.canInteract?.(ix), cur: it?.current?.id ?? null, act: it?.actionKind, busy: s.rig.controller.busy, mode: s.rig.controller.mode?.kind, locked: s.rig.controller.locked, paused: s.game.isPaused, frozen: s.game.isFrozen, lp: it?.o?.linkPriority?.() ?? null, ig: s.puzzles.beam.igniter.state }; })()`)));
       if (/操作/.test(await evaluate(prompt))) throw new Error('点灯不应用「E 操作」');
       out.push('「E 点灯」只在拉杆 1.8 m / ±60° 内出现 ✓');
       // 按 E：锁输入（cutscene）→ 走到 -interact → xi-ignite-lever 第 34 帧（1.133 s）点燃；连按只一次
