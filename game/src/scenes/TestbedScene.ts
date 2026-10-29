@@ -123,6 +123,7 @@ export class TestbedScene extends BaseScene {
         read: (id) => this.game.ui.reader.open(id),
       },
       fallbackPrompt: () => this.rig.controller.nearLink?.prompt ?? null,
+      linkPriority: () => this.rig?.controller.nearLink?.priority ?? null,
     });
     this.samples = buildInteractionSamples({
       scene: this.scene,

@@ -58,6 +58,12 @@ export interface InteractableOptions {
   socket?: THREE.Object3D;
   /** use / hold / push 前是否自动走到交互点，默认 true（inspect / read / pickup / place / puzzle 不走） */
   approach?: boolean;
+  /**
+   * 优先级（和跨越点比）：附近有跨越点、且它的优先级更高时，这个物体不当候选，E 归跨越。
+   * 默认 inspect / read = 0（看看而已），其余 = 20（操作类）；跨越点默认 10（TraversalLink.priority）。
+   * 例：站在浮台上，「E 跨过去」压过石槽的「E 查看」。
+   */
+  priority?: number;
 }
 
 const INTERACT_NODE = /-interact(\.\d+)?$/i;
@@ -92,6 +98,8 @@ export class Interactable extends Component {
   readonly item: string | null;
   readonly socket: THREE.Object3D | null;
   readonly approach: boolean;
+  /** 见 InteractableOptions.priority */
+  readonly priority: number;
   /** push：轨道进度 0–1；到 1 后 locked */
   pushT = 0;
   /** push 到终点 / 一次性物体用完：不再可交互 */
@@ -118,6 +126,7 @@ export class Interactable extends Component {
     this.item = opts.item ?? (opts.kind === 'pickup' ? opts.id : null);
     this.socket = opts.socket ?? (opts.kind === 'place' ? findNode(opts.object, SOCKET_NODE) : null);
     this.approach = opts.approach ?? (opts.kind === 'use' || opts.kind === 'hold' || opts.kind === 'push');
+    this.priority = opts.priority ?? (opts.kind === 'inspect' || opts.kind === 'read' ? 0 : 20);
     this.point = opts.interactPoint ?? findNode(opts.object, INTERACT_NODE);
     this.focusSpec = opts.focus ?? null;
     if ((opts.kind === 'inspect' || opts.kind === 'read') && !this.textId) throw new Error(`Interactable ${opts.id}: ${opts.kind} 需要 textId`);

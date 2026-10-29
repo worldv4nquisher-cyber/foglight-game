@@ -18,6 +18,8 @@ export interface TraversalLinkOptions {
   walkInto?: boolean;
   /** HUD 提示文本 */
   prompt?: string;
+  /** 和交互物比的优先级（默认 10：高于 inspect / read 的 0，低于操作类的 20），见 Interactable.priority */
+  priority?: number;
 }
 
 const tmp = new THREE.Vector3();
@@ -35,6 +37,7 @@ export class TraversalLink extends Component {
   readonly radius: number;
   readonly walkInto: boolean;
   readonly prompt: string;
+  readonly priority: number;
   readonly length: number;
   readonly duration: number;
   private readonly condition: (() => boolean) | undefined;
@@ -48,6 +51,7 @@ export class TraversalLink extends Component {
     this.radius = opts.radius ?? 0.8;
     this.walkInto = opts.walkInto ?? true;
     this.prompt = opts.prompt ?? text('ui.prompt.traverse');
+    this.priority = opts.priority ?? 10;
     this.condition = opts.condition;
     let len = 0;
     for (let i = 1; i < this.points.length; i++) {

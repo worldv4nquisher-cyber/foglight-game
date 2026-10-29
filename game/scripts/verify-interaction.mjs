@@ -28,7 +28,7 @@ function test(name, fn) {
 }
 
 /** 一个最小场景：地面 + 角色 + 相机（站在角色身后 3 m 看向 -z） */
-function setup({ floor = true } = {}) {
+function setup({ floor = true, linkPriority } = {}) {
   now = 0;
   const events = new EventBus();
   const input = new InputManager(events, () => now);
@@ -68,6 +68,7 @@ function setup({ floor = true } = {}) {
     hud,
     presenters: { say: (id) => log.said.push(id), read: (id) => log.read.push(id) },
     viewport: () => ({ width: 1600, height: 900 }),
+    ...(linkPriority ? { linkPriority } : {}),
   });
   const fired = [];
   for (const ev of ['interact:used', 'interact:pushEnd', 'item:pickup', 'item:place', 'puzzle:enter', 'puzzle:exit', 'puzzle:partSelected', 'puzzle:partRotated', 'puzzle:reset', 'highlight:start', 'highlight:end'])
@@ -116,6 +117,31 @@ function setup({ floor = true } = {}) {
 const used = (env, id) => env.fired.filter(([e, p]) => e === 'interact:used' && p.id === id).length;
 
 // ---------------------------------------------------------------- 判定
+
+test('优先级：附近有跨越点（默认 10）时 inspect / read（0）让位，E 留给跨越；操作类（20）不让；离开跨越点恢复', () => {
+  let link = null;
+  const env = setup({ linkPriority: () => link });
+  const crate = env.box('crate', [0, 0.3, -2]);
+  const look = env.ix.add(new Interactable({ id: 'slot', kind: 'inspect', object: crate, textId: 'ch1.s1.nets.inspect', reach: 0.3 }));
+  assert.equal(look.priority, 0);
+  env.step(2);
+  assert.equal(env.ix.current?.id, 'slot');
+  link = 10; // 站到跨越点起点（TraversalLink 默认优先级）
+  env.step(1, { press: ['KeyE'] });
+  assert.equal(env.ix.current, null, 'inspect 不当候选');
+  assert.equal(env.log.said.length, 0, 'E 没被 inspect 吃掉');
+  assert.ok(env.input.consumePressed('interact'), 'E 还在，留给 PlayerController 的跨越');
+  env.step(1, { release: ['KeyE'] });
+  const lever = env.box('lever', [0.2, 0.3, -1.6]);
+  env.ix.add(new Interactable({ id: 'lever', kind: 'use', object: lever, approach: false }));
+  env.step(1);
+  assert.equal(env.ix.current?.id, 'lever', '操作类（20）压过跨越点');
+  env.ix.items.splice(env.ix.items.findIndex((i) => i.id === 'lever'), 1);
+  link = null;
+  env.step(1);
+  assert.equal(env.ix.current?.id, 'slot', '离开跨越点：inspect 恢复候选');
+});
+
 
 test('判定：距离 ≤ 1.8 m 且朝向夹角 ≤ 60° 才显示提示；E 触发', () => {
   const env = setup();

@@ -49,6 +49,8 @@ export interface InteractionSystemOptions {
   presenters?: InteractionPresenters;
   /** 没有交互候选时的提示（场景里跨越点等），每步调用 */
   fallbackPrompt?: () => string | null;
+  /** 附近跨越点的优先级（没有 = null）：优先级低于它的交互物不当候选，E 留给跨越（PlayerController 在交互之后读 E） */
+  linkPriority?: () => number | null;
   /** 屏幕尺寸（图标投影用），默认取 window */
   viewport?: () => { width: number; height: number };
 }
@@ -280,7 +282,9 @@ export class InteractionSystem {
   private pickCandidate(): Interactable | null {
     let best: Interactable | null = null;
     let bestScore = Infinity;
+    const lp = this.o.linkPriority?.() ?? null;
     for (const it of this.items) {
+      if (lp !== null && it.priority < lp) continue;
       if (!this.canInteract(it)) continue;
       it.focus(tmpA);
       ndc.copy(tmpA).project(this.o.camera);

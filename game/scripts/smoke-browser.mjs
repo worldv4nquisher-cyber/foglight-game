@@ -1632,6 +1632,9 @@ const CHECKS = [
       const cross = async (x, y, z, facing, label) => {
         await tp(x, y, z, facing);
         if (!(await until(`!!${S}.rig.controller.nearLink`, 6000))) throw new Error(label + '：没有跨越提示 ' + JSON.stringify(await st()));
+        // 交互优先级：跨越点（10）压过石槽等 inspect（0），提示必须是「E 跨过去」、E 归跨越（站在浮台上时石槽「E 查看」曾抢 E）
+        if (!(await until(`(document.querySelector('.hud-prompt')?.textContent ?? '').includes('跨过去') && ${S}.interaction.current === null`, 3000)))
+          throw new Error(label + '：提示不是「E 跨过去」 ' + JSON.stringify(await evaluate(`[document.querySelector('.hud-prompt')?.textContent, ${S}.interaction.current?.id]`)));
         await evaluate(`__game.input.setRaw('smoke', 'KeyE', true); 1`);
         await sleep(80);
         await evaluate(`__game.input.setRaw('smoke', 'KeyE', false); 1`);

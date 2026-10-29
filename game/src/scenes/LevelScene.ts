@@ -275,6 +275,7 @@ export abstract class LevelScene extends BaseScene {
       },
       // 跨越点（TraversalLink，S1 浮台）：附近没有可交互物时显示跨越提示
       fallbackPrompt: () => this.extraPrompt() ?? this.rig.controller.nearLink?.prompt ?? null,
+      linkPriority: () => this.rig?.controller.nearLink?.priority ?? null,
     });
   }
 
