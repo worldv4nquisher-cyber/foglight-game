@@ -28,6 +28,7 @@ import {
   stepAcrossSpan,
   readKeyAttach,
 } from '@/entities/xi/clips';
+import { rowerSeat, tieBoatStand, oarlock, alignXiTo, rowingAngles, oarHandleDir, findArtNode, XI_BOAT_NODES } from '@/entities/xi/boatAlign';
 import { TraversalLink } from '@/entities/components/TraversalLink';
 import { s1StepLinks, S1 } from '@/levels/s1/layout';
 import { buildLods, setForceLod0, applyLodDistances } from '@/render/lod';
@@ -451,6 +452,63 @@ if (existsSync(animsFile) && existsSync(modelFile)) {
       const ang = (q0.angleTo(q1) * 180) / Math.PI;
       assert.ok(jump <= 0.02 && ang <= 5, `grab 帧钥匙跳动 ${(jump * 100).toFixed(1)} cm / ${ang.toFixed(1)}°`);
       out.push(`地窖钥匙：extras.attach = 缺省 T/Q ✓；grab 帧 22 middle_03_r × attach 对 socket 偏差 ${(jump * 1000).toFixed(1)} mm / ${ang.toFixed(2)}°；LOD 3 级，forceLod0 开 / 关 ✓`);
+    }
+  }
+
+  // 小船对位（开场演出 035 用）：座位 = xi-row-boat 原点、桨架 = align.rowing、系船站位 = xi-tie-boat 根（桩中心前 0.37 m）
+  {
+    const boatFile = new URL('../../art/models/props/prop-boat-rowboat.glb', import.meta.url);
+    const pierFile = new URL('../../art/models/env/env-pier-wood-ch1.glb', import.meta.url);
+    if (existsSync(boatFile) && existsSync(pierFile)) {
+      const [boatG, pierG] = await Promise.all([parse(boatFile), parse(pierFile)]);
+      const row = clips.find((c) => c.name === 'xi-row-boat').userData.align.rowing;
+      const tie = clips.find((c) => c.name === 'xi-tie-boat').userData.align.mooringPost;
+      const boat = boatG.scene;
+      // 船放到 S1 的摆位上测（世界变换不影响局部关系）
+      boat.position.set(5.508, 1.36, -10.757);
+      boat.rotation.y = -1.70407;
+      boat.updateMatrixWorld(true);
+      const seat = rowerSeat(boat);
+      assert.ok(seat && oarlock(boat, 'l') && oarlock(boat, 'r') && findArtNode(boat, XI_BOAT_NODES.bowRing), '船上座位 / 桨架 / 船头环节点');
+      const xi = new THREE.Group();
+      new THREE.Group().add(xi);
+      xi.parent.position.set(1, 2, 3);
+      xi.parent.rotation.y = 0.4;
+      alignXiTo(xi, seat);
+      const inv = xi.matrixWorld.clone().invert();
+      const toXi = (o) => o.getWorldPosition(new THREE.Vector3()).applyMatrix4(inv);
+      for (const [side, want] of [
+        ['l', row.oarlockL],
+        ['r', row.oarlockR],
+      ]) {
+        const p = toXi(oarlock(boat, side));
+        p.toArray().forEach((v, i) => near(v, want[i], 0.011, `桨架 ${side} 汐局部[${i}]`));
+      }
+      near(seat.userData.seatTopAboveOrigin, row.seatTop, 1e-6, '座面高');
+      // 汐面朝 +Z = 船尾（船朝 −Z）：船头环在她背后
+      assert.ok(toXi(findArtNode(boat, XI_BOAT_NODES.bowRing)).z < -1, '船头在汐背后');
+      // 桨角：91 帧、循环首尾一致、方向是单位向量、drive 段桨叶在水里（pitch > 0 = 手柄高）
+      assert.equal(row.yawDegPerFrame.length, 91);
+      const a0 = rowingAngles(row, 0);
+      const a3 = rowingAngles(row, 3);
+      near(a0.yawDeg, a3.yawDeg, 1e-9, '桨角循环');
+      near(rowingAngles(row, 10 / 30).yawDeg, row.yawDegPerFrame[10], 1e-9, '整帧取值');
+      near(rowingAngles(row, 10.5 / 30).pitchDeg, (row.pitchDegPerFrame[10] + row.pitchDegPerFrame[11]) / 2, 1e-9, '帧间插值');
+      const d = oarHandleDir(30, 10, 'l');
+      near(d.length(), 1, 1e-9, '手柄方向单位');
+      assert.ok(d.x < 0 && oarHandleDir(30, 10, 'r').x > 0 && d.z > 0, '左桨手柄朝 −X（向内），右桨镜像，yaw 正 = 手柄朝她前方');
+      // 系船：mooring 站位 → 桩中心在正前方 0.37 m、桩顶高出桥面 0.85
+      const pier = pierG.scene;
+      pier.updateMatrixWorld(true);
+      const stand = tieBoatStand(pier);
+      assert.ok(stand, '码头系船站位节点');
+      alignXiTo(xi, stand);
+      const invT = xi.matrixWorld.clone().invert();
+      const post = findArtNode(pier, XI_BOAT_NODES.postTop).getWorldPosition(new THREE.Vector3()).applyMatrix4(invT);
+      near(post.x, tie.center[0], 0.005, '桩中心 x');
+      near(post.z, tie.center[2], 0.005, '桩中心前方 0.37');
+      near(post.y, tie.heightAboveDeckM, 0.005, '桩顶高出桥面');
+      out.push('小船对位：座位 = xi-row-boat 原点、桨架 = align.rowing ±0.56 / 0.525 / 0.22（≤ 1 cm）、桨角 91 帧循环 / 插值、系船站位桩中心前 0.37 m ✓');
     }
   }
 
