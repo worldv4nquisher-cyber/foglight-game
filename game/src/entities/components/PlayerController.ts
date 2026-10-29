@@ -70,6 +70,12 @@ export class PlayerController extends Component {
     return this._nearLink;
   }
 
+  /** 自动跨越进度（动画用）：已过时间 / 总时长；不在跨越中为 null */
+  get traversal(): { t: number; duration: number } | null {
+    const m = this.mode;
+    return m.kind === 'traverse' ? { t: Math.min(m.t, m.link.duration), duration: m.link.duration } : null;
+  }
+
   /** 是否在跨越 / 送回中（输入被忽略） */
   get busy(): boolean {
     return this.mode.kind !== 'free';

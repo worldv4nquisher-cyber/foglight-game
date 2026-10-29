@@ -577,6 +577,44 @@ const CHECKS = [
     },
   },
   {
+    name: 'v0.1-017 汐模型 + 动画：?scene=testbed&art=1 真模型（73 骨 / LOD / hand_r_socket 挂手持点）、31 个 clip、走 1.6 / 跑 3.2 播放率 1、停下回 idle、原地转身 +90°',
+    async run({ evaluate, cdp, sleep }) {
+      const until = async (expr, ms = 8000) => {
+        const end = Date.now() + ms;
+        let v;
+        while (Date.now() < end) {
+          v = await evaluate(expr);
+          if (v) return v;
+          await sleep(100);
+        }
+        return v;
+      };
+      await cdp.goto('scene=testbed&art=1', 'testbed');
+      if (!(await until(`!!window.__testbed?.rig?.body?.body?.onGround`, 60000))) throw new Error('art=1 测试场地没进去');
+      const info = await evaluate(`(() => { const r = __testbed.rig; const a = r.animator; if (!a) return null; let bones = 0, skinned = 0;
+        r.visual.traverse((o) => { if (o.isBone) bones++; if (o.isSkinnedMesh) skinned++; });
+        const hand = r.visual.getObjectByName('hand-item');
+        return { clips: a.clips.size, missing: a.missing, bones, skinned, hand: hand?.parent?.name, state: a.state }; })()`);
+      if (!info) throw new Error('art=1 下没有 XiAnimator（char-xi / char-xi-anims 没加载？）');
+      if (info.clips !== 31 || info.missing.length) throw new Error('clip 不全 ' + JSON.stringify(info));
+      if (info.bones < 73 || info.skinned < 3) throw new Error('模型不对 ' + JSON.stringify(info));
+      if (info.hand !== 'hand_r_socket') throw new Error('hand-item 没挂在 hand_r_socket：' + info.hand);
+      const st = `(() => { const a = __testbed.rig.animator; const b = __testbed.rig.body.body; return { s: a.state, w: a.blend.walk, wr: a.blend.walkRate, j: a.blend.jog, jr: a.blend.jogRate, v: Math.hypot(b.actualVelocity.x, b.actualVelocity.z) }; })()`;
+      await evaluate(`__game.input.setRaw('smoke', 'KeyA', true)`);
+      const walk = await until(`(() => { const r = ${st}; return r.s === 'walk' && Math.abs(r.v - 1.6) < 0.08 && Math.abs(r.wr - 1) < 0.06 ? r : null; })()`);
+      await evaluate(`__game.input.setRaw('smoke', 'ShiftLeft', true)`);
+      const jog = await until(`(() => { const r = ${st}; return r.s === 'jog' && Math.abs(r.v - 3.2) < 0.16 && Math.abs(r.jr - 1) < 0.06 ? r : null; })()`);
+      await evaluate(`(__game.input.setRaw('smoke', 'ShiftLeft', false), __game.input.setRaw('smoke', 'KeyA', false))`);
+      if (!walk) throw new Error('慢走动画 / 播放率不对 ' + JSON.stringify(await evaluate(st)));
+      if (!jog) throw new Error('小跑动画 / 播放率不对 ' + JSON.stringify(await evaluate(st)));
+      if (!(await until(`${st}.s === 'idle'`))) throw new Error('停下没回 idle ' + JSON.stringify(await evaluate(st)));
+      const turn = await evaluate(`(async () => { const r = __testbed.rig; const f0 = r.controller.facing; const t0 = performance.now();
+        await r.animator.turnInPlace('l'); return { d: (r.controller.facing - f0) * 180 / Math.PI, ms: performance.now() - t0, locked: r.controller.locked, s: r.animator.state }; })()`);
+      if (Math.abs(turn.d - 90) > 0.5 || turn.locked) throw new Error('原地转身不对 ' + JSON.stringify(turn));
+      return `char-xi ${info.bones} 骨 / ${info.skinned} 蒙皮网格、31 clip、hand-item → hand_r_socket；走 ${walk.v.toFixed(2)} m/s 播放率 ${walk.wr.toFixed(2)}、跑 ${jog.v.toFixed(2)} m/s 播放率 ${jog.jr.toFixed(2)}、停下 idle；转身 +${turn.d.toFixed(1)}°（${(turn.ms / 1000).toFixed(2)} s）✓`;
+    },
+  },
+  {
     name: 'v0.1-004 交互：提示 / 图标、八种交互样例、hold 圆环、push、机关暂停后右键直接退出、demo 灯塔',
     async run({ evaluate, cdp, sleep }) {
       const out = [];

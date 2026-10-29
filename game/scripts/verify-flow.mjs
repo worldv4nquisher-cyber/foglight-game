@@ -31,7 +31,7 @@ await test('资源清单：分组只用 boot / menu / common / s1–s3，key 唯
     }
   }
   assert.ok(entriesForGroup('menu').some((e) => e.type === 'font'));
-  assert.equal(manifest.find((e) => e.key === 'hero')?.group, 'common', '主角常驻 common');
+  for (const k of ['char-xi', 'char-xi-anims', 'tex-xi-ramp', 'tex-xi-sdf-face']) assert.equal(manifest.find((e) => e.key === k)?.group, 'common', `主角 ${k} 常驻 common`);
   assert.deepEqual([...LEVEL_GROUPS], ['s1', 's2', 's3']);
 });
 
