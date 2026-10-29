@@ -15,7 +15,6 @@ import { Rain } from '@/world/Rain';
 import { Lighthouse } from '@/world/Lighthouse';
 import { Interactable } from '@/systems/interaction/Interactable';
 import { InteractionSystem, actorFromRig } from '@/systems/interaction/InteractionSystem';
-import { t } from '@/content/text';
 import { applyLodDistances, describeLods } from '@/render/lod';
 
 const ISLAND_RADIUS = 18;
@@ -79,6 +78,8 @@ export class MainScene extends BaseScene {
     // 掉出世界（理论上不会发生）：黑场送回出生点
     this.physics.onFallOut = () => void this.rig.controller.teleportTo(SPAWN);
     this.buildInteraction();
+    // 当前目标（日志顶部）：进入 S1 时设为 find_bell；之后由谜题进度（013）更新
+    this.game.narrative.setGoal('ch1.s1.goal.find_bell');
 
     const { events, audio, ui } = this.game;
     this.cleanups.push(
@@ -305,7 +306,11 @@ export class MainScene extends BaseScene {
       camera: this.camera,
       cameraFollow: this.cameraFollow,
       hud: this.game.ui.hud,
-      presenters: { say: (id) => this.game.ui.hud.toast(t(id), 3) },
+      // inspect → 字幕（汐的一句描述，text-ch1 §0.10）；read → 阅读界面（首次阅读写进日志）
+      presenters: {
+        say: (id) => this.game.ui.subtitles.play([id]),
+        read: (id) => this.game.ui.reader.open(id),
+      },
     });
     // 灯塔塔身半径 1.4 m：判定距离从塔身表面算（站在台座上靠近塔即可），焦点取塔门高度
     const base = this.lighthouse.position;

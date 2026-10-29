@@ -18,7 +18,7 @@
 | `npm run preview` | 本地预览 `dist/`（http://localhost:4173） |
 | `npm run typecheck` | TypeScript 严格模式检查（src + vite.config） |
 | `npm run lint` / `lint:fix` | ESLint（flat config + typescript-eslint 类型感知规则） |
-| `npm run test` | 全部 Node 校验：LOD / puzzleCritical、资源后处理与 GLB 自检（`test:assets`）、输入（`test:input`）、存档（`test:save`）、角色物理（`test:physics`）、相机（`test:camera`）、画质参数表与自动检测（`test:quality`，逐键对照 style-guide §8）、文本表是否最新 / 代码引用的文本 ID 是否都在（`test:text`）、交互与机关（`test:interaction`） |
+| `npm run test` | 全部 Node 校验：LOD / puzzleCritical、资源后处理与 GLB 自检（`test:assets`）、输入（`test:input`）、存档（`test:save`）、角色物理（`test:physics`）、相机（`test:camera`）、画质参数表与自动检测（`test:quality`，逐键对照 style-guide §8）、文本表是否最新 / 代码引用的文本 ID 是否都在（`test:text`）、交互与机关（`test:interaction`）、字幕 / 阅读 / 日志（`test:narrative`；`test:text` 同时检查代码里没有硬编码的剧情中文） |
 | `npm run text:import` | 从 `docs/gdd/text-ch1.json` 重新生成 `src/content/text/zh-CN.ts`（文案改了跑一次；`test:text` 会检查生成结果是否已提交） |
 | `node scripts/verify-lod.mjs <a.glb> [b.glb…]` | **GLB 交付自检**（美术交付前跑，也可 `npm run verify:glb -- <文件>`）：LOD 层级与各级三角面、puzzleCritical、`-collider` / `-interact` 等特殊节点、COLOR_0 平滑法线、面数预算、材质与贴图。不带参数 = 原来的 LOD 自测。见下文「GLB 交付自检」 |
 | `npm run assets:test-lod` | 重新生成 LOD 测试模型 `public/assets/models/test-lod-puzzle-critical.glb` |
@@ -51,13 +51,14 @@
 | 小跑 / 精调 | 按住 Shift 小跑 | 按住 Shift 精调 | — | — |
 | 转视角 | 点击画面锁定鼠标后直接移动（不支持指针锁定时按住左键拖拽） | 固定机位（鼠标用来转部件） | 显示光标 | — |
 | 交互 | E | — | — | — |
+| 翻页 | — | — | A·D / ← → / 点箭头 | — |
 | 切换部件 | — | Q / E，滚轮上 / 下 | — | — |
 | 相机远近 | 滚轮 | — | — | — |
 | 观察 | 按住右键 | — | — | — |
 | 退出机关 / 关闭阅读 | — | 右键 / Tab | 右键 / Tab | — |
 | 重置机关 | — | R | — | — |
-| 提示 / 日志 | H / J | H | — | — |
-| 推进字幕 | 左键 / 空格 | 空格 | 左键 / 空格 | 左键 / 空格；按住空格 1 秒跳过 |
+| 提示 / 日志 | H / J | H | J（关日志） | — |
+| 推进字幕 | 左键 / 空格 | 空格 | —（左键留给翻页箭头 / 日志条目） | 左键 / 空格；按住空格 1 秒跳过 |
 | 暂停 | Esc（任何时候） | Esc | Esc | Esc |
 
 - Esc 永远是暂停（制作人裁定：指针锁定时 Esc 先被浏览器用来解锁，页面不一定收到按键）。暂停后点「继续」或再按 Esc，再点一下画面重新锁定鼠标。
@@ -86,6 +87,7 @@ game/
 │  ├─ render/               PostFX 后处理管线（postprocessing + N8AO）、lod（LOD 组装 + puzzleCritical）
 │  ├─ world/                场景构件：SkyDome、Water、Rain、Lighthouse（占位）、testCourse（角色测试场地）、interactionSamples（交互样例）
 │  ├─ content/text/         文本表（zh-CN.ts 由 scripts/import-text.mjs 生成，勿手改）与 t()
+│  │                        （systems/NarrativeState.ts：已读文档、只一次、当前目标；ui/Subtitles、Reader、Journal、Toast：005）
 │  ├─ assets/               AssetLoader（GLB+DRACO+Meshopt+KTX2、纹理、音频）、manifest、placeholders
 │  ├─ config/               gameConfig（技术参数）、gameplay（玩法数值）、quality（画质三档）、atmosphere（气氛预设）
 │  ├─ ui/                   UIManager、LoadingScreen、Hud、PauseMenu、FpsCounter、styles.css
@@ -161,7 +163,7 @@ scene.interaction.add(new Interactable({ id: 'bell', kind: 'use', object: bellNo
 game.events.on('interact:used', ({ id }) => { if (id === 'bell') ring(); });
 ```
 
-- **八种类型**：`inspect`（不暂停，台词走字幕，005 前临时用 HUD 小字）、`read`（打开阅读界面，005）、`pickup` / `place`（同时只拿一件，只能放到 `-socket` 节点）、`use`（自动走到交互点 ≤ 0.4 s 后发事件）、`hold`（按住 E 2 s，HUD 圆环，中途松开归零）、`push`（按住 E 沿轨道 0.8 m/s，到端点发 `interact:pushEnd` 并锁定）、`puzzle`（进入机关模式）。
+- **八种类型**：`inspect`（不暂停，台词走字幕）、`read`（打开阅读界面，005）、`pickup` / `place`（同时只拿一件，只能放到 `-socket` 节点）、`use`（自动走到交互点 ≤ 0.4 s 后发事件）、`hold`（按住 E 2 s，HUD 圆环，中途松开归零）、`push`（按住 E 沿轨道 0.8 m/s，到端点发 `interact:pushEnd` 并锁定）、`puzzle`（进入机关模式）。
 - **判定**：水平距离（到物体焦点、减去 `reach`）≤ 1.8 m 且角色朝向夹角 ≤ 60°；多个候选取最靠近屏幕中心的；3.5 m 内画冷色小图标。参数在 `config/gameplay.ts` 的 `interaction` / `puzzle`。
 - **交互点**：模型里的 `-interact` 节点（+Z 朝向物体）是 use / hold / push 的站位；没有时取物体 +Z 方向 reach+1 m。走位路径被碰撞体挡住时原地转身，不穿模。
 - **机关**：`RotatablePart`（单轴 / 双轴，15° 一档、Shift 7.5°，绝对网格吸附，可设范围）+ `PuzzleGroup`（部件列表 + `-cam` 机位节点）。Q / E 切换（当前部件冷灰描边），R 复位，右键 / Tab 退出；只有一个部件时操作条不显示「Q·E 切换」。暂停时机关不响应，继续后仍在机关里。
@@ -170,6 +172,19 @@ game.events.on('interact:used', ({ id }) => { if (id === 'bell') ring(); });
 - **事件**：`interact:used / inspect / read / holdProgress / pushMoved / pushEnd`、`item:pickup / place`、`puzzle:enter / exit / partSelected / partRotated / reset`、`highlight:start / end`（`core/EventBus.ts`）。
 - **测试场地交互走廊**：`?scene=testbed` 出生点东侧 x = 16 一条南北向通道，东侧依次是 inspect（木箱）、read（告示板）、pickup（底座上的提灯）、place（灯台 A），西侧是 use（钟）、hold（油阀）、place（灯台 B）、push（浮台，向北推 3 m）。demo 主场景的灯塔改为 `use` 交互（站在台座上面向塔按 E）。
 - 校验：`npm run test:interaction`；smoke 里有八种交互、hold 圆环、push、机关 Esc→继续→右键退出、灯塔的浏览器端检查。
+
+## 字幕、阅读界面与日志（v0.1-005）
+
+- **文本表**：`docs/gdd/text-ch1.json` → `npm run text:import` → `src/content/text/zh-CN.ts`（ID 原样，`TextId` 联合类型，写错 ID typecheck 报错）。`npm run test:text`：生成结果已提交、代码里引用的 ID 全部存在（缺失 0）、`src/` 与 `index.html` 里没有任何剧情文本（字幕 / 独白 / 查看 / 目标 / 文档 / 提示）≥ 4 个汉字的原句片段。暂停菜单等 UI 杂项里还有少量硬编码 UI 文案，完整设置界面（008）接入时换成 `t('ui.*')`。
+- **字幕** `game.ui.subtitles`（`ui/Subtitles.ts`，逻辑在无 DOM 的 `SubtitleTrack`）：`play(['ch1.…'])` 依次播放，每行 max(2.0 s, 字数 × 0.12 s)（字数 = 去掉空白的字符数，标点计入；参数在 `gameplay.narrative`），到时自动下一行，左键 / 空格立即推进；新的 `play` 顶掉旧的（同一时刻只一条）。「只一次」的行显示时写入存档 `seenLines`，以后 `play` 自动跳过。汐 `#E4E8EA`、父亲 `#8B959D`，不显示名字；底部居中、无底框、浅阴影；字号小 / 中 / 大（18 / 22 / 28 px，设置 `subtitleSize`，暂停菜单「字幕大小」，即时生效）。时间走游戏时间：暂停、阅读 / 日志打开时停。
+  - 演出（035）：`subtitles.track.setTimeline([{ at: 46, id: 'ch1.intro.line_home', duration: 4 }])`，每帧 `subtitles.playAt(cutsceneTime)`，按时间计算该显示哪条（跳转 / 倒退也对），演出行锁定不可手动推进，期间独白 / 查看被屏蔽；结束 `track.endTimeline()`。
+  - `track.playText(text)` 只给自动化测试用（表里没有正好 30 字的行）。
+- **阅读界面** `game.ui.reader.open(docId)`（`read` 交互自动调用）：纸张（030 的 `ui-paper-*` 到位前是纯色占位）+ 文字、标题 `ui.doc_title.<对象>`、多页「n / N」和箭头；A·D / ← → 翻页；右键 / Tab 关闭。打开时压 `reading` 上下文（显示光标、无移动轴）并 `game.freeze()`（fixedUpdate / scene.update 不跑，渲染和 UI 照常），背景 `backdrop-filter` 模糊。阅读里 Esc 暂停→继续后仍在阅读界面，第一下右键直接关闭（reading 是自由光标，不需要重新锁定）。
+- **已读与日志**（`systems/NarrativeState.ts`，`game.narrative`）：首次打开的文档（类型 doc / journal）按首次阅读顺序写进日志并交给存档 `readDocs`，左下角「日志已更新」2 s（`ui/Toast.ts`）；再读不重复、不提示。没有进行中的存档进度时只记在内存。
+- **日志（J）** `game.ui.journal`：顶部「当前目标」（`game.narrative.setGoal('ch1.s1.goal.find_bell')`，只接受 goal 类文本，变化即时刷新），下面「第一章 · 归岸」分组「父亲的日志」「信与纸条」，点条目打开阅读界面（关掉回到日志）；J / 右键 / Tab 关闭。主场景进场时设目标 `ch1.s1.goal.find_bell`，之后由谜题进度（013–015）更新。**当前目标不进存档**（由进度决定，场景入口按进度重设）。
+- **结尾第 6 页**：结尾演出（035）调用 `game.narrative.unlockOutroEntry()`，父亲日志（`ch1.s2.journal.doc`，5 页）末尾多出第 6 页 `ch1.outro.journal_entry`；记录在 `seenLines`，读档后仍在。
+- **测试场地**：交互走廊东侧 z = 10 的书桌上是父亲日志（5 页）；z = 1 的告示板是单页文档。
+- 校验：`npm run test:narrative`（时长 2.0 / 3.6 s、推进、只一次与存档、时间轴、已读 / 不重复 / 存档顺序、目标、第 6 页、全部 ID 可加载、阅读键位、硬编码检查反例）；smoke 里有真实按键 / 点击的整套流程（见 `scripts/smoke-browser.mjs`「v0.1-005」）。
 
 ## 资源规范与添加方法
 

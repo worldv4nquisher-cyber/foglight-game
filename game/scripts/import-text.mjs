@@ -67,6 +67,53 @@ export function scanIds(dir = join(root, 'src')) {
   return found;
 }
 
+/** 剧情类文本（不含 UI / 提示词这些短词）：代码里不能出现它们的原文片段 */
+const STORY_TYPES = new Set(['subtitle', 'title', 'monologue', 'inspect', 'goal', 'journal', 'doc', 'hint']);
+const CJK = /[\u3400-\u9fff]/g;
+
+/** 剧情文本拆成短句（按标点 / 换行），保留 ≥ 4 个汉字的片段 */
+export function storyFragments() {
+  const out = new Map();
+  for (const e of entries) {
+    if (!STORY_TYPES.has(e.type)) continue;
+    const v = strings[e.id];
+    const text = Array.isArray(v) ? v.join('\n') : String(v ?? '');
+    for (const frag of text.split(/[\s，。、！？；：「」『』（）…—·,.!?;:"'()]+/)) {
+      if ((frag.match(CJK) ?? []).length >= 4) out.set(frag, e.id);
+    }
+  }
+  return out;
+}
+
+/**
+ * 代码里硬编码的剧情中文（任务单 005 验收「grep 检查」）：扫 src 下的 .ts / .css（文本表目录除外）和 index.html，
+ * 出现任何剧情文本片段（≥ 4 个汉字的短句）就报出来。返回 [片段, 来源 ID, 文件][]
+ */
+export function hardcodedStory(dir = join(root, 'src')) {
+  const frags = storyFragments();
+  const textDir = dirname(outPath);
+  const found = [];
+  const walk = (d) => {
+    for (const f of readdirSync(d)) {
+      const p = join(d, f);
+      if (p === textDir) continue;
+      if (statSync(p).isDirectory()) walk(p);
+      else if (/\.(ts|css|html)$/.test(f)) {
+        const src = readFileSync(p, 'utf8');
+        for (const [frag, id] of frags) if (src.includes(frag)) found.push([frag, id, relative(root, p)]);
+      }
+    }
+  };
+  walk(dir);
+  for (const extra of ['index.html']) {
+    const p = join(root, extra);
+    if (!existsSync(p)) continue;
+    const src = readFileSync(p, 'utf8');
+    for (const [frag, id] of frags) if (src.includes(frag)) found.push([frag, id, extra]);
+  }
+  return found;
+}
+
 export function missingIds() {
   return scanIds().filter(([id]) => !(id in strings));
 }
@@ -92,5 +139,11 @@ if (isMain) {
     console.log(`✗ 代码里用到但 JSON 没有的文本 ID：${missing.length} 个`);
     for (const [id, f] of missing) console.log(`    ${id}  （${f}）`);
   } else console.log(`✓ 代码里用到的文本 ID ${used.size} 个，缺失 0 个`);
+  const story = hardcodedStory();
+  if (story.length) {
+    fail++;
+    console.log(`✗ 文本表之外硬编码的剧情中文：${story.length} 处`);
+    for (const [frag, id, f] of story) console.log(`    「${frag}」（${id}）  ${f}`);
+  } else console.log(`✓ 文本表之外没有硬编码的剧情中文（检查 ${storyFragments().size} 个剧情短句片段）`);
   process.exit(fail ? 1 : 0);
 }

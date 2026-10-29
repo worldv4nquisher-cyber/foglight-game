@@ -31,8 +31,12 @@ export type ButtonAction =
   | 'resetPuzzle'
   /** H：提示 */
   | 'hint'
-  /** J：日志 */
+  /** J：日志（explore 打开；reading 里关闭日志） */
   | 'journal'
+  /** A / ←：阅读界面上一页（reading） */
+  | 'pagePrev'
+  /** D / →：阅读界面下一页（reading） */
+  | 'pageNext'
   /** Esc：暂停（全局，任何上下文） */
   | 'pause'
   /** 鼠标左键 / Space：推进字幕 */
@@ -105,7 +109,10 @@ export const CONTEXTS: Record<InputContextName, ContextBindings> = {
   reading: {
     buttons: {
       exitPuzzle: ['Mouse2', 'Tab'],
-      advance: ['Mouse0', 'Space'],
+      pagePrev: ['KeyA', 'ArrowLeft'],
+      pageNext: ['KeyD', 'ArrowRight'],
+      journal: ['KeyJ'],
+      advance: ['Space'],
     },
     axes: false,
     look: false,

@@ -9,6 +9,12 @@ import { Hud } from './Hud';
 import { LoadingScreen } from './LoadingScreen';
 import { PauseMenu } from './PauseMenu';
 import { ScreenFade } from './ScreenFade';
+import { Journal } from './Journal';
+import { Reader } from './Reader';
+import { Subtitles } from './Subtitles';
+import { Toast } from './Toast';
+import { gameplay } from '@/config/gameplay';
+import { t } from '@/content/text';
 
 /**
  * DOM UI 层（叠在 canvas 上）。UI 用原生 DOM + CSS，便于做清晰的文字和响应式布局；
@@ -23,6 +29,14 @@ export class UIManager {
   readonly debug: DebugPanel;
   /** 全屏黑场（teleportTo / 场景切换） */
   readonly fade: ScreenFade;
+  /** 字幕（005）：底部居中；play(ids) / playAt(time) */
+  readonly subtitles: Subtitles;
+  /** 阅读界面（005）：reader.open(docId) */
+  readonly reader: Reader;
+  /** 日志（J，005） */
+  readonly journal: Journal;
+  /** 左下角短提示（「日志已更新」） */
+  readonly toastLeft: Toast;
   private offs: Array<() => void> = [];
 
   constructor(
@@ -42,11 +56,27 @@ export class UIManager {
     this.loading = new LoadingScreen(root);
     this.fade = new ScreenFade(root);
     this.hud = new Hud(root);
+    this.subtitles = new Subtitles(root, game.narrative, game.events);
+    this.toastLeft = new Toast(root);
+    const freeze = (): (() => void) => game.freeze();
+    this.reader = new Reader(root, { input: game.input, narrative: game.narrative, events: game.events, freeze });
+    this.journal = new Journal(root, { input: game.input, narrative: game.narrative, events: game.events, reader: this.reader, freeze });
+    this.subtitles.setSize(game.settings.get('subtitleSize'));
     this.pause = new PauseMenu(root, game, () => this.toggleFps());
 
     this.offs.push(
       game.events.on('game:pause', () => this.pause.show()),
       game.events.on('game:resume', () => this.pause.hide()),
+      // 首次阅读 → 左下角「日志已更新」2 s；再次阅读不会发这个事件
+      game.events.on('journal:updated', () => this.toastLeft.show(t('ch1.common.journal_updated'), gameplay.narrative.journalToastSeconds)),
+      // 字号三档：设置变化即时生效
+      game.settings.onChange(() => this.subtitles.setSize(game.settings.get('subtitleSize'))),
+      // 换场景：字幕清掉，阅读界面 / 日志关掉（解冻）
+      game.events.on('scene:change', () => {
+        this.subtitles.track.clear();
+        this.journal.close();
+        this.reader.close(false);
+      }),
     );
 
     // 自动存档完成：右下角「已保存」2.5s（写不进去时不显示）。
@@ -97,6 +127,14 @@ export class UIManager {
     if (this.game.input.consumePressed('toggleDebug') && debugEnabled) this.debug.toggle();
     this.fps.update(dt);
     this.debug.update(dt);
+    // 阅读界面在日志之上：先让阅读界面读输入
+    this.reader.update();
+    this.journal.update();
+    // 字幕：左键 / Space 手动推进（explore / puzzle / cutscene 上下文有 advance 绑定）；时间走游戏时间（暂停、阅读时停）
+    const ctx = this.game.input.context;
+    if (this.subtitles.current && ctx !== 'reading' && this.game.input.consumePressed('advance')) this.subtitles.advance();
+    this.subtitles.update(this.game.isPaused || this.game.isFrozen ? 0 : dt);
+    this.toastLeft.update(dt);
   }
 
   dispose(): void {
@@ -107,6 +145,10 @@ export class UIManager {
     this.fade.dispose();
     this.hud.dispose();
     this.pause.dispose();
+    this.journal.dispose();
+    this.reader.dispose();
+    this.subtitles.dispose();
+    this.toastLeft.dispose();
     this.root.replaceChildren();
   }
 }

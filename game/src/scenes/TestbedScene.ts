@@ -12,7 +12,6 @@ import { ViewpointTarget } from '@/entities/components/ViewpointTarget';
 import { buildTestCourse, type TestCourse } from '@/world/testCourse';
 import { InteractionSystem, actorFromRig } from '@/systems/interaction/InteractionSystem';
 import { buildInteractionSamples, type InteractionSamples } from '@/world/interactionSamples';
-import { t } from '@/content/text';
 
 /**
  * 角色控制器 / 相机测试场地（v0.1-002、003）：地址栏加 ?scene=testbed 进入。不存档。
@@ -104,9 +103,10 @@ export class TestbedScene extends BaseScene {
       camera: this.camera,
       cameraFollow: this.cameraFollow,
       hud: this.game.ui.hud,
+      // inspect → 字幕（汐的一句描述，text-ch1 §0.10）；read → 阅读界面（首次阅读写进日志）
       presenters: {
-        // 005 之前：inspect 用 HUD 小字临时显示，read 只发事件
-        say: (id) => this.game.ui.hud.toast(t(id), 3),
+        say: (id) => this.game.ui.subtitles.play([id]),
+        read: (id) => this.game.ui.reader.open(id),
       },
       fallbackPrompt: () => this.rig.controller.nearLink?.prompt ?? null,
     });

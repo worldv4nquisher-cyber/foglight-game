@@ -88,6 +88,15 @@ export const gameplay = {
     fadeSec: 0.5,
   },
   /** 交互与机关（GDD §9；v0.1-004） */
+  /** 字幕 / 阅读 / 日志（GDD §9、§10；任务单 005） */
+  narrative: {
+    /** 每字显示时长（s）：显示时长 = max(minSeconds, 字数 × perChar)；字数 = 去掉空白后的字符数（含标点） */
+    subtitlePerChar: 0.12,
+    /** 最短显示时长（s） */
+    subtitleMinSeconds: 2.0,
+    /** 「日志已更新」提示时长（s，左下角） */
+    journalToastSeconds: 2.0,
+  },
   interaction: {
     /** 可交互距离（m，角色到物体焦点的水平距离减去物体 reach） */
     distance: 1.8,

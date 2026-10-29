@@ -50,6 +50,16 @@ export interface GameEvents {
   /** 高亮（提示系统二级提示） */
   'highlight:start': { ids: string[]; seconds: number };
   'highlight:end': { ids: string[] };
+  /** 005：文档首次阅读（写入日志）/ 当前目标变化 / 字幕显示与结束 / 阅读界面与日志开关 */
+  'journal:updated': { docId: string; entries: string[] };
+  'goal:changed': { goal: string | null };
+  'subtitle:show': { id: string; duration: number; locked: boolean };
+  /** shown = 这一行实际显示了多久（游戏时间，s） */
+  'subtitle:hide': { id: string; reason: 'timeout' | 'advance' | 'replaced' | 'clear'; shown: number };
+  'reader:open': { docId: string; pages: number };
+  'reader:close': { docId: string };
+  'journal:open': undefined;
+  'journal:close': undefined;
 }
 
 /** 交互类型名（与 systems/interaction/Interactable.ts 的 InteractKind 一致；放这里避免 core 依赖 systems） */

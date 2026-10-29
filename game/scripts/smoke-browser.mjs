@@ -3,13 +3,15 @@
 // 用法：npm run build && npm run smoke（需要本机有 Chrome/Chromium；路径可用 CHROME=/path 指定）
 // 依赖：只用 Node 内置（child_process、WebSocket），不额外装 puppeteer。
 import { spawn } from 'node:child_process';
-import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { preview } from 'vite';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+/** 文本表原文（005 检查对照显示的文字） */
+const TEXT = JSON.parse(readFileSync(resolve(root, '../docs/gdd/text-ch1.json'), 'utf8')).strings;
 if (!existsSync(join(root, 'dist/index.html'))) {
   console.error('dist/ 不存在，先运行 npm run build');
   process.exit(1);
@@ -526,6 +528,12 @@ const CHECKS = [
         await expectPrompt(id, re);
         await tapE();
         if (!(await until(usedCount(id)))) throw new Error(id + ' 按 E 没触发');
+        // 005：read 打开阅读界面（冻结游戏逻辑），Tab 关掉再继续
+        if (id === 'sample-read') {
+          if (!(await until(`__game.ui.reader.isOpen`, 3000))) throw new Error('read 没打开阅读界面');
+          await cdp.key('Tab', 'Tab', 9);
+          if (!(await until(`!__game.ui.reader.isOpen && __game.input.context === 'explore'`, 3000))) throw new Error('Tab 没关阅读界面');
+        }
       }
       out.push('inspect / read ✓');
       // pickup → place（另一个插槽）
@@ -594,6 +602,194 @@ const CHECKS = [
       await tapE();
       if (!(await until(`__game.scenes.current.lighthouseOn !== ${on0}`, 2000))) throw new Error('E 没切换灯塔');
       out.push('灯塔 ✓');
+      return out.join('，');
+    },
+  },
+  {
+    name: 'v0.1-005 字幕 / 阅读界面 / 日志：时长 2.0 / 3.6 s、手动推进、样式与字号、5 页翻阅 + 第 6 页、右键 / Tab 关闭（含暂停后）、不能移动、日志更新提示与不重复、当前目标',
+    async run({ evaluate, cdp, sleep }) {
+      const out = [];
+      if ((await evaluate(`__game.scenes.current?.name`)) !== 'testbed') await cdp.goto('scene=testbed', 'testbed');
+      const until = async (expr, ms = 5000) => {
+        const end = Date.now() + ms;
+        let v;
+        while (Date.now() < end) {
+          v = await evaluate(expr);
+          if (v) return v;
+          await sleep(80);
+        }
+        return v;
+      };
+      if (!(await until(`__game.input.context === 'explore' && !__game.isPaused`, 30000))) throw new Error('测试场地没进 explore');
+      // 干净的进度（前面的检查读过告示）；事件记录
+      await evaluate(`(() => { __game.save.newGame('ch1', 'testbed'); __game.narrative.resetMemory(); window.__nx = [];
+        for (const n of ['subtitle:show', 'subtitle:hide', 'journal:updated', 'reader:open', 'reader:close', 'goal:changed']) __game.events.on(n, (p) => __nx.push([n, p]));
+        return 1; })()`);
+      const hides = () => `__nx.filter(([n]) => n === 'subtitle:hide').map(([, p]) => p)`;
+      const sub = `__game.ui.subtitles`;
+
+      // ---- 1. 时长：10 字（表内 ch1.s2.cups.inspect）2.0 s、30 字 3.6 s，到时自动消失
+      // 游戏时间按帧累加：无头 SwiftShader 每帧可能到 maxFrameDelta，允许 [时长, 时长 + 一帧上限]（精确值由 test:narrative 按 1/60 帧验）
+      const fmax = await evaluate(`__game.time.maxFrameDelta`);
+      const okDur = (p, d) => p && p.reason === 'timeout' && p.shown >= d - 1e-6 && p.shown <= d + fmax + 1e-6;
+      await evaluate(`${sub}.play(['ch1.s2.cups.inspect']); 1`);
+      const h1 = await until(`${hides()}.find((p) => p.id === 'ch1.s2.cups.inspect')`, 30000);
+      if (!okDur(h1, 2.0)) throw new Error('10 字行显示时长不对 ' + JSON.stringify(h1));
+      await evaluate(`${sub}.track.playText('${'一二三四五六七八九十'.repeat(3)}'); 1`);
+      const h2 = await until(`${hides()}.find((p) => p.id === '')`, 40000);
+      if (!okDur(h2, 3.6)) throw new Error('30 字行显示时长不对 ' + JSON.stringify(h2));
+      out.push(`时长 ${h1.shown.toFixed(2)} / ${h2.shown.toFixed(2)} s`);
+
+      // ---- 2. 样式：底部居中、无底框、浅阴影、汐的字色
+      await evaluate(`${sub}.play(['ch1.s1.boat.inspect', 'ch1.s1.tide_pillar.inspect']); 1`);
+      const style = await evaluate(`(() => { const el = document.querySelector('.subtitle-line'); const cs = getComputedStyle(el); const r = el.getBoundingClientRect();
+        return { text: el.textContent, hidden: el.hidden, bg: cs.backgroundColor, border: cs.borderTopStyle, shadow: cs.textShadow, color: cs.color,
+          cx: r.x + r.width / 2, bottom: r.bottom, w: innerWidth, h: innerHeight, size: cs.fontSize }; })()`);
+      if (style.hidden || style.text !== TEXT['ch1.s1.boat.inspect']) throw new Error('字幕没显示 ' + JSON.stringify(style));
+      if (Math.abs(style.cx - style.w / 2) > 2 || style.bottom < style.h * 0.8) throw new Error('字幕不在底部居中 ' + JSON.stringify(style));
+      if (style.bg !== 'rgba(0, 0, 0, 0)' || (style.border !== 'none' && style.border !== '')) throw new Error('字幕有底框 ' + JSON.stringify(style));
+      if (!style.shadow || style.shadow === 'none') throw new Error('字幕没有阴影');
+      if (style.color !== 'rgb(228, 232, 234)') throw new Error('汐的字色不对 ' + style.color);
+      // ---- 3. Space 立即推进（真实按键）；左键（指针锁定后的点击）也推进
+      await cdp.key('Space', ' ', 32);
+      const adv = await until(`${hides()}.find((p) => p.id === 'ch1.s1.boat.inspect')`, 3000);
+      if (!adv || adv.reason !== 'advance' || adv.shown > 1.5) throw new Error('Space 没有立即推进 ' + JSON.stringify(adv));
+      if ((await evaluate(`${sub}.current?.id`)) !== 'ch1.s1.tide_pillar.inspect') throw new Error('推进后不是下一行');
+      await cdp.click(640, 400);
+      await until(`document.pointerLockElement === document.querySelector('canvas')`, 3000);
+      if (await evaluate(`${sub}.current?.id !== 'ch1.s1.tide_pillar.inspect'`)) throw new Error('用于锁定指针的那一下点击不该推进字幕');
+      await cdp.click(640, 400);
+      const adv2 = await until(`${hides()}.find((p) => p.id === 'ch1.s1.tide_pillar.inspect')`, 3000);
+      if (!adv2 || adv2.reason !== 'advance') throw new Error('左键没推进 ' + JSON.stringify(adv2));
+      out.push('Space / 左键推进 ✓');
+      await evaluate(`document.exitPointerLock(); 1`);
+      await sleep(400);
+      if (await evaluate('__game.isPaused')) await evaluate('__game.resume()');
+      // 父亲的文字用次要色
+      await evaluate(`${sub}.play(['ch1.s1.goal.find_bell']); 1`);
+      const fc = await evaluate(`getComputedStyle(document.querySelector('.subtitle-line')).color`);
+      if (fc !== 'rgb(139, 149, 157)') throw new Error('父亲的文字字色不对 ' + fc);
+
+      // ---- 4. 字号三档：暂停菜单里点，立即生效
+      await cdp.key('Escape', 'Escape', 27);
+      if (!(await until(`__game.isPaused`, 3000))) throw new Error('Esc 没暂停');
+      const sizes = [];
+      for (const sz of ['s', 'l', 'm']) {
+        const b = await evaluate(`(() => { const r = document.querySelector('.pause-menu [data-size="${sz}"]').getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; })()`);
+        await cdp.click(b.x, b.y);
+        await sleep(100);
+        sizes.push(await evaluate(`getComputedStyle(document.querySelector('.subtitle-line')).fontSize + '/' + __game.settings.get('subtitleSize')`));
+      }
+      if (sizes.join(',') !== '18px/s,28px/l,22px/m') throw new Error('字号切换不对 ' + sizes.join(','));
+      const resume = await evaluate(`(() => { const b = document.querySelector('.pause-menu [data-act="resume"]').getBoundingClientRect(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 }; })()`);
+      await cdp.click(resume.x, resume.y);
+      await until(`!__game.isPaused`, 3000);
+      await evaluate(`${sub}.track.clear(); 1`);
+      out.push('字号 ' + sizes.map((x) => x.split('/')[0]).join(' / ') + ' ✓');
+
+      // ---- 5. 阅读界面：父亲日志 5 页，A/D 和箭头翻页，打开期间不能移动，首次阅读 → 日志更新提示
+      const goTo = (id) =>
+        evaluate(`(() => { const tb = __testbed; const s = tb.samples.stands['${id}']; tb.interaction.cancel(); tb.rig.body.teleport(s.position.clone()); tb.rig.controller.facing = s.facing; return 1; })()`);
+      const promptText = `((p) => (p && !p.hidden ? p.textContent : ''))(document.querySelector('.hud-prompt'))`;
+      await goTo('sample-journal');
+      if (!(await until(`/E\\s*阅读/.test(${promptText})`, 5000))) throw new Error('日志本旁没有「E 阅读」');
+      await cdp.key('KeyE', 'e', 69);
+      if (!(await until(`__game.ui.reader.isOpen`, 3000))) throw new Error('E 没打开阅读界面');
+      const rd = () => evaluate(`(() => { const r = __game.ui.reader; return { doc: r.docId, page: r.page, n: r.pageCount, body: document.querySelector('.reader-body').textContent, idx: document.querySelector('.reader-page').textContent, title: document.querySelector('.reader-title').textContent, ctx: __game.input.context, frozen: __game.isFrozen }; })()`);
+      let st = await rd();
+      const journalPages = TEXT['ch1.s2.journal.doc'];
+      if (st.doc !== 'ch1.s2.journal.doc' || st.n !== 5 || st.body !== journalPages[0] || st.idx !== '1 / 5') throw new Error('日志第 1 页不对 ' + JSON.stringify(st));
+      if (st.title !== TEXT['ui.doc_title.journal'] || st.ctx !== 'reading' || !st.frozen) throw new Error('阅读状态不对 ' + JSON.stringify(st));
+      const toast = await until(`(() => { const t = document.querySelector('.toast-left'); return t && !t.hidden ? t.textContent : ''; })()`, 2000);
+      if (toast !== TEXT['ch1.common.journal_updated']) throw new Error('首次阅读没弹「日志已更新」：' + toast);
+      // 不能移动：按住 W 1 s，角色不动
+      const p0 = await evaluate(`(() => { const b = __testbed.rig.body.position; return [b.x, b.z]; })()`);
+      await evaluate(`__game.input.setRaw('smoke', 'KeyW', true); 1`);
+      await sleep(1000);
+      await evaluate(`__game.input.setRaw('smoke', 'KeyW', false); 1`);
+      const p1 = await evaluate(`(() => { const b = __testbed.rig.body.position; return [b.x, b.z]; })()`);
+      if (Math.hypot(p1[0] - p0[0], p1[1] - p0[1]) > 1e-4) throw new Error('阅读时角色移动了 ' + JSON.stringify([p0, p1]));
+      // 翻页：D ×4 到第 5 页（每页文字对照），A 回一页，再点箭头翻回
+      for (let i = 1; i < 5; i++) {
+        await cdp.key('KeyD', 'd', 68);
+        await until(`__game.ui.reader.page === ${i}`, 2000);
+        st = await rd();
+        if (st.page !== i || st.body !== journalPages[i]) throw new Error(`D 翻到第 ${i + 1} 页不对 ` + JSON.stringify(st));
+      }
+      await cdp.key('KeyD', 'd', 68);
+      // 等这一下被某一帧消费掉（无头低帧率），再按 A
+      await until(`!__game.input.pressed.has('pageNext')`, 2000);
+      if ((await rd()).page !== 4) throw new Error('最后一页再按 D 不该再翻');
+      await cdp.key('KeyA', 'a', 65);
+      if (!(await until(`__game.ui.reader.page === 3`, 2000))) throw new Error('A 没翻回 ' + JSON.stringify(await rd()) + ' ' + JSON.stringify(await evaluate(`({ held: [...__game.input.rawHeld.entries()].filter(([, v]) => v.size).map(([k, v]) => k + ':' + [...v]), pressed: [...__game.input.pressed.keys()] })`)));
+      const arrow = await evaluate(`(() => { const r = document.querySelector('.reader-arrow[data-act="next"]').getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; })()`);
+      await cdp.click(arrow.x, arrow.y);
+      if (!(await until(`__game.ui.reader.page === 4 && document.querySelector('.reader-page').textContent === '5 / 5'`, 2000))) throw new Error('点箭头没翻页');
+      out.push('5 页翻阅（A/D + 箭头）✓，打开时不能移动 ✓，日志已更新 ✓');
+      // 右键关闭
+      await cdp.click(640, 600, 'right');
+      if (!(await until(`!__game.ui.reader.isOpen && __game.input.context === 'explore' && !__game.isFrozen`, 3000))) throw new Error('右键没关阅读界面');
+      const toastGone = await until(`document.querySelector('.toast-left').hidden`, 15000);
+      if (!toastGone) throw new Error('「日志已更新」没有消失');
+
+      // ---- 6. 再次阅读：不重复添加、不再提示；Esc 暂停 → 继续 → 第一下右键直接关闭
+      const upd0 = await evaluate(`__nx.filter(([n]) => n === 'journal:updated').length`);
+      await goTo('sample-journal');
+      await until(`/E\\s*阅读/.test(${promptText})`, 5000);
+      await cdp.key('KeyE', 'e', 69);
+      if (!(await until(`__game.ui.reader.isOpen`, 3000))) throw new Error('第二次 E 没打开');
+      await sleep(300);
+      const upd1 = await evaluate(`__nx.filter(([n]) => n === 'journal:updated').length`);
+      const toast2 = await evaluate(`!document.querySelector('.toast-left').hidden`);
+      if (upd1 !== upd0 || toast2) throw new Error('再次阅读不该再提示 / 添加');
+      if ((await evaluate(`__game.narrative.journal.length`)) !== 1) throw new Error('日志条目重复了');
+      await cdp.key('Escape', 'Escape', 27);
+      if (!(await until(`__game.isPaused && __game.input.context === 'menu'`, 3000))) throw new Error('阅读时 Esc 没暂停');
+      const rs = await evaluate(`(() => { const b = document.querySelector('.pause-menu [data-act="resume"]').getBoundingClientRect(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 }; })()`);
+      await cdp.click(rs.x, rs.y);
+      if (!(await until(`!__game.isPaused && __game.input.context === 'reading' && __game.ui.reader.isOpen`, 3000))) throw new Error('继续后应回到阅读界面');
+      await sleep(300);
+      await cdp.click(640, 600, 'right');
+      if (!(await until(`!__game.ui.reader.isOpen && __game.input.context === 'explore'`, 3000))) throw new Error('暂停继续后第一下右键没关阅读界面');
+      out.push('再读不重复 ✓，暂停→继续→右键一下关闭 ✓');
+
+      // ---- 7. 日志（J）：分组条目、当前目标由代码更新、点条目打开阅读、Tab 关阅读回到日志、J 关日志
+      await evaluate(`__game.narrative.setGoal('ch1.s1.goal.find_bell'); 1`);
+      await cdp.key('KeyJ', 'j', 74);
+      if (!(await until(`__game.ui.journal.isOpen && !document.querySelector('.journal').hidden`, 3000))) throw new Error('J 没打开日志');
+      const jl = await evaluate(`(() => { const el = document.querySelector('.journal'); return { goal: el.querySelector('.journal-goal-text').textContent, chapter: el.querySelector('.journal-chapter h3')?.textContent, entries: [...el.querySelectorAll('.journal-entry')].map((b) => [b.closest('.journal-group').dataset.group, b.dataset.doc, b.textContent]), ctx: __game.input.context, frozen: __game.isFrozen }; })()`);
+      if (jl.goal !== TEXT['ch1.s1.goal.find_bell']) throw new Error('日志顶部目标不对 ' + jl.goal);
+      if (jl.chapter !== TEXT['ui.journal.chapter1'] || JSON.stringify(jl.entries) !== JSON.stringify([['father', 'ch1.s2.journal.doc', TEXT['ui.doc_title.journal']]])) throw new Error('日志条目不对 ' + JSON.stringify(jl));
+      if (jl.ctx !== 'reading' || !jl.frozen) throw new Error('日志打开时应冻结游戏 ' + JSON.stringify(jl));
+      await evaluate(`__game.narrative.setGoal('ch1.s1.goal.reef_path'); 1`);
+      const g2 = await until(`document.querySelector('.journal-goal-text').textContent === ${JSON.stringify(TEXT['ch1.s1.goal.reef_path'])}`, 2000);
+      if (!g2) throw new Error('当前目标没随代码更新');
+      // 结尾演出写下第 6 页
+      await evaluate(`__game.narrative.unlockOutroEntry(); 1`);
+      const en = await evaluate(`(() => { const r = document.querySelector('.journal-entry[data-doc="ch1.s2.journal.doc"]').getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; })()`);
+      await cdp.click(en.x, en.y);
+      if (!(await until(`__game.ui.reader.isOpen`, 3000))) throw new Error('点日志条目没打开阅读界面');
+      for (let i = 1; i <= 5; i++) {
+        await cdp.key('KeyD', 'd', 68);
+        await until(`__game.ui.reader.page === ${i}`, 2000);
+      }
+      st = await rd();
+      if (st.n !== 6 || st.page !== 5 || st.body !== TEXT['ch1.outro.journal_entry'] || st.idx !== '6 / 6') throw new Error('结尾后第 6 页不对 ' + JSON.stringify(st));
+      await cdp.key('Tab', 'Tab', 9);
+      if (!(await until(`!__game.ui.reader.isOpen && __game.ui.journal.isOpen && __game.input.context === 'reading'`, 3000))) throw new Error('Tab 关阅读后应回到日志');
+      await cdp.key('KeyJ', 'j', 74);
+      if (!(await until(`!__game.ui.journal.isOpen && __game.input.context === 'explore' && !__game.isFrozen`, 3000))) throw new Error('J 没关日志');
+      out.push('日志分组 / 目标更新 / 第 6 页 ✓');
+      // 第二种文档（告示）进「信与纸条」
+      await goTo('sample-read');
+      await until(`/E\\s*阅读/.test(${promptText})`, 5000);
+      await cdp.key('KeyE', 'e', 69);
+      await until(`__game.ui.reader.isOpen`, 3000);
+      await cdp.key('Tab', 'Tab', 9);
+      await until(`!__game.ui.reader.isOpen`, 3000);
+      const groups = await evaluate(`__game.narrative.journal.map((e) => e.group + ':' + e.docId).join(',')`);
+      if (groups !== 'father:ch1.s2.journal.doc,letters:ch1.s1.notice.doc') throw new Error('日志分组不对 ' + groups);
+      out.push('信与纸条分组 ✓');
       return out.join('，');
     },
   },

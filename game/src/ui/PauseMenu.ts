@@ -4,6 +4,14 @@ import { QUALITY_PRESETS, QualityManager, type QualityTier } from '@/config/qual
 /** 文案 text-ch1 `ui.settings.quality_auto_note`（本地化系统 / 完整设置界面在 008 接入） */
 export const QUALITY_AUTO_NOTE = '已根据这台电脑自动选择画质，可以随时改回。';
 import { isFullscreenSupported, toggleFullscreen } from '@/platform/fullscreen';
+import { t, type TextId } from '@/content/text';
+import type { SubtitleSize } from '@/systems/save/Settings';
+
+const SUBTITLE_SIZE_LABELS: Record<SubtitleSize, TextId> = {
+  s: 'ui.settings.subtitle_small',
+  m: 'ui.settings.subtitle_medium',
+  l: 'ui.settings.subtitle_large',
+};
 
 /**
  * Esc 暂停菜单：继续、画质档位、鼠标灵敏度、Y 轴反转、FPS 显示、全屏、静音。
@@ -17,6 +25,7 @@ export class PauseMenu {
   private sensInput: HTMLInputElement;
   private sensValue: HTMLSpanElement;
   private invertBtn: HTMLButtonElement;
+  private subtitleButtons = new Map<SubtitleSize, HTMLButtonElement>();
 
   constructor(
     parent: HTMLElement,
@@ -37,6 +46,10 @@ export class PauseMenu {
         <p class="menu-note" data-role="quality-note" data-key="ui.settings.quality_auto_note" hidden></p>
         <div class="menu-row"><span>鼠标灵敏度</span><span class="menu-range"><input type="range" min="0.1" max="3" step="0.1" data-act="sens" aria-label="鼠标灵敏度"><span data-role="sens-value"></span></span></div>
         <div class="menu-row"><span>Y 轴反转</span><button type="button" class="menu-btn small" data-act="invert"></button></div>
+        <div class="menu-row">
+          <span data-role="subtitle-label"></span>
+          <div class="seg" data-role="subtitle-size"></div>
+        </div>
         <div class="menu-row"><span>帧率显示</span><button type="button" class="menu-btn small" data-act="fps"></button></div>
         <div class="menu-row"><span>声音</span><button type="button" class="menu-btn small" data-act="mute"></button></div>
         <button type="button" class="menu-btn" data-act="fullscreen">全屏切换</button>
@@ -57,6 +70,21 @@ export class PauseMenu {
       });
       seg.appendChild(b);
       this.qualityButtons.set(tier, b);
+    }
+    this.el.querySelector('[data-role="subtitle-label"]')!.textContent = t('ui.settings.subtitle_size');
+    const subSeg = this.el.querySelector<HTMLDivElement>('[data-role="subtitle-size"]')!;
+    for (const size of ['s', 'm', 'l'] as const) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'seg-btn';
+      b.dataset.size = size;
+      b.textContent = t(SUBTITLE_SIZE_LABELS[size]);
+      b.addEventListener('click', () => {
+        this.game.settings.set('subtitleSize', size);
+        this.refresh();
+      });
+      subSeg.appendChild(b);
+      this.subtitleButtons.set(size, b);
     }
     this.fpsBtn = this.el.querySelector<HTMLButtonElement>('[data-act="fps"]')!;
     this.muteBtn = this.el.querySelector<HTMLButtonElement>('[data-act="mute"]')!;
@@ -98,6 +126,8 @@ export class PauseMenu {
   private refresh(): void {
     const q = this.game.quality;
     for (const [tier, b] of this.qualityButtons) b.classList.toggle('active', tier === q.tier);
+    const subSize = this.game.settings.get('subtitleSize');
+    for (const [size, b] of this.subtitleButtons) b.classList.toggle('active', size === subSize);
     this.fpsBtn.textContent = this.game.ui.fps.visible ? '开' : '关';
     this.muteBtn.textContent = this.game.audio.muted ? '静音' : '开';
     const sens = this.game.settings.get('mouseSensitivity');

@@ -8,7 +8,7 @@ import { RotatablePart } from '@/systems/interaction/RotatablePart';
 
 /**
  * 测试场地的交互示例（v0.1-004 验收：八种交互各一例）。白盒几何，全部在 x = 13–18、z = -3–10 一带，
- * 玩家沿 x = 16 的「交互走廊」走：东侧 inspect / read / pickup / place-A，西侧 use / hold / place-B / push；
+ * 玩家沿 x = 16 的「交互走廊」走：东侧 inspect / read / pickup / place-A / 多页日志（z = 10，005），西侧 use / hold / place-B / push；
  * puzzle 是原来西边的测试机关底座（v0.1-003 机位）上的两个部件（单轴转盘 + 双轴小镜）。
  */
 export interface InteractionSamples {
@@ -85,6 +85,13 @@ export function buildInteractionSamples(opts: {
   physics.addMesh(post);
   ix.add(new Interactable({ id: 'sample-read', kind: 'read', object: board, textId: 'ch1.s1.notice.doc', focus: panel }));
   addStand('sample-read', LANE_X, 1, 17.7, 1);
+
+  // read（多页）：桌上父亲的日志（ch1.s2.journal.doc，5 页；v0.1-005 翻页验收）
+  const desk = solid(mesh(new THREE.BoxGeometry(0.6, 0.75, 0.9), wood, 'sample-journal-desk', 17.6, 0.375, 10));
+  const book = mesh(new THREE.BoxGeometry(0.22, 0.05, 0.3), mat(0x4b3b2e), 'sample-journal', 17.55, 0.775, 10);
+  root.add(book);
+  ix.add(new Interactable({ id: 'sample-journal', kind: 'read', object: book, textId: 'ch1.s2.journal.doc', focus: desk }));
+  addStand('sample-journal', LANE_X, 10, 17.6, 10);
 
   // pickup：底座上的风灯（底座本身也是一个 socket，风灯可以放回来）
   const lantern = new THREE.Group();

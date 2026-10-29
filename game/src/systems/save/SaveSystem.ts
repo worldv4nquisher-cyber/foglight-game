@@ -196,6 +196,11 @@ export class SaveSystem {
     return this.progress?.playTimeSec ?? 0;
   }
 
+  /** 已读文档 ID（首次阅读顺序，Set 保持插入顺序；日志 005 按此排列） */
+  readDocIds(): readonly string[] {
+    return this.progress ? [...this.progress.readDocs] : [];
+  }
+
   markDocRead(id: string): void {
     this.progress?.readDocs.add(id);
   }

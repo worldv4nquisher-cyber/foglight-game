@@ -15,6 +15,7 @@ import { VisibilityWatcher } from '@/platform/visibility';
 import { nativeBridge } from '@/platform/native';
 import { PostFX } from '@/render/PostFX';
 import { QualityBenchmark, parseSimulateFps } from '@/systems/QualityBenchmark';
+import { NarrativeState } from '@/systems/NarrativeState';
 
 /**
  * 游戏根对象：持有渲染器与各全局服务，驱动主循环。
@@ -31,6 +32,8 @@ export class Game {
   readonly settings = new Settings();
   /** 存档（foglight.save.v1） */
   readonly save = new SaveSystem();
+  /** 已读文档 / 只一次字幕 / 当前目标（005；有进度时读写存档） */
+  readonly narrative: NarrativeState;
   readonly quality: QualityManager;
   /** 首次启动的 3 秒画质自动检测（第一次进入 S1 时由场景调用 start()） */
   readonly benchmark: QualityBenchmark;
@@ -42,6 +45,8 @@ export class Game {
   readonly postfx: PostFX;
 
   private paused = false;
+  /** 冻结计数（阅读界面 / 日志打开时 > 0）：游戏逻辑不跑，UI 照常 */
+  private freezeCount = 0;
   private running = false;
   private rafId = 0;
   private visibility: VisibilityWatcher;
@@ -67,6 +72,7 @@ export class Game {
     // F3 性能面板要整帧（含后处理各 pass）的 draw call / 三角面：每帧开头手动清零
     this.renderer.info.autoReset = false;
 
+    this.narrative = new NarrativeState(this.events, this.save);
     this.quality = new QualityManager(this.events, this.renderer, this.settings);
     this.benchmark = new QualityBenchmark(this.quality, this.settings, this.events, {
       simulateFps: parseSimulateFps(location.search),
@@ -130,6 +136,23 @@ export class Game {
     return this.paused;
   }
 
+  /** 阅读界面 / 日志打开中：游戏逻辑暂停（fixedUpdate、scene.update、游玩计时都不跑），渲染和 UI 照常 */
+  get isFrozen(): boolean {
+    return this.freezeCount > 0;
+  }
+
+  /** 冻结游戏逻辑，返回只解这一层的函数（可嵌套：日志里再打开阅读界面） */
+  freeze(): () => void {
+    this.freezeCount++;
+    let done = false;
+    return () => {
+      if (done) return;
+      done = true;
+      this.freezeCount = Math.max(0, this.freezeCount - 1);
+      if (this.freezeCount === 0) this.time.resetClock();
+    };
+  }
+
   start(): void {
     if (this.running) return;
     this.running = true;
@@ -171,13 +194,14 @@ export class Game {
     this.input.beginFrame();
     if (this.input.consumePressed('pause')) this.togglePause();
 
-    const steps = time.beginFrame(now, this.paused);
+    const halted = this.paused || this.freezeCount > 0;
+    const steps = time.beginFrame(now, halted);
     const scene = this.scenes.current;
     if (scene) {
       for (let i = 0; i < steps; i++) {
         scene.fixedUpdate(time.fixedDelta);
       }
-      if (!this.paused) {
+      if (!halted) {
         scene.update(time.delta, time.alpha);
         if (scene.savePoint) this.save.tick(time.delta);
       }
