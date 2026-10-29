@@ -11,6 +11,7 @@ import { artEnabled } from '@/config/debug';
 import { applyMaterialHints } from '@/render/materialHints';
 import { buildLods } from '@/render/lod';
 import { prepareOutlineNormals } from './vertexColors';
+import { pendingArtPresent } from './artPresent';
 import { fontStats, forgetFont, loadFontOnce } from './fontLoader';
 import { entriesForGroup, type AssetEntry, type AssetGroup } from './manifest';
 import { createPlaceholderModel, createPlaceholderTexture, createMissingTexture } from './placeholders';
@@ -193,6 +194,10 @@ export class AssetLoader {
       if (this.has(e.key)) return false;
       if (e.art && !this.artEnabled) {
         this.missing.add(e.key); // ?art=0：当作没交付，场景用白盒
+        return false;
+      }
+      if (e.pending && !pendingArtPresent(e.url)) {
+        this.missing.add(e.key); // 约定文件还没交付：不发请求（不 404），场景用白盒
         return false;
       }
       return true;

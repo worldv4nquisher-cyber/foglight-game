@@ -42,6 +42,11 @@ export interface AssetEntry {
    * `?art=0`（以及冒烟测试默认）不加载，按缺失处理（场景退回白盒）。
    */
   art?: boolean;
+  /**
+   * 约定了文件名、美术还没交付（021 / 022 解谜道具）：只有构建 / dev 启动时 ../art 里真有这个文件才加载，
+   * 否则直接按缺失处理（不发请求、不 404）。文件放进 art/ 后重新 `npm run build`（dev 重启）即生效，代码不用改。
+   */
+  pending?: boolean;
   /** 仅 font：CSS font-family 名（styles.css 的 --ui-font / --ui-serif 排在最前） */
   family?: string;
 }
@@ -73,6 +78,9 @@ export const manifest: AssetEntry[] = [
   { key: 'env-fish-shed-ruin', type: 'gltf', url: 'assets/art/models/env/env-fish-shed-ruin.glb', group: 's1', optional: true, art: true },
   { key: 'env-net-rack-a', type: 'gltf', url: 'assets/art/models/env/env-net-rack-a.glb', group: 's1', optional: true, art: true },
   { key: 'env-net-rack-b', type: 'gltf', url: 'assets/art/models/env/env-net-rack-b.glb', group: 's1', optional: true, art: true },
+  // 021 解谜道具（未交付，pending：文件到了自动加载，挂点 / 节点见 src/levels/s1/artSlots.ts）
+  { key: 'prop-tide-bell', type: 'gltf', url: 'assets/art/models/props/prop-tide-bell.glb', group: 's1', optional: true, art: true, pending: true },
+  { key: 'prop-raft-s1', type: 'gltf', url: 'assets/art/models/props/prop-raft-s1.glb', group: 's1', optional: true, art: true, pending: true },
   { key: 'env-lighthouse-silhouette-far', type: 'gltf', url: 'assets/art/models/env/env-lighthouse-silhouette-far.glb', group: 's1', optional: true, art: true },
   { key: 'env-lighthouse-island-main-s3tower', type: 'gltf', url: 'assets/art/models/env/env-lighthouse-island-main-s3tower.glb', group: 's1', optional: true, art: true },
   { key: 'env-lighthouse-ch1', type: 'gltf', url: 'assets/art/models/env/env-lighthouse-ch1.glb', group: 's1', optional: true, art: true },
@@ -87,6 +95,11 @@ export const manifest: AssetEntry[] = [
   { key: 'prop-lantern-brass', type: 'gltf', url: 'assets/art/models/props/prop-lantern-brass.glb', group: 's2', optional: true, art: true },
   // 021 院子灯台（东 / 西两份同一 GLB，摆在院墙 lamp-east/west-socket）
   { key: 'prop-lantern-stand-s2', type: 'gltf', url: 'assets/art/models/props/prop-lantern-stand-s2.glb', group: 's2', optional: true, art: true },
+  // 021 解谜道具（未交付，pending；挂点 / 节点见 src/levels/s2/artSlots.ts）
+  { key: 'prop-mirror-stand-s2', type: 'gltf', url: 'assets/art/models/props/prop-mirror-stand-s2.glb', group: 's2', optional: true, art: true, pending: true },
+  { key: 'prop-light-lock-s2', type: 'gltf', url: 'assets/art/models/props/prop-light-lock-s2.glb', group: 's2', optional: true, art: true, pending: true },
+  { key: 'prop-white-stones-s2', type: 'gltf', url: 'assets/art/models/props/prop-white-stones-s2.glb', group: 's2', optional: true, art: true, pending: true },
+  { key: 'prop-dial-gate-s2', type: 'gltf', url: 'assets/art/models/props/prop-dial-gate-s2.glb', group: 's2', optional: true, art: true, pending: true },
   // 017 收尾：地窖钥匙（架上放 env-cellar-s2-key-socket；xi-pickup-shelf grab 帧挂 middle_03_r，extras.attach）
   { key: 'prop-key-cellar-s2', type: 'gltf', url: 'assets/art/models/props/prop-key-cellar-s2.glb', group: 's2', optional: true, art: true },
   { key: 'env-cellar-door-s2', type: 'gltf', url: 'assets/art/models/env/env-cellar-door-s2.glb', group: 's2', optional: true, art: true },
@@ -103,6 +116,12 @@ export const manifest: AssetEntry[] = [
   { key: 'prop-fresnel-lens-ch1', type: 'gltf', url: 'assets/art/models/props/prop-fresnel-lens-ch1.glb', group: 's3', optional: true, art: true },
   { key: 'env-rock-islet-a', type: 'gltf', url: 'assets/art/models/env/env-rock-islet-a.glb', group: 's3', optional: true, art: true },
   { key: 'env-stone-bridge-s3', type: 'gltf', url: 'assets/art/models/env/env-stone-bridge-s3.glb', group: 's3', optional: true, art: true },
+  // 022 解谜道具（未交付，pending；挂点 / 节点见 src/levels/s3/artSlots.ts）。潮汐钟与 S1 同一文件，s3 组另登记一个 key（同 s2far 做法）
+  { key: 'prop-tide-bell-s3', type: 'gltf', url: 'assets/art/models/props/prop-tide-bell.glb', group: 's3', optional: true, art: true, pending: true },
+  { key: 'prop-oil-valve-s3', type: 'gltf', url: 'assets/art/models/props/prop-oil-valve-s3.glb', group: 's3', optional: true, art: true, pending: true },
+  { key: 'prop-guide-mirror-window-s3', type: 'gltf', url: 'assets/art/models/props/prop-guide-mirror-window-s3.glb', group: 's3', optional: true, art: true, pending: true },
+  { key: 'prop-guide-mirror-wall-s3', type: 'gltf', url: 'assets/art/models/props/prop-guide-mirror-wall-s3.glb', group: 's3', optional: true, art: true, pending: true },
+  { key: 'prop-ignition-port-s3', type: 'gltf', url: 'assets/art/models/props/prop-ignition-port-s3.glb', group: 's3', optional: true, art: true, pending: true },
   // ---- 更多示例（取消注释即可登记）----
   // { key: 'ground-diffuse', type: 'ktx2', url: 'assets/textures/ground-diffuse.ktx2', group: 's1', optional: true },
   // { key: 'sfx-footstep', type: 'audio', url: 'assets/audio/sfx-footstep.ogg', group: 'common', optional: true },

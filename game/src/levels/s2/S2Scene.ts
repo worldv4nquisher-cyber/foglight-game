@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import { missingGreyboxNodes, mountArtSlots, type ArtSlots } from '../artSlots';
+import { S2_ART_SLOTS } from './artSlots';
 import type { Game } from '@/core/Game';
 import { gameplay } from '@/config/gameplay';
 import { greyboxVisible } from '@/config/debug';
@@ -28,6 +30,8 @@ export class S2Scene extends LevelScene {
   greybox!: S2Greybox;
   art!: S2Art;
   puzzles!: S2Puzzles;
+  artSlots: ArtSlots | null = null;
+  artSlotGreyboxMissing: string[] = [];
   private readonly colliderOf = new Map<THREE.Mesh, Collider>();
   private readonly mats = defaultS2GreyboxMaterials();
 
@@ -76,6 +80,10 @@ export class S2Scene extends LevelScene {
       beamDebug: beamDebugEnabled,
     });
     this.cleanups.push(() => this.puzzles.dispose());
+    // 021 / 022 未交付道具的替换入口（文件到了自动挂上，白盒逻辑不变）
+    this.artSlots = mountArtSlots(this.game.assets, this.scene, S2_ART_SLOTS, { showGreybox: greyboxVisible });
+    this.artSlotGreyboxMissing = missingGreyboxNodes(this.scene, S2_ART_SLOTS);
+    if (this.artSlotGreyboxMissing.length) console.warn('[art-slot] 白盒节点名对不上：' + this.artSlotGreyboxMissing.join('、'));
   }
 
   /** 观察点上替代 E 提示（text-ch1：ch1.s2.viewpoint.prompt） */
@@ -93,6 +101,7 @@ export class S2Scene extends LevelScene {
     super.update(dt, alpha);
     if (!this.rig) return;
     this.puzzles.update(dt);
+    this.artSlots?.update();
     if (this.game.ui.debug.visible) {
       const s = this.puzzles.state;
       const b = this.puzzles.beam;

@@ -73,6 +73,13 @@ function manifestArtUrls(): string[] {
   return [...src.matchAll(/^\s*\{[^\n]*url:\s*'(assets\/art\/[^']+)'/gm)].map((m) => m[1] ?? '');
 }
 
+/** manifest 里 pending（约定文件名、未交付）的美术 url，以及其中 ../art 里已经存在的 */
+function pendingArtUrls(): { all: string[]; present: string[] } {
+  const src = readFileSync(fileURLToPath(new URL('./src/assets/manifest.ts', import.meta.url)), 'utf8');
+  const all = [...src.matchAll(/^\s*\{[^\n]*url:\s*'(assets\/art\/[^']+)'[^\n]*pending:\s*true/gm)].map((m) => m[1] ?? '');
+  return { all, present: all.filter((u) => !!artFile(u.slice(ART_PREFIX.length))) };
+}
+
 function artAssets(): Plugin {
   let outDir = 'dist';
   return {
@@ -102,6 +109,7 @@ function artAssets(): Plugin {
         return;
       }
       const todo = manifestArtUrls().map((u) => u.slice(ART_PREFIX.length));
+      const pending = new Set(pendingArtUrls().all);
       const done = new Set<string>();
       while (todo.length) {
         const rel = posix.normalize(todo.pop()!);
@@ -109,6 +117,7 @@ function artAssets(): Plugin {
         done.add(rel);
         const abs = artFile(rel);
         if (!abs) {
+          if (pending.has(ART_PREFIX + rel)) continue; // 约定文件未交付：运行时不请求
           this.warn(`清单里的美术资源 ${rel} 不在 ../art 里（运行时用占位）`);
           continue;
         }
@@ -125,6 +134,8 @@ export default defineConfig({
   // 相对路径，方便以后 Capacitor / Electron 以 file:// 或本地 webview 加载
   base: './',
   plugins: [threeDecodersWasmOnly(), artAssets()],
+  // 021 / 022 未交付道具：只把 ../art 里已有的 pending 文件告诉运行时（其余不请求）；交付后重新 build / 重启 dev
+  define: { __FOGLIGHT_PENDING_ART__: JSON.stringify(pendingArtUrls().present) },
   resolve: {
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
   },

@@ -21,6 +21,11 @@ import { applyMaterialHints } from '@/render/materialHints';
 import { QUALITY_PRESETS } from '@/config/quality';
 import { gameplay } from '@/config/gameplay';
 import { artLanternFrame } from '@/levels/s2/lantern';
+import { mountArtSlots } from '@/levels/artSlots';
+import { S1_ART_SLOTS } from '@/levels/s1/artSlots';
+import { S2_ART_SLOTS } from '@/levels/s2/artSlots';
+import { S3_ART_SLOTS } from '@/levels/s3/artSlots';
+import { manifest } from '@/assets/manifest';
 import { S2 } from '@/levels/s2/layout';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -70,6 +75,57 @@ function instanceBox(set, k, level = 0) {
   if (!geo.boundingBox) geo.computeBoundingBox();
   return geo.boundingBox.clone().applyMatrix4(set.instanceMatrix(k, level));
 }
+
+await test('021 / 022 替换入口（合成）：没交付不挂；交付后挂到 socket、对齐白盒节点、drive 跟白盒转、白盒网格隐藏（物理不动）、自发光清零', () => {
+  const pending = manifest.filter((e) => e.pending).map((e) => e.key);
+  for (const spec of [...S1_ART_SLOTS, ...S2_ART_SLOTS, ...S3_ART_SLOTS]) assert.ok(pending.includes(spec.key), `${spec.key} 要在 manifest 里登记为 pending`);
+  const scene = new THREE.Group();
+  const socket = new THREE.Object3D();
+  socket.name = 'gate-socket';
+  socket.position.set(5, 0, 2);
+  scene.add(socket);
+  const hinge = new THREE.Group();
+  hinge.name = 'gb-hinge';
+  hinge.position.set(5.5, 0, 2);
+  const leaf = new THREE.Mesh(new THREE.BoxGeometry(1, 2, 0.1));
+  leaf.name = 'gb-leaf';
+  hinge.add(leaf);
+  scene.add(hinge);
+  const mkArt = () => {
+    const r = new THREE.Group();
+    const door = new THREE.Group();
+    door.name = 'prop-x-gate-door';
+    door.position.set(0.4, 0, 0);
+    const m = new THREE.Mesh(new THREE.BoxGeometry(1, 2, 0.1), new THREE.MeshStandardMaterial({ emissive: 0xffaa00 }));
+    door.add(m);
+    const col = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1));
+    col.name = 'prop-x-collider';
+    r.add(door, col);
+    return r;
+  };
+  const spec = [{ key: 'prop-x', at: ['missing-socket', 'gate-socket'], align: { art: 'gate-door', logic: 'gb-hinge' }, drive: [{ art: 'gate-door', logic: 'gb-hinge' }], hide: ['gb-hinge'] }];
+  const none = mountArtSlots({ has: () => false, getModel: mkArt }, scene, spec);
+  assert.equal(none.mounted.length, 0, '没交付不挂');
+  assert.ok(leaf.visible, '没交付白盒照常显示');
+  const s = mountArtSlots({ has: () => true, getModel: mkArt }, scene, spec);
+  assert.equal(s.mounted.length, 1);
+  const art = s.mounted[0].model;
+  assert.equal(art.parent, socket, '挂到第一个存在的挂点');
+  scene.updateMatrixWorld(true);
+  const door = art.getObjectByName('prop-x-gate-door');
+  const dw = door.getWorldPosition(new THREE.Vector3());
+  near(dw.distanceTo(hinge.position), 0, 1e-6, '门扇节点对齐白盒合页');
+  assert.equal(leaf.visible, false, '白盒网格隐藏');
+  assert.equal(art.getObjectByName('prop-x-collider').visible, false, '美术 -collider 隐藏');
+  let glow = 0;
+  art.traverse((o) => o.isMesh && o.material.emissive?.getHex() && glow++);
+  assert.equal(glow, 0, '自发光清零');
+  hinge.rotation.y = 1.2;
+  s.update();
+  near(new THREE.Euler().setFromQuaternion(door.quaternion).y, 1.2, 1e-6, 'drive 跟白盒转');
+  const keys = [...S1_ART_SLOTS, ...S2_ART_SLOTS, ...S3_ART_SLOTS].length;
+  return `合成门：挂点回退 / 对齐 / 跟转 / 隐藏 ✓；表里 ${keys} 处摆放全部登记为 pending`;
+});
 
 await test('岩石实例化（合成）：实例矩阵乘上 _lodN 节点矩阵，顶面 = 摆放 y + 节点平移 + 半高', () => {
   const model = syntheticRock();

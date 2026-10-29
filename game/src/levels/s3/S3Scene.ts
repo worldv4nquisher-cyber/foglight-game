@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import { missingGreyboxNodes, mountArtSlots, type ArtSlots } from '../artSlots';
+import { S3_ART_SLOTS } from './artSlots';
 import type { Game } from '@/core/Game';
 import { gameplay } from '@/config/gameplay';
 import { beamDebugEnabled, greyboxVisible } from '@/config/debug';
@@ -30,6 +32,8 @@ export class S3Scene extends LevelScene {
   greybox!: S3Greybox;
   art!: S3Art;
   puzzles!: S3Puzzles;
+  artSlots: ArtSlots | null = null;
+  artSlotGreyboxMissing: string[] = [];
   private readonly colliderOf = new Map<THREE.Mesh, Collider>();
   private readonly mats = defaultS3GreyboxMaterials();
   private ending = false;
@@ -90,6 +94,10 @@ export class S3Scene extends LevelScene {
     this.tides.add(this.puzzles.tide);
     this.bells.push(this.puzzles.bell);
     this.cleanups.push(() => this.puzzles.dispose());
+    // 021 / 022 未交付道具的替换入口（文件到了自动挂上，白盒逻辑不变）
+    this.artSlots = mountArtSlots(this.game.assets, this.scene, S3_ART_SLOTS, { showGreybox: greyboxVisible });
+    this.artSlotGreyboxMissing = missingGreyboxNodes(this.scene, S3_ART_SLOTS);
+    if (this.artSlotGreyboxMissing.length) console.warn('[art-slot] 白盒节点名对不上：' + this.artSlotGreyboxMissing.join('、'));
   }
 
   /**
@@ -122,6 +130,7 @@ export class S3Scene extends LevelScene {
     super.update(dt, alpha);
     if (!this.rig) return;
     this.puzzles.update(dt);
+    this.artSlots?.update();
     if (this.game.ui.debug.visible) {
       const b = this.puzzles.beam;
       const m = b.mirrors;

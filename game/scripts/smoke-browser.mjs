@@ -2073,6 +2073,14 @@ const CHECKS = [
       const dt = (await clock()).e - t0;
       const lp = await evaluate(`__s2.puzzles.lantern.parent?.name`);
       if (lp !== 'desk-lantern-s2-socket') throw new Error('风灯没上书桌 ' + lp);
+      // 021 美术风灯 / 灯台：风灯组里只有美术灯（提手 = 原点 → 书桌提手 3.75 + 0.28），发光材质保留；灯台在院墙 socket，风灯 socket = 美术 -socket
+      const art21 = await evaluate(`(() => { const L = __s2.puzzles.lantern; const a = L.getObjectByName('prop-lantern-brass'); if (!a) return null; let glow = 0; a.traverse((o) => { if (o.isMesh && o.visible) for (const m of [o.material].flat()) if (m.emissive && m.emissive.getHex() !== 0) glow++; }); const y = L.getWorldPosition(new L.position.constructor()).y; const st = ['east', 'west'].map((k) => { const s = __s2.art.lampStands[k]; const lamp = __s2.puzzles.beam.lamps[k]; if (!s) return null; const w = s.getObjectByName('prop-lantern-stand-s2-socket').getWorldPosition(new L.position.constructor()); return { parent: s.parent?.name, d: w.distanceTo(lamp.socket.getWorldPosition(new L.position.constructor())), gb: lamp.stand.children.some((c) => c.isMesh && c.visible) }; }); let gb = 0; L.traverse((o) => { if (o.isMesh && o.visible) { let p = o; while (p && p !== a) p = p.parent; if (!p) gb++; } }); return { gb, glow, y, st }; })()`);
+      if (!art21) throw new Error('art=1 风灯组里没有 prop-lantern-brass');
+      if (art21.gb || !art21.glow || Math.abs(art21.y - 4.03) > 0.01) throw new Error('美术风灯不对 ' + JSON.stringify(art21));
+      for (const [i, k] of ['east', 'west'].entries()) {
+        const st = art21.st[i];
+        if (!st || st.parent !== `env-courtyard-wall-s2-lamp-${k}-socket` || st.d > 1e-3 || st.gb) throw new Error(`${k} 灯台不对 ` + JSON.stringify(st));
+      }
       if (dt < 1.8 - 0.05) throw new Error(`xi-place-table 1.8 s 没播完就开了日志（${dt.toFixed(2)} s）`);
       if (await evaluate(`__s2.rig.animator.posing`)) throw new Error('动作结束没 clearPose');
       await evaluate(`__game.ui.reader.close(); 1`);
@@ -2106,7 +2114,7 @@ const CHECKS = [
       await until(`false`, 300);
       const wetOut = await evaluate(`__s2.rig.look.wetTarget`);
       if (wetIn.rain && wetOut !== 1) throw new Error('小院下雨应淋湿 ' + wetOut);
-      return `xi-place-table ${dt.toFixed(2)} s 后开日志、风灯上桌 ✓；钥匙 xi-pickup-shelf、socket 上 → grab 帧挂 middle_03_r（${att.kids.join('/')}，跳动 ${(jump * 100).toFixed(1)} cm，LOD0）、播完收起解锁 ✓；地窖 wetTarget 0 / 小院 ${wetOut}（雨 ${wetIn.rain ? '开' : '关'}）✓`;
+      return `xi-place-table ${dt.toFixed(2)} s 后开日志、风灯上桌 ✓（021 美术风灯提手 y ${art21.y.toFixed(3)}、发光保留、东西灯台在院墙 socket）；钥匙 xi-pickup-shelf、socket 上 → grab 帧挂 middle_03_r（${att.kids.join('/')}，跳动 ${(jump * 100).toFixed(1)} cm，LOD0）、播完收起解锁 ✓；地窖 wetTarget 0 / 小院 ${wetOut}（雨 ${wetIn.rain ? '开' : '关'}）✓`;
     },
   },
   {
@@ -2437,6 +2445,29 @@ const CHECKS = [
       await evaluate(`localStorage.removeItem('foglight.save.v1'); 1`);
       try { await cdp.goto(''); } catch (e) { throw new Error('回 S1 失败：' + e.message, { cause: e }); }
       return out.join('，');
+    },
+  },
+  {
+    name: 'v0.1-021/022 替换入口 art=1：S1 / S2 / S3 表里的白盒节点名都在、未交付道具不发请求（不 404）、白盒照常显示',
+    async run({ evaluate, cdp, sleep }) {
+      const out = [];
+      for (const [q, scene, v] of [['s1', 's1-ebb-shore', '__s1'], ['s2', 's2-keeper-house', '__s2'], ['s3', 's3-lighthouse', '__s3']]) {
+        await evaluate(`localStorage.removeItem('foglight.save.v1'); 1`);
+        await cdp.goto(`debug=1&scene=${q}&art=1`, scene);
+        let ok = false;
+        for (let i = 0; i < 600 && !ok; i++) {
+          ok = await evaluate(`!!(window.${v} && ${v}.artSlots)`);
+          if (!ok) await sleep(100);
+        }
+        if (!ok) throw new Error(`${q} 没就绪`);
+        const r = await evaluate(`(() => { const s = ${v}; const req = performance.getEntriesByType('resource').map((e) => e.name).filter((n) => /prop-(tide-bell|raft-s1|mirror-stand|light-lock|white-stones|dial-gate|oil-valve|guide-mirror|ignition-port)/.test(n)); return { miss: s.artSlotGreyboxMissing, mounted: s.artSlots.mounted.map((m) => m.id), req }; })()`);
+        if (r.miss.length) throw new Error(`${q} 替换表白盒节点名对不上：${r.miss.join('、')}`);
+        if (r.req.length) throw new Error(`${q} 请求了未交付的道具：${r.req.join('、')}`);
+        out.push(`${q}：节点齐、挂上 ${r.mounted.length} 件、0 请求`);
+      }
+      await evaluate(`localStorage.removeItem('foglight.save.v1'); 1`);
+      await cdp.goto('');
+      return out.join('；');
     },
   },
 ];
