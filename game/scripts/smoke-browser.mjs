@@ -2448,7 +2448,7 @@ const CHECKS = [
     },
   },
   {
-    name: 'v0.1-021/022 替换入口 art=1：S1 / S2 / S3 表里的白盒节点名都在、未交付道具不发请求（不 404）、白盒照常显示',
+    name: 'v0.1-021/022 替换入口 art=1：S1 / S2 / S3 表里的白盒节点名都在、未交付道具不发请求（不 404），已交付的（潮汐钟）挂上',
     async run({ evaluate, cdp, sleep }) {
       const out = [];
       for (const [q, scene, v] of [['s1', 's1-ebb-shore', '__s1'], ['s2', 's2-keeper-house', '__s2'], ['s3', 's3-lighthouse', '__s3']]) {
@@ -2460,10 +2460,11 @@ const CHECKS = [
           if (!ok) await sleep(100);
         }
         if (!ok) throw new Error(`${q} 没就绪`);
-        const r = await evaluate(`(() => { const s = ${v}; const req = performance.getEntriesByType('resource').map((e) => e.name).filter((n) => /prop-(tide-bell|raft-s1|mirror-stand|light-lock|white-stones|dial-gate|oil-valve|guide-mirror|ignition-port)/.test(n)); return { miss: s.artSlotGreyboxMissing, mounted: s.artSlots.mounted.map((m) => m.id), req }; })()`);
+        const r = await evaluate(`(() => { const s = ${v}; const mounted = s.artSlots.mounted.map((m) => m.id); const req = performance.getEntriesByType('resource').map((e) => /models\\/props\\/(prop-(?:tide-bell|raft-s1|mirror-stand|light-lock|white-stones|dial-gate|oil-valve|guide-mirror|ignition-port)[a-z0-9-]*)\\.glb/.exec(e.name)?.[1]).filter((n) => n && !mounted.some((id) => id.startsWith(n))); return { miss: s.artSlotGreyboxMissing, mounted, req }; })()`);
         if (r.miss.length) throw new Error(`${q} 替换表白盒节点名对不上：${r.miss.join('、')}`);
-        if (r.req.length) throw new Error(`${q} 请求了未交付的道具：${r.req.join('、')}`);
-        out.push(`${q}：节点齐、挂上 ${r.mounted.length} 件、0 请求`);
+        if (q !== 's2' && !r.mounted.some((id) => id.startsWith('prop-tide-bell'))) throw new Error(`${q} 潮汐钟美术没挂上 ` + JSON.stringify(r));
+        if (r.req.length) throw new Error(`${q} 请求了没挂上的道具（未交付应不请求）：${r.req.join('、')}`);
+        out.push(`${q}：节点齐、挂上 ${r.mounted.length} 件${r.mounted.length ? '（' + r.mounted.join('/') + '）' : ''}、未交付 0 请求`);
       }
       await evaluate(`localStorage.removeItem('foglight.save.v1'); 1`);
       await cdp.goto('');

@@ -78,8 +78,9 @@ export const manifest: AssetEntry[] = [
   { key: 'env-fish-shed-ruin', type: 'gltf', url: 'assets/art/models/env/env-fish-shed-ruin.glb', group: 's1', optional: true, art: true },
   { key: 'env-net-rack-a', type: 'gltf', url: 'assets/art/models/env/env-net-rack-a.glb', group: 's1', optional: true, art: true },
   { key: 'env-net-rack-b', type: 'gltf', url: 'assets/art/models/env/env-net-rack-b.glb', group: 's1', optional: true, art: true },
+  // 021 潮汐钟（10-30 交付；S1 / S3 同一文件，S3 另登记 prop-tide-bell-s3）：挂 bell-anchor，bell-swing 跟白盒钟摆（src/levels/s1/artSlots.ts）
+  { key: 'prop-tide-bell', type: 'gltf', url: 'assets/art/models/props/prop-tide-bell.glb', group: 's1', optional: true, art: true },
   // 021 解谜道具（未交付，pending：文件到了自动加载，挂点 / 节点见 src/levels/s1/artSlots.ts）
-  { key: 'prop-tide-bell', type: 'gltf', url: 'assets/art/models/props/prop-tide-bell.glb', group: 's1', optional: true, art: true, pending: true },
   { key: 'prop-raft-s1', type: 'gltf', url: 'assets/art/models/props/prop-raft-s1.glb', group: 's1', optional: true, art: true, pending: true },
   { key: 'env-lighthouse-silhouette-far', type: 'gltf', url: 'assets/art/models/env/env-lighthouse-silhouette-far.glb', group: 's1', optional: true, art: true },
   { key: 'env-lighthouse-island-main-s3tower', type: 'gltf', url: 'assets/art/models/env/env-lighthouse-island-main-s3tower.glb', group: 's1', optional: true, art: true },
@@ -116,8 +117,8 @@ export const manifest: AssetEntry[] = [
   { key: 'prop-fresnel-lens-ch1', type: 'gltf', url: 'assets/art/models/props/prop-fresnel-lens-ch1.glb', group: 's3', optional: true, art: true },
   { key: 'env-rock-islet-a', type: 'gltf', url: 'assets/art/models/env/env-rock-islet-a.glb', group: 's3', optional: true, art: true },
   { key: 'env-stone-bridge-s3', type: 'gltf', url: 'assets/art/models/env/env-stone-bridge-s3.glb', group: 's3', optional: true, art: true },
-  // 022 解谜道具（未交付，pending；挂点 / 节点见 src/levels/s3/artSlots.ts）。潮汐钟与 S1 同一文件，s3 组另登记一个 key（同 s2far 做法）
-  { key: 'prop-tide-bell-s3', type: 'gltf', url: 'assets/art/models/props/prop-tide-bell.glb', group: 's3', optional: true, art: true, pending: true },
+  // 022 解谜道具（未交付的标 pending；挂点 / 节点见 src/levels/s3/artSlots.ts）。潮汐钟（已交付）与 S1 同一文件，s3 组另登记一个 key（同 s2far 做法）
+  { key: 'prop-tide-bell-s3', type: 'gltf', url: 'assets/art/models/props/prop-tide-bell.glb', group: 's3', optional: true, art: true },
   { key: 'prop-oil-valve-s3', type: 'gltf', url: 'assets/art/models/props/prop-oil-valve-s3.glb', group: 's3', optional: true, art: true, pending: true },
   { key: 'prop-guide-mirror-window-s3', type: 'gltf', url: 'assets/art/models/props/prop-guide-mirror-window-s3.glb', group: 's3', optional: true, art: true, pending: true },
   { key: 'prop-guide-mirror-wall-s3', type: 'gltf', url: 'assets/art/models/props/prop-guide-mirror-wall-s3.glb', group: 's3', optional: true, art: true, pending: true },

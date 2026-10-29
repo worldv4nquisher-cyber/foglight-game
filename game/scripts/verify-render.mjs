@@ -488,6 +488,64 @@ if (hasArt) {
     return out.join('；');
   });
 
+  await test('021 潮汐钟 prop-tide-bell：S1 bell-anchor / S3 tide-bell-s3-socket = 白盒钟位、正面朝白盒站位、触点高 1.10、bell-swing 跟白盒钟摆（世界增量，摆动平面朝站位）', async () => {
+    const { S1 } = await import('@/levels/s1/layout');
+    const { S3 } = await import('@/levels/s3/layout');
+    const out = [];
+    const cases = [
+      ['S1', 'models/env/env-shore-ledge-s1.glb', S1.artNodes['env-shore-ledge-s1'], 'env-shore-ledge-s1-bell-anchor', S1.bellAnchor, [S1.bellAnchor[0] + 1.05, S1.bellAnchor[1], S1.bellAnchor[2]], 'prop-tide-bell'],
+      ['S3', 'models/env/env-rock-islet-a.glb', { translation: [0, 0, 0], rotationY: 0 }, 'tide-bell-s3-socket', S3.points.bellSocket, S3.points.bellInteract, 'prop-tide-bell-s3'],
+    ];
+    for (const [sc, file, place, anchorName, sock, stand, key] of cases) {
+      const scene = new THREE.Group();
+      const env = await loadGlb(file);
+      env.position.set(...place.translation);
+      env.rotation.y = place.rotationY;
+      scene.add(env);
+      // 白盒钟（同 puzzles.ts：钟架局部 +X = 站位方向，swing 绕局部 Z）
+      const [bx, by, bz] = sock;
+      const gb = new THREE.Group();
+      gb.name = sc === 'S1' ? 'tide-bell-s1' : 'tide-bell-s3';
+      gb.position.set(bx, by, bz);
+      gb.rotation.y = Math.atan2(-(stand[2] - bz), stand[0] - bx);
+      const sw = new THREE.Group();
+      sw.name = `${gb.name}-swing`;
+      sw.position.set(0, 2.05, 0);
+      sw.add(new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.5, 0.3)));
+      gb.add(sw);
+      scene.add(gb);
+      scene.updateMatrixWorld(true);
+      const bellGlb = await loadGlb('models/props/prop-tide-bell.glb');
+      const spec = (sc === 'S1' ? S1_ART_SLOTS : S3_ART_SLOTS).find((x) => x.key === key);
+      const slots = mountArtSlots({ has: () => true, getModel: () => bellGlb.clone() }, scene, [spec]);
+      assert.equal(slots.mounted.length, 1);
+      const art = slots.mounted[0].model;
+      assert.equal(art.parent.name, anchorName, `${sc} 挂在 ${anchorName}`);
+      assert.deepEqual(slots.mounted[0].missingNodes, []);
+      scene.updateMatrixWorld(true);
+      const p = art.getWorldPosition(new THREE.Vector3());
+      near(p.distanceTo(new THREE.Vector3(...sock)), 0, 0.01, `${sc} 钟位`);
+      const fwd = new THREE.Vector3(0, 0, 1).applyQuaternion(art.getWorldQuaternion(new THREE.Quaternion()));
+      const toStand = new THREE.Vector3(stand[0] - bx, 0, stand[2] - bz).normalize();
+      near(fwd.dot(toStand), 1, 0.01, `${sc} 正面朝白盒站位`);
+      const contact = art.getObjectByName('prop-tide-bell-contact').getWorldPosition(new THREE.Vector3());
+      near(contact.y - by, 1.1, 0.01, `${sc} 触点高`);
+      const dist = Math.hypot(stand[0] - bx, stand[2] - bz);
+      // 白盒钟摆往站位反方向摆 0.3 rad → 美术钟口也往远离站位的方向走
+      const lip = art.getObjectByName('bell-swing');
+      const lip0 = new THREE.Vector3(0, -1, 0).applyQuaternion(lip.getWorldQuaternion(new THREE.Quaternion()));
+      sw.rotation.z = 0.3;
+      slots.update();
+      scene.updateMatrixWorld(true);
+      const lip1 = new THREE.Vector3(0, -1, 0).applyQuaternion(lip.getWorldQuaternion(new THREE.Quaternion()));
+      const gbLip = new THREE.Vector3(0, -1, 0).applyQuaternion(sw.getWorldQuaternion(new THREE.Quaternion()));
+      near(lip1.angleTo(gbLip), 0, 1e-4, `${sc} 摆动方向与白盒一致`);
+      near(lip0.angleTo(lip1), 0.3, 1e-4, `${sc} 摆幅`);
+      out.push(`${sc} 钟位 (${p.x.toFixed(2)}, ${p.y.toFixed(2)}, ${p.z.toFixed(2)})、白盒站位离钟轴 ${dist.toFixed(2)} m（美术 -interact 0.98）`);
+    }
+    return out.join('；');
+  });
+
   await test('外部 KTX2：S1 全部 GLB 的 images.uri 相对 GLB 解析后存在（运行时 assets/art/models/env/../../textures/ 同理）', () => {
     const files = [...new Set(Object.values(layout.nodes).flatMap((n) => [n.file, ...(n.socketInstances ?? []).map((s) => s.file)]).filter(Boolean))];
     let n = 0;
