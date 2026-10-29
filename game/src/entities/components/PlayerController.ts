@@ -50,7 +50,10 @@ type Mode =
 export class PlayerController extends Component {
   /** 场景里可用的自动跨越点 */
   links: TraversalLink[] = [];
-  /** 外部锁定（过场、读文档时由对应系统置位） */
+  /**
+   * 外部锁定（过场、读文档、交互走位 / 交互动作 / 推浮台 / 原地转身时由对应系统置位）：输入不驱动移动。
+   * 「交互 / 动画进行中」判这个，不判 busy。
+   */
   locked = false;
   private body!: KinematicBody;
   private readonly opts: PlayerControllerOptions;
@@ -76,7 +79,11 @@ export class PlayerController extends Component {
     return m.kind === 'traverse' ? { t: Math.min(m.t, m.link.duration), duration: m.link.duration } : null;
   }
 
-  /** 是否在跨越 / 送回中（输入被忽略） */
+  /**
+   * 控制器自己接管位移中：自动跨越（traverse）或黑场送回（teleport）。交互动作期间为 false 是预期——
+   * 那时由 locked 锁输入。使用方：交互系统（跨越 / 送回中不选交互物）、潮汐送回（跨越中不判淹没）、
+   * S1 R 重置浮台、dev 面板「接管中」。不要并入 locked：交互动作中改判 busy 会让潮汐送回推迟、R 被吞。
+   */
   get busy(): boolean {
     return this.mode.kind !== 'free';
   }

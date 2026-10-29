@@ -15,7 +15,7 @@ export interface InteractionActor {
   readonly body: CharacterBody;
   facing: number;
   locked: boolean;
-  /** 是否在自动跨越 / 黑场送回中（这时不判定交互） */
+  /** 是否在自动跨越 / 黑场送回中（这时不判定交互）；交互动作锁定看 locked，不是 busy */
   readonly busy: boolean;
   /** 清掉移动惯性 */
   halt(): void;
