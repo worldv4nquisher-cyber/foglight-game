@@ -77,12 +77,15 @@ function instanceBox(set, k, level = 0) {
 }
 
 await test('021 / 022 替换入口（合成）：没交付不挂；交付后挂到 socket、对齐白盒节点、drive 跟白盒转、白盒网格隐藏（物理不动）、自发光清零', () => {
-  const pending = manifest.filter((e) => e.pending).map((e) => e.key);
-  for (const spec of [...S1_ART_SLOTS, ...S2_ART_SLOTS, ...S3_ART_SLOTS]) assert.ok(pending.includes(spec.key), `${spec.key} 要在 manifest 里登记为 pending`);
+  for (const spec of [...S1_ART_SLOTS, ...S2_ART_SLOTS, ...S3_ART_SLOTS]) {
+    const e = manifest.find((x) => x.key === spec.key);
+    assert.ok(e && e.optional && e.art, `${spec.key} 要在 manifest 里登记（optional 美术；未交付的标 pending）`);
+  }
   const scene = new THREE.Group();
   const socket = new THREE.Object3D();
   socket.name = 'gate-socket';
   socket.position.set(5, 0, 2);
+  socket.rotation.y = Math.PI / 2; // 挂点转 90°：世界增量照样对
   scene.add(socket);
   const hinge = new THREE.Group();
   hinge.name = 'gb-hinge';
@@ -122,9 +125,14 @@ await test('021 / 022 替换入口（合成）：没交付不挂；交付后挂�
   assert.equal(glow, 0, '自发光清零');
   hinge.rotation.y = 1.2;
   s.update();
-  near(new THREE.Euler().setFromQuaternion(door.quaternion).y, 1.2, 1e-6, 'drive 跟白盒转');
+  near(door.getWorldQuaternion(new THREE.Quaternion()).angleTo(hinge.quaternion.clone().multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI / 2))), 0, 1e-6, 'drive 跟白盒转（世界增量）');
+  hinge.rotation.set(0, 0, 0.3); // 绕白盒局部 Z 摆
+  s.update();
+  const tip = new THREE.Vector3(0, -1, 0).applyQuaternion(door.getWorldQuaternion(new THREE.Quaternion()));
+  near(tip.x, Math.sin(0.3), 1e-6, '摆动平面一致（世界 x）');
+  near(tip.z, 0, 1e-6, '摆动平面一致（世界 z）');
   const keys = [...S1_ART_SLOTS, ...S2_ART_SLOTS, ...S3_ART_SLOTS].length;
-  return `合成门：挂点回退 / 对齐 / 跟转 / 隐藏 ✓；表里 ${keys} 处摆放全部登记为 pending`;
+  return `合成门：挂点回退 / 对齐 / 世界增量跟转 / 隐藏 ✓；表里 ${keys} 处摆放全部登记进清单`;
 });
 
 await test('岩石实例化（合成）：实例矩阵乘上 _lodN 节点矩阵，顶面 = 摆放 y + 节点平移 + 半高', () => {
