@@ -281,7 +281,7 @@ export class QualityManager {
     return p;
   }
 
-  /** 自动检测给出的档位（未检测时 null） */
+  /** 自动检测**完成**给出的档位；没跑过 / 被打断 / 被跳过时 null（BUG-002） */
   get detected(): QualityTier | null {
     return this.settings.get('qualityDetected') ? this.settings.get('qualityDetectedTier') : null;
   }

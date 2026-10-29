@@ -103,7 +103,7 @@ export class MainScene extends BaseScene {
     );
     ui.hud.setLocation('雾岬 · 第一座灯塔');
     this.cleanups.push(() => this.cameraFollow.dispose());
-    // 首次启动后第一次进入 S1：3 秒画质自动检测和建立镜头同时进行（009；开场演出做好后挪到演出最后 3 s，035）
+    // 首次启动后第一次进入 S1：画质自动检测第一轮和建立镜头同时进行、镜头等第一轮测完再交还；后续轮次在玩家可操作后继续（009 裁定；035 开场演出尾段留 9 s）
     this.game.benchmark.start();
     this.playEstablishing();
   }
@@ -114,6 +114,8 @@ export class MainScene extends BaseScene {
     const track = new CameraTrack({
       name: 'establishing',
       duration: gameplay.camera.establishingTime,
+      // 009 制作人裁定：画质检测第一轮必须在建立镜头内测完（热身帧 + 3 s 比镜头略长，停在最后一帧等）
+      holdUntil: () => this.game.benchmark.firstRoundDone,
       keys: [
         { time: 0, position: new THREE.Vector3(p.x + 6, 6.5, p.z + 12), lookAt: new THREE.Vector3(8, 4, -10), fov: 50 },
         { time: gameplay.camera.establishingTime, position: new THREE.Vector3(p.x + 1.6, 2.6, p.z + 5), lookAt: new THREE.Vector3(p.x, 1.2, p.z - 2), fov: 55 },
@@ -425,6 +427,8 @@ export class MainScene extends BaseScene {
   }
 
   override exit(): void {
+    // 画质检测没测完就离开（回到主菜单等）：整次作废，下次进 S1 重测（BUG-002）
+    this.game.benchmark.cancel();
     this.game.ui.hud.hide();
     this.game.ui.hud.setPrompt(null);
   }

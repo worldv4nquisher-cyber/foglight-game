@@ -297,6 +297,30 @@ await test('建立镜头 3 s：期间不能移动，结束交还控制', () => {
   assert.equal(e.input.context, 'explore');
 });
 
+await test('建立镜头 holdUntil：轨道播完停在最后一帧等条件（画质检测第一轮），条件满足 / 超时才交还', () => {
+  const e = setup();
+  e.target.position.copy(OPEN);
+  let ready = false;
+  const keys = testTrack(cfg.establishingTime);
+  const track = new CameraTrack({ keys: [0, 1].map((i) => ({ time: i * cfg.establishingTime, position: new THREE.Vector3(i * 4, 3, 6), lookAt: new THREE.Vector3(0, 1, 0) })), duration: cfg.establishingTime, ease: false, holdUntil: () => ready, maxHold: 2 });
+  void keys;
+  void e.cam.playEstablishing(track);
+  e.run(cfg.establishingTime + 0.5);
+  assert.equal(e.input.context, 'cutscene', '条件没满足时应停在镜头里');
+  near(e.camera.position.x, 4, 1e-3, '停在最后一帧');
+  ready = true;
+  e.run(DT * 2);
+  assert.equal(e.input.context, 'explore', '条件满足后交还');
+  // 超时
+  const e2 = setup();
+  e2.target.position.copy(OPEN);
+  void e2.cam.playEstablishing(new CameraTrack({ keys: [{ time: 0, position: new THREE.Vector3(0, 3, 6), lookAt: new THREE.Vector3() }, { time: 1, position: new THREE.Vector3(1, 3, 6), lookAt: new THREE.Vector3() }], holdUntil: () => false, maxHold: 1 }));
+  e2.run(1.9);
+  assert.equal(e2.input.context, 'cutscene');
+  e2.run(0.2);
+  assert.equal(e2.input.context, 'explore', '超过 maxHold 也交还');
+});
+
 await test('换场景（dispose）时中断演出并交还输入上下文', async () => {
   const e = setup();
   e.target.position.copy(OPEN);

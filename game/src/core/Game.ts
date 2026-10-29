@@ -37,6 +37,10 @@ export class Game {
   readonly quality: QualityManager;
   /** 首次启动的 3 秒画质自动检测（第一次进入 S1 时由场景调用 start()） */
   readonly benchmark: QualityBenchmark;
+  /** 调试计数（smoke 读取）：resizeAfterRender = 在本帧渲染之后重设画布的次数（会出现一帧黑屏，应为 0） */
+  readonly debugStats = { resizeAfterRender: 0 };
+  private pendingResize = false;
+  private renderedThisTick = false;
   readonly input: InputManager;
   readonly assets: AssetLoader;
   readonly audio: AudioSystem;
@@ -93,9 +97,12 @@ export class Game {
     this.scenes = new SceneManager(this);
 
     // 窗口/容器尺寸变化
-    this.resizeObserver = new ResizeObserver(() => this.resize());
+    // ResizeObserver 回调在本帧渲染之后才跑：只标记，下一帧渲染前再改画布（否则窗口缩放时闪一帧黑）
+    this.resizeObserver = new ResizeObserver(() => (this.pendingResize = true));
     this.resizeObserver.observe(container);
-    const onOrientation = (): void => this.resize();
+    const onOrientation = (): void => {
+      this.pendingResize = true;
+    };
     window.addEventListener('orientationchange', onOrientation);
     this.disposers.push(() => window.removeEventListener('orientationchange', onOrientation));
     this.resize();
@@ -111,9 +118,11 @@ export class Game {
         const t0 = performance.now();
         // 像素比没变就不 resize：重设画布尺寸会清掉绘图缓冲、重建全部渲染目标（切档卡顿的大头）
         const ratioChanged = Math.abs(this.renderer.getPixelRatio() - this.pixelRatio) > 1e-6;
-        this.applyQuality();
+        // 不在这里 setPixelRatio / resize：重设画布尺寸会清空绘图缓冲，如果发生在本帧渲染之后、合成之前就是一帧可见黑屏。
+        // 推迟到下一帧 tick 开头（渲染之前）统一做（009 制作人裁定：切档不能有可见黑帧）
+        this.applyQuality(false);
         this.postfx.applyQuality(this.quality.preset);
-        if (ratioChanged) this.resize();
+        if (ratioChanged) this.pendingResize = true;
         if (import.meta.env.DEV) console.info(`[quality] ${previous} → ${tier}（${source}），${(performance.now() - t0).toFixed(1)} ms`);
       }),
       // 场景切换：为使用后处理的场景重建管线，其他场景（启动/加载）直接渲染
@@ -191,6 +200,13 @@ export class Game {
 
     const time = this.time;
     this.renderer.info.reset();
+    // 画质切档的画布重建放在渲染之前（见 quality:changed）
+    if (this.pendingResize) {
+      this.pendingResize = false;
+      this.resize();
+    }
+    // 画质检测放在渲染之前：它触发的切档在本帧渲染前生效，不会留下被清空的画布
+    this.benchmark.update(now, this.paused || document.hidden);
     this.input.beginFrame();
     if (this.input.consumePressed('pause')) this.togglePause();
 
@@ -214,9 +230,10 @@ export class Game {
         this.renderer.render(scene.scene, scene.camera);
       }
     }
-    this.benchmark.update(now, this.paused || document.hidden);
+    this.renderedThisTick = true;
     this.ui.update(time.unscaledDelta);
     this.input.endFrame();
+    this.renderedThisTick = false;
   };
 
   /** 把设置应用到各系统（启动时一次 + 每次设置变化，立即生效） */
@@ -237,9 +254,9 @@ export class Game {
     return Math.min(window.devicePixelRatio || 1, p.maxPixelRatio, gameConfig.maxPixelRatio) * p.renderScale;
   }
 
-  private applyQuality(): void {
-    // setPixelRatio 内部会 setSize（重建绘图缓冲），没变就不调
-    if (Math.abs(this.renderer.getPixelRatio() - this.pixelRatio) > 1e-6) this.renderer.setPixelRatio(this.pixelRatio);
+  private applyQuality(setRatio = true): void {
+    // setPixelRatio 内部会 setSize（重建绘图缓冲），没变就不调；运行时切档由 tick 开头的 resize 统一设置
+    if (setRatio && Math.abs(this.renderer.getPixelRatio() - this.pixelRatio) > 1e-6) this.renderer.setPixelRatio(this.pixelRatio);
     // 三档都有阴影（style-guide §8 shadowType 全是 CSM）；CSM / PCSS 在 023 做，现在是单张平行光阴影
     this.renderer.shadowMap.enabled = true;
     // three r18x：PCFSoftShadowMap 已移除，PCFShadowMap 配合各灯光的 shadow.radius 实现软阴影
@@ -248,6 +265,8 @@ export class Game {
   }
 
   resize(): void {
+    // 渲染之后、本帧结束之前重设画布 = 可见黑帧（smoke 检查这个计数为 0）
+    if (this.renderedThisTick) this.debugStats.resizeAfterRender++;
     const w = Math.max(1, this.container.clientWidth);
     const h = Math.max(1, this.container.clientHeight);
     const ratio = this.pixelRatio;

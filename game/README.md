@@ -109,7 +109,8 @@ game/
 - **画质（config/quality.ts，v0.1-009）**：纯桌面三档「极致 / 高 / 标准」，参数表键名与数值逐项照抄 `art/style/style-guide.md` §8（`npm run test:quality` 校验，期望值内嵌在 `scripts/verify-quality.mjs`，§8 改了两边一起改）。表里体积雾、CSM、描边、反射、TAA、AgX 等特性在 023–026 实现时直接读这里；现在已生效的是 `renderScale`、`maxPixelRatio`、`shadowType.mapSize`（单张平行光阴影）、`rainParticles.count`、`ao.gtao`（N8AO）、`bloom.mipLevels`、`filmGrain`、`vignette`、`lodDistances`。
   - **默认极致**，不按 GPU 名称判档（GPU 名只打日志、显示在暂停菜单底部）。
   - **3 秒自动检测（systems/QualityBenchmark.ts）**：设置里 `qualityDetected=false`（新安装 / 清空设置）时，第一次进入 S1 的 3 秒建立镜头里从极致开始测平均帧率，< 50 fps 降一档后重测 3 秒，最多连降两档；暂停 / 切后台这一轮作废重测，切档后前 5 帧不计。结果写设置（`quality`、`qualityDetectedTier`、`qualitySource='auto'`），之后刷新 / 重启都不再测。降过档且玩家没手动改过时，暂停菜单画质项下显示 `ui.settings.quality_auto_note`。
-  - 玩家手动切换（`game.quality.set(tier)`）随时生效并保存，`qualitySource='user'` 后不会再被自动改；检测中途手动改 = 停止检测、以玩家为准。「恢复默认」不重新检测，画质回到检测结果（没检测过回到极致）。
+  - 玩家手动切换（`game.quality.set(tier)`）随时生效并保存，`qualitySource='user'` 后不会再被自动改；检测中途手动改 = 停止检测（aborted）、以玩家为准；检测前已手动选过档 = 跳过（skipped）。这两种都只记「以后不再自动检测」（`qualityDetected=true`），**不写 `qualityDetectedTier`**（保持 null = 没有检测结果），设置里显示「尚未自动检测」。检测没完成就离开 S1（回到主菜单等）= 整次作废、什么都不写，下次进 S1 重测。「恢复默认」不重新检测：有检测结果回到检测结果（来源 auto），没有结果（未检测 / 打断 / 跳过）回到默认极致（来源 default）（BUG-002）。
+  - **检测时机**（009 制作人裁定）：第一轮落在建立镜头内——建立镜头播完停在最后一帧，等第一轮测完（热身 5 帧 + 3 s，最多多停 5 s）再交还操作；降档后的复测在玩家能移动后继续。切档引起的画布重建推迟到下一帧渲染之前，不出现可见黑帧（smoke 检查 `__game.debugStats.resizeAfterRender === 0`）。035 开场演出接入后，检测放进演出最后 9 s（3 轮 × 3 s）。
   - **运行时切档**不重载场景：发布 `quality:changed { tier, previous, source }`，Game 改像素比并 resize（重建后处理渲染目标），PostFX 改 AO / bloom / 颗粒，场景丢掉旧阴影贴图按新尺寸重建、改雨量和 LOD 距离。检测完成另发 `quality:detected`。
   - **F3 性能面板**（开发模式 / `?debug=1`）：FPS、帧时间（含最长帧）、draw call、三角面（整帧含后处理，`renderer.info`）、显存估算（几何 + 贴图 + 渲染目标，`render/vram.ts`），draw call 和三角面对照当前档 §8 预算（`maxDrawCalls` / `sceneVisibleTris`），超了标 ⚠。正式版「显示帧率」只显示一行 FPS。
 

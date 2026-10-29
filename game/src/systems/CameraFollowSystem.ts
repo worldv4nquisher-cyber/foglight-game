@@ -356,8 +356,12 @@ export class CameraFollowSystem {
   private updateCutscene(mode: Extract<Mode, { kind: 'cutscene' }>, dt: number): void {
     mode.t += dt;
     if (mode.track.skippable && this.input.consumePressed('skipHold')) mode.t = mode.track.duration;
-    mode.track.sample(mode.t, this.live);
-    if (mode.t >= mode.track.duration - 1e-6) this.finishCutscene(false);
+    const tr = mode.track;
+    mode.track.sample(Math.min(mode.t, tr.duration), this.live);
+    if (mode.t < tr.duration - 1e-6) return;
+    // 停在最后一帧等外部条件（建立镜头等画质检测第一轮），超时也交还
+    if (tr.holdUntil && !tr.holdUntil() && mode.t < tr.duration + tr.maxHold) return;
+    this.finishCutscene(false);
   }
 
   private finishCutscene(immediate: boolean): void {

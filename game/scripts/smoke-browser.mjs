@@ -214,6 +214,9 @@ const CHECKS = [
       await cdp.goto('simulateFps=40');
       s = await st();
       if (s.settings?.qualityDetected) throw new Error('清空设置后应重新检测');
+      // 009 制作人裁定：第一轮在建立镜头内测完（第一次降档时还在 cutscene），后续轮次在玩家可操作后继续
+      await evaluate(`(() => { const g = __game; window.__qcam = [];
+        g.events.on('quality:changed', (e) => { if (e.source === 'auto') window.__qcam.push(e.previous + '>' + e.tier + ':' + g.scenes.current.cameraFollow.modeName); }); return 1; })()`);
       const seen = [s.tier];
       const end = Date.now() + 40000;
       while (Date.now() < end && s.bench !== 'done') {
@@ -227,7 +230,11 @@ const CHECKS = [
       if (s.tier !== 'standard' || s.rounds.length !== 3) throw new Error('应停在标准且只测 3 轮 ' + JSON.stringify(s));
       const ss = s.settings;
       if (!ss.qualityDetected || ss.quality !== 'standard' || ss.qualityDetectedTier !== 'standard' || ss.qualitySource !== 'auto') throw new Error('检测结果没写对 ' + JSON.stringify(ss));
-      out.push('simulateFps=40：' + seen.join(' → ') + ' ✓');
+      const qcam = await evaluate(`window.__qcam`);
+      // 开场 start() 的 'high>ultra'（如有）在监听之前；只看降档
+      const drops = qcam.filter((x) => /^ultra>high|^high>standard/.test(x));
+      if (drops.length !== 2 || !/:cutscene$/.test(drops[0]) || /:cutscene$/.test(drops[1])) throw new Error('第一轮应在建立镜头内、第二轮在交还之后：' + qcam.join(', '));
+      out.push('simulateFps=40：' + seen.join(' → ') + ' ✓（第一轮在建立镜头内、第二轮玩家可操作后 ✓）');
       // 设置界面（暂停菜单）画质项下显示 quality_auto_note
       const note = await evaluate(`(async () => { __game.pause('user'); await new Promise((r) => setTimeout(r, 300));
         const n = document.querySelector('[data-role="quality-note"]'); const t = n && !n.hidden ? n.textContent : null; __game.resume(); return t; })()`);
@@ -282,6 +289,10 @@ const CHECKS = [
         if (r.worst >= 5000) throw new Error('切档卡死 ≥ 5 s ' + JSON.stringify(r));
       }
       if (sw.events < 4) throw new Error('quality:changed 事件数 ' + sw.events);
+      // 切档不能有可见黑帧：画布重建（setPixelRatio / setSize 会清空绘图缓冲）必须发生在渲染之前
+      const rar = await evaluate(`__game.debugStats.resizeAfterRender`);
+      if (rar !== 0) throw new Error('有 ' + rar + ' 次画布重建发生在本帧渲染之后（可见黑帧）');
+      out.push('切档无渲染后重建画布 ✓');
       out.push('运行时切档 ✓（最长帧间隔 ' + sw.res.map((r) => r.t + ' ' + r.worst + 'ms').join(' / ') + '）');
       // 7) F3 性能面板
       const panel = await evaluate(`(async () => { const f = __game.ui.fps; const was = f.visible; f.setVisible(true);
@@ -294,6 +305,30 @@ const CHECKS = [
       }
       if (!(panel.snap?.stats?.calls > 0 && panel.snap.stats.triangles > 0)) throw new Error('renderer.info 读数为 0 ' + JSON.stringify(panel.snap));
       out.push('F3：' + panel.text.split('\n').slice(0, 3).join(' | '));
+      // 8) BUG-002：检测中途在暂停菜单手动改档 → 底栏「尚未自动检测」、恢复默认回极致（来源 default）、没写 qualityDetectedTier
+      await evaluate(`localStorage.clear(); 1`);
+      await cdp.goto('simulateFps=40');
+      for (let i = 0; i < 200; i++) {
+        s = await st();
+        if (s.tier === 'high') break;
+        await sleep(100);
+      }
+      if (s.tier !== 'high' || s.bench !== 'running') throw new Error('没进到第二轮 ' + JSON.stringify(s));
+      const b2 = await evaluate(`(async () => { const g = __game; g.pause('user'); await new Promise((r) => setTimeout(r, 200));
+        [...document.querySelectorAll('.pause-menu [data-role="quality"] button')].find((b) => b.textContent === '标准').click();
+        await new Promise((r) => setTimeout(r, 200));
+        const foot = document.querySelector('.pause-menu .menu-foot').textContent;
+        const set1 = JSON.parse(localStorage.getItem('foglight.settings.v1'));
+        g.settings.resetToDefaults(); await new Promise((r) => setTimeout(r, 200));
+        const foot2 = (g.resume(), g.pause('user'), await new Promise((r) => setTimeout(r, 200)), document.querySelector('.pause-menu .menu-foot').textContent);
+        g.resume();
+        return { foot, foot2, state: g.benchmark.state, set1, set2: JSON.parse(localStorage.getItem('foglight.settings.v1')), tier: g.quality.tier };
+      })()`);
+      if (b2.state !== 'aborted') throw new Error('检测应被打断 ' + JSON.stringify(b2));
+      if (!/^尚未自动检测/.test(b2.foot) || !/^尚未自动检测/.test(b2.foot2)) throw new Error('底栏应显示「尚未自动检测」：' + b2.foot + ' / ' + b2.foot2);
+      if (b2.set1.qualityDetectedTier !== null || b2.set1.quality !== 'standard' || b2.set1.qualitySource !== 'user') throw new Error('打断后设置不对 ' + JSON.stringify(b2.set1));
+      if (b2.tier !== 'ultra' || b2.set2.quality !== 'ultra' || b2.set2.qualitySource !== 'default' || b2.set2.qualityDetectedTier !== null) throw new Error('恢复默认应回极致 ' + JSON.stringify(b2));
+      out.push('BUG-002 打断后「尚未自动检测」、恢复默认 → 极致 ✓');
       // 恢复干净状态（回到无 simulateFps 的地址）
       await evaluate(`localStorage.clear(); 1`);
       await cdp.goto('');

@@ -267,7 +267,8 @@ test('恢复默认：保留画质检测标记', () => {
 test('009：qualityDetectedTier 清洗 / 持久化；恢复默认回到检测结果（来源 auto），未检测回到极致', () => {
   const st = new MemStorage('ok', { [SETTINGS_KEY]: JSON.stringify({ qualityDetectedTier: 'epic' }) });
   const s = new Settings(st);
-  assert.equal(s.get('qualityDetectedTier'), 'ultra');
+  assert.equal(s.get('qualityDetectedTier'), null, '非法值 → 没有检测结果（BUG-002）');
+  assert.equal(new Settings(new MemStorage('ok', { [SETTINGS_KEY]: JSON.stringify({ qualityDetected: false, qualityDetectedTier: 'high' }) })).get('qualityDetectedTier'), null, '没检测过时不认 qualityDetectedTier');
   s.update({ qualityDetected: true, qualityDetectedTier: 'high', qualitySource: 'auto', quality: 'high' });
   s.update({ qualitySource: 'user', quality: 'standard' });
   const order = [];

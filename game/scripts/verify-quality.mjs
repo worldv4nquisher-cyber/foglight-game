@@ -302,6 +302,67 @@ test('检测中玩家手动改画质：立即停止、以玩家为准；检测�
   assert.equal(b.settings.get('qualityDetected'), true);
 });
 
+test('BUG-002：检测被手动改档打断 / 被跳过 → 没有检测结果（不写 qualityDetectedTier）、显示「尚未自动检测」、恢复默认回默认档', () => {
+  // aborted：极致测完降到高后，玩家手动改到标准
+  const st = new MemStorage();
+  let b = boot(st, { search: '?simulateFps=40' });
+  b.bench.start();
+  run(b, { sec: 3.3 });
+  assert.equal(b.quality.tier, 'high');
+  b.quality.set('standard');
+  assert.equal(b.bench.state, 'aborted');
+  assert.equal(b.settings.get('qualityDetectedTier'), null, '检测没完成不应写 qualityDetectedTier');
+  assert.equal(b.quality.detected, null, '暂停菜单读 detected → 「尚未自动检测」');
+  assert.equal(b.quality.showAutoNote, false);
+  b.settings.resetToDefaults();
+  assert.deepEqual([b.quality.tier, b.settings.get('quality'), b.settings.get('qualitySource')], ['ultra', 'ultra', 'default'], '恢复默认回默认档（极致），来源 default');
+  assert.equal(b.changes.at(-1).source, 'settings');
+  // 重启：仍然没有结果，也不再检测
+  b = boot(st, { search: '?simulateFps=40' });
+  assert.equal(b.quality.detected, null);
+  assert.equal(b.bench.start(), false, '打断过就不再自动检测');
+
+  // skipped：检测前已手动选档
+  const st2 = new MemStorage();
+  b = boot(st2, { search: '?simulateFps=40' });
+  b.quality.set('high');
+  assert.equal(b.bench.start(), false);
+  assert.equal(b.bench.state, 'skipped');
+  assert.deepEqual([b.settings.get('qualityDetected'), b.settings.get('qualityDetectedTier'), b.quality.detected], [true, null, null]);
+  b.settings.resetToDefaults();
+  assert.equal(b.quality.tier, 'ultra');
+  assert.equal(b.settings.get('qualitySource'), 'default');
+
+  // 暂停菜单画质状态（底栏）：detected 为 null 时显示「尚未自动检测」
+  const src = readFileSync(new URL('../src/ui/PauseMenu.ts', import.meta.url), 'utf8');
+  assert.ok(/detected\s*\?[^:]+:\s*[^;]*(尚未自动检测|quality_undetected)/.test(src), '设置界面没按 detected 为 null 显示「尚未自动检测」');
+});
+
+test('BUG-002：检测没完成就离开 S1（cancel）→ 不写任何结果、运行时档位退回设置、下次进 S1 重测', () => {
+  const st = new MemStorage();
+  let b = boot(st, { search: '?simulateFps=40' });
+  b.bench.start();
+  run(b, { sec: 3.3 });
+  assert.equal(b.quality.tier, 'high');
+  b.bench.cancel();
+  assert.equal(b.bench.state, 'idle');
+  assert.equal(b.quality.tier, 'ultra', '运行时档位退回设置里的极致');
+  assert.deepEqual([b.settings.get('qualityDetected'), b.settings.get('qualityDetectedTier'), b.settings.get('quality')], [false, null, 'ultra']);
+  b = boot(st, { search: '?simulateFps=40' });
+  assert.equal(b.bench.start(), true, '下次进 S1 重新检测');
+});
+
+test('firstRoundDone：第一轮测完前为 false（建立镜头等它），之后 / 不在跑时为 true', () => {
+  const b = boot(new MemStorage(), { search: '?simulateFps=40', warmupFrames: 5 });
+  assert.equal(b.bench.firstRoundDone, true, '没在跑');
+  b.bench.start();
+  const t = run(b, { sec: 3.0 });
+  assert.equal(b.bench.firstRoundDone, false, '热身帧 + 3 s 还没到');
+  run(b, { sec: 0.2, t0: t });
+  assert.equal(b.bench.firstRoundDone, true);
+  assert.equal(b.bench.state, 'running', '后续轮次继续（玩家已可操作）');
+});
+
 test('暂停 / 切后台时这一轮作废、恢复后重测；切档后丢弃热身帧', () => {
   const b = boot(new MemStorage(), { search: '?simulateFps=40', warmupFrames: 5 });
   b.bench.start();
