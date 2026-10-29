@@ -1426,7 +1426,7 @@ const CHECKS = [
     },
   },
   {
-    name: 'v0.1-012 光路：测试场地风灯灯台 → 镜 A → 镜 B → 光感锁（机关台 E 进机位、转对 1.5 s 触发、提示解开）、F4 光路读数、O 冷暖切换、U 开油阀 → 天光常亮 → 点火口 2 s 触发并转暖、?beamDebug=1 调试线',
+    name: 'v0.1-012 光路：测试场地风灯灯台 → 镜 A → 镜 B → 光感锁（机关台 E 进机位、转对 1.5 s 触发、提示解开）、F4 光路读数、O 冷暖切换、U 开油阀 → 天光常亮 → 点火口 1.0 s 可点灯 → E 点灯转暖、?beamDebug=1 调试线',
     async run({ evaluate, cdp, sleep }) {
       const out = [];
       await cdp.goto('scene=testbed&debug=1&beamDebug=1', 'testbed');
@@ -1778,10 +1778,10 @@ const CHECKS = [
       if (!(await until(`__game.ui.reader.isOpen`, 5000))) throw new Error('日志没打开 ' + JSON.stringify(await st()));
       const desk = await evaluate(`(() => { const s = __s2; const l = s.puzzles.lantern; const w = l.getWorldPosition(l.position.clone()); const b = s.rig.body.position;
         const f = s.rig.controller.facing; return { lp: l.parent?.name, w: w.toArray().map((v) => +v.toFixed(3)), b: b.toArray().map((v) => +v.toFixed(3)), f: +f.toFixed(3) }; })()`);
-      // 站位朝 −X：前 0.45、右（−Z）0.05，桌面 0.75
+      // 站位朝 −X：前 0.45、右（−Z）0.10（a9b3403 起 socket z 用美术 019 值 −0.35，制作人 1029），桌面 0.75
       const fwd = desk.b[0] - desk.w[0];
       const right = desk.b[2] - desk.w[2];
-      if (desk.lp !== 'desk-lantern-s2-socket' || Math.abs(fwd - 0.45) > 0.03 || Math.abs(right - 0.05) > 0.03 || Math.abs(desk.w[1] - 3.75) > 0.01) throw new Error('风灯应放在书桌 socket（站位前 0.45、右 0.05、桌面 3.75）' + JSON.stringify(desk));
+      if (desk.lp !== 'desk-lantern-s2-socket' || Math.abs(fwd - 0.45) > 0.03 || Math.abs(right - 0.1) > 0.03 || Math.abs(desk.w[1] - 3.75) > 0.01) throw new Error('风灯应放在书桌 socket（站位前 0.45、右 0.10、桌面 3.75）' + JSON.stringify(desk));
       await gsleep(800);
       s = await st();
       if (!s.glow || s.holding) throw new Error('风灯放书桌后窗口应透暖光 ' + JSON.stringify(s));
