@@ -8,7 +8,8 @@ import { EventBus } from '@/core/EventBus';
 import { InputManager } from '@/systems/input/InputManager';
 import { CharacterBody, PhysicsSystem } from '@/systems/PhysicsSystem';
 import { InteractionSystem } from '@/systems/interaction/InteractionSystem';
-import { TideController, TideSet } from '@/systems/tide/TideController';
+import { polygonRegion, TideController, TideSet } from '@/systems/tide/TideController';
+import { S1 } from '@/levels/s1/layout';
 import { Floatable } from '@/systems/tide/Floatable';
 import { buildTideTestArea } from '@/world/tideTestArea';
 import { tideUniforms, withTideLevel, WET_LINE_GLSL } from '@/render/tideUniforms';
@@ -284,6 +285,35 @@ test('送回：站在被淹没 > 0.3 m 的地面 → 送回安全点 + 「水太
   resolve();
   assert.deepEqual(area.tide.safePoint.position.toArray(), [0, 2, 22]);
   assert.equal(text('ch1.common.tide_return'), '水太冷了。');
+});
+
+test('S1 退潮深水区：码头尽头 / 小船附近退潮也送回（按美术海床 −0.44 算水深）；码头甲板、岸台、滩地合法路线不送', () => {
+  const D = S1.deepWater;
+  const zone = new TideController({ id: 's1', initial: 'low', region: () => true, safePoint: { position: new THREE.Vector3(...S1.safePoint) } });
+  zone.addSeabed({ id: 'deep', contains: polygonRegion(D.polygon), floorY: D.floorY, maxFootY: D.maxFootY });
+  const tides = new TideSet();
+  tides.add(zone);
+  const recalls = [];
+  tides.onRecall = (z) => void recalls.push(z.id);
+  const at = (x, y, z) => ({ position: { x, y, z }, onGround: true, busy: false });
+  assert.equal(zone.level, 0, '退潮');
+  // 小船（新船位）/ 旧船位附近的滩地层：送回
+  for (const [x, z] of [[S1.boat.position[0], S1.boat.position[2]], [0.182, -13.531], [5, -15], [-15, -14]]) {
+    recalls.length = 0;
+    assert.equal(tides.checkRecall(at(x, S1.sandY, z))?.id, 's1', `(${x}, ${z}) 退潮送回`);
+  }
+  // 区外合法路线：岸台下来的台阶底、礁石小径、近岸平台、浮台沟、滩地北段
+  const legal = [[S1.reefStairs.x0 + S1.reefStairs.run * S1.reefStairs.count, -3], ...S1.reefPath.map((p) => [p[0], p[2]]), [S1.reefPathEnd[0], S1.reefPathEnd[2]], [-2, 7], [5, 10.5], [0, -6], [8, -8.5]];
+  for (const [x, z] of legal) assert.equal(tides.checkRecall(at(x, S1.sandY, z)), null, `(${x}, ${z}) 退潮不送回`);
+  // 码头甲板（起点）、岸台顶在区内但脚高于 maxFootY：不送
+  assert.equal(tides.checkRecall(at(S1.spawnStart[0], S1.spawnStart[1], S1.spawnStart[2])), null, '码头起点不送回');
+  assert.equal(tides.checkRecall(at(-15, S1.ledge.topY, -10.4)), null, '岸台顶不送回');
+  assert.ok(!polygonRegion(D.polygon)({ x: S1.safePoint[0], y: 0, z: S1.safePoint[2] }), '安全点不在深水区');
+  // 涨潮：区内外都按原规则
+  zone.set('high', { instant: true });
+  assert.equal(tides.checkRecall(at(0, S1.sandY, -6))?.id, 's1', '涨潮滩地照旧送回');
+  assert.equal(zone.floorAt({ x: 0, y: 0.1, z: -6 }), 0.1, '区外 floorAt = 脚底');
+  assert.equal(zone.floorAt({ x: 5, y: 0.1, z: -12 }), D.floorY, '区内 floorAt = 海床');
 });
 
 test('浮物：锚位里随潮浮起到 1.6 + offset，与岸台齐平；站在上面稳定被带着升降；浮起时不能推', () => {

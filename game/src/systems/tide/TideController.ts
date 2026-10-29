@@ -38,6 +38,33 @@ interface BoundCollider {
   rule: { kind: 'walkable'; when: TideState } | { kind: 'deep'; floorY: number };
 }
 
+/**
+ * 深水区（BUG：S1 码头尽头小船附近，白盒滩地 0.1 比美术海床（−0.44 / 旧船位 −0.62）高，退潮能走在「水面」上）：
+ * 区域内、脚踩在白盒滩地这一层（脚底 ≤ maxFootY，码头甲板 / 岸台顶等高处不算）时，送回判定按 floorY 算水深。
+ * 退潮（0）时 0 − floorY > recallDepth ⇒ 走进去就走现有送回安全点流程；碰撞不变（白盒滩地照旧是碰撞唯一来源）。
+ */
+export interface Seabed {
+  id: string;
+  contains: TideRegion;
+  /** 该处真实海床高度（美术地形） */
+  floorY: number;
+  /** 脚底高于这个值 = 站在别的东西上（码头、岸台、船体挡板），不按海床算 */
+  maxFootY: number;
+}
+
+/** 多边形（xz）内判定：射线法；poly = [x, z][] */
+export function polygonRegion(poly: readonly (readonly [number, number])[]): TideRegion {
+  return (p) => {
+    let inside = false;
+    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+      const [xi, zi] = poly[i]!;
+      const [xj, zj] = poly[j]!;
+      if (zi > p.z !== zj > p.z && p.x < ((xj - xi) * (p.z - zi)) / (zj - zi) + xi) inside = !inside;
+    }
+    return inside;
+  };
+}
+
 const cfg = gameplay.tide;
 
 const smoothstep = (u: number): number => u * u * (3 - 2 * u);
@@ -73,6 +100,7 @@ export class TideController {
   private moving = false;
   private walkable: TideState;
   private readonly bound: BoundCollider[] = [];
+  readonly seabeds: Seabed[] = [];
   private readonly events: EventBus | null;
 
   constructor(opts: TideControllerOptions) {
@@ -185,6 +213,18 @@ export class TideController {
     return f;
   }
 
+  /** 深水区：区域内按真实海床算送回水深（见 Seabed） */
+  addSeabed(s: Seabed): Seabed {
+    this.seabeds.push(s);
+    return s;
+  }
+
+  /** 送回判定用的脚下地面高度：在深水区里、脚踩滩地层 → 海床高度；否则就是脚底 */
+  floorAt(p: Vec3Like): number {
+    for (const s of this.seabeds) if (p.y <= s.maxFootY && s.contains(p)) return Math.min(p.y, s.floorY);
+    return p.y;
+  }
+
   /** p 处地面被淹没的深度（m，负数 = 在水面以上） */
   depthAt(footY: number): number {
     return this.level - footY;
@@ -265,7 +305,7 @@ export class TideSet {
     if (this.recalling || actor.busy || !actor.onGround) return null;
     for (const z of this.zones) {
       if (!z.safePoint || !z.contains(actor.position)) continue;
-      if (z.depthAt(actor.position.y) > gameplay.tide.recallDepth) {
+      if (z.depthAt(z.floorAt(actor.position)) > gameplay.tide.recallDepth) {
         const r = this.onRecall?.(z);
         if (r instanceof Promise) {
           this.recalling = true;

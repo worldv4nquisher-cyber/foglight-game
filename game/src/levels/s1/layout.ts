@@ -87,6 +87,21 @@ export const S1 = {
   boat: { position: [5.508, 1.36, -10.757] as V3, rotationY: -1.70407, belowWater: 0.24, groundY: -0.24, seabedY: -0.44, bowRing: [4.071, 1.98, -10.95] as V3, mooring: [3.26, 2.2, -11.39] as V3,
     /** 船体（GLB extras beamM / lengthM、包围盒顶 0.80、船长中心局部 z +0.028）：白盒在退潮船位放一块挡板，退潮走过去不穿船 */
     hull: { beam: 1.2, length: 3.06, centerZ: 0.028, topY: 0.8 } },
+  /**
+   * 退潮深水区（制作人 1029 裁定）：码头尽头 / 小船一带美术海床（env-tidal-flat-s1）比白盒滩地 0.1 低得多（小船处 −0.44，旧船位 −0.62），
+   * 退潮也有水。多边形 = 美术海床 < −0.3（= 送回水深 gameplay.tide.recallDepth）的连续区域（从南边界往北扫描，0.5 m 一列取边界），
+   * 东段（x < −10）在岸台下方的部分取 −11.25，西段（x > 12.5）随西侧乱石岸抬高收窄。区域内脚踩滩地层（≤ maxFootY）时按 floorY 算送回水深：
+   * 走进去 = 现有送回安全点流程（黑场 + 「水太冷了。」）。碰撞不变。码头甲板 / 岸台 / 礁石小径 / 台阶都在区外或高于 maxFootY。
+   * scripts/verify-render.mjs「S1 深水区 = 美术海床」用 GLB 采样比对。
+   */
+  deepWater: {
+    polygon: [
+      [-19.6, -18.1], [-19.6, -11.25], [-10.5, -11.25], [-10.5, -10], [-10, -8.95], [12.5, -8.95], [13, -10.75],
+      [13.5, -12.5], [14, -14.25], [14.5, -16.25], [15, -17.75], [15.2, -18.1],
+    ] as readonly V2[],
+    floorY: -0.44,
+    maxFootY: 0.3,
+  },
   sunkenBoat: { position: [10.2, -1.15, -17] as V3, rotationY: 0.6, rotationXDeg: 9, rotationZDeg: -21 },
   /** 美术节点摆放（GLB 根的平移 / 绕 Y 旋转；与 s1-layout.json nodes 一致） */
   artNodes: {

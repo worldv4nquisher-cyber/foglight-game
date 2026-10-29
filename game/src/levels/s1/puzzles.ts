@@ -5,7 +5,7 @@ import type { InteractionSystem } from '@/systems/interaction/InteractionSystem'
 import type { HintSystem } from '@/systems/HintSystem';
 import { boxZone, circleZone } from '@/systems/HintSystem';
 import { Interactable } from '@/systems/interaction/Interactable';
-import { TideController } from '@/systems/tide/TideController';
+import { polygonRegion, TideController } from '@/systems/tide/TideController';
 import { TideBell } from '@/systems/tide/TideBell';
 import { Floatable } from '@/systems/tide/Floatable';
 import { TraversalLink } from '@/entities/components/TraversalLink';
@@ -90,6 +90,8 @@ export function buildS1Puzzles(o: S1PuzzleOptions): S1Puzzles {
     safePoint: { position: v3(S1.safePoint), facing: S1.safeFacing },
   });
   tide.bindFromColliders(o.tideColliders);
+  // 退潮深水区（码头尽头 / 小船附近，美术海床低于白盒滩地）：走进去按真实海床算水深 → 送回
+  tide.addSeabed({ id: 's1-deep-water', contains: polygonRegion(S1.deepWater.polygon), floorY: S1.deepWater.floorY, maxFootY: S1.deepWater.maxFootY });
 
   // ---- 潮汐钟（岸台东侧；高光金属 = 湿铜）
   const [bx, by, bz] = S1.bellAnchor;

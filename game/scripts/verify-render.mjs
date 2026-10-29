@@ -19,6 +19,7 @@ import { makeSkyLayer, SKY_DEPTH } from '@/render/skyLayer';
 import { applyObjectFog, fogExp2Factor, OBJECT_FOG_GLSL, readFogHint } from '@/render/objectFog';
 import { applyMaterialHints } from '@/render/materialHints';
 import { QUALITY_PRESETS } from '@/config/quality';
+import { gameplay } from '@/config/gameplay';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const ART = resolve(ROOT, '../art');
@@ -294,6 +295,59 @@ if (hasArt) {
     near(S1.boat.hull.length, bb.max.z - bb.min.z, 0.02, '船长');
     near(S1.boat.hull.centerZ, (bb.max.z + bb.min.z) / 2, 0.01, '船长中心');
     return `美术节点 ${Object.keys(S1.artNodes).length} 个、关键点、台阶 / 平台、小船 (${S1.boat.position.join(', ')}) 与系船点 (${S1.boat.mooring.join(', ')}) ✓`;
+  });
+
+  await test('S1 深水区 = 美术海床（env-tidal-flat-s1 LOD0）：区内海床 < −0.3（送回水深），区外滩地北段 / 合法路线不在区内', async () => {
+    const { S1 } = await import('@/levels/s1/layout');
+    const { polygonRegion } = await import('@/systems/tide/TideController');
+    const { computeBoundsTree, acceleratedRaycast } = await import('three-mesh-bvh');
+    const flat = await loadGlb('models/env/env-tidal-flat-s1.glb');
+    const n = S1.artNodes['env-tidal-flat-s1'];
+    flat.position.set(...n.translation);
+    flat.rotation.y = n.rotationY;
+    flat.updateMatrixWorld(true);
+    const meshes = [];
+    flat.traverse((o) => {
+      if (o.isMesh && /_lod0_/.test(o.name)) {
+        o.geometry.computeBoundsTree = computeBoundsTree;
+        o.geometry.computeBoundsTree();
+        o.raycast = acceleratedRaycast;
+        o.material.side = THREE.DoubleSide;
+        meshes.push(o);
+      }
+    });
+    assert.ok(meshes.length, '地形 LOD0');
+    const rc = new THREE.Raycaster();
+    rc.firstHitOnly = true;
+    const down = new THREE.Vector3(0, -1, 0);
+    const H = (x, z) => {
+      rc.set(new THREE.Vector3(x, 20, z), down);
+      const h = rc.intersectObjects(meshes, false);
+      return h.length ? Math.min(...h.map((q) => q.point.y)) : NaN;
+    };
+    near(H(S1.boat.position[0], S1.boat.position[2]), S1.boat.seabedY, 0.02, '小船处海床');
+    const D = S1.deepWater;
+    const inside = polygonRegion(D.polygon);
+    let nIn = 0, deepIn = 0, worst = -Infinity, nOut = 0, deepOut = 0;
+    for (let x = -19.5; x <= 15.5; x += 0.5) {
+      for (let z = -17.5; z <= -4; z += 0.5) {
+        const h = H(x, z);
+        if (Number.isNaN(h)) continue;
+        if (inside({ x, y: 0, z })) {
+          nIn++;
+          if (h < -gameplay.tide.recallDepth) deepIn++;
+          worst = Math.max(worst, h);
+        } else if (x > -10 && x < 12.5) {
+          nOut++;
+          if (h < -gameplay.tide.recallDepth) deepOut++;
+        }
+      }
+    }
+    assert.ok(deepIn / nIn >= 0.97, `区内海床 < −0.3 占 ${((deepIn / nIn) * 100).toFixed(1)}%（≥ 97%）`);
+    assert.ok(worst < -0.15, `区内最高海床 ${worst.toFixed(3)} 仍明显在水下（< −0.15）`);
+    assert.ok(deepOut / nOut <= 0.05, `区外（滩地北段）深水只占 ${((deepOut / nOut) * 100).toFixed(1)}%（≤ 5%）`);
+    assert.ok(D.floorY <= -gameplay.tide.recallDepth - 0.1, 'floorY 退潮也超过送回水深');
+    return `区内 ${nIn} 点 ${((deepIn / nIn) * 100).toFixed(1)}% < −0.3、最高 ${worst.toFixed(2)}；区外北段 ${nOut} 点深水 ${((deepOut / nOut) * 100).toFixed(1)}%`;
   });
 
   await test('外部 KTX2：S1 全部 GLB 的 images.uri 相对 GLB 解析后存在（运行时 assets/art/models/env/../../textures/ 同理）', () => {
