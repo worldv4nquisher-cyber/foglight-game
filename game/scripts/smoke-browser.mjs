@@ -1276,6 +1276,104 @@ const CHECKS = [
       return out.join('；');
     },
   },
+  {
+    name: 'v0.1-011 潮汐：测试场地敲钟 6 s 退潮（过渡中提示变灰、再按 E 无效）、水面 / uTideLevel / F4 读数、礁石路空气墙、涨潮淹没送回 + 字幕、浮台锚位载人浮起',
+    async run({ evaluate, cdp, sleep }) {
+      const out = [];
+      await cdp.goto('scene=testbed&debug=1', 'testbed');
+      const until = async (expr, ms = 15000) => {
+        const end = Date.now() + ms;
+        let v;
+        while (Date.now() < end) {
+          v = await evaluate(expr).catch(() => false);
+          if (v) return v;
+          await sleep(100);
+        }
+        return v;
+      };
+      const tapE = async () => {
+        await evaluate(`__game.input.setRaw('smoke', 'KeyE', true); 1`);
+        await sleep(150);
+        await evaluate(`__game.input.setRaw('smoke', 'KeyE', false); 1`);
+      };
+      // 无头高负载时游戏时间比墙钟慢很多：所有等待都按状态轮询，超时放宽
+      const T = 180000;
+      await evaluate(`(() => { window.__tx = []; for (const n of ['tide:changing', 'tide:changed', 'tide:bell', 'tide:recall', 'float:state', 'sfx:play']) __game.events.on(n, (p) => __tx.push([n, p])); return 1; })()`);
+      const st = `(() => { const tb = __testbed, a = tb.tideArea, t = a.tide, pr = document.querySelector('.hud-prompt'); const p = tb.rig.body.position;
+        return { level: t.level, state: t.state, moving: t.transitioning, water: a.water.position.y, gaugeU: a.gauge.material.userData.tideShader?.uniforms.uTideLevel.value ?? null,
+          cur: tb.interaction.current?.id ?? null, prompt: pr && !pr.hidden ? pr.textContent : null, grey: !!pr?.classList.contains('is-disabled'), rings: a.bell.rings,
+          gate: a.reefGate.enabled, raft: a.raft.state, raftY: a.raft.object.position.y, p: [p.x, p.y, p.z], ground: tb.rig.body.body.onGround, busy: tb.rig.controller.busy,
+          debug: document.querySelector('.debug-panel')?.textContent ?? '' }; })()`;
+      const place = (x, y, z, facing) => evaluate(`(() => { const tb = __testbed; tb.rig.body.body.teleport(new tb.tideArea.anchors.safe.constructor(${x}, ${y}, ${z})); tb.rig.controller.facing = ${facing}; return 1; })()`);
+
+      // ---- 1. 敲钟：站到钟前，E
+      if (!(await until(`__game.input.context === 'explore'`, 20000))) throw new Error('测试场地没进 explore');
+      let s = await evaluate(st);
+      if (s.state !== 'high' || Math.abs(s.level - 1.6) > 1e-6 || s.water !== s.level || !s.gate) throw new Error('初始应为涨潮 1.6、礁石路有墙 ' + JSON.stringify(s));
+      await place(-4, 2.02, 22.45, Math.PI);
+      if (!(await until(`${st}.cur === 'tide-bell'`, 20000))) throw new Error('站到钟前没有候选 ' + JSON.stringify(await evaluate(st)));
+      s = await evaluate(st);
+      if (s.prompt !== TEXT['ui.prompt.ring'] || s.grey) throw new Error('钟前提示应为「' + TEXT['ui.prompt.ring'] + '」且不灰 ' + JSON.stringify(s));
+      await tapE();
+      if (!(await until(`${st}.moving`, 30000))) throw new Error('按 E 没开始退潮 ' + JSON.stringify(await evaluate(st)));
+      if (!(await until(`${st}.grey`, 10000))) throw new Error('过渡中提示没变灰 ' + JSON.stringify(await evaluate(st)));
+      await tapE();
+      await sleep(600);
+      s = await evaluate(st);
+      if (s.rings !== 1 || s.state !== 'low') throw new Error('过渡中再按 E 不应生效 ' + JSON.stringify(s));
+      out.push('E 敲钟 → 退潮、过渡中提示变灰、再按 E 无效 ✓');
+      if (!(await until(`!${st}.moving`, T))) throw new Error('退潮没结束 ' + JSON.stringify(await evaluate(st)));
+      // 刻度柱可能不在视野里还没编译：强制编译一次再读它着色器里的 uTideLevel
+      await evaluate(`(() => { __game.renderer.compile(__testbed.scene, __testbed.camera); return 1; })()`);
+      s = await evaluate(st);
+      if (s.level !== 0 || s.water !== 0 || s.gaugeU !== 0 || s.gate) throw new Error('退潮到位后 level / 水面 / 刻度柱 uniform / 礁石路墙不对 ' + JSON.stringify(s));
+      if (s.grey || s.prompt !== TEXT['ui.prompt.ring']) throw new Error('到位后提示应恢复 ' + JSON.stringify(s));
+      await evaluate(`__game.ui.debug.setVisible(true); 1`);
+      await until(`/test-tide/.test(document.querySelector('.debug-panel')?.textContent ?? '')`, 20000);
+      s = await evaluate(st);
+      await evaluate(`__game.ui.debug.setVisible(false); 1`);
+      if (!/潮汐/.test(s.debug) || !/test-tide low/.test(s.debug)) throw new Error('F4 面板没有潮汐读数 ' + s.debug.slice(0, 300));
+      const ev = await evaluate('__tx.map(([n]) => n)');
+      for (const n of ['tide:bell', 'sfx:play', 'tide:changing', 'tide:changed']) if (!ev.includes(n)) throw new Error('缺事件 ' + n + ' ' + ev.join());
+      out.push('6 s 后 level 0、水面 / uTideLevel 同步、礁石路墙撤掉、F4「潮汐」✓');
+
+      // ---- 2. 送回：站在礁石路上（0.1 m），Y 遥控涨潮 → 水深 > 0.3 m 时黑场送回岸台安全点 + 字幕
+      await place(0, 0.12, 32, 0);
+      await until(`${st}.ground`, 10000);
+      await evaluate(`__testbed.tideArea.bell.ring(); 1`);
+      if (!(await until(`__tx.some(([n]) => n === 'tide:recall')`, T))) throw new Error('涨潮淹没礁石路没有送回 ' + JSON.stringify(await evaluate(st)));
+      const sub = await until(`(() => { const l = document.querySelector('.subtitle-line'); return l && l.textContent === ${JSON.stringify(TEXT['ch1.common.tide_return'])} ? l.textContent : false; })()`, 20000);
+      if (!sub) throw new Error('送回时没显示「' + TEXT['ch1.common.tide_return'] + '」');
+      const lvl = await evaluate(`__testbed.tideArea.tide.level`);
+      if (!(await until(`(() => { const s = ${st}; return !s.busy && Math.hypot(s.p[0], s.p[2] - 22) < 0.6 && Math.abs(s.p[1] - 2) < 0.1; })()`, 60000))) throw new Error('没送回到岸台安全点 ' + JSON.stringify(await evaluate(st)));
+      out.push(`涨到 ${lvl.toFixed(2)} m 时送回岸台 + 字幕「${sub}」✓`);
+      if (!(await until(`!${st}.moving`, T))) throw new Error('涨潮没结束');
+      if (!(await evaluate(`${st}.gate`))) throw new Error('涨潮后礁石路墙没恢复');
+
+      // ---- 3. 浮台：退潮、浮台推进锚位，站上去，涨潮 → 浮台载人升到岸台高度；浮起时不可推
+      await evaluate(`(() => { const a = __testbed.tideArea; a.tide.set('low', { instant: true }); a.raft.object.position.copy(a.anchors.raftAnchor); a.raftPush.pushT = 1; a.raftPush.locked = true; a.raft.object.updateMatrixWorld(true); return 1; })()`);
+      await sleep(300);
+      await place(5, 0.62, 24.65, Math.PI);
+      if (!(await until(`(() => { const s = ${st}; return s.ground && Math.abs(s.p[1] - 0.6) < 0.05; })()`, 20000))) throw new Error('没站上浮台 ' + JSON.stringify(await evaluate(st)));
+      await evaluate(`__testbed.tideArea.bell.ring(); 1`);
+      let minGap = 0;
+      const end = Date.now() + T;
+      while (Date.now() < end) {
+        s = await evaluate(st);
+        minGap = Math.max(minGap, Math.abs(s.p[1] - (s.raftY + 0.25)));
+        if (!s.moving) break;
+        await sleep(150);
+      }
+      if (s.moving) throw new Error('涨潮没结束');
+      if (s.raft !== 'floating' || Math.abs(s.raftY - 1.75) > 0.021) throw new Error('锚位浮台应浮到 1.75 ±2 cm ' + JSON.stringify(s));
+      if (Math.abs(s.p[1] - 2.0) > 0.05 || Math.hypot(s.p[0] - 5, s.p[2] - 24.65) > 0.3) throw new Error('角色没被浮台带上去 ' + JSON.stringify(s));
+      if (minGap > 0.06) throw new Error('上升途中角色与浮台顶面偏差 ' + minGap.toFixed(3) + ' m');
+      if (await evaluate(`__testbed.interaction.canInteract(__testbed.tideArea.raftPush)`)) throw new Error('浮起时还能推');
+      out.push(`浮台锚位载人浮到 ${(s.raftY + 0.25).toFixed(2)} m（与岸台齐平、途中最大偏差 ${(minGap * 100).toFixed(1)} cm）、浮起不可推 ✓`);
+      await cdp.goto('');
+      return out.join('；');
+    },
+  },
 ];
 const extra = process.env.SMOKE_ONLY ? CHECKS.filter((c) => process.env.SMOKE_ONLY.split('|').some((k) => c.name.includes(k))) : CHECKS;
 

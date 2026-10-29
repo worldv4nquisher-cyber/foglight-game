@@ -24,7 +24,8 @@ export interface InteractionActor {
 
 /** 交互 HUD（ui/Hud.ts 实现） */
 export interface InteractionHud extends PuzzleBarHud {
-  setPrompt(text: string | null): void;
+  /** disabled = 灰色提示（Interactable.blocked：潮汐钟过渡中等），按 E 无效 */
+  setPrompt(text: string | null, disabled?: boolean): void;
   /** 3.5 m 内的冷色小图标（屏幕像素坐标）；active = 当前可交互的那个 */
   setMarkers(markers: ReadonlyArray<{ x: number; y: number; active: boolean }>): void;
   /** hold 圆环进度，null 隐藏 */
@@ -90,6 +91,7 @@ export class InteractionSystem {
   current: Interactable | null = null;
   private action: Action = { kind: 'none' };
   private prompt: string | null = null;
+  private promptDisabled = false;
   private holdShown: number | null = null;
   private readonly o: InteractionSystemOptions;
 
@@ -202,6 +204,8 @@ export class InteractionSystem {
   /** 直接触发（测试 / 脚本用；正常由 E 触发） */
   trigger(it: Interactable): void {
     const ev = this.o.events;
+    // 暂时不可用（提示已变灰）：按 E 无效
+    if (it.isBlocked) return;
     switch (it.kind) {
       case 'inspect': {
         const id = it.textId as TextId;
@@ -290,9 +294,11 @@ export class InteractionSystem {
     let text: string | null = null;
     if (a.kind === 'hold' || a.kind === 'push' || (a.kind === 'approach' && a.then !== 'use')) text = t(a.target.prompt);
     else if (a.kind === 'none') text = this.current ? t(this.current.prompt) : (this.o.fallbackPrompt?.() ?? null);
-    if (text !== this.prompt) {
+    const disabled = a.kind === 'none' && this.current !== null && this.current.isBlocked;
+    if (text !== this.prompt || disabled !== this.promptDisabled) {
       this.prompt = text;
-      this.o.hud.setPrompt(text);
+      this.promptDisabled = disabled;
+      this.o.hud.setPrompt(text, disabled);
     }
     const hp = a.kind === 'hold' || (a.kind === 'approach' && a.then === 'hold') ? this.holdProgress : null;
     if (hp !== this.holdShown) {
@@ -388,7 +394,7 @@ export class InteractionSystem {
   private stepPush(a: Extract<Action, { kind: 'push' }>, dt: number): void {
     const it = a.target;
     const track = it.track;
-    if (!track || !this.o.input.isDown('interact')) {
+    if (!track || !it.enabled || !this.o.input.isDown('interact')) {
       this.endAction();
       return;
     }

@@ -76,10 +76,11 @@ export class Hud implements InteractionHud {
     this.hint.innerHTML = html;
   }
 
-  /** 交互提示（如「E 点亮灯塔」），传 null 隐藏 */
-  setPrompt(text: string | null): void {
+  /** 交互提示（如「E 点亮灯塔」），传 null 隐藏；disabled = 灰色（暂时不可用，如潮汐钟涨落中，v0.1-011） */
+  setPrompt(text: string | null, disabled = false): void {
     this.prompt.hidden = text === null;
     if (text !== null) this.prompt.textContent = text;
+    this.prompt.classList.toggle('is-disabled', text !== null && disabled);
   }
 
   /** 交互小图标（屏幕像素坐标）；active = 可交互的那个（文字提示同时出现） */

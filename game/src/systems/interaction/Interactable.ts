@@ -96,6 +96,10 @@ export class Interactable extends Component {
   pushT = 0;
   /** push 到终点 / 一次性物体用完：不再可交互 */
   locked = false;
+  /**
+   * 暂时不可用但仍显示（v0.1-011 潮汐钟过渡中）：仍是候选、提示变灰，按 E 无效。可以是函数（每步求值）。
+   */
+  blocked: boolean | (() => boolean) = false;
   private readonly point: THREE.Object3D | null;
   private readonly focusSpec: THREE.Object3D | THREE.Vector3 | null;
 
@@ -125,6 +129,11 @@ export class Interactable extends Component {
   /** 是否参与判定（enabled 且没用完） */
   get available(): boolean {
     return this.enabled && !this.locked;
+  }
+
+  /** 当前是否被 blocked（提示变灰、E 无效） */
+  get isBlocked(): boolean {
+    return typeof this.blocked === 'function' ? this.blocked() : this.blocked;
   }
 
   /** 焦点世界坐标 */

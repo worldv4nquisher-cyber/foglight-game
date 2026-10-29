@@ -20,6 +20,9 @@ import { t, type TextId } from '@/content/text';
 import { keyHintHtml } from '@/ui/keyHint';
 import type { HintSystem } from '@/systems/HintSystem';
 import { createSceneHints } from './sceneHints';
+import { TideSet } from '@/systems/tide/TideController';
+import type { TideBell } from '@/systems/tide/TideBell';
+import { bindSfxFallback, recallToSafePoint } from '@/systems/tide/tideScene';
 
 /** 建立镜头迟迟不结束时（慢机器上画质检测拖住），进场多久后无论如何开始预加载下一个场景 */
 const PRELOAD_FALLBACK_MS = 8000;
@@ -57,6 +60,10 @@ export abstract class LevelScene extends BaseScene {
   interaction!: InteractionSystem;
   /** 三级提示（007）：谜题区域在 buildInteractables 里用 this.hints.add({ id, zone, l1, … }) 登记（013–015） */
   hints!: HintSystem;
+  /** 潮汐（011）：S1 / S3 在 buildLevel / buildInteractables 里 this.tides.add(new TideController(…))；有主分区时水面高度跟随潮位 */
+  readonly tides = new TideSet();
+  /** 潮汐钟（011）：每帧摆动 */
+  protected readonly bells: TideBell[] = [];
 
   /** 入口点（buildLevel 里登记；也可以从模型 collectSceneMarkers 收集） */
   readonly spawns = new Map<string, SpawnPoint>();
@@ -129,6 +136,8 @@ export abstract class LevelScene extends BaseScene {
 
     // 掉出世界（理论上不会发生）：黑场送回本次入口
     this.physics.onFallOut = () => void this.rig.controller.teleportTo(spawn.position);
+    // 潮水送回（011）：水深 > 0.3 m → 黑场 0.5 s 送回分区安全点 + 「水太冷了。」
+    this.tides.onRecall = (zone) => recallToSafePoint(this.game, this.rig, zone);
     if (this.goalId) this.game.narrative.setGoal(this.goalId);
 
     const { events, audio, ui } = this.game;
@@ -139,6 +148,10 @@ export abstract class LevelScene extends BaseScene {
       }),
       () => this.interaction.dispose(),
       () => this.cameraFollow.dispose(),
+      bindSfxFallback(events, audio, (id) => this.game.assets.getAudio(id)),
+      () => {
+        for (const b of this.bells) b.dispose();
+      },
     );
 
     ui.hud.show();
@@ -307,9 +320,12 @@ export abstract class LevelScene extends BaseScene {
     if (this.game.flow.transitioning) this.rig.controller.locked = true;
     this.interaction.fixedUpdate(dt);
     this.entities.fixedUpdate(dt);
+    // 潮汐在角色物理之前：浮物（dynamic 碰撞体）先移动，站在上面的角色被带着走
+    this.tides.fixedUpdate(dt);
     this.physics.step(dt);
     this.rig.body.afterPhysics();
     this.clampPlayer(this.rig.body.position);
+    this.tides.checkRecall({ position: this.rig.body.position, onGround: this.rig.body.body.onGround, busy: this.rig.controller.busy });
     this.hints.fixedUpdate(dt, this.rig.body.position);
   }
 
@@ -322,10 +338,13 @@ export abstract class LevelScene extends BaseScene {
       this.game.ui.debug.set('角色', debugPlayerLine(this.rig, this.physics));
       this.game.ui.debug.set('相机', this.cameraFollow.debugLine());
       this.game.ui.debug.set('提示', this.hints.debugLine());
+      if (this.tides.zones.length) this.game.ui.debug.set('潮汐', this.tides.debugLine());
       this.game.ui.debug.set('场景', `${this.name} · 入口 ${this.entryId} · 资源组 ${this.game.assets.loadedGroups.join(' ')}`);
     }
     this.sky.follow(this.camera);
+    if (this.water && this.tides.primary) this.water.setLevel(this.tides.primary.level);
     this.water?.update(dt);
+    for (const b of this.bells) b.update(dt);
     this.rain?.update(dt, this.camera);
     // 阴影相机跟随玩家（保证近处阴影精度），光照方向不变
     const a = this.atmosphere!;

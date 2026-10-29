@@ -223,6 +223,13 @@ body {
   border-radius: 4px;
 }
 
+/* v0.1-011：暂时不可用的交互（潮汐钟涨落中）—— 灰色、无暖色 */
+.hud-prompt.is-disabled {
+  color: #7d878d;
+  border-color: rgba(125, 135, 141, 0.35);
+  opacity: 0.75;
+}
+
 /* v0.1-004 交互：小图标（style-guide §2 可交互提示 #A9BCC4）、hold 圆环、机关按键提示条 */
 .hud-markers {
   position: absolute;

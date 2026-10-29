@@ -5,9 +5,12 @@ import * as THREE from 'three';
  * 法线由解析导数计算，配合低粗糙度得到暗沉、缓慢起伏的海面。以后可替换为带反射/折射的正式水体。
  */
 export class Water extends THREE.Mesh<THREE.PlaneGeometry, THREE.MeshStandardMaterial> {
-  private uniforms = { uTime: { value: 0 } };
+  private uniforms = { uTime: { value: 0 }, uWaveScale: { value: 1 } };
 
-  constructor(size = 600, segments = 200, color = 0x1b252c) {
+  /**
+   * @param waveScale 波浪振幅倍数（潮汐分区的小片水面用 0.3 左右，免得浪高盖过 0.3 m 的送回判定）
+   */
+  constructor(size = 600, segments = 200, color = 0x1b252c, waveScale = 1) {
     const geometry = new THREE.PlaneGeometry(size, size, segments, segments);
     geometry.rotateX(-Math.PI / 2);
     const material = new THREE.MeshStandardMaterial({
@@ -19,14 +22,17 @@ export class Water extends THREE.Mesh<THREE.PlaneGeometry, THREE.MeshStandardMat
     super(geometry, material);
     this.name = 'water';
     this.receiveShadow = true;
+    this.uniforms.uWaveScale.value = waveScale;
 
     material.onBeforeCompile = (shader) => {
       shader.uniforms.uTime = this.uniforms.uTime;
+      shader.uniforms.uWaveScale = this.uniforms.uWaveScale;
       shader.vertexShader = shader.vertexShader
         .replace(
           '#include <common>',
           /* glsl */ `#include <common>
           uniform float uTime;
+          uniform float uWaveScale;
           // dir.xy, 振幅, 波长, 速度
           vec3 waveSum(vec2 p, out vec2 grad) {
             const int N = 4;
@@ -41,8 +47,8 @@ export class Water extends THREE.Mesh<THREE.PlaneGeometry, THREE.MeshStandardMat
               float k = 6.28318 / W[i].w;
               float c = sqrt(9.8 / k) * 0.6;
               float f = k * (dot(W[i].xy, p) - c * uTime);
-              h += W[i].z * sin(f);
-              grad += W[i].z * k * cos(f) * W[i].xy;
+              h += W[i].z * uWaveScale * sin(f);
+              grad += W[i].z * uWaveScale * k * cos(f) * W[i].xy;
             }
             return vec3(0.0, h, 0.0);
           }`,
@@ -58,6 +64,17 @@ export class Water extends THREE.Mesh<THREE.PlaneGeometry, THREE.MeshStandardMat
         )
         .replace('#include <begin_vertex>', 'vec3 transformed = position + wOffset;');
     };
+  }
+
+  /** 水面高度（世界 y = 网格 position.y；潮汐 v0.1-011 每帧写） */
+  get level(): number {
+    return this.position.y;
+  }
+
+  setLevel(y: number): void {
+    if (this.position.y === y) return;
+    this.position.y = y;
+    this.updateMatrixWorld();
   }
 
   update(dt: number): void {

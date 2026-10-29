@@ -66,6 +66,14 @@ export interface GameEvents {
   'hint:open': { puzzleId: string | null; level: number; step: string | null };
   'hint:close': undefined;
   'journal:close': undefined;
+  /** 011：潮汐开始涨落（state = 目标状态）/ 到位；潮汐钟敲响；浮物状态（搁浅 / 浮起 / 漂回中）；送回 */
+  'tide:changing': { zone: string; state: 'high' | 'low'; from: 'high' | 'low' };
+  'tide:changed': { zone: string; state: 'high' | 'low' };
+  'tide:bell': { id: string; zone: string; state: 'high' | 'low' };
+  'tide:recall': { zone: string };
+  'float:state': { id: string; state: 'grounded' | 'floating' | 'drifting' };
+  /** 音效请求（id = manifest 音频 key；没有资源时场景用合成音兜底，见 systems/tide/tideScene.ts bindSfxFallback） */
+  'sfx:play': { id: string };
 }
 
 /** 交互类型名（与 systems/interaction/Interactable.ts 的 InteractKind 一致；放这里避免 core 依赖 systems） */

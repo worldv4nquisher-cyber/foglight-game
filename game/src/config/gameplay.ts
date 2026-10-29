@@ -87,6 +87,27 @@ export const gameplay = {
     /** 强制送回的黑场时长（s） */
     fadeSec: 0.5,
   },
+  /** 潮汐（GDD §7 谜题 1、2、5，§9；v0.1-011）。高度基准全章统一：退潮水面 y = 0.0、涨潮 y = 1.6 */
+  tide: {
+    /** 退潮 / 涨潮水面高度（m，世界 y） */
+    lowLevel: 0.0,
+    highLevel: 1.6,
+    /** 涨落一次的时长（s，smoothstep 过渡；期间钟不能再敲） */
+    transitionSec: 6,
+    /** 水深超过多少算「深水」（m）：深水隐形墙启用，角色进不去 */
+    deepWaterDepth: 0.5,
+    /** 送回阈值（m）：角色脚下的地面被淹没超过这个深度 → 黑场送回安全点 + 字幕 */
+    recallDepth: 0.3,
+    /** 送回黑场保持时长（s） */
+    recallFadeSec: 0.5,
+    /** 浮物漂浮时的起伏：振幅（m，±）与周期（s） */
+    floatBobAmplitude: 0.02,
+    floatBobPeriod: 3,
+    /** 浮物不在锚位里浮起时漂回原位的演出时长（s） */
+    floatDriftSec: 2,
+    /** 潮汐钟敲响后的摆动时长（s，白盒动画） */
+    bellSwingSec: 1.6,
+  },
   /** 交互与机关（GDD §9；v0.1-004） */
   /** 字幕 / 阅读 / 日志（GDD §9、§10；任务单 005） */
   narrative: {

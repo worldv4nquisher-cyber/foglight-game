@@ -14,6 +14,9 @@ import { InteractionSystem, actorFromRig } from '@/systems/interaction/Interacti
 import { buildInteractionSamples, type InteractionSamples } from '@/world/interactionSamples';
 import { circleZone, type HintSystem } from '@/systems/HintSystem';
 import { createSceneHints } from './sceneHints';
+import { buildTideTestArea, type TideTestArea } from '@/world/tideTestArea';
+import { TideSet } from '@/systems/tide/TideController';
+import { bindSfxFallback, recallToSafePoint } from '@/systems/tide/tideScene';
 
 /**
  * 角色控制器 / 相机测试场地（v0.1-002、003）：地址栏加 ?scene=testbed 进入。不存档。
@@ -23,6 +26,7 @@ import { createSceneHints } from './sceneHints';
  * 碰撞网格走与美术模型相同的 -collider / -wall 命名约定（addFromModel，注册后隐藏），
  * 这里另外放一份可见的灰盒外观，方便看清楚。
  * 交互（004）：x = 16 一带的「交互走廊」放了八种交互各一例（world/interactionSamples.ts）。
+ * 潮汐（011）：起点往南坡道上岸台（world/tideTestArea.ts）：潮汐钟、礁石路、沙洲浮台、刻度柱；Y 键遥控切潮（只在测试场地）。
  */
 export class TestbedScene extends BaseScene {
   readonly name = 'testbed';
@@ -38,6 +42,9 @@ export class TestbedScene extends BaseScene {
   samples!: InteractionSamples;
   /** 007 测试谜题：test-bell（钟旁，敲钟 = 解开）、test-steps（油阀旁，分步骤：拧开油阀 = 完成第 1 步） */
   hints!: HintSystem;
+  /** 011 潮汐区 */
+  readonly tides = new TideSet();
+  tideArea!: TideTestArea;
   private tipMat: THREE.MeshBasicMaterial | null = null;
   private liftT = 0;
   private liftBaseY = 0;
@@ -122,9 +129,20 @@ export class TestbedScene extends BaseScene {
       mechanism: anchors.mechanism,
       beep: (f, d) => this.game.audio.beep(f, d, 'sine', 0.04),
     });
+    this.tideArea = buildTideTestArea({
+      scene: this.scene,
+      physics: this.physics,
+      interaction: this.interaction,
+      events: this.game.events,
+      waterColor: a.waterColor,
+    });
+    this.tides.add(this.tideArea.tide);
+    this.tides.onRecall = (zone) => recallToSafePoint(this.game, this.rig, zone);
     this.cleanups.push(
       () => this.interaction.dispose(),
       () => this.cameraFollow.dispose(),
+      () => this.tideArea.bell.dispose(),
+      bindSfxFallback(this.game.events, this.game.audio, (id) => this.game.assets.getAudio(id)),
     );
     this.buildHintTests();
 
@@ -133,7 +151,8 @@ export class TestbedScene extends BaseScene {
     ui.hud.setLocation('测试场地 · 角色控制器');
     ui.hud.setHint(
       '<kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 移动　<kbd>Shift</kbd> 小跑　<kbd>E</kbd> 交互 / 跨越（东侧 x = 16 交互走廊）　' +
-        '<kbd>G</kbd> 开关闸门　<kbd>T</kbd> 送回起点（黑场）　<kbd>C</kbd> 测试镜头　<kbd>右键</kbd> 观察　<kbd>F4</kbd> 调试读数',
+        '<kbd>G</kbd> 开关闸门　<kbd>T</kbd> 送回起点（黑场）　<kbd>C</kbd> 测试镜头　<kbd>右键</kbd> 观察　<kbd>F4</kbd> 调试读数　' +
+        '潮汐区在起点往南坡道上（<kbd>E</kbd> 敲钟，<kbd>Y</kbd> 遥控切潮）',
     );
 
     // 测试快捷键（只在这个场景）：G 闸门、T 送回
@@ -141,6 +160,7 @@ export class TestbedScene extends BaseScene {
       if (e.repeat || this.game.isPaused) return;
       if (e.code === 'KeyG') this.toggleGate();
       else if (e.code === 'KeyT') void this.rig.controller.teleportTo(anchors.spawn);
+      else if (e.code === 'KeyY') this.tideArea.bell.ring();
       else if (e.code === 'KeyC' && this.game.input.context === 'explore') void this.playTestCutscene();
     };
     window.addEventListener('keydown', onKey);
@@ -261,8 +281,10 @@ export class TestbedScene extends BaseScene {
     // 交互先于角色控制器：有交互候选时 E 归交互，跨越点只在没有候选时生效
     this.interaction.fixedUpdate(dt);
     this.entities.fixedUpdate(dt);
+    this.tides.fixedUpdate(dt);
     this.physics.step(dt);
     this.rig.body.afterPhysics();
+    this.tides.checkRecall({ position: this.rig.body.position, onGround: this.rig.body.body.onGround, busy: this.rig.controller.busy });
     this.hints.fixedUpdate(dt, this.rig.body.position);
   }
 
@@ -272,6 +294,7 @@ export class TestbedScene extends BaseScene {
     this.cameraFollow.update(dt);
     this.interaction.update(dt);
     this.samples.update(dt);
+    this.tideArea.update(dt);
     // 观察点在相机更新之后再算一次（用本帧相机朝向）
     this.viewpoint.evaluate();
     if (this.tipMat) this.tipMat.opacity = 0.15 + 0.85 * this.viewpoint.alignment;
@@ -279,6 +302,8 @@ export class TestbedScene extends BaseScene {
       this.game.ui.debug.set('角色', debugPlayerLine(this.rig, this.physics));
       this.game.ui.debug.set('相机', this.cameraFollow.debugLine());
       this.game.ui.debug.set('提示', this.hints.debugLine());
+      const r = this.tideArea.raft;
+      this.game.ui.debug.set('潮汐', `${this.tides.debugLine()} · 浮台 ${r.state}${r.inAnchor ? '（锚位）' : ''}`);
       const v = this.viewpoint;
       this.game.ui.debug.set('观察点', v.inRegion ? `对准度 ${v.alignment.toFixed(2)} · 偏差 ${v.angleDeg.toFixed(1)}°` : '不在观察点');
     }

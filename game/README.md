@@ -18,7 +18,7 @@
 | `npm run preview` | 本地预览 `dist/`（http://localhost:4173） |
 | `npm run typecheck` | TypeScript 严格模式检查（src + vite.config） |
 | `npm run lint` / `lint:fix` | ESLint（flat config + typescript-eslint 类型感知规则） |
-| `npm run test` | 全部 Node 校验：LOD / puzzleCritical、资源后处理与 GLB 自检（`test:assets`）、输入（`test:input`）、存档（`test:save`）、角色物理（`test:physics`）、相机（`test:camera`）、画质参数表与自动检测（`test:quality`，逐键对照 style-guide §8）、文本表是否最新 / 代码引用的文本 ID 是否都在（`test:text`）、交互与机关（`test:interaction`）、字幕 / 阅读 / 日志（`test:narrative`）、三级提示（`test:hint`；`test:text` 同时检查代码里没有硬编码的剧情中文） |
+| `npm run test` | 全部 Node 校验：LOD / puzzleCritical、资源后处理与 GLB 自检（`test:assets`）、输入（`test:input`）、存档（`test:save`）、角色物理（`test:physics`）、相机（`test:camera`）、画质参数表与自动检测（`test:quality`，逐键对照 style-guide §8）、文本表是否最新 / 代码引用的文本 ID 是否都在（`test:text`）、交互与机关（`test:interaction`）、字幕 / 阅读 / 日志（`test:narrative`）、三级提示（`test:hint`）、潮汐（`test:tide`；`test:text` 同时检查代码里没有硬编码的剧情中文） |
 | `npm run text:import` | 从 `docs/gdd/text-ch1.json` 重新生成 `src/content/text/zh-CN.ts`（文案改了跑一次；`test:text` 会检查生成结果是否已提交） |
 | `npm run verify:glb -- <a.glb> [b.glb…]` | **GLB 交付自检**（美术交付前跑；文件路径按你执行 npm 的目录解析，在 art/ 下可用 `npm --prefix ../game run verify:glb -- <文件>`）：LOD 层级与各级三角面、puzzleCritical、`-collider` / `-interact` 等特殊节点、COLOR_0 平滑法线、面数预算、材质与贴图。不带参数 = 原来的 LOD 自测。见下文「GLB 交付自检」 |
 | `npm run assets:test-lod` | 重新生成 LOD 测试模型 `public/assets/models/test-lod-puzzle-critical.glb` |
@@ -42,7 +42,7 @@
 | `?scene=s1\|s2\|s3` | 直接进第 1 章某个场景（S1 退潮海岸 / S2 守塔人小屋 / S3 灯塔；开发服务器或带 `?debug=1`），进场即在该场景入口存档 |
 | `?scene=sandbox` | 沙盒：v0.1 demo 岛（原主场景，含画质检测以外的全部样例；开发服务器或带 `?debug=1`），不存档、没有出口 |
 | `?slowLoad=1500` | 模拟慢网：除 boot/menu 外每个资源组至少加载 1500 ms（进度按时间线性），用来看加载页和切换黑场里的细线进度 |
-| `?scene=testbed` | 角色控制器 / 相机测试场地（坡、台阶、螺旋楼梯、墙、闸门 G、升降台、跨越点、T 黑场送回；带窄门的小屋、测试机关、观察点、C 测试镜头），不存档 |
+| `?scene=testbed` | 角色控制器 / 相机测试场地（坡、台阶、螺旋楼梯、墙、闸门 G、升降台、跨越点、T 黑场送回；带窄门的小屋、测试机关、观察点、C 测试镜头；起点往南坡道上是潮汐区，E 敲钟 / Y 遥控切潮），不存档 |
 | `?hintScale=0.05` | 三级提示计时乘系数（0.05 = 9 / 18 / 30 s 解锁一二三级，方便试玩提示；开发服务器 / `?debug=1` / 冒烟时才生效） |
 | `?debug=1` | 正式构建里也打开 F3 性能面板 / F4 调试面板（输入、速度、碰撞耗时、相机、观察点对准度） |
 
@@ -227,6 +227,19 @@ game.events.on('interact:used', ({ id }) => { if (id === 'bell') ring(); });
 - 提示次数：每道谜题每个层级第一次在弹窗里看到时记 1 次（一次看到二、三级记 2 次；换步骤不再记），立即写入存档的 `hintsUsed`（不改存档点、不弹「已保存」），章节结束页显示。
 - 测试场地 `?scene=testbed&hintScale=0.05`：钟旁地面圆圈 = `test-bell`（谜题 1 文案，二级高亮钟，敲钟 = 解开）；油阀旁圆圈 = `test-steps`（谜题 5 文案，拧开油阀 = 完成第一步，之后二三级换成「窗边镜子」）。F4 面板「提示」一行显示计时 / 阈值 / 层级 / 步骤。
 - 校验：`npm run test:hint`；smoke「v0.1-007」用 `?hintScale=0.02` 走真实 H 键。
+
+## 潮汐系统（v0.1-011）
+
+- **代码**：`systems/tide/TideController.ts`（分区状态 / 水位 / 碰撞开关 + `TideSet` 管多个分区、写全局 `uTideLevel`、送回判定）、`TideBell.ts`（潮汐钟，`use` 交互）、`Floatable.ts`（浮物）、`tideScene.ts`（送回演出 + `sfx:play` 占位音）；数值在 `config/gameplay.ts` 的 `tide`（低 0.0 / 高 1.6 m、过渡 6 s、深水 0.5 m、送回 0.3 m、起伏 ±2 cm / 3 s、漂回 2 s）。
+- **场景接入**（013 / 015）：`buildLevel` / `buildInteractables` 里 `this.tides.add(new TideController({ id, initial: 'high', events, region, safePoint }))`；第一个加入的分区是主分区，LevelScene 的水面高度跟随它。钟：`new TideBell({ id, tide, object, swing, interactPoint, events })`，把 `bell.interactable` 加进交互系统、`bell` 推进 `this.bells`。浮物：`tide.addFloatable(new Floatable({ id, object, floatOffset, anchors, homePosition, push }))`。
+- **碰撞约定**：GLB 碰撞网格 extras 写 `walkableWhen = "low" | "high"`（`-collider` 在该潮位存在；`-wall` 反过来，在该潮位**撤掉**，用作入口空气墙），或 `deepFloorY = <该处地面高度>`（水深 > 0.5 m 时挡住）；`tide.bindFromColliders(colliders)` 自动绑定。可走状态在水位过中点（0.8 m）时切换。
+- **送回**：角色在分区 `region` 内、着地、脚下被淹没 > 0.3 m → 黑场 0.5 s 回 `safePoint` + 字幕 `ch1.common.tide_return`。
+- **钟**：过渡中仍显示提示但变灰（`Interactable.blocked`，HUD `.hud-prompt.is-disabled`），按 E 无效。
+- **浮物**：水面 + `floatOffset` 高过搁浅高度时浮起；在锚位（石槽）里原地升到 1.6 + offset，不在锚位 2 s 漂回原位并把推动进度归零；只有搁浅时能推。根节点父级不要旋转 / 缩放。
+- **材质**：`render/tideUniforms.ts` 的 `tideUniforms.uTideLevel` 是全局 uniform；`withTideLevel(material, glsl)` 注入（片元里可用 `uTideLevel`、`vTideWorldY`），白盒湿痕线 `WET_LINE_GLSL`（025 换正式材质）。
+- **事件**：`tide:changing { zone, state, from }`、`tide:changed`、`tide:bell`、`tide:recall`、`float:state`、`sfx:play { id }`。
+- **测试场地**（`?scene=testbed`，加 `&debug=1` 后 F4 看「潮汐」一行）：起点往南走坡道上岸台。岸台西侧是潮汐钟（E 敲；Y 键遥控切潮，只在测试场地）；正前方礁石路（涨潮时入口有空气墙）；东侧沙洲上的浮台退潮时可向北推进石槽，涨潮后与岸台齐平可走上去；刻度柱水下部分变暗。站在礁石路上涨潮会被送回岸台。
+- 校验：`npm run test:tide`；smoke「v0.1-011」。
 
 ## 字幕、阅读界面与日志（v0.1-005）
 
