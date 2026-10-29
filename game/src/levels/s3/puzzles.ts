@@ -110,6 +110,8 @@ export interface S3Puzzles {
   leverSwing: THREE.Group;
   leverKnob: THREE.Mesh;
   leverIx: Interactable;
+  /** 透镜 inspect（BUG-015：可点灯期间禁用，让位给拉杆） */
+  lensIx: Interactable;
   /** 「E 点灯」当前能不能生效（阀已开 + 可点灯状态，含 0.3 s 断光容差） */
   canIgnite(): boolean;
   /** 按 E 生效：锁输入 → 走到拉杆交互点 → xi-ignite-lever → 第 34 帧点燃。返回是否生效 */
@@ -597,7 +599,10 @@ export function buildS3Puzzles(d: S3PuzzleDeps): S3Puzzles {
   lensAnchor.name = S3_IDS.lens;
   lensAnchor.position.set(...S3.points.lensSocket);
   root.add(lensAnchor);
-  interaction.add(new Interactable({ id: S3_IDS.lens, kind: 'inspect', object: lensAnchor, textId: 'ch1.s3.lens.inspect', focus: W(S3.points.lensSocket), reach: 0.6 }));
+  // BUG-015：透镜焦点（灯室中心 y 22.85）从拉杆站位看和握把几乎同方向，按离屏幕中心选会抢走「E 点灯」。
+  // 可点灯期间（含 0.3 s 宽限，= 拉杆开放）透镜不当候选，见 fixedUpdate；其余时候照常可查看。
+  const lensIx = new Interactable({ id: S3_IDS.lens, kind: 'inspect', object: lensAnchor, textId: 'ch1.s3.lens.inspect', focus: W(S3.points.lensSocket), reach: 0.6 });
+  interaction.add(lensIx);
 
   // ======================================================== 提示（整座灯塔 + 门外平台；按步骤）
   hints.add({
@@ -634,6 +639,7 @@ export function buildS3Puzzles(d: S3PuzzleDeps): S3Puzzles {
     leverSwing,
     leverKnob: knob,
     leverIx,
+    lensIx,
     canIgnite,
     startIgnite,
     igniteNow,
@@ -661,6 +667,8 @@ export function buildS3Puzzles(d: S3PuzzleDeps): S3Puzzles {
       if (rig && walk) stepWalk(rig, dt);
       actions?.fixedUpdate(dt);
       leverIx.enabled = canIgnite();
+      // BUG-015：可点灯时「E 点灯」优先——透镜 inspect 让位（和拉杆开放同一步切换）
+      lensIx.enabled = !leverIx.enabled;
       // 光路进度（上升沿反馈；天光刚亮起那一步不算，避免 40 s 周期里每次亮起都响）
       const reached = traceReached();
       const skyLit = beam.sky.lit;

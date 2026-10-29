@@ -15,6 +15,7 @@ import { RotatablePart, nextDetent } from '@/systems/interaction/RotatablePart';
 import { PuzzleGroup, puzzleBarText } from '@/systems/interaction/PuzzleMode';
 import { t as text } from '@/content/text';
 import { asXiClip, pushRate } from '@/entities/xi/clips';
+import { S3, toWorld } from '@/levels/s3/layout';
 
 const DT = 1 / 60;
 let now = 0;
@@ -177,6 +178,69 @@ test('BUG-014 aimCone：没对准的「看看而已」（0）让给画面里的�
   env.step(1);
   assert.ok(ndcOf(plain) < dj);
   assert.equal(env.ix.current?.id, 'plain', '没设 aimCone 的按离屏幕中心最近选（行为不变）');
+});
+
+
+test('BUG-015 S3 灯室：可点灯时站在拉杆站位，yaw ±0.6 × pitch 0 / −0.25 / −0.5 共 21 个视角全选拉杆「E 点灯」；不可点灯时透镜仍可查看', () => {
+  const env = setup({ floor: false });
+  const L = S3.igniteLever;
+  const P = (p) => toWorld(p);
+  // 灯室地面 y 22（世界），角色站在拉杆交互点、面向拉杆
+  const floorM = env.box('lamp-room-floor', [P(L.interact).x, P(L.interact).y - 0.5, P(L.interact).z], [8, 1, 8]);
+  env.physics.addMesh(floorM);
+  const stand = P(L.interact);
+  env.body.teleport(stand.clone());
+  const fd = P([L.interact[0] + L.facing[0], L.interact[1], L.interact[2] + L.facing[2]]).sub(stand);
+  env.actor.facing = Math.atan2(fd.x, fd.z);
+  // 和 s3/puzzles.ts 一样的两个候选：拉杆（use，20，焦点 = 握把）、透镜（inspect，0，reach 0.6，焦点 = 灯室中心）
+  const lever = env.ix.add(new Interactable({ id: 'ignite-lever-s3', kind: 'use', prompt: 'ui.prompt.ignite', object: env.box('lever', P(L.gripRest).toArray(), [0.05, 0.05, 0.05]), focus: P(L.gripRest), approach: false, priority: 20 }));
+  const lens = env.ix.add(new Interactable({ id: 'lens-s3', kind: 'inspect', object: env.box('lens', P(S3.points.lensSocket).toArray(), [0.1, 0.1, 0.1]), textId: 'ch1.s3.lens.inspect', focus: P(S3.points.lensSocket), reach: 0.6 }));
+  // 相机：探索跟随相机的近似（gameplay.camera：头部 pivotHeight、肩后偏右 shoulderOffset、室内 ≤ indoorMaxDistance），yaw = 面向 + π（相机在身后）+ 偏移
+  let yaw = 0;
+  let pitch = 0;
+  env.look = () => {
+    const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(pitch, yaw, 0, 'YXZ'));
+    const back = new THREE.Vector3(0, 0, 1).applyQuaternion(q);
+    const right = new THREE.Vector3(Math.cos(yaw), 0, -Math.sin(yaw));
+    env.camera.position.copy(env.body.position).add(new THREE.Vector3(0, gameplay.camera.pivotHeight, 0)).addScaledVector(right, gameplay.camera.shoulderOffset).addScaledVector(back, gameplay.camera.indoorMaxDistance);
+    env.camera.quaternion.copy(q);
+    env.camera.updateMatrixWorld(true);
+  };
+  const sweep = () => {
+    const hits = { lever: 0, lens: 0, none: 0 };
+    for (const p of [0, -0.25, -0.5])
+      for (let k = -3; k <= 3; k++) {
+        yaw = env.actor.facing + Math.PI + k * 0.2;
+        pitch = p;
+        env.body.teleport(stand.clone());
+        env.step(1);
+        const id = env.ix.current?.id;
+        hits[id === 'ignite-lever-s3' ? 'lever' : id === 'lens-s3' ? 'lens' : 'none']++;
+      }
+    return hits;
+  };
+  // 修复前（两个都开放）：复现 QA 的「透镜抢 E」
+  const before = sweep();
+  console.log(`  BUG-015 21 视角：修复前 ${JSON.stringify(before)}`);
+  assert.ok(before.lens >= 10, `前提：两个都开放时多数视角选透镜（QA 16 / 21）：${JSON.stringify(before)}`);
+  // 可点灯：puzzles.fixedUpdate 里 lensIx.enabled = !leverIx.enabled
+  lever.enabled = true;
+  lens.enabled = !lever.enabled;
+  const ready = sweep();
+  assert.deepEqual(ready, { lever: 21, lens: 0, none: 0 }, `可点灯时 21 个视角都应选拉杆：${JSON.stringify(ready)}`);
+  yaw = env.actor.facing + Math.PI;
+  pitch = -0.2;
+  env.step(1);
+  assert.equal(text(env.ix.current.prompt), text('ui.prompt.ignite'), '提示「E 点灯」');
+  // 不可点灯（拉杆关）：透镜照常可查看
+  lever.enabled = false;
+  lens.enabled = !lever.enabled;
+  const idle = sweep();
+  assert.equal(idle.lever, 0);
+  assert.ok(idle.lens >= 15, `不可点灯时透镜仍是候选：${JSON.stringify(idle)}`);
+  // 场景代码确实按拉杆开放切透镜
+  const src = readFileSync(new URL('../src/levels/s3/puzzles.ts', import.meta.url), 'utf8');
+  assert.match(src, /lensIx\.enabled = !leverIx\.enabled/);
 });
 
 

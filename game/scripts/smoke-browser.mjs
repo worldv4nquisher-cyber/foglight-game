@@ -2378,6 +2378,19 @@ const CHECKS = [
       if (!(await until(`/E\\s*点灯/.test(${prompt})`, 5000))) throw new Error('拉杆前没显示「E 点灯」：' + (await evaluate(prompt)) + JSON.stringify(await evaluate(`(() => { const s = __s3; const ix = s.puzzles.leverIx; const it = s.interaction ?? s.game.interaction; const f = ix.focus(s.rig.body.position.clone()); return { en: ix.enabled, av: ix.available, ctx: s.game.input.context, pos: s.rig.body.position.toArray(), f: f.toArray(), facing: s.rig.controller.facing, can: it?.canInteract?.(ix), cur: it?.current?.id ?? null, act: it?.actionKind, busy: s.rig.controller.busy, mode: s.rig.controller.mode?.kind, locked: s.rig.controller.locked, paused: s.game.isPaused, frozen: s.game.isFrozen, lp: it?.o?.linkPriority?.() ?? null, ig: s.puzzles.beam.igniter.state }; })()`)));
       if (/操作/.test(await evaluate(prompt))) throw new Error('点灯不应用「E 操作」');
       out.push('「E 点灯」只在拉杆 1.8 m / ±60° 内出现 ✓');
+      // BUG-015：可点灯时站在拉杆站位，相机 yaw ±0.6 × pitch 0 / −0.25 / −0.5（21 个视角）都选拉杆，不被透镜 inspect 抢走
+      if (await evaluate(`__s3.puzzles.lensIx.enabled`)) throw new Error('可点灯时透镜 inspect 应让位（lensIx.enabled 应为 false）');
+      const views = [];
+      for (const pitch of [0, -0.25, -0.5])
+        for (let k = -3; k <= 3; k++) {
+          await evaluate(`(() => { const s = __s3; const sp = s.puzzles.leverIx.standPoint(s.rig.body.position.clone()); s.rig.body.position.set(sp.position.x, sp.position.y + 0.02, sp.position.z); s.rig.body.velocity.set(0, 0, 0); s.rig.controller.facing = sp.facing; s.cameraFollow.yaw = sp.facing + Math.PI + ${k * 0.2}; s.cameraFollow.pitch = ${pitch}; window.__t15 = s.game.time.fixedTick; return 1; })()`);
+          await until(`__s3.game.time.fixedTick >= window.__t15 + 3`, 5000);
+          views.push(await evaluate(`__s3.interaction.current?.id ?? null`));
+        }
+      const bad = views.filter((id) => id !== 'ignite-lever-s3');
+      if (bad.length) throw new Error(`BUG-015：21 个视角里 ${bad.length} 个没选拉杆 ` + JSON.stringify(views));
+      if (!/E\s*点灯/.test(await evaluate(prompt))) throw new Error('BUG-015 扫视角后提示不是「E 点灯」');
+      out.push('BUG-015：可点灯时拉杆站位 21 个视角全选拉杆「E 点灯」，透镜让位 ✓');
       // 按 E：锁输入（cutscene）→ 走到 -interact → xi-ignite-lever 第 34 帧（1.133 s）点燃；连按只一次
       await evaluate(`(() => { window.__lit = 0; __s3.game.events.on('lighthouse:ignited', () => window.__lit++); return 1; })()`);
       await evaluate(`__s3.game.input.setRaw('smoke', 'KeyE', true); 1`);
