@@ -601,8 +601,8 @@ const CHECKS = [
       if (info.hand !== 'hand_r_socket') throw new Error('hand-item 没挂在 hand_r_socket：' + info.hand);
       // 材质：ramp 卡通明暗 + 脸 SDF + 湿痕 shader 真编译（编译错误 three 会打 console.error，由总表把关；这里查程序都链接成功）
       await sleep(500);
-      const mat = await evaluate(`(() => { const r = __testbed.rig; const progs = (__game.renderer.info.programs ?? []).filter((p) => /xi-(body|face|hair)/.test(p.cacheKey));
-        const gl = __game.renderer.getContext(); return { patched: r.look?.patched ?? 0, progs: progs.length, linked: progs.every((p) => gl.getProgramParameter(p.program, gl.LINK_STATUS)) }; })()`);
+      const mat = await evaluate(`(() => { const r = __testbed.rig; const progs = (__game.renderer.info.programs ?? []).filter((p) => /xi-(body|face|hair)(-sdf)?$/.test(p.cacheKey) || /,xi-(body|face|hair)/.test(p.cacheKey));
+        const gl = __game.renderer.getContext(); const A = __game.assets; return { tex: ['tex-xi-ramp', 'tex-xi-sdf-face'].map((k) => [A.has(k), A.isMissing(k)]), patched: r.look?.look.patched ?? 0, progs: progs.length, linked: progs.every((p) => gl.getProgramParameter(p.program, gl.LINK_STATUS)) }; })()`);
       if (mat.patched !== 3 || mat.progs < 2 || !mat.linked) throw new Error('汐材质没生效 / shader 没链接 ' + JSON.stringify(mat));
       const st = `(() => { const a = __testbed.rig.animator; const b = __testbed.rig.body.body; return { s: a.state, w: a.blend.walk, wr: a.blend.walkRate, j: a.blend.jog, jr: a.blend.jogRate, v: Math.hypot(b.actualVelocity.x, b.actualVelocity.z) }; })()`;
       await evaluate(`__game.input.setRaw('smoke', 'KeyA', true)`);
@@ -1954,6 +1954,60 @@ const CHECKS = [
       await evaluate(`localStorage.removeItem('foglight.save.v1'); 1`);
       try { await cdp.goto(''); } catch (e) { throw new Error('回 S1 失败：' + e.message, { cause: e }); }
       return out.join('，');
+    },
+  },
+  {
+    name: 'v0.1-017 交互动作 art=1（S2）：读日志 → xi-place-table（1.8 s，第 34 帧风灯上桌）→ 日志；地窖钥匙 xi-pickup-shelf（节点 anim）grab 帧挂到 middle_03_r',
+    async run({ evaluate, cdp, sleep }) {
+      const clock = () => evaluate(`({ e: __game.time.fixedTick * __game.time.fixedDelta, f: __game.time.frame })`);
+      const until = async (expr, ms = 8000) => {
+        const c0 = await clock();
+        const end = Date.now() + 180000;
+        let v;
+        while (Date.now() < end) {
+          v = await evaluate(expr);
+          if (v) return v;
+          await sleep(50);
+          const c = await clock();
+          if (c.e - c0.e > ms / 1000 && c.f - c0.f > 3) return await evaluate(expr);
+        }
+        return v;
+      };
+      const trig = (id) => evaluate(`(() => { const s = __s2; const it = s.interaction.get('${id}'); if (!it) return 'no ' + '${id}'; s.interaction.trigger(it); return 'ok'; })()`);
+      const tp = (x, y, z) => evaluate(`(() => { const s = __s2; s.rig.body.teleport(new s.rig.body.body.position.constructor(${x}, ${y}, ${z})); 1 })()`);
+      await evaluate(`localStorage.removeItem('foglight.save.v1'); 1`);
+      await cdp.goto('debug=1&scene=s2&art=1', 's2-keeper-house');
+      if (!(await until(`!!window.__s2?.puzzles`, 60000))) throw new Error('?scene=s2&art=1 没进 S2');
+      if (!(await until(`__game.input.context === 'explore' && !__s2.rig.controller.busy`, 40000))) throw new Error('建立镜头后没回到 explore');
+      if (!(await evaluate(`!!__s2.rig.animator`))) throw new Error('art=1 下 S2 没有 XiAnimator');
+      await tp(-3.9, 3.05, -0.25);
+      await until(`false`, 300);
+      if ((await trig('journal-s2')) !== 'ok') throw new Error('没有 journal-s2');
+      const t0 = (await clock()).e;
+      const play = await until(`__s2.puzzles.actions.playing === 'xi-place-table' && __s2.rig.animator.posing === 'xi-place-table'`, 3000);
+      if (!play) throw new Error('读日志没播 xi-place-table');
+      if (!(await until(`__game.ui.reader.isOpen`, 6000))) throw new Error('日志没打开');
+      const dt = (await clock()).e - t0;
+      const lp = await evaluate(`__s2.puzzles.lantern.parent?.name`);
+      if (lp !== 'desk-lantern-s2-socket') throw new Error('风灯没上书桌 ' + lp);
+      if (dt < 1.8 - 0.05) throw new Error(`xi-place-table 1.8 s 没播完就开了日志（${dt.toFixed(2)} s）`);
+      if (await evaluate(`__s2.rig.animator.posing`)) throw new Error('动作结束没 clearPose');
+      await evaluate(`__game.ui.reader.close(); 1`);
+      await until(`__game.input.context === 'explore'`, 3000);
+      // 地窖钥匙
+      await tp(-1.6, -2.35, 1.6);
+      await until(`false`, 300);
+      if ((await trig('cellar-key-s2')) !== 'ok') throw new Error('没有 cellar-key-s2');
+      const clip = await until(`__s2.interaction.animState?.clip`, 2000);
+      if (clip !== 'xi-pickup-shelf') throw new Error('钥匙应播 xi-pickup-shelf：' + clip);
+      if (!(await until(`__s2.puzzles.state.hasKey`, 4000))) throw new Error('grab 帧没拿到钥匙');
+      const att = await evaluate(`(() => { const b = __s2.rig.visual.getObjectByName('middle_03_r'); return { kids: b ? b.children.filter((c) => c.visible).map((c) => c.name) : null, t: __s2.interaction.animState?.t ?? null }; })()`);
+      if (!att.kids?.length) throw new Error('钥匙没挂到 middle_03_r ' + JSON.stringify(att));
+      if (att.t !== null && Math.abs(att.t - 22 / 30) > 0.12) throw new Error('钥匙不在 grab 帧生效 ' + JSON.stringify(att));
+      if (!(await until(`!__s2.rig.controller.locked && !__s2.interaction.animState`, 4000))) throw new Error('xi-pickup-shelf 播完没解锁');
+      const hidden = await evaluate(`(() => { const b = __s2.rig.visual.getObjectByName('middle_03_r'); return b.children.filter((c) => c.visible).length; })()`);
+      if (hidden) throw new Error('clip 播完钥匙应收起');
+      return `xi-place-table ${dt.toFixed(2)} s 后开日志、风灯上桌 ✓；钥匙 xi-pickup-shelf、grab 帧挂 middle_03_r（${att.kids.join('/')}）、播完收起解锁 ✓`;
     },
   },
   {
