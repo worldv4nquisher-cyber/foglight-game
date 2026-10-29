@@ -103,3 +103,21 @@ export class TraversalLink extends Component {
     return out.copy(this.end);
   }
 }
+
+/**
+ * 站在 feet 处能触发的跨越：可用、在范围内的里取起点（水平）最近的一条；没有则 null。
+ * （S1 浮台南沿：岸台→浮台 的起点范围会盖到浮台边上 5 cm，回程起点更近，得选回程。）
+ */
+export function pickTraversalLink(links: Iterable<TraversalLink>, feet: THREE.Vector3): TraversalLink | null {
+  let best: TraversalLink | null = null;
+  let bestD = Infinity;
+  for (const link of links) {
+    if (!link.available || !link.inRange(feet)) continue;
+    const d = Math.hypot(feet.x - link.start.x, feet.z - link.start.z);
+    if (d < bestD) {
+      bestD = d;
+      best = link;
+    }
+  }
+  return best;
+}

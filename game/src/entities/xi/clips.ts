@@ -260,14 +260,56 @@ export function readKeyAttach(
 
 /**
  * step-across 的跨越几何（anims.glb extras：rootMotion.inPlace = true、translateM [0,0,0.85]、profile smoothstep；gap near 0.20 / far 0.70）：
- * clip 原地，游戏沿 TraversalLink 前移 translateM，进度曲线 smoothstep 覆盖第 0–48 帧（TraversalLink.sample 同一条曲线、
- * XiAnimator 按跨越进度映射 clip 时间）→ 水平位移 = translateM · smoothstep(帧 / 48)，脚不滑。
- * 起点 = 缝近沿前 nearM，终点 = 起点 + translateM（落在缝远沿后 0.15 m）。
+ * clip 原地，游戏沿 TraversalLink 前移，进度曲线 smoothstep 覆盖第 0–48 帧（TraversalLink.sample 同一条曲线、
+ * XiAnimator 按跨越进度映射 clip 时间）→ 水平位移 = span · smoothstep(帧 / 48)。
+ *
+ * 制作人拍板（落点离任何边沿 ≥ 0.30 m）：美术原设「缝前 0.20 m 起跳、前移 0.85 m」落点只离远沿 0.15 m。
+ * 做法：先把起跳点往缝沿挪（不缩放、零滑步），但起跳脚尖（toe 骨，第 0 帧在根前 toeLeadM）至少留在台面上 takeoffToeMarginM；
+ * 挪到底还不够时，再把路径位移按实际距离缩放（span / 0.85），多出来的量按同一条 smoothstep 摊开。
+ * S1 的 0.5 m 缝：起跳点离近沿 0.15 m，落点离远沿 0.32 m，span 0.97 m（×1.14，支撑脚滑移约 6 cm / 0.8 s）。
  */
-export const XI_STEP_ACROSS = { translateM: 0.85, gapNearM: 0.2, gapFarM: 0.7 } as const;
+export const XI_STEP_ACROSS = {
+  translateM: 0.85,
+  gapNearM: 0.2,
+  gapFarM: 0.7,
+  /** 第 0 帧前脚 toe 骨在根前的距离（char-xi-anims.glb 实测 0.124 m，verify-xi 核对） */
+  toeLeadM: 0.124,
+  /** 起跳时 toe 骨离近沿至少留这么多（脚掌不悬空） */
+  takeoffToeMarginM: 0.026,
+  /** 落点（根 / 胶囊中心）离远沿至少（制作人 ≥ 0.30，留 2 cm 给浮台位置误差） */
+  landMarginM: 0.32,
+} as const;
 
-/** 沿一维方向（dir = ±1）跨过从 edge 开始的缝：返回起点 / 终点坐标 */
-export function stepAcrossSpan(edge: number, dir: 1 | -1): { start: number; end: number } {
-  const start = edge - dir * XI_STEP_ACROSS.gapNearM;
-  return { start, end: start + dir * XI_STEP_ACROSS.translateM };
+export interface StepAcrossSpan {
+  start: number;
+  end: number;
+  /** 路径水平位移 / translateM（1 = 不缩放） */
+  scale: number;
+  /** 起点离近沿 / 落点离远沿（m） */
+  takeoffInset: number;
+  landMargin: number;
+}
+
+/**
+ * 沿一维方向（dir = ±1）跨过 [nearEdge, farEdge] 这道缝（farEdge = nearEdge + dir · 缝宽）：返回起点 / 终点坐标与缩放。
+ * 只给 nearEdge 时缝宽 = gapFarM − gapNearM（美术原设 0.5 m）。
+ */
+export function stepAcrossSpan(nearEdge: number, dir: 1 | -1, farEdge: number = nearEdge + dir * (XI_STEP_ACROSS.gapFarM - XI_STEP_ACROSS.gapNearM)): StepAcrossSpan {
+  const g = XI_STEP_ACROSS;
+  const gap = Math.abs(farEdge - nearEdge);
+  const minInset = g.toeLeadM + g.takeoffToeMarginM;
+  // 不缩放时为了落点留够 landMargin 需要的起跳内缩；不超过美术原设 gapNearM
+  const want = g.translateM - gap - g.landMarginM;
+  let inset: number;
+  let span: number;
+  if (want >= minInset) {
+    inset = Math.min(g.gapNearM, want);
+    span = g.translateM;
+  } else {
+    inset = minInset;
+    span = inset + gap + g.landMarginM;
+  }
+  const start = nearEdge - dir * inset;
+  const end = start + dir * span;
+  return { start, end, scale: span / g.translateM, takeoffInset: inset, landMargin: span - inset - gap };
 }

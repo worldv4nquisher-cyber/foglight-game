@@ -6,8 +6,9 @@ import { gameplay } from '@/config/gameplay';
 import { CharacterBody, PhysicsSystem } from '@/systems/PhysicsSystem';
 import { StairGait, stepLocomotion } from '@/systems/locomotion';
 import { buildTestCourse } from '@/world/testCourse';
-import { TraversalLink } from '@/entities/components/TraversalLink';
+import { TraversalLink, pickTraversalLink } from '@/entities/components/TraversalLink';
 import { buildS1Greybox } from '@/levels/s1/greybox';
+import { S1, s1StepLinks } from '@/levels/s1/layout';
 
 const DT = 1 / 60;
 const results = [];
@@ -439,6 +440,68 @@ test('013 S1 退潮后走下礁石台阶（smoke 同一起点 x −9.7 → −8.
 });
 
 let failed = 0;
+test('S1 跨越选择：站在每条起点 / 落点上，按 E 选中的是起点最近的那条（去程落点 → 回程起点，不会被上一条的半径抢走）', () => {
+  const deckY = S1.nearPlatform.topY;
+  const x = S1.linkNear[0];
+  const P = (z) => new THREE.Vector3(x, deckY, z);
+  const sp = s1StepLinks();
+  const links = sp.map((s, i) => new TraversalLink({ start: P(s.start), end: P(s.end), path: [P((s.start + s.end) / 2).setY(deckY + 0.25)], radius: i % 3 === 0 ? 0.7 : 0.6 }));
+  links.forEach((l, i) => assert.equal(pickTraversalLink(links, P(sp[i].start)), l, `站在跨越 ${i} 起点选错`));
+  // 落点 → 能接着往回 / 往前跨：0 落浮台 → 1（回岸）；1 落岸 → 0；2 落台阶 → 3；3 落浮台 → 2
+  for (const [i, j] of [[0, 1], [1, 0], [2, 3], [3, 2]]) assert.equal(pickTraversalLink(links, P(sp[i].end)), links[j], `跨越 ${i} 落点应选 ${j}`);
+  // 浮台南沿 9.0–9.05（两条范围重叠处）→ 回程起点更近
+  assert.equal(pickTraversalLink(links, P(9.02)), links[1]);
+});
+
+test('013 S1 四条跨越（制作人拍板）：落点离所在台面最近边沿 ≥ 0.30 m、起点在起跳台面上，两端都站得稳（岸台 / 浮台锚位 / 台阶平台）', () => {
+  const gb = buildS1Greybox();
+  const ph = new PhysicsSystem();
+  for (const m of gb.colliders) ph.addMesh(m);
+  // 浮台在锚位、涨潮浮到甲板顶 = 岸台面（puzzles ready 条件）：用同尺寸盒子
+  const deckY = S1.nearPlatform.topY;
+  const [rw, rh, rd] = S1.raft.size;
+  const raft = new THREE.Mesh(new THREE.BoxGeometry(rw, rh, rd));
+  raft.position.set(S1.raft.slot[0], deckY - rh / 2, S1.raft.slot[2]);
+  raft.updateMatrixWorld(true);
+  ph.addMesh(raft);
+  const rect = (name, x0, x1, z0, z1) => ({ name, x0, x1, z0, z1 });
+  const shore = rect('近岸平台', S1.nearPlatform.min[0], S1.nearPlatform.max[0], S1.nearPlatform.min[1], S1.nearPlatform.max[1]);
+  const raftR = rect('浮台', S1.raft.slot[0] - rw / 2, S1.raft.slot[0] + rw / 2, S1.raft.slot[2] - rd / 2, S1.raft.slot[2] + rd / 2);
+  const F = S1.farSteps;
+  const steps = rect('台阶平台', F.x[0], F.x[1], F.z0, F.z0 + F.landing);
+  const edgeDist = (r, x, z) => Math.min(x - r.x0, r.x1 - x, z - r.z0, r.z1 - z);
+  const surfaces = [
+    [shore, raftR],
+    [raftR, shore],
+    [raftR, steps],
+    [steps, raftR],
+  ];
+  const links = s1StepLinks();
+  const x = S1.linkNear[0];
+  const notes = [];
+  links.forEach((l, i) => {
+    const [from, to] = surfaces[i];
+    const dEnd = edgeDist(to, x, l.end);
+    const dStart = edgeDist(from, x, l.start);
+    assert.ok(dEnd >= 0.3, `跨越 ${i}（${from.name} → ${to.name}）落点 z ${l.end.toFixed(2)} 离${to.name}最近边沿 ${dEnd.toFixed(3)} m < 0.30`);
+    assert.ok(dStart > 0, `跨越 ${i} 起点 z ${l.start.toFixed(2)} 不在${from.name}上`);
+    for (const [z, what] of [
+      [l.start, '起点'],
+      [l.end, '落点'],
+    ]) {
+      const b = new CharacterBody();
+      ph.addBody(b);
+      b.teleport(new THREE.Vector3(x, deckY + 0.02, z));
+      for (let k = 0; k < 60; k++) ph.step(DT);
+      ph.removeBody(b);
+      assert.ok(b.onGround, `跨越 ${i} ${what} z ${z.toFixed(2)} 没站在可走面上`);
+      assert.ok(Math.abs(b.position.y - deckY) < 0.03 && Math.hypot(b.position.x - x, b.position.z - z) < 0.01, `跨越 ${i} ${what} 站不稳：${b.position.toArray().map((v) => v.toFixed(3))}`);
+    }
+    notes.push(`${from.name}→${to.name} ${l.start.toFixed(2)}→${l.end.toFixed(2)}（落点离沿 ${dEnd.toFixed(2)}）`);
+  });
+  console.log(`  （S1 跨越：${notes.join('；')}）`);
+});
+
 for (const [name, err] of results) {
   if (err) {
     failed++;

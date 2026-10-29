@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { stepAcrossSpan } from '@/entities/xi/clips';
+import { stepAcrossSpan, type StepAcrossSpan } from '@/entities/xi/clips';
 
 /**
  * S1 落潮滩白盒布局（v0.1-013）。018 返工 1029 后美术 `art/source/env/s1-layout.json` 已按这里对位；
@@ -170,16 +170,18 @@ export function bearingFrom(from: V3, to: V3): { azimuthDeg: number; distance: n
 }
 
 /**
- * S1 的四条跨越（近岸平台 ↔ 浮台 ↔ 远侧台阶，沿 +Z / −Z、x = linkNear.x）：按 step-across 的跨越几何
- * （缝前 0.20 m 起跳、水平前移 0.85 m）从缝沿算起点 / 终点 z。缝沿：岸台北沿 nearPlatform.max.z、浮台南 / 北沿（锚位）、台阶南沿 farSteps.z0。
+ * S1 的四条跨越（近岸平台 ↔ 浮台 ↔ 远侧台阶，沿 +Z / −Z、x = linkNear.x = 浮台中心 x）：按 stepAcrossSpan 从两侧缝沿算起点 / 终点 z
+ * （起跳点离近沿 0.15 m、落点离远沿 0.32 m，路径位移按实际 0.97 m 缩放）。缝沿：岸台北沿 nearPlatform.max.z、浮台南 / 北沿（锚位）、台阶南沿 farSteps.z0。
  */
-export function s1StepLinks(): Array<{ start: number; end: number }> {
+export function s1StepLinks(): StepAcrossSpan[] {
   const raftS = S1.raft.slot[2] - S1.raft.size[2] / 2;
   const raftN = S1.raft.slot[2] + S1.raft.size[2] / 2;
+  const shore = S1.nearPlatform.max[1];
+  const steps = S1.farSteps.z0;
   return [
-    stepAcrossSpan(S1.nearPlatform.max[1], 1), // 岸台 → 浮台
-    stepAcrossSpan(raftS, -1), // 浮台 → 岸台
-    stepAcrossSpan(raftN, 1), // 浮台 → 台阶
-    stepAcrossSpan(S1.farSteps.z0, -1), // 台阶 → 浮台
+    stepAcrossSpan(shore, 1, raftS), // 岸台 → 浮台
+    stepAcrossSpan(raftS, -1, shore), // 浮台 → 岸台
+    stepAcrossSpan(raftN, 1, steps), // 浮台 → 台阶
+    stepAcrossSpan(steps, -1, raftN), // 台阶 → 浮台
   ];
 }

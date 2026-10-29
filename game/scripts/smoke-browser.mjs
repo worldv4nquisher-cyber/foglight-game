@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { preview } from 'vite';
-import { s1StepLinks } from '@/levels/s1/layout';
+import { S1, s1StepLinks } from '@/levels/s1/layout';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 /** 文本表原文（005 检查对照显示的文字） */
@@ -1715,17 +1715,40 @@ const CHECKS = [
         if (!(await until(`${S}.rig.controller.busy`, 4000))) throw new Error(label + '：E 没开始跨越');
         if (!(await until(`!${S}.rig.controller.busy`, 15000))) throw new Error(label + '：跨越没结束');
       };
-      // 跨越端点按 step-across translateM 0.85 从 layout 算（017 收尾三：8.3 → 9.15、11.8 → 12.65）
+      // 跨越端点从 layout 算（制作人拍板：起跳离近沿 0.15 m、落点离远沿 0.32 m，路径位移 ×1.14）
       const stepLinks = s1StepLinks();
+      // 落点到所在台面最近边沿 ≥ 0.30 m：浮台用实际位置（锚位）+ layout 尺寸，岸台 / 台阶平台用 layout
+      const landed = async (surface, label) => {
+        const q = await evaluate(`(() => { const b = ${S}.rig.body.position, r = ${S}.puzzles.raft.object.position; return { p: [b.x, b.y, b.z], r: [r.x, r.y, r.z], g: ${S}.rig.body.body.onGround }; })()`);
+        const [px, py, pz] = q.p;
+        const [rw, , rd] = S1.raft.size;
+        const rect = {
+          raft: [q.r[0] - rw / 2, q.r[0] + rw / 2, q.r[2] - rd / 2, q.r[2] + rd / 2],
+          shore: [S1.nearPlatform.min[0], S1.nearPlatform.max[0], S1.nearPlatform.min[1], S1.nearPlatform.max[1]],
+          steps: [S1.farSteps.x[0], S1.farSteps.x[1], S1.farSteps.z0, S1.farSteps.z0 + S1.farSteps.landing],
+        }[surface];
+        const d = Math.min(px - rect[0], rect[1] - px, pz - rect[2], rect[3] - pz);
+        if (!(d >= 0.3) || Math.abs(py - 1.85) > 0.1 || !q.g) throw new Error(`${label}：落点离边沿 ${d.toFixed(3)} m（< 0.30）/ 没站稳 ` + JSON.stringify(q));
+        return `${label} 落点 z ${pz.toFixed(2)} 离沿 ${d.toFixed(2)}`;
+      };
+      const marks = [];
       await cross(-0.9, 1.87, stepLinks[0].start - 0.15, 0, '近岸平台 → 浮台');
       s = await st();
       if (Math.abs(s.pos[2] - stepLinks[0].end) > 0.15 || Math.abs(s.pos[1] - 1.85) > 0.1) throw new Error('没站到浮台上 ' + JSON.stringify(s));
+      marks.push(await landed('raft', '岸→浮台'));
       await sleep(500);
       s = await st();
       if (Math.abs(s.pos[1] - 1.85) > 0.1 || s.tide !== 'high') throw new Error('站在浮台上不稳 / 被送回 ' + JSON.stringify(s));
       await cross(-0.9, 1.87, stepLinks[2].start - 0.25, 0, '浮台 → 远侧台阶');
+      marks.push(await landed('steps', '浮台→台阶'));
       if (!(await until(`${S}.puzzles.p2Solved`, 6000))) throw new Error('到远侧台阶没解开谜题 2 ' + JSON.stringify(await st()));
       out.push('两次跨越 → 远侧台阶解开谜题 2 ✓');
+      // 回程：台阶 → 浮台 → 岸台（站在上一次落点上直接按 E，选中的必须是回程那条）
+      await cross(-0.9, 1.87, stepLinks[2].end, Math.PI, '远侧台阶 → 浮台');
+      marks.push(await landed('raft', '台阶→浮台'));
+      await cross(-0.9, 1.87, stepLinks[1].start, Math.PI, '浮台 → 近岸平台');
+      marks.push(await landed('shore', '浮台→岸'));
+      out.push(`四条跨越落点离边沿 ≥ 0.30 m ✓（${marks.join('；')}）`);
       // 013 补充（制作人裁定）：谜题 2 解开后 R 不再生效、提示不再显示——即使把潮汐 / 浮台条件都伪造成满足
       const after = await evaluate(`(() => { const p = ${S}.puzzles, t = p.tide, r = p.raft;
         const ts = t.state, rs = r.state; t.state = 'low'; r.state = 'grounded'; Object.defineProperty(t, 'transitioning', { configurable: true, get: () => false });

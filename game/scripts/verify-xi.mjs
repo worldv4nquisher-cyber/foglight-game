@@ -150,20 +150,40 @@ const glbJson = (file) => {
   assert.ok(XI_SHADOW_TINT[2] > XI_SHADOW_TINT[1] && XI_SHADOW_TINT[1] > XI_SHADOW_TINT[0], '暗部冷色（B > G > R），不偏暖');
   assert.equal(xiMaterialKind('mat-char-xi-face'), 'face');
   assert.equal(xiMaterialKind('mat-env-wood'), null);
-  // 跨越路径位移 = translateM · smoothstep(clip 帧 / 48)：S1 四条跨越水平跨度都是 0.85 m，TraversalLink.sample 的水平进度
-  // 在每个跨越进度上 = stepAcrossRootZ（XiAnimator 按跨越进度映射 clip 时间：clipT = u · 1.6 s）→ 脚不滑
+  // 跨越几何（制作人拍板：落点离边沿 ≥ 0.30 m）：先把起跳点挪向缝沿（toe 骨仍在台面上），不够再按实际距离缩放路径位移；
+  // 路径水平位移 = span · smoothstep(clip 帧 / 48)（XiAnimator 按跨越进度映射 clip 时间：clipT = u · 1.6 s）
   {
+    const g = XI_STEP_ACROSS;
+    // 美术原设缝 0.5 m：起跳离近沿 0.15 m（toe 骨离沿 ≥ 2.6 cm）、落点离远沿 0.32 m、span 0.97 m
     const sp = stepAcrossSpan(8.5, 1);
-    near(sp.start, 8.3, 1e-9, '缝前 0.2 m 起跳');
-    near(sp.end, 9.15, 1e-9, '前移 0.85 m');
-    near(stepAcrossSpan(9, -1).end, 8.35, 1e-9, '反向');
+    near(sp.start, 8.35, 1e-9, '缝 0.5：起跳离近沿 0.15 m');
+    near(sp.end, 9.32, 1e-9, '缝 0.5：落点离远沿 0.32 m');
+    near(sp.scale, 0.97 / 0.85, 1e-9, '缝 0.5：位移缩放');
+    near(stepAcrossSpan(9, -1, 8.5).end, 8.18, 1e-9, '反向');
+    // 窄缝：不缩放（scale 1），起跳内缩不超过美术原设 0.2 m
+    const narrow = stepAcrossSpan(0, 1, 0.2);
+    near(narrow.scale, 1, 1e-9, '窄缝不缩放');
+    near(narrow.takeoffInset, g.gapNearM, 1e-9, '窄缝起跳 0.2 m');
+    assert.ok(narrow.landMargin >= g.landMarginM, '窄缝落点余量');
+    const mid = stepAcrossSpan(0, 1, 0.35); // 0.85 − 0.35 − 0.32 = 0.18 → 起跳挪到 0.18 m、不缩放
+    near(mid.scale, 1, 1e-9, '中缝不缩放');
+    near(mid.takeoffInset, 0.18, 1e-9, '中缝起跳内缩');
+    for (const gap of [0.1, 0.3, 0.5, 0.8, 1.2]) {
+      for (const dir of [1, -1]) {
+        const s = stepAcrossSpan(5, dir, 5 + dir * gap);
+        assert.ok(s.landMargin >= g.landMarginM - 1e-9 && g.landMarginM >= 0.3, `缝 ${gap}：落点余量 ${s.landMargin}`);
+        assert.ok(s.takeoffInset - g.toeLeadM >= g.takeoffToeMarginM - 1e-9, `缝 ${gap}：起跳 toe 悬空`);
+        assert.ok(s.scale >= 1 - 1e-9, `缝 ${gap}：只放大不缩小`);
+        near(Math.abs(s.end - s.start), g.translateM * s.scale, 1e-9, `缝 ${gap}：span = 0.85·scale`);
+      }
+    }
     const links = s1StepLinks();
     assert.equal(links.length, 4);
     const lx = S1.linkNear[0];
     const y = S1.nearPlatform.topY;
     let maxErr = 0;
     for (const l of links) {
-      near(Math.abs(l.end - l.start), XI_STEP_ACROSS.translateM, 1e-9, 'S1 跨越水平跨度');
+      assert.ok(l.scale < 1.2, `S1 跨越缩放 ${l.scale} 过大（滑步明显）`);
       const P = (z) => new THREE.Vector3(lx, y, z);
       const tl = new TraversalLink({ start: P(l.start), end: P(l.end), path: [P((l.start + l.end) / 2).setY(y + 0.25)] });
       const v = new THREE.Vector3();
@@ -171,14 +191,16 @@ const glbJson = (file) => {
         const u = f / 48;
         tl.sample(u, v);
         const along = Math.abs(v.z - l.start);
-        maxErr = Math.max(maxErr, Math.abs(along - stepAcrossRootZ(u * xiClipDuration('xi-step-across'))));
+        maxErr = Math.max(maxErr, Math.abs(along - l.scale * stepAcrossRootZ(u * xiClipDuration('xi-step-across'))));
       }
     }
-    assert.ok(maxErr < 1e-6, `跨越路径水平位移偏离 0.85·smoothstep：${maxErr}`);
+    assert.ok(maxErr < 1e-6, `跨越路径水平位移偏离 span·smoothstep：${maxErr}`);
     // S1 缝沿：岸台北沿 → 浮台南沿 0.5 m、浮台北沿 → 台阶南沿 0.5 m（= gap.farM − gap.nearM）
     near(S1.raft.slot[2] - S1.raft.size[2] / 2 - S1.nearPlatform.max[1], XI_STEP_ACROSS.gapFarM - XI_STEP_ACROSS.gapNearM, 1e-9, 'S1 近缝宽');
     near(S1.farSteps.z0 - (S1.raft.slot[2] + S1.raft.size[2] / 2), XI_STEP_ACROSS.gapFarM - XI_STEP_ACROSS.gapNearM, 1e-9, 'S1 远缝宽');
-    out.push('step-across：extras inPlace / 0.85 m / smoothstep / 缝 0.2–0.7 ✓；S1 四条跨越水平跨度 0.85 m、路径位移 = 0.85·smoothstep(帧/48)（偏差 < 1 µm）✓');
+    out.push(
+      `step-across：缝 0.5 m → 起跳离近沿 0.15 m、落点离远沿 0.32 m、路径位移 ×${links[0].scale.toFixed(3)}（0.97 m）；窄缝不缩放 ✓；S1 四条路径位移 = span·smoothstep(帧/48)（偏差 < 1 µm）✓`,
+    );
   }
   near(stepWetness(0, 1, 40), 1, 1e-9, '雨里 40 s 湿透');
   near(stepWetness(1, 0, 75), 0.5, 1e-9, '避雨 150 s 干透');
@@ -376,11 +398,17 @@ if (existsSync(animsFile) && existsSync(modelFile)) {
   const footL = scene.getObjectByName('foot_l');
   sample(sa, 0);
   const f0 = footL.getWorldPosition(new THREE.Vector3());
+  // 起跳几何依赖第 0 帧前脚 toe 骨在根前 toeLeadM（stepAcrossSpan 用它决定起跳点能挪多近缝沿）
+  for (const toe of ['toe_l', 'toe_r']) {
+    const tz = scene.getObjectByName(toe).getWorldPosition(new THREE.Vector3()).z;
+    assert.ok(tz <= XI_STEP_ACROSS.toeLeadM + 0.01, `step-across 第 0 帧 ${toe} 在根前 ${tz.toFixed(3)} m > toeLeadM`);
+  }
+  near(scene.getObjectByName('toe_l').getWorldPosition(new THREE.Vector3()).z, XI_STEP_ACROSS.toeLeadM, 0.01, 'step-across 第 0 帧 toe_l 前伸');
   sample(sa, 1.6);
   const f1 = footL.getWorldPosition(new THREE.Vector3());
   const stepNote =
     measured === 0
-      ? `原地（extras inPlace:true、hips 首尾差 0、左脚 48 帧回原位 ${(Math.abs(f1.z - f0.z) * 100).toFixed(1)} cm）→ 不抵消，0.85 m 位移全由跨越路径按 smoothstep 给`
+      ? `原地（extras inPlace:true、hips 首尾差 0、左脚 48 帧回原位 ${(Math.abs(f1.z - f0.z) * 100).toFixed(1)} cm）→ 不抵消，位移全由跨越路径按 span·smoothstep 给`
       : `根运动实测 ${measured.toFixed(3)} m，代码抵消`;
 
   for (const [n, yaw] of [

@@ -189,7 +189,7 @@ export function buildS1Puzzles(o: S1PuzzleOptions): S1Puzzles {
   const ready = (): boolean => raft.state === 'floating' && raft.inAnchor && !tide.transitioning && Math.abs(raftRoot.position.y - deckY) < 0.05;
   const lx = S1.linkNear[0];
   const P = (z: number): THREE.Vector3 => new THREE.Vector3(lx, deckY, z);
-  // 跨 0.5 m 的缝：中点抬高 0.25 m（小跳）；起终点按 step-across 几何（缝前 0.2 m 起跳、前移 0.85 m，s1StepLinks）
+  // 跨 0.5 m 的缝：中点抬高 0.25 m（小跳）；起终点按 s1StepLinks（起跳离近沿 0.15 m、落点离远沿 0.32 m）
   const hop = (a: number, b: number): THREE.Vector3[] => [P((a + b) / 2).setY(deckY + 0.25)];
   const link = (a: number, b: number, radius: number): TraversalLink => new TraversalLink({ start: P(a), end: P(b), path: hop(a, b), radius, condition: ready });
   const links = s1StepLinks().map((s, i) => link(s.start, s.end, i % 3 === 0 ? 0.7 : 0.6));

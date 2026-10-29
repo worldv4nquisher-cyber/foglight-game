@@ -5,7 +5,7 @@ import type { InputManager } from '@/systems/input/InputManager';
 import { StairGait, stepLocomotion, type LocomotionState } from '@/systems/locomotion';
 import { Component } from '../Component';
 import { KinematicBody } from './KinematicBody';
-import type { TraversalLink } from './TraversalLink';
+import { pickTraversalLink, type TraversalLink } from './TraversalLink';
 
 export interface PlayerControllerOptions {
   input: InputManager;
@@ -165,15 +165,15 @@ export class PlayerController extends Component {
     // 自动跨越：站在起点附近，按 E 或朝终点方向走
     this._nearLink = null;
     if (!this.locked && body.onGround) {
-      for (const link of this.links) {
-        if (!link.available || !link.inRange(body.position)) continue;
-        this._nearLink = link;
-        const pushing = link.walkInto && link.pushingToward(this.loco.vx, this.loco.vz) && Math.hypot(move.x, move.y) > 0.5;
+      // 多个起点都在范围内（S1 浮台南沿两侧的去 / 回起点相距 0.8 m、半径 0.6–0.7）：取起点最近的那条
+      const best = pickTraversalLink(this.links, body.position);
+      if (best) {
+        this._nearLink = best;
+        const pushing = best.walkInto && best.pushingToward(this.loco.vx, this.loco.vz) && Math.hypot(move.x, move.y) > 0.5;
         if (input.consumePressed('interact') || pushing) {
-          this.startTraversal(link);
+          this.startTraversal(best);
           this._nearLink = null;
         }
-        break;
       }
     }
   }
