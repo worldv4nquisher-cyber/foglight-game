@@ -211,7 +211,7 @@ game.events.on('interact:used', ({ id }) => { if (id === 'bell') ring(); });
 - **切换**：淡出 0.33 s → 全黑（至少 0.3 s；换场景、在黑场里存档、释放上一场景资源组、预编译着色器、新场景先画两帧）→ 淡入 0.33 s，合计 0.96 s ≤ 1.0 s。下一场景没加载完时黑场里显示一条 1 px 细线进度，加载完才换。切换期间角色停住、不能暂停。
 - **分组加载**：启动只加载 `boot` + `menu`（主菜单 + 字体子集）；新游戏 / 继续加载 `common` + 当前场景组；场景内建立镜头结束后（最晚进场 8 s）后台预加载下一个场景组；切换后释放上一场景组（GPU 资源一起释放）。`?slowLoad=ms` 可模拟慢网。
 - **体积预算**：`npm run size`（`check` 里也跑）：主菜单包 ≤ 15 MB、首场景包 common + s1 ≤ 150 MB、首次进入 S1 总下载 ≤ 150 MB、字体子集 ≤ 2 MB。美术还没登记进 manifest（034），脚本按 `../art` 里的文件名预估：首场景包约 79 MB。
-- **字体子集**：`npm run fonts` 从思源黑体 / 宋体（`../art/source/fonts/`，不在仓库里）生成只含本作用字的 WOFF2（现在约 685 字，216 KB + 304 KB），以 `Foglight Sans` / `Foglight Serif` 注册在 CSS 字体栈最前面；许可证 `public/assets/fonts/OFL.txt` 随包发布。`npm run test:fonts` 检查文本表 / 代码里的每个字都在子集里——加了中文文案后它会失败，跑一次 `npm run fonts` 并提交生成的字体。
+- **字体子集**：`npm run fonts` 从思源黑体 / 宋体（`../art/source/fonts/`，不在仓库里）生成只含本作用字的 WOFF2（现在约 685 字，216 KB + 304 KB），以 `Foglight Sans` / `Foglight Serif` 注册在 CSS 字体栈最前面；许可证 `public/assets/fonts/OFL.txt` 随包发布。字体只有一条下载路径（`src/assets/fontLoader.ts`：fetch → FontFace → `document.fonts`；index.html 不 preload、CSS 不写 `@font-face url()`），同一 URL 并发请求共用一次下载；网络层失败（如被取消的 ERR_ABORTED）最多重试 2 次，仍失败就回退到 CSS 字体栈里的系统中文字体（`<html>` 加 `fonts-fallback`，控制台 warn，不阻塞菜单）。控制台 `__game.assets.fontStats` 可看每个字体的 fetch 次数。`npm run test:fonts` 检查文本表 / 代码里的每个字都在子集里——加了中文文案后它会失败，跑一次 `npm run fonts` 并提交生成的字体。
 - **存档**：存的是场景 ID（`s1` / `s2` / `s3`），旧存档里的 `main` 视为 `s1`。
 - 校验：`npm run test:flow`（manifest 分组、场景链、存档映射、切换时长、出口触发、模型命名、模拟切换已加载 / 慢加载）、`npm run size`；smoke「v0.1-010」走一遍：启动只加载主菜单包和字体、新游戏 → S1 → 预加载 S2 → 走进出口到 S2（全黑时换、存档、释放 S1）→ 慢加载到 S3（细线进度）→ 点灯 → 结束页、沙盒仅 debug。
 - 本机试玩：`npm run dev` → 主菜单「新游戏」，在 S1 往西北走到两根石柱之间；`http://localhost:5173/?slowLoad=1500` 看进度线；`?scene=s2` / `?scene=s3` 直接进某个场景（正式构建加 `&debug=1`）。
@@ -353,6 +353,8 @@ DRACO / Basis 解码器由 three 随包打包（带哈希文件名、可离线�
 5. 导出的 GLB 里该节点会有 `"extras": { "puzzleCritical": true }`，three 加载后在 `object.userData.puzzleCritical`。可以把 GLB 拖进 https://gltf.report 查看节点 extras 确认。
 
 代码里运行时才决定的关键物体，用 `markPuzzleCritical(obj)` 把它的 LOD 折叠成 LOD0；仅设置 `userData.puzzleCritical = true` 时，`applyLodDistances` 也会兜底强制 LOD0。
+
+**`forceLod0`（只固定 LOD0，不是解谜物体）**：菲涅尔透镜这类低级 LOD 会破坏折射 / 高光轮廓、但玩家不直接交互的物体，在 Blender 里按上面的方法加布尔自定义属性 `forceLod0`（父级空物体或 `_lod0` 上都行）。加载器对它的处理和 puzzleCritical 一样（只保留 LOD0、释放低级 LOD、`applyLodDistances` 兜底），但**不要求** `-collider` / `-interact`，也不会写 `puzzleCritical`。`verify:glb` 会在信息里列出 `forceLod0：…`，加载器行显示「固定 LOD0 n 个（解谜）+ m 个（forceLod0）」。
 
 ### 用例与校验
 

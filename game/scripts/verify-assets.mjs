@@ -236,7 +236,13 @@ try {
 
   r = await auditGlb(await write('prop-test-crate.glb', { lods: 3, tris: 800 }));
   assert.ok(r.warnings.some((w) => /只交 LOD0/.test(w)));
-  assert.ok(r.info.some((l) => /固定 LOD0 1 个，丢弃低级 LOD 2 个/.test(l)), r.info.join('\n'));
+  assert.ok(r.info.some((l) => /固定 LOD0 1 个（解谜）\+ 0 个（forceLod0），丢弃低级 LOD 2 个/.test(l)), r.info.join('\n'));
+  // extras.forceLod0（菲涅尔透镜）：固定 LOD0，但不是解谜物体，不要求 -collider / -interact
+  r = await auditGlb(await write('prop-fresnel-lens.glb', { name: 'prop-fresnel-lens', critical: false, collider: false, interact: false, lods: 3, tris: 800, rootExtras: { forceLod0: true } }));
+  assert.deepEqual(r.errors, [], r.errors.join('\n'));
+  assert.ok(r.info.some((l) => /^forceLod0：prop-fresnel-lens/.test(l)), r.info.join('\n'));
+  assert.ok(r.info.some((l) => /固定 LOD0 0 个（解谜）\+ 1 个（forceLod0），丢弃低级 LOD 2 个/.test(l)), r.info.join('\n'));
+  ok('extras.forceLod0：交付自检报告、加载器固定 LOD0 并丢弃低级 LOD，不要求 -collider / -interact');
   r = await auditGlb(await write('env-rock-test.glb', { critical: false, collider: false, interact: false, lods: 3, tris: 800 }));
   assert.deepEqual(r.errors, []);
   assert.equal(r.summary.levels.length, 3);
@@ -263,6 +269,82 @@ try {
   // 测试模型故意缺 -collider 等（退出码 1），这里只验证脚本能启动并出报告，没有模块解析错误
   assert.ok(existsSync(glb) && (r.status === 0 || r.status === 1) && /错误 \d+，警告 \d+/.test(r.stdout) && !/Cannot find|ERR_MODULE/.test(r.stderr), r.stdout + r.stderr);
   ok('package.json 的 node 脚本都带 register-ts-paths（@/ 别名），npm run verify:glb -- <文件> 可直接跑');
+}
+
+// ---- 字体加载（fontLoader.ts）：每个字体只下载一次、被取消可重试、全部失败回退系统字体
+{
+  const { loadFontOnce, forgetFont, fontStats } = await import('../src/assets/fontLoader.ts');
+  const mk = (plan) => {
+    const calls = [];
+    const added = [];
+    const fallbacks = [];
+    return {
+      calls, added, fallbacks,
+      deps: {
+        fetch: async (url, init) => {
+          calls.push({ url, init });
+          const r = plan[calls.length - 1] ?? 'ok';
+          await new Promise((res) => setTimeout(res, 5));
+          if (r === 'abort') throw new TypeError('Failed to fetch (net::ERR_ABORTED)');
+          if (typeof r === 'number') return { ok: false, status: r, arrayBuffer: async () => new ArrayBuffer(0) };
+          return { ok: true, status: 200, arrayBuffer: async () => new ArrayBuffer(8) };
+        },
+        makeFace: async (family) => ({ family }),
+        addFace: (f) => added.push(f),
+        onFallback: (family) => fallbacks.push(family),
+        sleep: async () => {},
+      },
+    };
+  };
+  // 并发两次请求同一 URL（例：菜单组被两处同时请求）→ 只 fetch 一次、只注册一个 FontFace
+  let m = mk([]);
+  const [a, b] = await Promise.all([loadFontOnce('/f/a.woff2', 'A', m.deps), loadFontOnce('/f/a.woff2', 'A', m.deps)]);
+  assert.equal(m.calls.length, 1);
+  assert.equal(m.added.length, 1);
+  assert.equal(a, b);
+  assert.equal(m.calls[0].init.credentials, 'same-origin');
+  // 加载过的再请求也不再下载
+  await loadFontOnce('/f/a.woff2', 'A', m.deps);
+  assert.equal(m.calls.length, 1);
+  ok('同一字体并发 / 重复请求只下载一次、只注册一个 FontFace');
+  // 卸载后可重新加载
+  forgetFont('/f/a.woff2');
+  await loadFontOnce('/f/a.woff2', 'A', m.deps);
+  assert.equal(m.calls.length, 2);
+  ok('卸载（forgetFont）后再请求会重新加载');
+  // 第一次被取消（ERR_ABORTED）→ 重试成功
+  m = mk(['abort']);
+  assert.ok(await loadFontOnce('/f/b.woff2', 'B', m.deps));
+  assert.equal(m.calls.length, 2);
+  assert.deepEqual(fontStats.get('/f/b.woff2').attempts, 2);
+  assert.equal(m.fallbacks.length, 0);
+  ok('第一次 fetch 被取消 → 重试成功，不回退');
+  // 一直被取消 → 最多 1+2 次，返回 null，回退系统字体（不抛）
+  m = mk(['abort', 'abort', 'abort']);
+  assert.equal(await loadFontOnce('/f/c.woff2', 'C', m.deps), null);
+  assert.equal(m.calls.length, 3);
+  assert.deepEqual(m.fallbacks, ['C']);
+  assert.equal(fontStats.get('/f/c.woff2').ok, false);
+  // 失败不缓存：之后再进菜单可再试
+  m = mk([]);
+  assert.ok(await loadFontOnce('/f/c.woff2', 'C', m.deps));
+  ok('重试全部失败 → 返回 null 走系统字体回退（不抛错）；失败不缓存，下次可再试');
+  // 404 不重试
+  m = mk([404]);
+  assert.equal(await loadFontOnce('/f/d.woff2', 'D', m.deps), null);
+  assert.equal(m.calls.length, 1);
+  ok('HTTP 404 不重试，直接回退');
+  // CSS 回退栈：Foglight 之后必须有系统中文字体
+  const css = readFileSync(resolve(root, 'src/ui/styles.css'), 'utf8');
+  for (const v of ['--ui-font', '--ui-serif']) {
+    const line = new RegExp(`${v}:\\s*([^;]+);`).exec(css)?.[1] ?? '';
+    assert.ok(/^'Foglight/.test(line) && /(Microsoft YaHei|Songti SC|PingFang SC|Noto)/.test(line) && /(sans-serif|serif)\s*$/.test(line), v + ': ' + line);
+  }
+  // 唯一下载路径：index.html 不 preload 字体，CSS 不用 @font-face url() 再下一份
+  const html = readFileSync(resolve(root, 'index.html'), 'utf8');
+  assert.ok(!/rel=["']?preload[^>]*woff2|woff2[^>]*rel=["']?preload/.test(html), 'index.html 不应 preload 字体');
+  assert.ok(!/@font-face/.test(css), 'styles.css 不应再声明 @font-face（字体由 AssetLoader 注册）');
+  ok('CSS 回退栈含系统中文字体；字体只有 AssetLoader 一条下载路径（无 preload / @font-face 重复）');
 }
 
 console.log(`\n资源加载后处理 / 交付自检校验通过（${passed} 项）`);

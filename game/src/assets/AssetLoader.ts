@@ -9,6 +9,7 @@ import { disposeObject3D } from '@/core/dispose';
 import { gameConfig } from '@/config/gameConfig';
 import { buildLods } from '@/render/lod';
 import { prepareOutlineNormals } from './vertexColors';
+import { fontStats, forgetFont, loadFontOnce } from './fontLoader';
 import { entriesForGroup, type AssetEntry, type AssetGroup } from './manifest';
 import { createPlaceholderModel, createPlaceholderTexture } from './placeholders';
 
@@ -48,6 +49,11 @@ export class AssetLoader {
   private textures = new Map<string, THREE.Texture>();
   private audio = new Map<string, AudioBuffer>();
   private fonts = new Map<string, FontFace>();
+  private fontUrls = new Map<string, string>();
+  /** 字体加载记录（每个 URL 的 fetch 次数 / 是否成功）：smoke 断言每个字体只请求一次，QA 可在控制台查 __game.assets.fontStats */
+  get fontStats(): { url: string; family: string; attempts: number; ok: boolean; error?: string }[] {
+    return [...fontStats.values()].map((s) => ({ ...s }));
+  }
   private missing = new Set<string>();
   private groups = new Map<string, GroupState>();
   /** 模拟慢网速（?slowLoad=ms），见 parseSlowLoad */
@@ -201,9 +207,9 @@ export class AssetLoader {
         const gltf = await this.gltf.loadAsync(url, prog);
         // 按 `_lodN` 命名组装 THREE.LOD；extras.puzzleCritical（→ userData）的物体只保留 LOD0 并释放低级 LOD
         const lodStats = buildLods(gltf.scene, (o) => disposeObject3D(o));
-        if (import.meta.env.DEV && (lodStats.lodGroups || lodStats.criticalGroups)) {
+        if (import.meta.env.DEV && (lodStats.lodGroups || lodStats.criticalGroups || lodStats.forcedGroups)) {
           console.info(
-            `[assets] ${entry.key}: LOD ${lodStats.lodGroups} 组，解谜关键(固定 LOD0) ${lodStats.criticalGroups} 个，丢弃低级 LOD ${lodStats.droppedLevels} 个`,
+            `[assets] ${entry.key}: LOD ${lodStats.lodGroups} 组，解谜关键(固定 LOD0) ${lodStats.criticalGroups} 个，forceLod0 ${lodStats.forcedGroups} 个，丢弃低级 LOD ${lodStats.droppedLevels} 个`,
           );
         }
         // COLOR_0 = 描边平滑法线（v0.1-index §5.4）：关掉材质 vertexColors，几何 color 属性保留给 023 描边读
@@ -245,12 +251,28 @@ export class AssetLoader {
       case 'font': {
         // 字体子集（WOFF2）：注册为 FontFace，CSS 的 --ui-font / --ui-serif 里排在最前；不支持 FontFace 的环境跳过
         if (typeof FontFace === 'undefined' || typeof document === 'undefined') break;
-        // 先 fetch 字节再交给 FontFace：比 url() 来源更可控（错误带 HTTP 状态，且能失败重试一次）
-        const bytes = await fetchBytes(url);
-        const face = new FontFace(entry.family ?? entry.key, bytes, { display: 'swap' });
-        await face.load();
-        document.fonts.add(face);
+        // 唯一下载路径（见 fontLoader.ts）：同 URL 共用一次请求，网络层失败重试，全部失败回退系统字体（不算加载失败）
+        const face = await loadFontOnce(url, entry.family ?? entry.key, {
+          fetch: (u, init) => fetch(u, init),
+          makeFace: async (family, bytes) => {
+            const f = new FontFace(family, bytes, { display: 'swap' });
+            await f.load();
+            return f;
+          },
+          addFace: (f) => document.fonts.add(f),
+          onFallback: (family, err) => {
+            document.documentElement.classList.add('fonts-fallback');
+            // text-ok: 只进控制台日志
+            console.warn(`[assets] 字体 ${family} 加载失败，回退系统字体`, err);
+          },
+        });
+        if (!face) {
+          this.missing.add(entry.key);
+          onProgress(1);
+          break;
+        }
         this.fonts.set(entry.key, face);
+        this.fontUrls.set(entry.key, url);
         onProgress(1);
         break;
       }
@@ -311,7 +333,10 @@ export class AssetLoader {
     this.audio.delete(key);
     const face = this.fonts.get(key);
     if (face) document.fonts.delete(face);
+    const fontUrl = this.fontUrls.get(key);
+    if (fontUrl) forgetFont(fontUrl);
     this.fonts.delete(key);
+    this.fontUrls.delete(key);
   }
 
   dispose(): void {
@@ -319,17 +344,5 @@ export class AssetLoader {
     this.groups.clear();
     this.draco.dispose();
     this.ktx2.dispose();
-  }
-}
-
-async function fetchBytes(url: string, retries = 1): Promise<ArrayBuffer> {
-  for (let attempt = 0; ; attempt++) {
-    try {
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      return await res.arrayBuffer();
-    } catch (err) {
-      if (attempt >= retries) throw err;
-    }
   }
 }

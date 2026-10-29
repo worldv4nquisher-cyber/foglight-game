@@ -11,6 +11,9 @@ import * as THREE from 'three';
  * 3. 解谜关键物体：节点或任一祖先 `userData.puzzleCritical === true`（glTF extras / Blender 自定义属性）
  *    → 三档都固定 LOD0：加载时直接丢弃并释放低级 LOD，不生成 THREE.LOD；
  *    运行时才标记的物体用 markPuzzleCritical() 折叠；applyLodDistances() 对它们也强制 LOD0 兜底。
+ * 4. 强制 LOD0：`userData.forceLod0 === true`（glTF extras，例：菲涅尔透镜——低级 LOD 会破坏折射/高光轮廓）
+ *    → LOD 处理与 puzzleCritical 完全相同（只保留 LOD0、释放低级 LOD），但不是解谜物体：
+ *    不要求 -collider / -interact，也不写 puzzleCritical。
  *
  * 本文件只依赖 three，便于在 Node 里直接跑校验脚本（scripts/verify-lod.mjs）。
  */
@@ -23,6 +26,8 @@ export interface LodBuildStats {
   lodGroups: number;
   /** 因 puzzleCritical 只保留 LOD0 的物体数量 */
   criticalGroups: number;
+  /** 因 forceLod0（非解谜）只保留 LOD0 的物体数量 */
+  forcedGroups: number;
   /** 被丢弃并释放的低级 LOD 节点数量 */
   droppedLevels: number;
 }
@@ -50,6 +55,19 @@ function flagOn(v: unknown): boolean {
   return v === true || v === 1 || v === 'true';
 }
 
+/** 自身或任一祖先标记了 forceLod0 */
+export function isForceLod0(obj: THREE.Object3D): boolean {
+  for (let o: THREE.Object3D | null = obj; o; o = o.parent) {
+    if (flagOn(o.userData.forceLod0)) return true;
+  }
+  return false;
+}
+
+/** 固定 LOD0：puzzleCritical 或 forceLod0 */
+export function isLod0Locked(obj: THREE.Object3D): boolean {
+  return isPuzzleCritical(obj) || isForceLod0(obj);
+}
+
 /** 自身或任一祖先标记了 puzzleCritical */
 export function isPuzzleCritical(obj: THREE.Object3D): boolean {
   for (let o: THREE.Object3D | null = obj; o; o = o.parent) {
@@ -67,7 +85,7 @@ function isManagedLod(obj: THREE.Object3D): obj is THREE.LOD {
  * @param dispose 用于释放被丢弃的低级 LOD 的 GPU 资源
  */
 export function buildLods(root: THREE.Object3D, dispose?: DisposeFn): LodBuildStats {
-  const stats: LodBuildStats = { lodGroups: 0, criticalGroups: 0, droppedLevels: 0 };
+  const stats: LodBuildStats = { lodGroups: 0, criticalGroups: 0, forcedGroups: 0, droppedLevels: 0 };
 
   // 先收集再修改，避免遍历中改树
   const groups = new Map<string, { parent: THREE.Object3D; base: string; nodes: Array<{ level: number; obj: THREE.Object3D }> }>();
@@ -88,8 +106,9 @@ export function buildLods(root: THREE.Object3D, dispose?: DisposeFn): LodBuildSt
     if (first.level !== 0) console.warn(`[lod] ${base} 缺少 _lod0，用 _lod${first.level} 作为最高精度`);
     const lod0 = first.obj;
     const critical = nodes.some((n) => isPuzzleCritical(n.obj));
+    const forced = !critical && nodes.some((n) => isForceLod0(n.obj));
 
-    if (critical || nodes.length === 1) {
+    if (critical || forced || nodes.length === 1) {
       // 只保留 LOD0：丢弃并释放其余层级
       for (const n of nodes.slice(1)) {
         n.obj.removeFromParent();
@@ -101,6 +120,9 @@ export function buildLods(root: THREE.Object3D, dispose?: DisposeFn): LodBuildSt
       if (critical) {
         lod0.userData.puzzleCritical = true;
         stats.criticalGroups++;
+      } else if (forced) {
+        lod0.userData.forceLod0 = true;
+        stats.forcedGroups++;
       }
       continue;
     }
@@ -181,7 +203,7 @@ export function applyLodDistances(root: THREE.Object3D, distances: LodDistances)
   let count = 0;
   root.traverse((o) => {
     if (!isManagedLod(o)) return;
-    const critical = isPuzzleCritical(o);
+    const critical = isLod0Locked(o);
     o.levels.forEach((level, i) => {
       if (i === 0) level.distance = 0;
       else if (critical) level.distance = Infinity;
@@ -197,8 +219,8 @@ export function applyLodDistances(root: THREE.Object3D, distances: LodDistances)
 export function describeLods(root: THREE.Object3D): Array<{ name: string; level: number; levels: number; critical: boolean }> {
   const out: Array<{ name: string; level: number; levels: number; critical: boolean }> = [];
   root.traverse((o) => {
-    if (isManagedLod(o)) out.push({ name: o.name, level: o.getCurrentLevel(), levels: o.levels.length, critical: isPuzzleCritical(o) });
-    else if (flagOn(o.userData.puzzleCritical)) out.push({ name: o.name, level: 0, levels: 1, critical: true });
+    if (isManagedLod(o)) out.push({ name: o.name, level: o.getCurrentLevel(), levels: o.levels.length, critical: isLod0Locked(o) });
+    else if (flagOn(o.userData.puzzleCritical) || flagOn(o.userData.forceLod0)) out.push({ name: o.name, level: 0, levels: 1, critical: true });
   });
   return out;
 }

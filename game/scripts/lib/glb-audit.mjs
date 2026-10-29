@@ -263,6 +263,9 @@ export async function auditGlb(file, opts = {}) {
   } else {
     info.push('puzzleCritical：无（按画质档位正常切 LOD）');
   }
+  // ---- forceLod0（非解谜但固定 LOD0，例：菲涅尔透镜；不要求 -collider / -interact）
+  const forcedNodes = nodes.map((n, i) => (flagOn(n.extras?.forceLod0) ? nodeName(i) : null)).filter(Boolean);
+  if (forcedNodes.length) info.push(`forceLod0：${forcedNodes.join(', ')}（加载后固定 LOD0，低级 LOD 会被丢弃）`);
 
   // ---- 三角面预算
   const lod0 = levelTotals[0] ?? 0;
@@ -330,7 +333,7 @@ export async function auditGlb(file, opts = {}) {
   // ---- 2. 用游戏的加载流程真正解析一遍
   const runtime = await loadLikeGame(buf);
   info.push(
-    `加载器：buildLods → THREE.LOD ${runtime.lod.lodGroups} 个，固定 LOD0 ${runtime.lod.criticalGroups} 个，丢弃低级 LOD ${runtime.lod.droppedLevels} 个；` +
+    `加载器：buildLods → THREE.LOD ${runtime.lod.lodGroups} 个，固定 LOD0 ${runtime.lod.criticalGroups} 个（解谜）+ ${runtime.lod.forcedGroups} 个（forceLod0），丢弃低级 LOD ${runtime.lod.droppedLevels} 个；` +
       `COLOR_0 网格 ${runtime.vc.meshes} 个，关掉 vertexColors 的材质 ${runtime.vc.materialsFixed} 个；加载后渲染三角面 ${runtime.renderTris.toLocaleString('en-US')}`,
   );
   for (const [mesh, reason] of runtime.vc.invalid) errors.push(`COLOR_0 数据不像平滑法线：${mesh}（${reason}）`);

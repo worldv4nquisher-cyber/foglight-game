@@ -68,7 +68,7 @@ ok('glTF extras.puzzleCritical 读到 object.userData.puzzleCritical');
 // ---- 2. 组装
 const disposed = [];
 const stats = buildLods(gltf.scene, (o) => disposed.push(o.name));
-assert.deepEqual(stats, { lodGroups: 1, criticalGroups: 2, droppedLevels: 4 });
+assert.deepEqual(stats, { lodGroups: 1, criticalGroups: 2, forcedGroups: 0, droppedLevels: 4 });
 assert.deepEqual(disposed.sort(), ['tide-gauge_lod1', 'tide-gauge_lod2', 'white-stone_lod1', 'white-stone_lod2']);
 ok(`buildLods: ${JSON.stringify(stats)}，丢弃的低级 LOD 已交给 dispose`);
 
@@ -128,6 +128,47 @@ const collapsed = markPuzzleCritical(clone);
 assert.ok(!collapsed.isLOD && collapsed.parent === scene && collapsed.userData.puzzleCritical === true);
 assert.deepEqual(collapsed.position.toArray(), [1.8, 0, 0]);
 ok('markPuzzleCritical 把 LOD 折叠为 LOD0 并保留位置');
+
+// ---- 5. extras.forceLod0（菲涅尔透镜等非解谜但必须固定 LOD0 的物体）
+{
+  const geo = new THREE.BoxGeometry();
+  const mat = new THREE.MeshBasicMaterial();
+  const root = new THREE.Group();
+  // 父级标记（Blender 空物体 + 各级 LOD）
+  const lens = new THREE.Group();
+  lens.name = 'fresnel-lens';
+  lens.userData.forceLod0 = true;
+  for (let lv = 0; lv < 3; lv++) {
+    const m = new THREE.Mesh(geo, mat);
+    m.name = `fresnel-lens_lod${lv}`;
+    lens.add(m);
+  }
+  // 只在 lod0 上标（逐物体设属性）
+  const ring = new THREE.Group();
+  for (let lv = 0; lv < 3; lv++) {
+    const m = new THREE.Mesh(geo, mat);
+    m.name = `lens-ring_lod${lv}`;
+    if (lv === 0) m.userData.forceLod0 = 'true';
+    ring.add(m);
+  }
+  root.add(lens, ring);
+  const dropped = [];
+  const st = buildLods(root, (o) => dropped.push(o.name));
+  assert.deepEqual(st, { lodGroups: 0, criticalGroups: 0, forcedGroups: 2, droppedLevels: 4 });
+  assert.deepEqual(dropped.sort(), ['fresnel-lens_lod1', 'fresnel-lens_lod2', 'lens-ring_lod1', 'lens-ring_lod2']);
+  const ringKeep = root.getObjectByName('lens-ring');
+  assert.ok(ringKeep && !ringKeep.isLOD && ringKeep.userData.forceLod0 === true && !ringKeep.userData.puzzleCritical);
+  assert.ok(!isPuzzleCritical(root.getObjectByName('fresnel-lens_lod0')));
+  ok('extras.forceLod0（父级或 lod0 标记）→ 只保留 LOD0、释放低级 LOD，且不标 puzzleCritical');
+  // 运行时兜底：已组装的 LOD 再设 forceLod0 → applyLodDistances 强制 LOD0
+  const c2 = control.clone();
+  scene.add(c2);
+  c2.userData.forceLod0 = true;
+  applyLodDistances(scene, QUALITY_PRESETS.standard.lodDistances);
+  assert.equal(levelAt(c2, 5000), 0);
+  c2.removeFromParent();
+  ok('运行时在 LOD 上设 forceLod0：applyLodDistances 强制 LOD0');
+}
 
 console.log(`\nLOD 校验通过（${passed} 项）`);
 console.table(describeLods(scene));

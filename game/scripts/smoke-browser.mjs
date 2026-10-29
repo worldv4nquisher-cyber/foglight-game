@@ -677,7 +677,8 @@ const CHECKS = [
           '灯塔旁没有「E 操作」提示：' + JSON.stringify(await evaluate(`(() => { const s = __game.scenes.current; const b = s.rig.body.position; const ix = s.interaction; return { pos: [b.x, b.y, b.z], facing: s.rig.controller.facing, ctx: __game.input.context, cand: ix.items.map((i) => [i.id, ix.canInteract(i)]) }; })()`)),
         );
       await tapE();
-      if (!(await until(`__game.scenes.current.lighthouseOn !== ${on0}`, 2000))) throw new Error('E 没切换灯塔');
+      // 高负载（软件渲染一帧可达 2 s+）下给足时间；只确认状态最终翻转（QA batch4）
+      if (!(await until(`__game.scenes.current.lighthouseOn !== ${on0}`, 15000))) throw new Error('E 没切换灯塔');
       out.push('灯塔 ✓');
       return out.join('，');
     },
@@ -1091,9 +1092,12 @@ const CHECKS = [
         glb: performance.getEntriesByType('resource').filter((e) => /\\.(glb|ktx2)$/.test(e.name)).length,
         woff: performance.getEntriesByType('resource').filter((e) => /\\.woff2$/.test(e.name)).map((e) => e.name.split('/').pop()),
         fontOk: document.fonts.check('32px "Foglight Serif"', '雾灯') && document.fonts.check('16px "Foglight Sans"', '继续'),
-        family: getComputedStyle(document.querySelector('.main-title')).fontFamily })`);
+        family: getComputedStyle(document.querySelector('.main-title')).fontFamily, fonts: __game.assets.fontStats })`);
       if (m.groups.join() !== 'boot,menu') throw new Error('启动应只加载 boot+menu：' + m.groups.join());
       if (m.glb) throw new Error('主菜单阶段不应下载模型 / 贴图');
+      // 每个字体只有一次成功下载；被取消重试的次数如实报告（QA batch4 §1 INFO）
+      if (m.fonts.length !== 2 || m.fonts.some((f) => !f.ok)) throw new Error('字体加载记录不对 ' + JSON.stringify(m.fonts));
+      console.log(`    字体 fetch 次数：${m.fonts.map((f) => f.family + ' ' + f.attempts).join('，')}`);
       if (m.woff.length !== 2 || !m.fontOk || !/Foglight Serif/.test(m.family)) throw new Error('字体子集没加载 / 没用上 ' + JSON.stringify(m));
       // 无头 SwiftShader 下 JS 初始化 / WebGL 着色器编译本身就要数秒（与资源无关），所以这里只卡「boot+menu 加载 → 主菜单」≤ 3 s；
       // 从导航开始的总时间只报告不断言，真机（RTX 3060）上要人工确认 ≤ 3 s
