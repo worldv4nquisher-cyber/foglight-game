@@ -30,6 +30,12 @@ const FALLBACK: Record<string, { freq: number; duration: number; type: Oscillato
   'sfx-lock-open': { freq: 220, duration: 0.5, type: 'triangle' },
   'sfx-gate-open': { freq: 140, duration: 0.8, type: 'triangle' },
   'sfx-key-pickup': { freq: 880, duration: 0.2, type: 'sine' },
+  // S3（015 占位）：塔门、油阀、油流、光斑落到下一面镜子的玻璃共鸣、没有油
+  'sfx-door-lighthouse-unlock': { freq: 180, duration: 0.9, type: 'triangle' },
+  'sfx-valve-turn': { freq: 120, duration: 0.6, type: 'triangle' },
+  'sfx-oil-flow': { freq: 90, duration: 1.2, type: 'sine' },
+  'sfx-glass-resonance': { freq: 1760, duration: 0.9, type: 'sine' },
+  'sfx-ignite-fail': { freq: 160, duration: 0.3, type: 'square' },
 };
 
 /** `sfx:play` → 有资源播资源，否则合成占位音。返回取消订阅 */

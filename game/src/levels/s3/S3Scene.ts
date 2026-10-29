@@ -54,7 +54,7 @@ export class S3Scene extends LevelScene {
     if (this.water) {
       this.water.position.x = S3_FRAME.position[0];
       this.water.position.z = S3_FRAME.position[2];
-      this.water.setLevel(S3.tide.low);
+      this.water.setLevel(S3.tide.high);
     }
 
     this.greybox = buildS3Greybox(this.mats);
@@ -78,10 +78,16 @@ export class S3Scene extends LevelScene {
       scene: this.scene,
       physics: this.physics,
       interaction: this.interaction,
+      hints: this.hints,
+      rig: () => this.rig,
+      cameraFollow: this.cameraFollow,
       greybox: this.greybox,
+      collider: (m) => this.colliderOf.get(m),
       beamDebug: beamDebugEnabled,
       onIgnite: () => this.lightTheLamp(),
     });
+    this.tides.add(this.puzzles.tide);
+    this.bells.push(this.puzzles.bell);
     this.cleanups.push(() => this.puzzles.dispose());
   }
 
@@ -89,6 +95,9 @@ export class S3Scene extends LevelScene {
   lightTheLamp(): void {
     if (this.ending) return;
     this.ending = true;
+    this.puzzles.state.ignited = true;
+    this.puzzles.leverIx.enabled = false;
+    this.hints.solve('p5');
     this.puzzles.lamp.setOn(true);
     window.setTimeout(() => {
       if (this.game.scenes.current === this) void this.game.flow.completeChapter();
@@ -116,7 +125,7 @@ export class S3Scene extends LevelScene {
       const sky = b.sky;
       this.game.ui.debug.set(
         'S3',
-        `窗镜 ${m.window.part.angles.map((a) => a.toFixed(1)).join('/')}° · A ${m.a.part.angles[0]}° · B ${m.b.part.angles[0]}° · 天光 ${sky.alwaysOn ? '常亮' : `${sky.skyTime.toFixed(0)}/${sky.periodSec}s ${sky.lit ? '亮' : '暗'}`} · 点火口 ${b.igniter.state} · 灯 ${this.lighthouseOn ? '亮' : '灭'}`,
+        `窗镜 ${m.window.part.angles.map((a) => a.toFixed(1)).join('/')}° · A ${m.a.part.angles[0]}° · B ${m.b.part.angles[0]}° · 天光 ${sky.alwaysOn ? '常亮' : `${sky.skyTime.toFixed(0)}/${sky.periodSec}s ${sky.lit ? '亮' : '暗'}`} · 点火口 ${b.igniter.state} · 阀 ${this.puzzles.state.valveOpen ? '开' : '关'} · 光到 ${this.puzzles.state.reached}/3 · 灯 ${this.lighthouseOn ? '亮' : '灭'}`,
       );
     }
   }

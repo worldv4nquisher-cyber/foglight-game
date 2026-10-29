@@ -1959,6 +1959,84 @@ const CHECKS = [
       return out.join('，');
     },
   },
+  {
+    name: 'v0.1-015 S3 谜题 5 流程：涨潮底层送回 / 敲钟退潮 / 开门撤碰撞 / 先调镜后开阀（红光 + 没有油 → 开阀重新计时）/ 光斑上升沿亮 + 共鸣 / 天光常亮 / 提示步骤 / 点灯',
+    async run({ evaluate, cdp, sleep }) {
+      const out = [];
+      const until = async (expr, ms = 8000) => {
+        const end = Date.now() + ms;
+        let v;
+        while (Date.now() < end) {
+          v = await evaluate(expr);
+          if (v) return v;
+          await sleep(100);
+        }
+        return v;
+      };
+      await cdp.goto('debug=1&scene=s3', 's3-lighthouse');
+      if (!(await until(`!!window.__s3?.rig && __s3.game.input.context === 'explore' && __s3.cameraFollow.modeName === 'explore'`, 120000))) throw new Error('?scene=s3 没进 S3');
+      const put = (x, y, z) => `(() => { const s = __s3; const w = s.frame.localToWorld(s.rig.body.position.clone().set(${x}, ${y}, ${z})); s.rig.body.position.copy(w); s.rig.body.velocity.set(0, 0, 0); return 1; })()`;
+      // 机器负载高时游戏时间远慢于真实时间：计时类步骤直接推进谜题 / 潮汐的物理步（每步 0.05 s）
+      const ff = (sec) => evaluate(`(() => { for (let i = 0; i < ${Math.round(sec / 0.05)}; i++) __s3.puzzles.fixedUpdate(0.05); return 1; })()`);
+      const near = (x, y, z, d) => `(() => { const s = __s3; const w = s.frame.localToWorld(s.rig.body.position.clone().set(${x}, ${y}, ${z})); return s.rig.body.position.distanceTo(w) < ${d}; })()`;
+      // 石桥中段独白
+      await evaluate(put(...[-14.14, 3.05, -14.14]));
+      if (!(await until(`__s3.puzzles.state.said.has('ch1.s3.bridge.mono_arrive')`, 3000))) throw new Error('石桥独白没触发');
+      out.push('石桥独白 ✓');
+      // 初始涨潮：天光 40 s / 25 s 周期；底层（地面 0.2）→ 送回门外平台
+      let st = await evaluate(`(() => { const p = __s3.puzzles; return { tide: p.tide.state, level: p.tide.level, period: p.beam.sky.periodSec, always: p.beam.sky.alwaysOn }; })()`);
+      if (st.tide !== 'high' || Math.abs(st.level - 1.6) > 1e-6 || st.period !== 40 || st.always) throw new Error('S3 初始状态不对 ' + JSON.stringify(st));
+      await evaluate(put(0.8, 0.4, 1.8));
+      if (!(await until(near(-4.526, 2.4, -3.677, 0.6), 40000))) throw new Error('涨潮时底层没送回门外平台 ' + JSON.stringify(await evaluate(`__s3.rig.body.position.toArray()`)));
+      out.push('涨潮底层 → 送回门外平台 ✓');
+      // 敲钟 → 退潮（6 s）
+      await evaluate(`__s3.game.events.emit('interact:used', { id: 'tide-bell-s3', kind: 'use' }), 1`);
+      if (!(await evaluate(`__s3.puzzles.bell.rings === 1 && __s3.puzzles.tide.state === 'low'`))) throw new Error('敲钟没生效 ' + JSON.stringify(await evaluate(`({ rings: __s3.puzzles.bell.rings, st: __s3.puzzles.tide.state })`)));
+      await evaluate(`__s3.tides.fixedUpdate(7), 1`);
+      if (!(await until(`__s3.puzzles.tide.state === 'low' && !__s3.puzzles.tide.transitioning`, 3000))) throw new Error('敲钟没退潮 ' + JSON.stringify(await evaluate(`({ st: __s3.puzzles.tide.state, lv: __s3.puzzles.tide.level, t: __s3.puzzles.tide.t, ctx: __s3.game.input.context, paused: __s3.game.isPaused, frozen: __s3.game.isFrozen })`)));
+      // 开门：1.4 s，撤门扇碰撞
+      await evaluate(`__s3.game.events.emit('interact:used', { id: 'door-s3', kind: 'use' }), 1`);
+      await ff(1.5);
+      if (!(await until(`__s3.puzzles.state.doorOpen >= 1`, 3000))) throw new Error('门没开');
+      const doorCol = await evaluate(`(() => { const s = __s3; const c = s.colliderOf.get(s.greybox.doorLeaf); return c ? c.enabled : null; })()`);
+      if (doorCol !== false) throw new Error('开门后门扇碰撞没撤 ' + doorCol);
+      out.push('敲钟退潮、开门撤碰撞 ✓');
+      // 底层仰视独白
+      await evaluate(put(0.6, 0.25, 1.2));
+      await sleep(400);
+      await evaluate(`__s3.cameraFollow.pitch = 0.9, 1`);
+      if (!(await until(`__s3.puzzles.state.said.has('ch1.s3.stairwell.mono_look_up')`, 3000))) throw new Error('仰视独白没触发');
+      // 先调镜子、后开阀：天光亮着时转到正解 → 上升沿 3 次（A 亮、B 亮、点火口）+ 点火口红光 + 没有油
+      await evaluate(`(() => { const b = __s3.puzzles.beam; b.sky.alwaysOn = true; return 1; })()`);
+      await ff(0.2);
+      const f0 = await evaluate(`__s3.puzzles.state.flashes`);
+      await evaluate(`__s3.puzzles.beam.solve(), 1`);
+      await ff(0.1);
+      if (!(await until(`__s3.puzzles.state.reached === 3`, 3000))) throw new Error('正解后光路没到点火口');
+      const f1 = await evaluate(`__s3.puzzles.state.flashes`);
+      if (f1 - f0 !== 3) throw new Error('光斑上升沿反馈次数不对 ' + (f1 - f0));
+      await ff(2.2);
+      if (!(await until(`__s3.puzzles.beam.igniter.state === 'blocked' && __s3.puzzles.state.noOilSaid > 0`, 3000))) throw new Error('未开阀时点火口没进红光 / 没有「没有油。」');
+      if (await evaluate(`__s3.puzzles.leverIx.enabled`)) throw new Error('未开阀时拉杆不应可点');
+      out.push('先调镜：光斑亮 ×3 + 共鸣、点火口红光 +「没有油。」、拉杆不可点 ✓');
+      // 开阀：天光 / 预告光常亮、点火口重新计时（不是立即触发）
+      await evaluate(`(() => { const b = __s3.puzzles.beam; b.sky.alwaysOn = false; __s3.game.events.emit('interact:used', { id: 'oil-valve-s3', kind: 'hold' }); return 1; })()`);
+      st = await evaluate(`(() => { const p = __s3.puzzles; return { valve: p.state.valveOpen, sky: p.beam.sky.alwaysOn, prev: p.beam.preview.alwaysOn, ig: p.beam.igniter.state }; })()`);
+      if (!st.valve || !st.sky || !st.prev || st.ig === 'activated') throw new Error('开阀后状态不对 ' + JSON.stringify(st));
+      await ff(2.2);
+      if (!(await until(`__s3.puzzles.beam.igniter.activated && __s3.puzzles.leverIx.enabled`, 3000))) throw new Error('开阀后点火口没触发 / 拉杆没开放');
+      const steps = await evaluate(`[...__s3.hints.puzzles.get('p5').doneSteps]`);
+      if (['valve', 'window_mirror', 'mid_a', 'mid_b'].some((k) => !steps.includes(k))) throw new Error('提示步骤没全部完成 ' + JSON.stringify(steps));
+      out.push('开阀：天光常亮、点火口重新计时后触发、提示四步完成 ✓');
+      // 点灯
+      await evaluate(`__s3.game.events.emit('interact:used', { id: 'ignite-lever-s3', kind: 'use' }), 1`);
+      if (!(await until(`__s3.lighthouseOn && __s3.puzzles.state.ignited && !__s3.puzzles.leverIx.enabled`, 3000))) throw new Error('点灯没生效');
+      out.push('点灯 ✓');
+      await evaluate(`localStorage.removeItem('foglight.save.v1'); 1`);
+      try { await cdp.goto(''); } catch (e) { throw new Error('回 S1 失败：' + e.message, { cause: e }); }
+      return out.join('，');
+    },
+  },
 ];
 const extra = process.env.SMOKE_ONLY ? CHECKS.filter((c) => process.env.SMOKE_ONLY.split('|').some((k) => c.name.includes(k))) : CHECKS;
 
