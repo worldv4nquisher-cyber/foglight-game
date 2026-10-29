@@ -21,8 +21,8 @@ import { S2 } from './layout';
 export const S2_BEAM = {
   stepDeg: 15,
   solution: { a: 30, b: 315 },
-  /** 光感锁接收器球心（锁框贴北墙外墙面 z 4.0…4.12，球心再往外 8 cm） */
-  lockCenter: [S2.lightLock[0], S2.beamY, S2.lightLock[2] + 0.2] as const,
+  /** 光感锁接收器球心 = 美术 019 `env-keeper-house-ch1-light-lock-socket` (−4.8, 0.85, 4.0)（制作人 1029：z 用美术值 4.0，不再外推 0.2） */
+  lockCenter: [S2.lightLock[0], S2.beamY, S2.lightLock[2]] as const,
   /** 风灯放在灯台 socket 上：socket 高 0.70，风灯本体中心 0.15 ⇒ 出光 0.846（见 S2.lampEmitY） */
   lampSocketY: 0.7,
   /** 机位：院子东南高处看向两面镜子和光感锁所在的屋角 */

@@ -186,10 +186,12 @@ export function buildS2Puzzles(d: S2PuzzleDeps): S2Puzzles {
   const [jx, jy, jz] = S2.points.journalSocket;
   const [dsx, dsy, dsz] = S2.points.deskInteract;
   const deskStand = standAt('desk-s2', dsx, dsy, dsz, dsx - 1, dsz);
-  // 书桌风灯 socket：站位前 0.45 m、偏右 5 cm（站位朝 −X ⇒ 右 = −Z）——任务单 014 / 017 角色 README
+  // 书桌风灯 socket = 美术 019 lanternSocket (−5.05, 3.75, −0.35)（制作人 1029：z 用美术值；相对站位是正前 0.45、偏右 10 cm，
+  // 017 xi-place-table 按 5 cm 调，差 5 cm 手上看不出——README-s2-layout）
+  const [lsx, lsy, lsz] = S2.points.lanternSocket;
   const deskSocket = new THREE.Object3D();
   deskSocket.name = S2_IDS.deskSocket;
-  deskSocket.position.set(dsx - 0.45, S2.furniture.desk.top, dsz - 0.05);
+  deskSocket.position.set(lsx, lsy, lsz);
   root.add(deskSocket);
   const journal = prop(box('journal-s2', 0.22, 0.03, 0.3, wood, [jx, jy + 0.015, jz]));
   const journalIx = new Interactable({ id: S2_IDS.journal, kind: 'use', object: journal, prompt: 'ui.prompt.read', interactPoint: deskStand, focus: new THREE.Vector3(jx, jy + 0.05, jz) });
