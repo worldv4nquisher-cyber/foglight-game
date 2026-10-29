@@ -87,6 +87,37 @@ export const gameplay = {
     /** 强制送回的黑场时长（s） */
     fadeSec: 0.5,
   },
+  /** 交互与机关（GDD §9；v0.1-004） */
+  interaction: {
+    /** 可交互距离（m，角色到物体焦点的水平距离减去物体 reach） */
+    distance: 1.8,
+    /** 角色朝向与物体方向的最大夹角（°） */
+    angleDeg: 60,
+    /** 冷色小图标出现的距离（m） */
+    iconDistance: 3.5,
+    /** 没有 -interact 节点时，站位取物体前方（+Z）多远（m） */
+    defaultPointDistance: 1.0,
+    /** use / hold / push 自动走到交互点：最长时间（s，含转向）与最短时间（只转身时） */
+    approachMaxTime: 0.4,
+    approachMinTime: 0.15,
+    /** hold：按住 E 的默认时长（s，油阀 2 s） */
+    holdSeconds: 2,
+    /** push：沿轨道移动速度（m/s，浮台） */
+    pushSpeed: 0.8,
+    /** 高亮默认时长（s，提示系统二级提示） */
+    highlightSeconds: 3,
+  },
+  /** 机关操作模式（GDD §7；v0.1-004） */
+  puzzle: {
+    /** 档位角（°）与按住 Shift 的精调档位（°） */
+    stepDeg: 15,
+    fineStepDeg: 7.5,
+    /** 鼠标累计转动多少（弧度，已乘灵敏度）算一档：默认灵敏度下约 32 px */
+    mouseStepRad: 0.08,
+    /** A/D、W/S 按住连发：首次延迟与间隔（s） */
+    keyRepeatDelay: 0.35,
+    keyRepeatInterval: 0.15,
+  },
 } as const;
 
 export type GameplayConfig = typeof gameplay;

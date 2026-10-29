@@ -283,7 +283,10 @@ const CHECKS = [
       out.push('运行时切档 ✓（最长帧间隔 ' + sw.res.map((r) => r.t + ' ' + r.worst + 'ms').join(' / ') + '）');
       // 7) F3 性能面板
       const panel = await evaluate(`(async () => { const f = __game.ui.fps; const was = f.visible; f.setVisible(true);
-        await new Promise((r) => setTimeout(r, 2600)); const text = f.el.textContent; const snap = f.snapshot; f.setVisible(was); return { text, snap }; })()`);
+        // 面板按真实帧刷新：无头 SwiftShader 刚切档时帧很慢，最多等 10 s 出第一份读数
+        const end = Date.now() + 10000; await new Promise((r) => setTimeout(r, 2600));
+        while (!/FPS/.test(f.el.textContent) && Date.now() < end) await new Promise((r) => setTimeout(r, 250));
+        const text = f.el.textContent; const snap = f.snapshot; f.setVisible(was); return { text, snap }; })()`);
       for (const re of [/FPS/, /ms/, /draw call \d+ \/ 2000/, /三角面 \S+ \/ 6\.00M/, /显存≈ \d+ MB/]) {
         if (!re.test(panel.text)) throw new Error('F3 面板缺 ' + re + '：' + panel.text);
       }
@@ -376,7 +379,9 @@ const CHECKS = [
       // 机关机位
       const yaw0 = cam.yaw, pitch0 = cam.pitch;
       tb.rig.body.teleport(a.mechanism.stand.clone().setY(0.02));
-      if (!(await until(() => /查看机关/.test(document.querySelector('.hud-prompt')?.textContent ?? '')))) throw new Error('机关旁没有提示');
+      // 004 起机关是 puzzle 交互：要面向机关才有提示（距离 ≤ 1.8 m、夹角 ≤ 60°）
+      tb.rig.controller.facing = Math.atan2(a.mechanism.center.x - a.mechanism.stand.x, a.mechanism.center.z - a.mechanism.stand.z);
+      if (!(await until(() => /E\\s*操作/.test(document.querySelector('.hud-prompt')?.textContent ?? '')))) throw new Error('机关旁没有提示');
       inp.setRaw('smoke', 'KeyE', true);
       const entered = await until(() => inp.context === 'puzzle', 3000);
       inp.setRaw('smoke', 'KeyE', false);
@@ -422,6 +427,175 @@ const CHECKS = [
       await g.scenes.change('main');
       await until(() => g.scenes.current && g.scenes.current.name === 'main');
       return out.join('，');`,
+  },
+  {
+    name: 'v0.1-004 回归（制作人①）：主场景真实 Esc 打开暂停菜单（未检测 / 已检测降档两种状态）不报错',
+    async run({ evaluate, cdp, sleep }) {
+      const out = [];
+      for (const detected of [null, 'high', 'standard']) {
+        await evaluate(`(() => { const s = __game.settings; ${detected ? `s.update({ qualityDetected: true, qualityDetectedTier: '${detected}' });` : `s.update({ qualityDetected: false });`} return 1; })()`);
+        await cdp.click(640, 400);
+        await sleep(400);
+        await cdp.key('Escape', 'Escape', 27);
+        const end = Date.now() + 3000;
+        let st = null;
+        while (Date.now() < end) {
+          st = await evaluate(`({ paused: __game.isPaused, foot: document.querySelector('.pause-menu .menu-foot')?.textContent ?? '', shown: !document.querySelector('.pause-menu').hidden })`);
+          if (st.paused && st.shown) break;
+          await sleep(100);
+        }
+        if (!st?.paused || !st.shown) throw new Error('Esc 没打开暂停菜单 ' + JSON.stringify(st));
+        if (/undefined|null|NaN/.test(st.foot)) throw new Error('暂停菜单底栏有 undefined：' + st.foot);
+        if (detected && !st.foot.includes('自动检测：')) throw new Error('已检测状态底栏不对：' + st.foot);
+        // 菜单开着时切档（refresh 再跑一次）
+        await evaluate(`(() => { document.querySelector('.pause-menu [data-role="quality"] button:last-child').click(); document.querySelector('.pause-menu [data-role="quality"] button').click(); return 1; })()`);
+        const r = await evaluate(`(() => { const b = document.querySelector('.pause-menu [data-act="resume"]').getBoundingClientRect(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 }; })()`);
+        await cdp.click(r.x, r.y);
+        await sleep(1300);
+        if (await evaluate('__game.isPaused')) throw new Error('继续后仍暂停');
+        out.push((detected ?? '未检测') + ' ✓');
+      }
+      await evaluate(`(() => { __game.settings.resetToDefaults(); __game.quality.set('ultra'); return 1; })()`);
+      return '暂停菜单刷新无异常：' + out.join('，') + '（控制台错误由总表把关）';
+    },
+  },
+  {
+    name: 'v0.1-004 回归（制作人①）：?scene=testbed 直接打开跑 6 s，fixedUpdate 无 undefined body',
+    async run({ evaluate, cdp, sleep }) {
+      await cdp.goto('scene=testbed', 'testbed');
+      const f0 = await evaluate('__game.time?.frame ?? performance.now()');
+      await sleep(6000);
+      const s = await evaluate(`(() => { const tb = window.__testbed; const p = tb.rig.body.position; return { ok: [p.x, p.y, p.z].every(Number.isFinite), name: __game.scenes.current.name, f: __game.time?.frame ?? performance.now() }; })()`);
+      if (!s.ok || s.name !== 'testbed') throw new Error('测试场地状态不对 ' + JSON.stringify(s));
+      if (!(s.f > f0)) throw new Error('循环没在走');
+      // 场地里 Esc 暂停 / 继续
+      await cdp.click(640, 400);
+      await sleep(300);
+      await cdp.key('Escape', 'Escape', 27);
+      await sleep(500);
+      if (!(await evaluate('__game.isPaused'))) throw new Error('测试场地 Esc 没暂停');
+      await evaluate('__game.resume()');
+      await sleep(500);
+      return '6 s 无异常，角色位置有效，Esc 暂停 / 继续 ✓';
+    },
+  },
+  {
+    name: 'v0.1-004 交互：提示 / 图标、八种交互样例、hold 圆环、push、机关暂停后右键直接退出、demo 灯塔',
+    async run({ evaluate, cdp, sleep }) {
+      const out = [];
+      if ((await evaluate(`__game.scenes.current?.name`)) !== 'testbed') await cdp.goto('scene=testbed', 'testbed');
+      await evaluate(`(() => { window.__ix = []; const e = __game.events;
+        for (const n of ['interact:used', 'interact:pushEnd', 'item:pickup', 'item:place', 'puzzle:enter', 'puzzle:exit']) e.on(n, (p) => __ix.push([n, p]));
+        return 1; })()`);
+      const until = async (expr, ms = 5000) => {
+        const end = Date.now() + ms;
+        let v;
+        while (Date.now() < end) {
+          v = await evaluate(expr);
+          if (v) return v;
+          await sleep(80);
+        }
+        return v;
+      };
+      const goTo = (id) =>
+        evaluate(`(() => { const tb = __testbed; const s = tb.samples.stands['${id}']; tb.interaction.cancel(); tb.rig.body.teleport(s.position.clone()); tb.rig.controller.facing = s.facing; return 1; })()`);
+      const prompt = () => `((p) => (p && !p.hidden ? p.textContent : ''))(document.querySelector('.hud-prompt'))`;
+      const usedCount = (id) => `__ix.filter(([n, p]) => n === 'interact:used' && p.id === '${id}').length`;
+      const tapE = async () => {
+        await evaluate(`__game.input.setRaw('smoke', 'KeyE', true); 1`);
+        await sleep(60);
+        await evaluate(`__game.input.setRaw('smoke', 'KeyE', false); 1`);
+      };
+      const expectPrompt = async (id, re) => {
+        await goTo(id);
+        const p = await until(`(${re}).test(${prompt()}) && ${prompt()}`, 3000);
+        if (!p)
+          throw new Error(
+            id + ' 没有提示 ' + re + '，当前「' + (await evaluate(prompt())) + '」 ' +
+              JSON.stringify(await evaluate(`(() => { const tb = __testbed; const ix = tb.interaction; const b = tb.rig.body.position; return { pos: [b.x, b.z], facing: tb.rig.controller.facing, cur: ix.current?.id ?? null, cands: ix.items.filter((i) => ix.canInteract(i)).map((i) => i.id) }; })()`)),
+          );
+        return p;
+      };
+      // 图标
+      await goTo('sample-inspect');
+      const markers = await until(`document.querySelectorAll('.hud-marker:not([hidden])').length`, 3000);
+      if (!markers) throw new Error('3.5 m 内没有交互图标');
+      out.push('图标 ' + markers + ' 个');
+      // inspect / read
+      for (const [id, re] of [['sample-inspect', '/E\\s*查看/'], ['sample-read', '/E\\s*阅读/']]) {
+        await expectPrompt(id, re);
+        await tapE();
+        if (!(await until(usedCount(id)))) throw new Error(id + ' 按 E 没触发');
+      }
+      out.push('inspect / read ✓');
+      // pickup → place（另一个插槽）
+      await expectPrompt('sample-lantern', '/E\\s*拾起/');
+      await tapE();
+      if (!(await until(`__testbed.interaction.held.isHolding('lantern')`))) throw new Error('没拿起提灯');
+      await expectPrompt('sample-stand-a', '/E\\s*放下/');
+      await tapE();
+      if (!(await until(usedCount('sample-stand-a')))) throw new Error('没放到 stand-a');
+      out.push('pickup / place ✓');
+      // use（敲钟：自动走位）
+      await expectPrompt('sample-bell', '/E\\s*敲钟/');
+      const t0 = Date.now();
+      await tapE();
+      if (!(await until(usedCount('sample-bell')))) throw new Error('敲钟没触发');
+      out.push('use ✓（' + (Date.now() - t0) + ' ms 含轮询）');
+      // hold（2 s；圆环）
+      await expectPrompt('sample-valve', '/按住\\s*E/');
+      await evaluate(`__game.input.setRaw('smoke', 'KeyE', true); 1`);
+      // 无头 SwiftShader 帧率低、每帧物理步数有上限，游戏时间比真实时间慢：按游戏内进度等，不按墙钟
+      const ring = await until(`(() => { const r = document.querySelector('.hud-hold'); return r && !r.hidden && Number(r.dataset.progress) > 0.3; })()`, 15000);
+      const valve = await until(usedCount('sample-valve'), 30000);
+      await evaluate(`__game.input.setRaw('smoke', 'KeyE', false); 1`);
+      if (!ring) throw new Error('hold 圆环没显示');
+      if (!valve) throw new Error('按住 2 s 没完成');
+      out.push('hold 2 s + 圆环 ✓');
+      // push（按住推到头）
+      await expectPrompt('sample-raft', '/按住\\s*E\\s*推/');
+      await evaluate(`__game.input.setRaw('smoke', 'KeyE', true); 1`);
+      const pushed = await until(`__ix.some(([n, p]) => n === 'interact:pushEnd' && p.id === 'sample-raft')`, 60000);
+      await evaluate(`__game.input.setRaw('smoke', 'KeyE', false); 1`);
+      if (!pushed) throw new Error('push 没推到头');
+      out.push('push ✓');
+      // 机关：真实按键进入 → 真实 Esc 暂停 → 点「继续」→ 仍在机关里 → 第一下真实右键：重新锁定 + 退出
+      await cdp.click(640, 400);
+      await until(`document.pointerLockElement === document.querySelector('canvas')`, 3000);
+      await expectPrompt('sample-mechanism', '/E\\s*操作/');
+      await cdp.key('KeyE', 'e', 69);
+      if (!(await until(`__game.input.context === 'puzzle'`, 3000))) throw new Error('E 没进机关');
+      const bar = await evaluate(`document.querySelector('.hud-puzzle-bar')?.textContent ?? ''`);
+      if (!/Q·E/.test(bar)) throw new Error('操作条不对：' + bar);
+      await cdp.key('Escape', 'Escape', 27);
+      if (!(await until(`__game.isPaused && __game.input.context === 'menu'`, 3000))) throw new Error('Esc 没暂停');
+      const r = await evaluate(`(() => { const b = document.querySelector('.pause-menu [data-act="resume"]').getBoundingClientRect(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 }; })()`);
+      await cdp.click(r.x, r.y);
+      await sleep(1300);
+      const st = await evaluate(`({ ctx: __game.input.context, paused: __game.isPaused, locked: document.pointerLockElement === document.querySelector('canvas') })`);
+      if (st.paused || st.ctx !== 'puzzle' || st.locked) throw new Error('继续后应在机关里且指针未锁定 ' + JSON.stringify(st));
+      await cdp.click(640, 400, 'right');
+      const after = await until(`(() => { const s = { ctx: __game.input.context, locked: document.pointerLockElement === document.querySelector('canvas') }; return s.ctx === 'explore' && s.locked ? s : null; })()`, 3000);
+      if (!after) throw new Error('暂停继续后第一下右键没有同时锁定 + 退出 ' + JSON.stringify(await evaluate(`({ ctx: __game.input.context, locked: document.pointerLockElement === document.querySelector('canvas') })`)));
+      out.push('机关 Esc→继续→右键一下退出并锁定 ✓');
+      await evaluate(`document.exitPointerLock(); 1`);
+      await sleep(400);
+      if (await evaluate('__game.isPaused')) await evaluate('__game.resume()');
+      // demo 灯塔（主场景）
+      await cdp.goto('');
+      if (!(await until(`__game.input.context === 'explore' && !__game.isPaused`, 30000))) throw new Error('主场景开场演出没交还');
+      const on0 = await evaluate(`__game.scenes.current.lighthouseOn`);
+      await evaluate(`(() => { const s = __game.scenes.current; s.rig.body.teleport(new s.rig.body.position.constructor(11, 2.45, -8.3)); s.rig.controller.facing = Math.PI; return 1; })()`);
+      const lp = await until(`/E\\s*操作/.test(${prompt()})`, 10000);
+      if (!lp)
+        throw new Error(
+          '灯塔旁没有「E 操作」提示：' + JSON.stringify(await evaluate(`(() => { const s = __game.scenes.current; const b = s.rig.body.position; const ix = s.interaction; return { pos: [b.x, b.y, b.z], facing: s.rig.controller.facing, ctx: __game.input.context, cand: ix.items.map((i) => [i.id, ix.canInteract(i)]) }; })()`)),
+        );
+      await tapE();
+      if (!(await until(`__game.scenes.current.lighthouseOn !== ${on0}`, 2000))) throw new Error('E 没切换灯塔');
+      out.push('灯塔 ✓');
+      return out.join('，');
+    },
   },
 ];
 const extra = process.env.SMOKE_ONLY ? CHECKS.filter((c) => c.name.includes(process.env.SMOKE_ONLY)) : CHECKS;
@@ -531,16 +705,16 @@ const cdp = {
     }
     throw new Error('刷新后 60 秒内主场景没有就绪');
   },
-  /** 换 URL 参数重新打开（在 ?smoke=1 基础上追加 query），等主场景就绪 */
-  async goto(query) {
+  /** 换 URL 参数重新打开（在 ?smoke=1 基础上追加 query），等场景（默认主场景）就绪 */
+  async goto(query, scene = 'main') {
     await send('Page.navigate', { url: url + (query ? '&' + query : '') }, sessionId);
     await new Promise((r) => setTimeout(r, 300));
     const end = Date.now() + 60000;
     while (Date.now() < end) {
-      if (await evaluate(`Boolean(window.__game?.scenes?.current?.name === 'main')`).catch(() => false)) return;
+      if (await evaluate(`Boolean(window.__game?.scenes?.current?.name === ${JSON.stringify(scene)})`).catch(() => false)) return;
       await new Promise((r) => setTimeout(r, 250));
     }
-    throw new Error('换地址后 60 秒内主场景没有就绪');
+    throw new Error('换地址后 60 秒内 ' + scene + ' 场景没有就绪');
   },
   async key(code, key = code, keyCode = 0) {
     const base = { code, key, windowsVirtualKeyCode: keyCode, nativeVirtualKeyCode: keyCode };

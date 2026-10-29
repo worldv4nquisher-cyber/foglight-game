@@ -18,7 +18,8 @@
 | `npm run preview` | 本地预览 `dist/`（http://localhost:4173） |
 | `npm run typecheck` | TypeScript 严格模式检查（src + vite.config） |
 | `npm run lint` / `lint:fix` | ESLint（flat config + typescript-eslint 类型感知规则） |
-| `npm run test` | 全部 Node 校验：LOD / puzzleCritical、资源后处理与 GLB 自检（`test:assets`）、输入（`test:input`）、存档（`test:save`）、角色物理（`test:physics`）、相机（`test:camera`）、画质参数表与自动检测（`test:quality`，逐键对照 style-guide §8） |
+| `npm run test` | 全部 Node 校验：LOD / puzzleCritical、资源后处理与 GLB 自检（`test:assets`）、输入（`test:input`）、存档（`test:save`）、角色物理（`test:physics`）、相机（`test:camera`）、画质参数表与自动检测（`test:quality`，逐键对照 style-guide §8）、文本表是否最新 / 代码引用的文本 ID 是否都在（`test:text`）、交互与机关（`test:interaction`） |
+| `npm run text:import` | 从 `docs/gdd/text-ch1.json` 重新生成 `src/content/text/zh-CN.ts`（文案改了跑一次；`test:text` 会检查生成结果是否已提交） |
 | `node scripts/verify-lod.mjs <a.glb> [b.glb…]` | **GLB 交付自检**（美术交付前跑，也可 `npm run verify:glb -- <文件>`）：LOD 层级与各级三角面、puzzleCritical、`-collider` / `-interact` 等特殊节点、COLOR_0 平滑法线、面数预算、材质与贴图。不带参数 = 原来的 LOD 自测。见下文「GLB 交付自检」 |
 | `npm run assets:test-lod` | 重新生成 LOD 测试模型 `public/assets/models/test-lod-puzzle-critical.glb` |
 | `npm run check` | typecheck + lint + test + build 一次跑完（提交前跑） |
@@ -46,9 +47,9 @@
 
 | 操作 | 探索 explore | 机关 puzzle | 阅读 reading | 演出 cutscene |
 |---|---|---|---|---|
-| 移动 / 旋转部件 | WASD / 方向键 | A/D 旋转（W/S 预留） | — | — |
+| 移动 / 旋转部件 | WASD / 方向键 | 鼠标左右 / A·D 转一档 15°；双轴部件鼠标上下 / W·S 转第二轴 | — | — |
 | 小跑 / 精调 | 按住 Shift 小跑 | 按住 Shift 精调 | — | — |
-| 转视角 | 点击画面锁定鼠标后直接移动（不支持指针锁定时按住左键拖拽） | 小范围转镜头 | 显示光标 | — |
+| 转视角 | 点击画面锁定鼠标后直接移动（不支持指针锁定时按住左键拖拽） | 固定机位（鼠标用来转部件） | 显示光标 | — |
 | 交互 | E | — | — | — |
 | 切换部件 | — | Q / E，滚轮上 / 下 | — | — |
 | 相机远近 | 滚轮 | — | — | — |
@@ -60,6 +61,7 @@
 | 暂停 | Esc（任何时候） | Esc | Esc | Esc |
 
 - Esc 永远是暂停（制作人裁定：指针锁定时 Esc 先被浏览器用来解锁，页面不一定收到按键）。暂停后点「继续」或再按 Esc，再点一下画面重新锁定鼠标。
+- 重新锁定的那一下点击一般不触发操作；**例外**（v0.1-004 制作人裁定）：在机关 / 阅读里暂停→继续后，第一下右键既重新锁定、也直接退出（和 Tab 一致），由 `actions.ts` 的 `lockClickPassesThrough()` 决定。
 - 开发模式或 URL 加 `?debug=1`：F3 性能面板，F4 调试面板（输入上下文栈、指针状态、最近触发的 action）。控制台 `__game.input.pushContext('puzzle')` 可手动切上下文试键位，`__game.input.debug = true` 在控制台打印每个 action。
 - 触屏输入（`TouchInput`，摇杆 + 滑动转视角 + 交互键）保留代码但默认不注册（桌面专做）。
 
@@ -78,11 +80,12 @@ game/
 │  ├─ core/                 Game（渲染器 + 主循环）、Time（固定步长）、EventBus、dispose 工具
 │  ├─ scenes/               SceneManager、BaseScene、BootScene → LoadingScene → MainScene
 │  ├─ entities/             轻量 ECS：Entity + Component（KinematicBody、PlayerController、TraversalLink、ViewpointTarget、Spinner…）、createPlayer
-│  ├─ systems/              PhysicsSystem（胶囊 vs BVH）、locomotion、CameraFollowSystem（第三人称 / 机关 / 演出）、QualityBenchmark（画质 3 秒检测）、AudioSystem、camera/、input/、save/
+│  ├─ systems/              PhysicsSystem（胶囊 vs BVH）、locomotion、CameraFollowSystem（第三人称 / 机关 / 演出）、QualityBenchmark（画质 3 秒检测）、AudioSystem、camera/、input/、save/、interaction/（交互与机关，004）
 │  │  ├─ camera/            CameraTrack（镜头轨道：关键帧或 GLB 相机动画节点）
 │  │  └─ input/             actions（抽象动作 + 键位）、InputManager、KeyboardMouseInput、TouchInput
 │  ├─ render/               PostFX 后处理管线（postprocessing + N8AO）、lod（LOD 组装 + puzzleCritical）
-│  ├─ world/                场景构件：SkyDome、Water、Rain、Lighthouse（占位）、testCourse（角色测试场地）
+│  ├─ world/                场景构件：SkyDome、Water、Rain、Lighthouse（占位）、testCourse（角色测试场地）、interactionSamples（交互样例）
+│  ├─ content/text/         文本表（zh-CN.ts 由 scripts/import-text.mjs 生成，勿手改）与 t()
 │  ├─ assets/               AssetLoader（GLB+DRACO+Meshopt+KTX2、纹理、音频）、manifest、placeholders
 │  ├─ config/               gameConfig（技术参数）、gameplay（玩法数值）、quality（画质三档）、atmosphere（气氛预设）
 │  ├─ ui/                   UIManager、LoadingScreen、Hud、PauseMenu、FpsCounter、styles.css
@@ -147,7 +150,26 @@ game/
 - **建立镜头**：`playEstablishing(track)`，主场景进入时 3 s（`MainScene.playEstablishing()` 里配轨道）。
 - **观察点**：`ViewpointTarget`（区域中心 + 半径 + 目标点或方向），每帧算 `alignment`：偏差 ≤ 6° 为 1，≥ 12° 为 0，中间线性；不在区域内为 0。谜题和材质直接读它。
 - **dev 面板（F4）**：相机模式、当前 / 设定距离、室内、FOV、俯仰；测试场地另有观察点对准度。
-- **测试场地**（`?scene=testbed`）：东南角带 1.0 m 窄门的小屋（室内 ≤ 2 m）、西侧底座是测试机关（站旁边按 E，右键 / Tab 退出）、西南侧地面黄圈是观察点（看向立柱顶的光球，对准时变亮）、C 播放 5 s 测试镜头。校验：`npm run test:camera`。
+- **测试场地**（`?scene=testbed`）：东南角带 1.0 m 窄门的小屋（室内 ≤ 2 m）、西侧底座是测试机关（面向它按 E，右键 / Tab 退出；004 起是 puzzle 交互，见下节）、西南侧地面黄圈是观察点（看向立柱顶的光球，对准时变亮）、C 播放 5 s 测试镜头。校验：`npm run test:camera`。
+
+## 交互系统与机关框架（v0.1-004）
+
+代码在 `src/systems/interaction/`，场景里只做「注册 Interactable + 监听事件」：
+
+```ts
+scene.interaction.add(new Interactable({ id: 'bell', kind: 'use', object: bellNode, prompt: 'ui.prompt.ring' }));
+game.events.on('interact:used', ({ id }) => { if (id === 'bell') ring(); });
+```
+
+- **八种类型**：`inspect`（不暂停，台词走字幕，005 前临时用 HUD 小字）、`read`（打开阅读界面，005）、`pickup` / `place`（同时只拿一件，只能放到 `-socket` 节点）、`use`（自动走到交互点 ≤ 0.4 s 后发事件）、`hold`（按住 E 2 s，HUD 圆环，中途松开归零）、`push`（按住 E 沿轨道 0.8 m/s，到端点发 `interact:pushEnd` 并锁定）、`puzzle`（进入机关模式）。
+- **判定**：水平距离（到物体焦点、减去 `reach`）≤ 1.8 m 且角色朝向夹角 ≤ 60°；多个候选取最靠近屏幕中心的；3.5 m 内画冷色小图标。参数在 `config/gameplay.ts` 的 `interaction` / `puzzle`。
+- **交互点**：模型里的 `-interact` 节点（+Z 朝向物体）是 use / hold / push 的站位；没有时取物体 +Z 方向 reach+1 m。走位路径被碰撞体挡住时原地转身，不穿模。
+- **机关**：`RotatablePart`（单轴 / 双轴，15° 一档、Shift 7.5°，绝对网格吸附，可设范围）+ `PuzzleGroup`（部件列表 + `-cam` 机位节点）。Q / E 切换（当前部件冷灰描边），R 复位，右键 / Tab 退出；只有一个部件时操作条不显示「Q·E 切换」。暂停时机关不响应，继续后仍在机关里。
+- **提示高亮**：`interaction.highlight(['id'], 3)`，暖色描边 3 s 后消失（后续提示系统 H 键调用）。
+- **文字**：提示全部来自文本表 `t('ui.prompt.*')`（`src/content/text/`，由 `npm run text:import` 从 `docs/gdd/text-ch1.json` 生成）。
+- **事件**：`interact:used / inspect / read / holdProgress / pushMoved / pushEnd`、`item:pickup / place`、`puzzle:enter / exit / partSelected / partRotated / reset`、`highlight:start / end`（`core/EventBus.ts`）。
+- **测试场地交互走廊**：`?scene=testbed` 出生点东侧 x = 16 一条南北向通道，东侧依次是 inspect（木箱）、read（告示板）、pickup（底座上的提灯）、place（灯台 A），西侧是 use（钟）、hold（油阀）、place（灯台 B）、push（浮台，向北推 3 m）。demo 主场景的灯塔改为 `use` 交互（站在台座上面向塔按 E）。
+- 校验：`npm run test:interaction`；smoke 里有八种交互、hold 圆环、push、机关 Esc→继续→右键退出、灯塔的浏览器端检查。
 
 ## 资源规范与添加方法
 

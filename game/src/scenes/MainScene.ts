@@ -13,11 +13,13 @@ import { SkyDome } from '@/world/SkyDome';
 import { Water } from '@/world/Water';
 import { Rain } from '@/world/Rain';
 import { Lighthouse } from '@/world/Lighthouse';
+import { Interactable } from '@/systems/interaction/Interactable';
+import { InteractionSystem, actorFromRig } from '@/systems/interaction/InteractionSystem';
+import { t } from '@/content/text';
 import { applyLodDistances, describeLods } from '@/render/lod';
 
 const ISLAND_RADIUS = 18;
 const SPAWN = new THREE.Vector3(-1.5, 0.01, 10);
-const tmpV = new THREE.Vector3();
 
 /** 简单可复现的伪随机（让占位岩石每次布局一致） */
 function mulberry32(seed: number): () => number {
@@ -52,7 +54,7 @@ export class MainScene extends BaseScene {
   private lighthouse = new Lighthouse();
   private sun = new THREE.DirectionalLight();
   private hemi = new THREE.HemisphereLight();
-  private nearLighthouse = false;
+  interaction!: InteractionSystem;
 
   constructor(game: Game) {
     super(game);
@@ -76,6 +78,7 @@ export class MainScene extends BaseScene {
 
     // 掉出世界（理论上不会发生）：黑场送回出生点
     this.physics.onFallOut = () => void this.rig.controller.teleportTo(SPAWN);
+    this.buildInteraction();
 
     const { events, audio, ui } = this.game;
     this.cleanups.push(
@@ -83,6 +86,13 @@ export class MainScene extends BaseScene {
       events.on('player:land', ({ impactSpeed }) => {
         if (impactSpeed > 4) audio.beep(90, 0.1, 'triangle', Math.min(0.08, impactSpeed * 0.006));
       }),
+      // demo 灯塔（v0.1-004 起走 Interactable：use，不走位，按 E 切换）
+      events.on('interact:used', ({ id }) => {
+        if (id !== 'lighthouse') return;
+        this.lighthouse.toggle();
+        audio.beep(this.lighthouse.on ? 440 : 160, 0.25, 'sine', 0.05);
+      }),
+      () => this.interaction.dispose(),
     );
 
     ui.hud.show();
@@ -286,6 +296,37 @@ export class MainScene extends BaseScene {
     if (import.meta.env.DEV) Object.assign(window, { __lods: () => describeLods(group) });
   }
 
+  private buildInteraction(): void {
+    this.interaction = new InteractionSystem({
+      events: this.game.events,
+      input: this.game.input,
+      physics: this.physics,
+      actor: actorFromRig(this.rig),
+      camera: this.camera,
+      cameraFollow: this.cameraFollow,
+      hud: this.game.ui.hud,
+      presenters: { say: (id) => this.game.ui.hud.toast(t(id), 3) },
+    });
+    // 灯塔塔身半径 1.4 m：判定距离从塔身表面算（站在台座上靠近塔即可），焦点取塔门高度
+    const base = this.lighthouse.position;
+    this.interaction.add(
+      new Interactable({
+        id: 'lighthouse',
+        kind: 'use',
+        prompt: 'ui.prompt.operate',
+        object: this.lighthouse,
+        focus: new THREE.Vector3(base.x, base.y + 1, base.z),
+        reach: 1.4,
+        approach: false,
+      }),
+    );
+  }
+
+  /** demo 灯塔是否点亮（测试用） */
+  get lighthouseOn(): boolean {
+    return this.lighthouse.on;
+  }
+
   private buildPlayer(): void {
     this.rig = createPlayer(this.game, this.physics, SPAWN, () => this.cameraFollow.yaw);
     this.entities.add(this.rig.entity);
@@ -340,11 +381,12 @@ export class MainScene extends BaseScene {
   // ---------------------------------------------------------------- 循环
 
   override fixedUpdate(dt: number): void {
+    if (!this.rig) return;
+    this.interaction.fixedUpdate(dt);
     this.entities.fixedUpdate(dt);
     this.physics.step(dt);
     this.rig.body.afterPhysics();
     this.clampToIsland();
-    this.updateInteraction();
   }
 
   /** 圆形岛屿边界：不让玩家走进海里 */
@@ -358,23 +400,10 @@ export class MainScene extends BaseScene {
     }
   }
 
-  private updateInteraction(): void {
-    tmpV.copy(this.lighthouse.position).sub(this.rig.body.position);
-    tmpV.y = 0;
-    const near = tmpV.length() < 4.2;
-    if (near !== this.nearLighthouse) {
-      this.nearLighthouse = near;
-      this.game.ui.hud.setPrompt(near ? 'E　熄灭 / 点亮灯塔' : null);
-    }
-    if (near && this.game.input.consumePressed('interact')) {
-      this.lighthouse.toggle();
-      this.game.audio.beep(this.lighthouse.on ? 440 : 160, 0.25, 'sine', 0.05);
-    }
-  }
-
   override update(dt: number, alpha: number): void {
     this.entities.update(dt, alpha);
     this.cameraFollow.update(dt);
+    this.interaction.update(dt);
     if (this.game.ui.debug.visible) {
       this.game.ui.debug.set('角色', debugPlayerLine(this.rig, this.physics));
       this.game.ui.debug.set('相机', this.cameraFollow.debugLine());

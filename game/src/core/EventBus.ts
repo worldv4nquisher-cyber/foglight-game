@@ -23,7 +23,37 @@ export interface GameEvents {
   'player:traverse': { phase: 'start' | 'end' };
   /** 强制送回（teleportTo）瞬移的那一刻 */
   'player:teleport': { x: number; y: number; z: number };
+
+  // ---------------------------------------------------------------- 交互（v0.1-004）：谜题逻辑只监听这些事件
+  /** 一次交互完成（所有类型；hold 为按满时、push 为到达终点时、puzzle 为进入时） */
+  'interact:used': { id: string; kind: InteractKindName };
+  /** inspect：显示了一句描述字幕 */
+  'interact:inspect': { id: string; textId: string };
+  /** read：请求打开阅读界面 */
+  'interact:read': { id: string; textId: string };
+  /** hold 进度（0–1，每个物理步；松开归零时发 0） */
+  'interact:holdProgress': { id: string; progress: number };
+  /** push：物体沿轨道移动（t = 0–1） */
+  'interact:pushMoved': { id: string; t: number };
+  /** push：到达轨道终点卡位，之后不能再推 */
+  'interact:pushEnd': { id: string };
+  /** 手持物（v0.1 只有风灯） */
+  'item:pickup': { item: string; from: string | null };
+  'item:place': { item: string; socket: string };
+  /** 机关模式 */
+  'puzzle:enter': { group: string };
+  'puzzle:exit': { group: string };
+  'puzzle:partSelected': { group: string; part: string; index: number };
+  /** 每转一档（咔哒音效）：angle = 该轴新角度（°），angles = 部件全部轴 */
+  'puzzle:partRotated': { group: string; part: string; axis: number; angle: number; angles: number[]; fine: boolean };
+  'puzzle:reset': { group: string };
+  /** 高亮（提示系统二级提示） */
+  'highlight:start': { ids: string[]; seconds: number };
+  'highlight:end': { ids: string[] };
 }
+
+/** 交互类型名（与 systems/interaction/Interactable.ts 的 InteractKind 一致；放这里避免 core 依赖 systems） */
+export type InteractKindName = 'inspect' | 'read' | 'pickup' | 'place' | 'use' | 'hold' | 'push' | 'puzzle';
 
 type Handler<T> = (payload: T) => void;
 

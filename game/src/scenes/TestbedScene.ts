@@ -10,14 +10,18 @@ import { PhysicsSystem } from '@/systems/PhysicsSystem';
 import { CameraFollowSystem, CameraTrack, collectIndoorVolumes } from '@/systems/CameraFollowSystem';
 import { ViewpointTarget } from '@/entities/components/ViewpointTarget';
 import { buildTestCourse, type TestCourse } from '@/world/testCourse';
+import { InteractionSystem, actorFromRig } from '@/systems/interaction/InteractionSystem';
+import { buildInteractionSamples, type InteractionSamples } from '@/world/interactionSamples';
+import { t } from '@/content/text';
 
 /**
  * 角色控制器 / 相机测试场地（v0.1-002、003）：地址栏加 ?scene=testbed 进入。不存档。
  * 30° / 45° 坡、0.25 / 0.4 m 台阶、螺旋楼梯、长墙、可开关闸门（G）、升降台、自动跨越点、强制送回（T）。
- * 相机（003）：东南角带窄门的小屋（室内距离 ≤ 2 m）、西侧测试机关（E 进机位、右键 / Tab 退出）、
+ * 相机（003）：东南角带窄门的小屋（室内距离 ≤ 2 m）、西侧测试机关（004 起是 puzzle 交互：E 进机位、右键 / Tab 退出）、
  * 观察点地面标记（站上去看向立柱顶，F4 显示对准度）、C 播放 5 s 测试镜头。
  * 碰撞网格走与美术模型相同的 -collider / -wall 命名约定（addFromModel，注册后隐藏），
  * 这里另外放一份可见的灰盒外观，方便看清楚。
+ * 交互（004）：x = 16 一带的「交互走廊」放了八种交互各一例（world/interactionSamples.ts）。
  */
 export class TestbedScene extends BaseScene {
   readonly name = 'testbed';
@@ -29,11 +33,11 @@ export class TestbedScene extends BaseScene {
   private entities = new EntityManager(this.scene);
   readonly cameraFollow: CameraFollowSystem;
   viewpoint!: ViewpointTarget;
-  private popPuzzle: (() => void) | null = null;
+  interaction!: InteractionSystem;
+  samples!: InteractionSamples;
   private tipMat: THREE.MeshBasicMaterial | null = null;
   private liftT = 0;
   private liftBaseY = 0;
-  private prompt: string | null = null;
   private gateVisual: THREE.Object3D | null = null;
   private liftVisual: THREE.Object3D | null = null;
 
@@ -91,17 +95,39 @@ export class TestbedScene extends BaseScene {
     this.cameraFollow.yaw = 0;
     this.cameraFollow.pitch = -0.3;
     this.cameraFollow.recommended = { yaw: 0, pitch: -0.3 };
+    this.buildCameraTests();
+    this.interaction = new InteractionSystem({
+      events: this.game.events,
+      input: this.game.input,
+      physics: this.physics,
+      actor: actorFromRig(this.rig),
+      camera: this.camera,
+      cameraFollow: this.cameraFollow,
+      hud: this.game.ui.hud,
+      presenters: {
+        // 005 之前：inspect 用 HUD 小字临时显示，read 只发事件
+        say: (id) => this.game.ui.hud.toast(t(id), 3),
+      },
+      fallbackPrompt: () => this.rig.controller.nearLink?.prompt ?? null,
+    });
+    this.samples = buildInteractionSamples({
+      scene: this.scene,
+      physics: this.physics,
+      interaction: this.interaction,
+      events: this.game.events,
+      mechanism: anchors.mechanism,
+      beep: (f, d) => this.game.audio.beep(f, d, 'sine', 0.04),
+    });
     this.cleanups.push(
-      () => this.exitMechanism(),
+      () => this.interaction.dispose(),
       () => this.cameraFollow.dispose(),
     );
-    this.buildCameraTests();
 
     const { ui } = this.game;
     ui.hud.show();
     ui.hud.setLocation('测试场地 · 角色控制器');
     ui.hud.setHint(
-      '<kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 移动　<kbd>Shift</kbd> 小跑　<kbd>E</kbd> 跨越　' +
+      '<kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 移动　<kbd>Shift</kbd> 小跑　<kbd>E</kbd> 交互 / 跨越（东侧 x = 16 交互走廊）　' +
         '<kbd>G</kbd> 开关闸门　<kbd>T</kbd> 送回起点（黑场）　<kbd>C</kbd> 测试镜头　<kbd>右键</kbd> 观察　<kbd>F4</kbd> 调试读数',
     );
 
@@ -152,20 +178,14 @@ export class TestbedScene extends BaseScene {
     this.tipMat = tipMat;
   }
 
-  /** 进入 / 退出测试机关（v0.1-003：E 进入，右键或 Tab 退出） */
+  /** 测试机关（004 起是 puzzle 交互）：直接进入 / 退出，测试用 */
   enterMechanism(): void {
-    if (this.popPuzzle) return;
-    this.popPuzzle = this.game.input.pushContext('puzzle');
-    this.rig.controller.locked = true;
-    this.cameraFollow.enterPuzzleView(this.course.anchors.mechanism.cam);
+    const it = this.interaction.get('sample-mechanism');
+    if (it && this.interaction.actionKind === 'none') this.interaction.trigger(it);
   }
 
   exitMechanism(): void {
-    if (!this.popPuzzle) return;
-    this.popPuzzle();
-    this.popPuzzle = null;
-    this.rig.controller.locked = false;
-    this.cameraFollow.exitPuzzleView();
+    this.interaction.puzzle.exit();
   }
 
   /** C：5 s 测试镜头（绕起点半圈），结束 0.8 s 交还 */
@@ -179,16 +199,6 @@ export class TestbedScene extends BaseScene {
     return this.cameraFollow.playCutscene(new CameraTrack({ name: 'testbed-orbit', keys, duration: 5 }));
   }
 
-  private updateMechanism(): void {
-    const input = this.game.input;
-    if (this.popPuzzle) {
-      if (input.consumePressed('exitPuzzle')) this.exitMechanism();
-      return;
-    }
-    const near = this.rig.body.position.distanceTo(this.course.anchors.mechanism.stand) < 1;
-    if (near && input.context === 'explore' && input.consumePressed('interact')) this.enterMechanism();
-  }
-
   toggleGate(): boolean {
     const c = this.physics.colliders.find((x) => x.name === 'gate-collider');
     if (!c) return false;
@@ -198,6 +208,7 @@ export class TestbedScene extends BaseScene {
   }
 
   override fixedUpdate(dt: number): void {
+    if (!this.rig) return; // enter() 之前（场景切换的那一帧）不跑逻辑
     // 升降台：0 → 1.2 m 往复，周期 6 s
     this.liftT += dt;
     const lift = this.course.lift;
@@ -205,23 +216,19 @@ export class TestbedScene extends BaseScene {
     lift.updateMatrixWorld();
     if (this.liftVisual) this.liftVisual.position.y = lift.position.y;
 
+    // 交互先于角色控制器：有交互候选时 E 归交互，跨越点只在没有候选时生效
+    this.interaction.fixedUpdate(dt);
     this.entities.fixedUpdate(dt);
     this.physics.step(dt);
     this.rig.body.afterPhysics();
-
-    this.updateMechanism();
-    const near = this.rig.controller.nearLink;
-    const nearMech = !this.popPuzzle && this.rig.body.position.distanceTo(this.course.anchors.mechanism.stand) < 1;
-    const prompt = near ? near.prompt : nearMech ? 'E　查看机关' : this.popPuzzle ? '右键 / Tab　离开机关' : null;
-    if (prompt !== this.prompt) {
-      this.prompt = prompt;
-      this.game.ui.hud.setPrompt(prompt);
-    }
   }
 
   override update(dt: number, alpha: number): void {
+    if (!this.rig) return;
     this.entities.update(dt, alpha);
     this.cameraFollow.update(dt);
+    this.interaction.update(dt);
+    this.samples.update(dt);
     // 观察点在相机更新之后再算一次（用本帧相机朝向）
     this.viewpoint.evaluate();
     if (this.tipMat) this.tipMat.opacity = 0.15 + 0.85 * this.viewpoint.alignment;

@@ -173,3 +173,12 @@ export function actionsForCode(ctx: InputContextName, code: string): ButtonActio
 export function codesForAction(ctx: InputContextName, action: ButtonAction): readonly string[] {
   return [...(GLOBAL_BINDINGS[action] ?? []), ...(CONTEXTS[ctx].buttons[action] ?? [])];
 }
+
+/**
+ * 「点画面重新锁定指针」的那一下要不要同时当成按键（制作人裁定，v0.1-004）：
+ * 机关里 Esc 暂停 → 继续后指针已解锁，第一下右键既重新锁定、也执行退出（和 Tab 一致），不用点两次。
+ * 只对绑定了 exitPuzzle 的键生效；左键等其他键这一下仍只用来锁定。
+ */
+export function lockClickPassesThrough(ctx: InputContextName, code: string): boolean {
+  return actionsForCode(ctx, code).includes('exitPuzzle');
+}

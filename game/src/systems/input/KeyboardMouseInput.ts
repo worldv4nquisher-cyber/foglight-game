@@ -1,6 +1,6 @@
 import { gameConfig } from '@/config/gameConfig';
 import { device } from '@/platform/device';
-import { allBoundCodes, WHEEL_NOTCH_PX, type InputContextName } from './actions';
+import { allBoundCodes, lockClickPassesThrough, WHEEL_NOTCH_PX, type InputContextName } from './actions';
 import type { InputSink, InputSource } from './InputManager';
 
 const SRC = 'kbm';
@@ -12,7 +12,8 @@ const ESC_DEDUPE_MS = 250;
  * 按键 → action 的映射由 InputManager 按当前输入上下文决定。
  *
  * 指针锁定（gameConfig.input.pointerLock，默认开）：
- * - 点击画面进入锁定，锁定后鼠标移动直接转视角；第一下用于锁定的点击不会触发 advance 等 action。
+ * - 点击画面进入锁定，锁定后鼠标移动直接转视角；第一下用于锁定的点击不会触发 advance 等 action，
+ *   但绑定了 exitPuzzle 的键（机关里的右键）会同时执行退出（v0.1-004 制作人裁定）。
  * - 锁定被浏览器解除（玩家按 Esc）→ 发出一次 pause（只算一次，见 ESC_DEDUPE_MS）。
  * - 上下文切到 cursor:'free'（阅读、菜单）时主动解锁，不算暂停；切回 locked 上下文后再点一下画面重新锁定
  *   （浏览器要求重新锁定必须由用户点击触发，Esc 解锁后约 1 秒内也不能重新锁定）。
@@ -126,7 +127,8 @@ export class KeyboardMouseInput implements InputSource {
     if (e.pointerType === 'touch') return;
     const code = `Mouse${e.button}`;
     if (e.button === 0 && this.isUiTarget(e.target)) return;
-    // 点击画面进入指针锁定：这一下只用来锁定，不触发 action
+    // 点击画面进入指针锁定：这一下一般只用来锁定，不触发 action；
+    // 例外：绑定了「退出」的键（机关里的右键）同时执行退出（制作人裁定，见 lockClickPassesThrough）
     if (
       this.isGameSurface(e.target) &&
       this.sink.enabled &&
@@ -135,7 +137,7 @@ export class KeyboardMouseInput implements InputSource {
       !this.isLocked
     ) {
       this.requestPointerLock();
-      return;
+      if (!lockClickPassesThrough(this.sink.context, code)) return;
     }
     // 不支持指针锁定时：左键拖拽转视角
     if (e.button === 0 && this.isGameSurface(e.target) && !this.lockWanted) this.dragging = true;

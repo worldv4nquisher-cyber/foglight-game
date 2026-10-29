@@ -109,6 +109,12 @@ export class PlayerController extends Component {
     });
   }
 
+  /** 立即停下（清掉移动惯性；交互系统接管走位前调用） */
+  halt(): void {
+    this.loco.vx = this.loco.vz = 0;
+    this.body.body.velocity.x = this.body.body.velocity.z = 0;
+  }
+
   /** 直接开始一次自动跨越（测试 / 脚本用；正常由 E 或往前走触发） */
   startTraversal(link: TraversalLink): void {
     this.mode = { kind: 'traverse', link, t: 0 };

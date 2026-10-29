@@ -213,6 +213,80 @@ body {
   border-radius: 4px;
 }
 
+/* v0.1-004 交互：小图标（style-guide §2 可交互提示 #A9BCC4）、hold 圆环、机关按键提示条 */
+.hud-markers {
+  position: absolute;
+  inset: 0;
+}
+
+.hud-marker {
+  position: absolute;
+  left: -5px;
+  top: -5px;
+  width: 10px;
+  height: 10px;
+  border: 1.5px solid #a9bcc4;
+  border-radius: 50%;
+  opacity: 0.55;
+  transition: opacity 0.2s ease;
+  will-change: transform;
+}
+
+.hud-marker.active {
+  opacity: 1;
+  background: rgba(169, 188, 196, 0.35);
+}
+
+.hud-marker[hidden],
+.hud-hold[hidden],
+.hud-puzzle-bar[hidden],
+.hud-prompt[hidden] {
+  display: none;
+}
+
+.hud-hold {
+  position: absolute;
+  left: 50%;
+  bottom: calc(22% + 44px);
+  transform: translateX(-50%);
+}
+
+.hud-hold-track,
+.hud-hold-arc {
+  fill: none;
+  stroke-width: 2.5;
+}
+
+.hud-hold-track {
+  stroke: rgba(169, 188, 196, 0.25);
+}
+
+.hud-hold-arc {
+  stroke: #a9bcc4;
+  stroke-linecap: round;
+  transform: rotate(-90deg);
+  transform-origin: 50% 50%;
+}
+
+.hud-hold.full .hud-hold-arc {
+  stroke: var(--ui-warm);
+}
+
+.hud-puzzle-bar {
+  position: absolute;
+  left: 50%;
+  bottom: 28px;
+  transform: translateX(-50%);
+  padding: 6px 16px;
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  white-space: pre;
+  color: var(--ui-text);
+  background: var(--ui-bg);
+  border: 1px solid var(--ui-border);
+  border-radius: 4px;
+}
+
 /* ---------- Pause ---------- */
 .pause-menu {
   position: absolute;
