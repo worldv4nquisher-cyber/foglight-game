@@ -17,6 +17,8 @@ import { createSceneHints } from './sceneHints';
 import { buildTideTestArea, type TideTestArea } from '@/world/tideTestArea';
 import { TideSet } from '@/systems/tide/TideController';
 import { bindSfxFallback, recallToSafePoint } from '@/systems/tide/tideScene';
+import { buildBeamTestArea, type BeamTestArea } from '@/world/beamTestArea';
+import { beamDebugEnabled } from '@/config/debug';
 
 /**
  * 角色控制器 / 相机测试场地（v0.1-002、003）：地址栏加 ?scene=testbed 进入。不存档。
@@ -45,6 +47,7 @@ export class TestbedScene extends BaseScene {
   /** 011 潮汐区 */
   readonly tides = new TideSet();
   tideArea!: TideTestArea;
+  beamArea!: BeamTestArea;
   private tipMat: THREE.MeshBasicMaterial | null = null;
   private liftT = 0;
   private liftBaseY = 0;
@@ -137,11 +140,20 @@ export class TestbedScene extends BaseScene {
       waterColor: a.waterColor,
     });
     this.tides.add(this.tideArea.tide);
+    // 光路（012）：起点西南 x −19…−15、z 4…16：风灯灯台 → 镜 A → 镜 B → 光感锁；云缝天光 → 点火口（U 开油阀）
+    this.beamArea = buildBeamTestArea({
+      scene: this.scene,
+      physics: this.physics,
+      interaction: this.interaction,
+      events: this.game.events,
+      debug: beamDebugEnabled,
+    });
     this.tides.onRecall = (zone) => recallToSafePoint(this.game, this.rig, zone);
     this.cleanups.push(
       () => this.interaction.dispose(),
       () => this.cameraFollow.dispose(),
       () => this.tideArea.bell.dispose(),
+      () => this.beamArea.dispose(),
       bindSfxFallback(this.game.events, this.game.audio, (id) => this.game.assets.getAudio(id)),
     );
     this.buildHintTests();
@@ -152,7 +164,8 @@ export class TestbedScene extends BaseScene {
     ui.hud.setHint(
       '<kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 移动　<kbd>Shift</kbd> 小跑　<kbd>E</kbd> 交互 / 跨越（东侧 x = 16 交互走廊）　' +
         '<kbd>G</kbd> 开关闸门　<kbd>T</kbd> 送回起点（黑场）　<kbd>C</kbd> 测试镜头　<kbd>右键</kbd> 观察　<kbd>F4</kbd> 调试读数　' +
-        '潮汐区在起点往南坡道上（<kbd>E</kbd> 敲钟，<kbd>Y</kbd> 遥控切潮）',
+        '潮汐区在起点往南坡道上（<kbd>E</kbd> 敲钟，<kbd>Y</kbd> 遥控切潮）　' +
+        '光路区在西南（机关台 <kbd>E</kbd> 转镜，<kbd>U</kbd> 开关油阀，<kbd>O</kbd> 灯台冷暖）',
     );
 
     // 测试快捷键（只在这个场景）：G 闸门、T 送回
@@ -161,6 +174,11 @@ export class TestbedScene extends BaseScene {
       if (e.code === 'KeyG') this.toggleGate();
       else if (e.code === 'KeyT') void this.rig.controller.teleportTo(anchors.spawn);
       else if (e.code === 'KeyY') this.tideArea.bell.ring();
+      else if (e.code === 'KeyU') this.beamArea.setOil(!this.beamArea.oilOpen);
+      else if (e.code === 'KeyO') {
+        const lamp = this.beamArea.lamp;
+        this.game.events.emit('beam:setColor', { id: lamp.id, color: lamp.color === 'warm' ? 'coldWhite' : 'warm' });
+      }
       else if (e.code === 'KeyC' && this.game.input.context === 'explore') void this.playTestCutscene();
     };
     window.addEventListener('keydown', onKey);
@@ -190,8 +208,10 @@ export class TestbedScene extends BaseScene {
         { id: 'mid_b', l2: 'ch1.hint.p5.mid_b.l2', l3: 'ch1.hint.p5.mid_b.l3', highlight: ['sample-mechanism'] },
       ],
     });
+    // 012 光路：机关台前 (−16.5, 5.5) 半径 1.6 m，文案用谜题 3（镜子 + 锁），二级高亮机关台；光感锁触发 = 解开
+    hints.add({ id: 'test-beam', zone: circleZone({ x: -16.5, z: 5.5 }, 1.6), l1: 'ch1.hint.p3.l1', l2: 'ch1.hint.p3.l2', l3: 'ch1.hint.p3.l3', highlight: ['beam-console'] });
     const markMat = new THREE.MeshBasicMaterial({ color: 0xd8b070, transparent: true, opacity: 0.35 });
-    for (const [x, z, r, name] of [[15.5, -2, 1.4, 'hint-zone-test-bell'], [15.5, 1, 1.2, 'hint-zone-test-steps']] as const) {
+    for (const [x, z, r, name] of [[15.5, -2, 1.4, 'hint-zone-test-bell'], [15.5, 1, 1.2, 'hint-zone-test-steps'], [-16.5, 5.5, 1.6, 'hint-zone-test-beam']] as const) {
       const ring = new THREE.Mesh(new THREE.RingGeometry(r - 0.05, r, 48), markMat);
       ring.rotation.x = -Math.PI / 2;
       ring.position.set(x, 0.012, z);
@@ -203,6 +223,9 @@ export class TestbedScene extends BaseScene {
       this.game.events.on('interact:used', ({ id }) => {
         if (id === 'sample-bell') hints.solve('test-bell');
         if (id === 'sample-valve') hints.completeStep('test-steps', 'valve');
+      }),
+      this.game.events.on('receiver:activated', ({ id }) => {
+        if (id === 'beam-lock') hints.solve('test-beam');
       }),
     );
   }
@@ -284,6 +307,8 @@ export class TestbedScene extends BaseScene {
     this.tides.fixedUpdate(dt);
     this.physics.step(dt);
     this.rig.body.afterPhysics();
+    // 光路在物理之后：本步的镜子转角 / 碰撞体开关都已生效
+    this.beamArea.fixedUpdate(dt);
     this.tides.checkRecall({ position: this.rig.body.position, onGround: this.rig.body.body.onGround, busy: this.rig.controller.busy });
     this.hints.fixedUpdate(dt, this.rig.body.position);
   }
@@ -295,6 +320,7 @@ export class TestbedScene extends BaseScene {
     this.interaction.update(dt);
     this.samples.update(dt);
     this.tideArea.update(dt);
+    this.beamArea.update(dt);
     // 观察点在相机更新之后再算一次（用本帧相机朝向）
     this.viewpoint.evaluate();
     if (this.tipMat) this.tipMat.opacity = 0.15 + 0.85 * this.viewpoint.alignment;
@@ -304,6 +330,7 @@ export class TestbedScene extends BaseScene {
       this.game.ui.debug.set('提示', this.hints.debugLine());
       const r = this.tideArea.raft;
       this.game.ui.debug.set('潮汐', `${this.tides.debugLine()} · 浮台 ${r.state}${r.inAnchor ? '（锚位）' : ''}`);
+      this.game.ui.debug.set('光路', this.beamArea.tracer.debugLine());
       const v = this.viewpoint;
       this.game.ui.debug.set('观察点', v.inRegion ? `对准度 ${v.alignment.toFixed(2)} · 偏差 ${v.angleDeg.toFixed(1)}°` : '不在观察点');
     }

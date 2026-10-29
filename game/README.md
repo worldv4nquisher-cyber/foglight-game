@@ -18,7 +18,7 @@
 | `npm run preview` | 本地预览 `dist/`（http://localhost:4173） |
 | `npm run typecheck` | TypeScript 严格模式检查（src + vite.config） |
 | `npm run lint` / `lint:fix` | ESLint（flat config + typescript-eslint 类型感知规则） |
-| `npm run test` | 全部 Node 校验：LOD / puzzleCritical、资源后处理与 GLB 自检（`test:assets`）、输入（`test:input`）、存档（`test:save`）、角色物理（`test:physics`）、相机（`test:camera`）、画质参数表与自动检测（`test:quality`，逐键对照 style-guide §8）、文本表是否最新 / 代码引用的文本 ID 是否都在（`test:text`）、交互与机关（`test:interaction`）、字幕 / 阅读 / 日志（`test:narrative`）、三级提示（`test:hint`）、潮汐（`test:tide`；`test:text` 同时检查代码里没有硬编码的剧情中文） |
+| `npm run test` | 全部 Node 校验：LOD / puzzleCritical、资源后处理与 GLB 自检（`test:assets`）、输入（`test:input`）、存档（`test:save`）、角色物理（`test:physics`）、相机（`test:camera`）、画质参数表与自动检测（`test:quality`，逐键对照 style-guide §8）、文本表是否最新 / 代码引用的文本 ID 是否都在（`test:text`）、交互与机关（`test:interaction`）、字幕 / 阅读 / 日志（`test:narrative`）、三级提示（`test:hint`）、潮汐（`test:tide`）、光束（`test:beam`；`test:text` 同时检查代码里没有硬编码的剧情中文） |
 | `npm run text:import` | 从 `docs/gdd/text-ch1.json` 重新生成 `src/content/text/zh-CN.ts`（文案改了跑一次；`test:text` 会检查生成结果是否已提交） |
 | `npm run verify:glb -- <a.glb> [b.glb…]` | **GLB 交付自检**（美术交付前跑；文件路径按你执行 npm 的目录解析，在 art/ 下可用 `npm --prefix ../game run verify:glb -- <文件>`）：LOD 层级与各级三角面、puzzleCritical、`-collider` / `-interact` 等特殊节点、COLOR_0 平滑法线、面数预算、材质与贴图。不带参数 = 原来的 LOD 自测。见下文「GLB 交付自检」 |
 | `npm run assets:test-lod` | 重新生成 LOD 测试模型 `public/assets/models/test-lod-puzzle-critical.glb` |
@@ -42,8 +42,9 @@
 | `?scene=s1\|s2\|s3` | 直接进第 1 章某个场景（S1 退潮海岸 / S2 守塔人小屋 / S3 灯塔；开发服务器或带 `?debug=1`），进场即在该场景入口存档 |
 | `?scene=sandbox` | 沙盒：v0.1 demo 岛（原主场景，含画质检测以外的全部样例；开发服务器或带 `?debug=1`），不存档、没有出口 |
 | `?slowLoad=1500` | 模拟慢网：除 boot/menu 外每个资源组至少加载 1500 ms（进度按时间线性），用来看加载页和切换黑场里的细线进度 |
-| `?scene=testbed` | 角色控制器 / 相机测试场地（坡、台阶、螺旋楼梯、墙、闸门 G、升降台、跨越点、T 黑场送回；带窄门的小屋、测试机关、观察点、C 测试镜头；起点往南坡道上是潮汐区，E 敲钟 / Y 遥控切潮），不存档 |
+| `?scene=testbed` | 角色控制器 / 相机测试场地（坡、台阶、螺旋楼梯、墙、闸门 G、升降台、跨越点、T 黑场送回；带窄门的小屋、测试机关、观察点、C 测试镜头；起点往南坡道上是潮汐区，E 敲钟 / Y 遥控切潮；西南是光路区，机关台 E 转镜 / U 油阀 / O 冷暖），不存档 |
 | `?hintScale=0.05` | 三级提示计时乘系数（0.05 = 9 / 18 / 30 s 解锁一二三级，方便试玩提示；开发服务器 / `?debug=1` / 冒烟时才生效） |
+| `?beamDebug=1` | 光束调试线（不受深度遮挡，标出每段光路与命中点；测试场地 / 以后的光路场景） |
 | `?debug=1` | 正式构建里也打开 F3 性能面板 / F4 调试面板（输入、速度、碰撞耗时、相机、观察点对准度） |
 
 开发模式下控制台可用 `__game`，如 `__game.quality.set('ultra')`、`__game.flow.completeChapter()`（035 结尾演出前手动进章节结束页）；`__lods()` 列出 LOD 测试物体的当前层级。
@@ -240,6 +241,15 @@ game.events.on('interact:used', ({ id }) => { if (id === 'bell') ring(); });
 - **事件**：`tide:changing { zone, state, from }`、`tide:changed`、`tide:bell`、`tide:recall`、`float:state`、`sfx:play { id }`。
 - **测试场地**（`?scene=testbed`，加 `&debug=1` 后 F4 看「潮汐」一行）：起点往南走坡道上岸台。岸台西侧是潮汐钟（E 敲；Y 键遥控切潮，只在测试场地）；正前方礁石路（涨潮时入口有空气墙）；东侧沙洲上的浮台退潮时可向北推进石槽，涨潮后与岸台齐平可走上去；刻度柱水下部分变暗。站在礁石路上涨潮会被送回岸台。
 - 校验：`npm run test:tide`；smoke「v0.1-011」。
+
+## 光束反射（v0.1-012）
+
+- **代码**：`systems/light/`：`BeamEmitter.ts`（光源：`socket` 风灯放上灯台亮 / 拿走灭；`sky` 云缝天光 40 s 一周期亮 25 s、1 s 淡入淡出，`beam:skyAlwaysOn` 后常亮；`manual`）、`Mirror.ts`（`-mirror-plane` 节点，局部 +Z = 镜面法线；正面反射、背面挡光）、`BeamReceiver.ts`（光感锁 / 点火口：命中半径 0.3 m 内持续 1.5 s / 2 s 触发 `receiver:activated`，锁存；`requires` 前置条件不满足时只发红光 + `receiver:blocked`）、`BeamTracer.ts`（光路：最多 4 次反射、60 m；碰撞体挡光、`-wall` 空气墙不挡；事件驱动重算 + 每步比对镜子矩阵签名）、`BeamRenderer.ts`（白盒光束：暖芯 + 光晕圆柱、命中光斑；`?beamDebug=1` 叠一层不受深度遮挡的调试线；014 换正式光束材质）。数值在 `config/gameplay.ts` 的 `beam`。
+- **颜色规则**（style-guide §0）：暖光只来自风灯（灯台光束 `warm`）；天光 / 环境一律 `coldWhite`；谜题 5 点火瞬间由点火口事件把天光转暖（火 = 风灯同源）。
+- **场景接入**（014 / 015）：建 `BeamTracer(physics)`，`addEmitter` / `addMirror` / `addReceiver`，`tracer.bind(events)`；镜子的转动部件用 `RotatablePart`（15° 一档、Alt 7.5° 微调），放进 `PuzzleGroup`。场景 `fixedUpdate` 在 `physics.step` 之后调 `tracer.fixedUpdate(dt)`，`update` 里 `renderer.update(dt, tracer)`。谜题用 `this.hints.add({ … highlight: [机关台 id] })` 登记，`receiver:activated` 时 `hints.solve`。
+- **事件**：`beam:traced { ms, paths }`、`beam:emitter { id, lit }`、`beam:setColor { id, color }`、`beam:skyAlwaysOn { id, alwaysOn }`、`beam:invalidate`、`receiver:activated / blocked / reset`。
+- **测试场地**（`?scene=testbed&debug=1`，加 `&beamDebug=1` 看调试线）：起点往西南（x −19…−15、z 4…16）。风灯灯台向北射出暖光 → 镜 A（初始偏 30°）→ 镜 B → 光感锁。机关台 (−16.5, 7) 前 E 进机位转两面镜子，转对 1.5 s 锁亮；机关台前地面圆圈是 `test-beam` 提示区（文案用谜题 3，二级高亮机关台），锁触发即解开。西侧云缝天光照点火口：没开油阀时只发红光，<kbd>U</kbd> 开 / 关油阀（开 = 天光常亮 + 前置条件满足，2 s 后点火、天光转暖）；<kbd>O</kbd> 切灯台冷暖。F4「光路」一行：各光源反射次数与终点、接收器状态、重算次数与耗时。
+- 校验：`npm run test:beam`（反射定律、4 次上限、镜背 / 碰撞体挡光、接收器半径与计时、前置条件、天光周期、颜色、事件驱动、测试场地光路、单次重算 ≤ 1 ms）；smoke「v0.1-012」。
 
 ## 字幕、阅读界面与日志（v0.1-005）
 

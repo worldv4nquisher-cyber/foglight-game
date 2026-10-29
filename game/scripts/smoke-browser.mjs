@@ -1334,6 +1334,11 @@ const CHECKS = [
       await evaluate(`(() => { __game.renderer.compile(__testbed.scene, __testbed.camera); return 1; })()`);
       s = await evaluate(st);
       if (s.level !== 0 || s.water !== 0 || s.gaugeU !== 0 || s.gate) throw new Error('退潮到位后 level / 水面 / 刻度柱 uniform / 礁石路墙不对 ' + JSON.stringify(s));
+      // 潮位到位在 fixedUpdate，提示灰 / 不灰在下一帧 interaction.update 才刷新：高负载时多等几帧
+      if (s.grey || s.prompt !== TEXT['ui.prompt.ring']) {
+        await until(`!${st}.grey && ${st}.prompt === ${JSON.stringify(TEXT['ui.prompt.ring'])}`, 8000);
+        s = await evaluate(st);
+      }
       if (s.grey || s.prompt !== TEXT['ui.prompt.ring']) throw new Error('到位后提示应恢复 ' + JSON.stringify(s));
       await evaluate(`__game.ui.debug.setVisible(true); 1`);
       await until(`/test-tide/.test(document.querySelector('.debug-panel')?.textContent ?? '')`, 20000);
@@ -1377,6 +1382,78 @@ const CHECKS = [
       if (minGap > 0.06) throw new Error('上升途中角色与浮台顶面偏差 ' + minGap.toFixed(3) + ' m');
       if (await evaluate(`__testbed.interaction.canInteract(__testbed.tideArea.raftPush)`)) throw new Error('浮起时还能推');
       out.push(`浮台锚位载人浮到 ${(s.raftY + 0.25).toFixed(2)} m（与岸台齐平、途中最大偏差 ${(minGap * 100).toFixed(1)} cm）、浮起不可推 ✓`);
+      await cdp.goto('');
+      return out.join('；');
+    },
+  },
+  {
+    name: 'v0.1-012 光路：测试场地风灯灯台 → 镜 A → 镜 B → 光感锁（机关台 E 进机位、转对 1.5 s 触发、提示解开）、F4 光路读数、O 冷暖切换、U 开油阀 → 天光常亮 → 点火口 2 s 触发并转暖、?beamDebug=1 调试线',
+    async run({ evaluate, cdp, sleep }) {
+      const out = [];
+      await cdp.goto('scene=testbed&debug=1&beamDebug=1', 'testbed');
+      const until = async (expr, ms = 15000) => {
+        const end = Date.now() + ms;
+        let v;
+        while (Date.now() < end) {
+          v = await evaluate(expr).catch(() => false);
+          if (v) return v;
+          await sleep(100);
+        }
+        return v;
+      };
+      const st = () =>
+        evaluate(`(() => { const b = __testbed.beamArea; const p = b.tracer.paths.find((x) => x.emitter.id === 'beam-lamp');
+          return { end: p?.end, refl: p?.reflections, recv: p?.receiver?.id ?? null, lock: b.lock.state, ig: b.igniter.state, lamp: b.lamp.color, sky: b.sky.color,
+            segs: b.renderer.root.children.length, solved: __testbed.hints.isSolved('test-beam'), f4: __game.ui.debug.lines.get('光路') ?? '' }; })()`);
+      if (!(await until(`__testbed.beamArea.tracer.paths.length === 2`))) throw new Error('光路没算出来');
+      let s = await st();
+      if (s.recv === 'beam-lock' || s.lock !== 'idle') throw new Error('初始镜 A 偏 30° 时不该命中锁 ' + JSON.stringify(s));
+      if (s.lamp !== 'warm' || s.sky !== 'coldWhite') throw new Error('颜色规则：灯台暖、天光冷白 ' + JSON.stringify(s));
+      if (!s.segs) throw new Error('光束没渲染');
+      out.push(`初始：灯台 ${s.refl} 次反射 · ${s.end}，锁 idle，灯台暖 / 天光冷白 ✓`);
+      // 机关台：E 进机位
+      await evaluate(`(() => { const tb = __testbed; tb.interaction.cancel(); tb.rig.body.teleport(new tb.rig.body.position.constructor(-16.5, 0.02, 6.1)); tb.rig.controller.facing = Math.PI; return 1; })()`);
+      let cur = await until(`__testbed.interaction.current?.id === 'beam-console'`, 8000);
+      if (!cur) {
+        await evaluate(`(() => { const tb = __testbed; tb.rig.body.teleport(new tb.rig.body.position.constructor(-16.5, 0.02, 6.1)); tb.rig.controller.facing = 0; return 1; })()`);
+        cur = await until(`__testbed.interaction.current?.id === 'beam-console'`, 8000);
+      }
+      if (!cur) throw new Error('机关台没有成为交互候选 ' + JSON.stringify(await evaluate(`(() => { const ix = __testbed.interaction; return { cur: ix.current?.id ?? null, cands: ix.items.filter((i) => ix.canInteract(i)).map((i) => i.id) }; })()`)));
+      await evaluate(`__game.input.setRaw('smoke', 'KeyE', true); 1`);
+      await sleep(60);
+      await evaluate(`__game.input.setRaw('smoke', 'KeyE', false); 1`);
+      if (!(await until(`__game.input.context === 'puzzle'`, 8000))) throw new Error('E 没进机关机位');
+      if (!(await until(`__testbed.hints.debugLine().includes('test-beam')`, 3000))) throw new Error('机关台前不在 test-beam 提示区');
+      out.push('机关台 E 进机位、在 test-beam 提示区 ✓');
+      // 转到正解 → 1.5 s（游戏时间）后锁触发
+      await evaluate(`__testbed.beamArea.solve(); 1`);
+      if (!(await until(`__testbed.beamArea.tracer.paths[0].receiver?.id === 'beam-lock'`, 10000))) throw new Error('转对后光路没打到锁 ' + JSON.stringify(await st()));
+      if (!(await until(`__testbed.beamArea.lock.state === 'activated'`, 40000))) throw new Error('光感锁没触发 ' + JSON.stringify(await st()));
+      s = await st();
+      if (s.refl !== 2) throw new Error('应经两面镜子 ' + JSON.stringify(s));
+      if (!(await until(`__testbed.hints.isSolved('test-beam')`, 5000))) throw new Error('锁触发后提示没解开');
+      await evaluate(`__testbed.interaction.cancel(); __game.ui.debug.setVisible(true); 1`);
+      await until(`__game.input.context === 'explore'`, 5000);
+      await until(`(__game.ui.debug.lines.get('光路') ?? '').includes('beam-lock')`, 8000);
+      s = await st();
+      if (!/光路|反射/.test(s.f4) || !/beam-lock/.test(s.f4)) throw new Error('F4 光路读数不对：' + s.f4);
+      out.push(`转对 → 2 次反射命中 beam-lock → 1.5 s 触发、提示解开、F4「${s.f4.slice(0, 40)}…」✓`);
+      // O：灯台冷暖
+      await cdp.key('KeyO', 'o', 79);
+      if (!(await until(`__testbed.beamArea.lamp.color === 'coldWhite'`, 8000))) throw new Error('O 没切到冷白');
+      await cdp.key('KeyO', 'o', 79);
+      if (!(await until(`__testbed.beamArea.lamp.color === 'warm'`, 8000))) throw new Error('O 没切回暖');
+      out.push('O 冷暖切换 ✓');
+      // U：开油阀 → 天光常亮 → 点火口 2 s 触发 → 天光转暖
+      if ((await st()).ig === 'activated') throw new Error('没开油阀点火口就触发了');
+      await cdp.key('KeyU', 'u', 85);
+      if (!(await until(`__testbed.beamArea.oilOpen && __testbed.beamArea.sky.lit`, 8000))) throw new Error('U 没开油阀 / 天光没常亮 ' + JSON.stringify(await evaluate(`({ oil: __testbed.beamArea.oilOpen, sky: __testbed.beamArea.sky.debugLine() })`)));
+      if (!(await until(`__testbed.beamArea.igniter.state === 'activated'`, 50000))) throw new Error('点火口没触发 ' + JSON.stringify(await st()));
+      if (!(await until(`__testbed.beamArea.sky.color === 'warm'`, 5000))) throw new Error('点火后天光没转暖');
+      out.push('U 开油阀 → 天光常亮 → 点火口触发 → 转暖 ✓');
+      const dbg = await evaluate(`!!__testbed.beamArea.renderer.root.getObjectByName('beam-debug') || __testbed.beamArea.renderer.root.children.some((c) => /debug/i.test(c.name))`);
+      if (!dbg) throw new Error('?beamDebug=1 没有调试线');
+      out.push('beamDebug 调试线 ✓');
       await cdp.goto('');
       return out.join('；');
     },

@@ -108,6 +108,29 @@ export const gameplay = {
     /** 潮汐钟敲响后的摆动时长（s，白盒动画） */
     bellSwingSec: 1.6,
   },
+  /** 光线反射（GDD §7 谜题 3、5，§8，§9；v0.1-012） */
+  beam: {
+    /** 最多反射次数：第 5 面镜子不再折返，光停在它上面 */
+    maxReflections: 4,
+    /** 每段光线最远距离（m） */
+    maxDistance: 60,
+    /** 接收器默认半径（m，-receiver 节点为球心） */
+    receiverRadius: 0.3,
+    /** 光感锁持续命中多久触发（s） */
+    lockHoldSec: 1.5,
+    /** 点火口持续命中多久触发（s） */
+    igniterHoldSec: 2,
+    /** 云缝天光：周期 / 每周期亮多久 / 开关淡入淡出（s） */
+    skyPeriodSec: 40,
+    skyOnSec: 25,
+    skyFadeSec: 1,
+    /** socket / 手动光源开关淡入淡出（s） */
+    switchFadeSec: 0.3,
+    /** 反射后这段距离内的碰撞体忽略（m）：镜子自带的碰撞外框不会把反射光挡在原地；镜面与碰撞体近乎重合时镜面优先 */
+    mirrorSkin: 0.05,
+    /** 光束颜色（style-guide §1 / §3）：暖 = 灯火琥珀，暖芯 = 光束最亮处，冷白 = 谜题 5 云缝天光，受阻 = 警告红 */
+    colors: { warm: 0xe8a24a, warmCore: 0xffd38a, coldWhite: 0xe6eef2, blocked: 0xb5584f },
+  },
   /** 交互与机关（GDD §9；v0.1-004） */
   /** 字幕 / 阅读 / 日志（GDD §9、§10；任务单 005） */
   narrative: {

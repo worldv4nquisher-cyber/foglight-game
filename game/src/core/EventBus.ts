@@ -74,6 +74,17 @@ export interface GameEvents {
   'float:state': { id: string; state: 'grounded' | 'floating' | 'drifting' };
   /** 音效请求（id = manifest 音频 key；没有资源时场景用合成音兜底，见 systems/tide/tideScene.ts bindSfxFallback） */
   'sfx:play': { id: string };
+  /** 012 光路：重算完成（ms = 本次耗时）；接收器触发 / 前置条件未满足（红光）/ 光离开后进度归零 */
+  'beam:traced': { ms: number; paths: number };
+  'receiver:activated': { id: string; emitter: string };
+  'receiver:blocked': { id: string; emitter: string };
+  'receiver:reset': { id: string };
+  /** 光源开关（lit = 逻辑上亮着，淡入过半算亮）/ 换颜色 / 天光切常亮（谜题 5 开油阀后） */
+  'beam:emitter': { id: string; lit: boolean };
+  'beam:setColor': { id: string; color: 'warm' | 'coldWhite' };
+  'beam:skyAlwaysOn': { id: string; alwaysOn: boolean };
+  /** 门等非镜子的状态变化后请求重算光路 */
+  'beam:invalidate': undefined;
 }
 
 /** 交互类型名（与 systems/interaction/Interactable.ts 的 InteractKind 一致；放这里避免 core 依赖 systems） */
