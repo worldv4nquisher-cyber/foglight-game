@@ -780,6 +780,8 @@ const CHECKS = [
       const journalPages = TEXT['ch1.s2.journal.doc'];
       if (st.doc !== 'ch1.s2.journal.doc' || st.n !== 5 || st.body !== journalPages[0] || st.idx !== '1 / 5') throw new Error('日志第 1 页不对 ' + JSON.stringify(st));
       if (st.title !== TEXT['ui.doc_title.journal'] || st.ctx !== 'reading' || !st.frozen) throw new Error('阅读状态不对 ' + JSON.stringify(st));
+      const readerBlur = await evaluate(`getComputedStyle(document.querySelector('.reader')).backdropFilter`);
+      if (readerBlur !== 'blur(6px) brightness(0.6)') throw new Error('阅读界面遮罩没有背景模糊（BUG-003）backdropFilter=' + readerBlur);
       const toast = await until(`(() => { const t = document.querySelector('.toast-left'); return t && !t.hidden ? t.textContent : ''; })()`, 2000);
       if (toast !== TEXT['ch1.common.journal_updated']) throw new Error('首次阅读没弹「日志已更新」：' + toast);
       // 不能移动：按住 W 1 s，角色不动
@@ -982,8 +984,10 @@ const CHECKS = [
       await sleep(400);
       await cdp.key('Escape', 'Escape', 27);
       if (!(await until(`__game.isPaused && __game.ui.pause.isOpen`, 3000))) throw new Error('Esc 没暂停');
-      const pp = await evaluate(`({ bg: getComputedStyle(document.querySelector('.pause-panel')).backgroundColor, btns: [...document.querySelectorAll('.pause-panel button')].filter((b) => b.checkVisibility()).map((b) => b.dataset.act).join(','), locked: !!document.pointerLockElement })`);
+      const pp = await evaluate(`({ blur: getComputedStyle(document.querySelector('.pause-menu')).backdropFilter, bg: getComputedStyle(document.querySelector('.pause-panel')).backgroundColor, btns: [...document.querySelectorAll('.pause-panel button')].filter((b) => b.checkVisibility()).map((b) => b.dataset.act).join(','), locked: !!document.pointerLockElement })`);
       if (pp.btns !== 'resume,settings,to-menu' || pp.bg !== 'rgba(26, 33, 40, 0.8)' || pp.locked) throw new Error('暂停菜单不对 ' + JSON.stringify(pp));
+      // BUG-003：生产构建里遮罩背景模糊不能丢
+      if (pp.blur !== 'blur(6px)') throw new Error('暂停遮罩没有背景模糊（BUG-003）backdropFilter=' + pp.blur);
       await clickSel('.pause-menu [data-act="to-menu"]');
       if (!(await until(`__game.ui.pause.view === 'confirm'`, 3000))) throw new Error('回到主菜单没弹确认');
       const cb = await evaluate(`document.querySelector('.pause-menu .confirm-body').textContent`);
