@@ -8,6 +8,10 @@ const COLLIDER_NAME = /-(collider|wall)(\.\d+)?$/i;
 /** S2 远景用的 S3 岛 / 塔（与 s1 组同一文件，另登记一份 key 在 s2 组：离开 S1 释放 s1 组时不受影响） */
 export const S2_FAR_KEYS = { island: 'env-lighthouse-island-main-s3tower-s2far', tower: 'env-lighthouse-ch1-s2far' } as const;
 
+/** 地窖钥匙模型 key / 架上 socket 节点（env-cellar-s2.glb） */
+export const S2_KEY_KEY = 'prop-key-cellar-s2';
+export const S2_KEY_SOCKET = 'env-cellar-s2-key-socket';
+
 export interface S2Art {
   root: THREE.Group;
   readonly loaded: boolean;
@@ -15,6 +19,8 @@ export interface S2Art {
   cellarDoor: THREE.Object3D | null;
   far: THREE.Group | null;
   farLayer: SkyLayerHandle | null;
+  /** 地窖钥匙（prop-key-cellar-s2）：根节点精确放在 env-cellar-s2-key-socket（无偏移）；没交付 / 没 socket = null，用白盒钥匙 */
+  cellarKey: THREE.Object3D | null;
 }
 
 /**
@@ -78,6 +84,17 @@ export function buildS2Art(assets: AssetLoader): S2Art {
     loaded = true;
   }
 
+  let cellarKey: THREE.Object3D | null = null;
+  const keySocket = root.getObjectByName(S2_KEY_SOCKET);
+  if (assets.has(S2_KEY_KEY) && keySocket) {
+    cellarKey = prepare(assets.getModel(S2_KEY_KEY));
+    cellarKey.name = S2_KEY_KEY;
+    cellarKey.position.set(0, 0, 0);
+    cellarKey.quaternion.identity();
+    cellarKey.scale.setScalar(1);
+    keySocket.add(cellarKey);
+  }
+
   // 远景 S3 岛 + 灯塔（天空层材质，不钉深度）
   let far: THREE.Group | null = null;
   let farLayer: SkyLayerHandle | null = null;
@@ -106,5 +123,5 @@ export function buildS2Art(assets: AssetLoader): S2Art {
     loaded = true;
   }
 
-  return { root, loaded, cellarDoor, far, farLayer };
+  return { root, loaded, cellarDoor, far, farLayer, cellarKey };
 }

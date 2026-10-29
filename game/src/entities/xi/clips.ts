@@ -229,3 +229,31 @@ export function nodeAnim(
 
 /** xi-pickup-shelf 的 grab 帧把钥匙挂到这根骨骼（中指末节；extras.align.keyShelf.attachBone，verify-xi 比对） */
 export const XI_KEY_BONE = 'middle_03_r';
+
+/**
+ * 地窖钥匙 prop-key-cellar-s2 挂到 middle_03_r 的局部变换（key.matrix = middle_03_r.matrixWorld × attach，缩放 1）。
+ * 运行时从钥匙根节点 extras.attach 读；这份只是缺省 / 校验（verify-xi 比对 GLB）。
+ */
+export const XI_KEY_ATTACH = {
+  translation: [-0.00843, 0.02492, 0.00414] as const,
+  rotation: [0.04513, -0.26586, 0.96208, 0.04104] as const,
+};
+
+/**
+ * 读挂点变换：传 userData（GLB 节点 extras）或 Object3D（在子树里找第一个带 userData.attach 的节点——
+ * GLTFLoader 的场景组和根节点同名，extras 在根节点上）；缺 / 格式不对 → XI_KEY_ATTACH
+ */
+export function readKeyAttach(
+  src: Record<string, unknown> | { traverse(cb: (o: { userData: Record<string, unknown> }) => void): void } | undefined,
+): { translation: readonly number[]; rotation: readonly number[]; fromGlb: boolean } {
+  let userData: Record<string, unknown> | undefined;
+  if (src && typeof (src as { traverse?: unknown }).traverse === 'function') {
+    (src as { traverse(cb: (o: { userData: Record<string, unknown> }) => void): void }).traverse((o) => {
+      if (!userData && o.userData.attach) userData = o.userData;
+    });
+  } else userData = src;
+  const a = userData?.attach as { translation?: unknown; rotation?: unknown } | undefined;
+  const ok = (v: unknown, n: number): v is number[] => Array.isArray(v) && v.length === n && v.every((x) => typeof x === 'number' && Number.isFinite(x));
+  if (a && ok(a.translation, 3) && ok(a.rotation, 4)) return { translation: a.translation, rotation: a.rotation, fromGlb: true };
+  return { translation: XI_KEY_ATTACH.translation, rotation: XI_KEY_ATTACH.rotation, fromGlb: false };
+}

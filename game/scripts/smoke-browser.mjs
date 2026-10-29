@@ -1997,6 +1997,10 @@ const CHECKS = [
       // 地窖钥匙
       await tp(-1.6, -2.35, 1.6);
       await until(`false`, 300);
+      // 美术钥匙 prop-key-cellar-s2：根节点就在架上 socket（无偏移），白盒钥匙隐藏
+      const rest = await evaluate(`(() => { const k = __s2.art.cellarKey; if (!k) return null; const s = __s2.art.root.getObjectByName('env-cellar-s2-key-socket'); const p = k.getWorldPosition(new k.position.constructor()); const q = s.getWorldPosition(new k.position.constructor()); return { parent: k.parent?.name, d: p.distanceTo(q), p: p.toArray() }; })()`);
+      if (!rest) throw new Error('art=1 没加载 prop-key-cellar-s2');
+      if (rest.parent !== 'env-cellar-s2-key-socket' || rest.d > 1e-4) throw new Error('钥匙不在 socket 上 ' + JSON.stringify(rest));
       if ((await trig('cellar-key-s2')) !== 'ok') throw new Error('没有 cellar-key-s2');
       const clip = await until(`__s2.interaction.animState?.clip`, 2000);
       if (clip !== 'xi-pickup-shelf') throw new Error('钥匙应播 xi-pickup-shelf：' + clip);
@@ -2004,10 +2008,14 @@ const CHECKS = [
       const att = await evaluate(`(() => { const b = __s2.rig.visual.getObjectByName('middle_03_r'); return { kids: b ? b.children.filter((c) => c.visible).map((c) => c.name) : null, t: __s2.interaction.animState?.t ?? null }; })()`);
       if (!att.kids?.length) throw new Error('钥匙没挂到 middle_03_r ' + JSON.stringify(att));
       if (att.t !== null && Math.abs(att.t - 22 / 30) > 0.12) throw new Error('钥匙不在 grab 帧生效 ' + JSON.stringify(att));
+      const held = await evaluate(`(() => { const k = __s2.art.cellarKey; const p = k.getWorldPosition(new k.position.constructor()); return { parent: k.parent?.name, lod0: k.userData.forceLod0 === true, p: p.toArray() }; })()`);
+      if (held.parent !== 'middle_03_r' || !held.lod0) throw new Error('美术钥匙没挂 middle_03_r / 没强制 LOD0 ' + JSON.stringify(held));
+      const jump = Math.hypot(held.p[0] - rest.p[0], held.p[1] - rest.p[1], held.p[2] - rest.p[2]);
+      if (jump > 0.08) throw new Error(`grab 帧钥匙跳了 ${(jump * 100).toFixed(1)} cm`);
       if (!(await until(`!__s2.rig.controller.locked && !__s2.interaction.animState`, 4000))) throw new Error('xi-pickup-shelf 播完没解锁');
       const hidden = await evaluate(`(() => { const b = __s2.rig.visual.getObjectByName('middle_03_r'); return b.children.filter((c) => c.visible).length; })()`);
       if (hidden) throw new Error('clip 播完钥匙应收起');
-      return `xi-place-table ${dt.toFixed(2)} s 后开日志、风灯上桌 ✓；钥匙 xi-pickup-shelf、grab 帧挂 middle_03_r（${att.kids.join('/')}）、播完收起解锁 ✓`;
+      return `xi-place-table ${dt.toFixed(2)} s 后开日志、风灯上桌 ✓；钥匙 xi-pickup-shelf、socket 上 → grab 帧挂 middle_03_r（${att.kids.join('/')}，跳动 ${(jump * 100).toFixed(1)} cm，LOD0）、播完收起解锁 ✓`;
     },
   },
   {

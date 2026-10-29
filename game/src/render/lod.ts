@@ -224,3 +224,26 @@ export function describeLods(root: THREE.Object3D): Array<{ name: string; level:
   });
   return out;
 }
+
+/**
+ * 运行时临时强制 / 取消 LOD0（拿在手里的道具：离相机近、但按自己到相机的距离可能切到低级；例：地窖钥匙挂在汐手上）。
+ * 只改切换距离、不释放低级 LOD（放回去可以恢复）；不写 puzzleCritical。原距离存在 userData.lodSavedDistances。
+ * @returns 处理的 LOD 数量
+ */
+export function setForceLod0(root: THREE.Object3D, on: boolean): number {
+  root.userData.forceLod0 = on;
+  let count = 0;
+  root.traverse((o) => {
+    if (!isManagedLod(o)) return;
+    if (on) {
+      if (!o.userData.lodSavedDistances) o.userData.lodSavedDistances = o.levels.map((l) => l.distance);
+      o.levels.forEach((l, i) => (l.distance = i === 0 ? 0 : Infinity));
+    } else {
+      const saved = o.userData.lodSavedDistances as number[] | undefined;
+      if (saved) o.levels.forEach((l, i) => (l.distance = saved[i] ?? l.distance));
+      delete o.userData.lodSavedDistances;
+    }
+    count++;
+  });
+  return count;
+}

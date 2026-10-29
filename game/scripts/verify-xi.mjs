@@ -23,7 +23,10 @@ import {
   nodeAnim,
   xiInteractEventSec,
   XI_KEY_BONE,
+  XI_KEY_ATTACH,
+  readKeyAttach,
 } from '@/entities/xi/clips';
+import { buildLods, setForceLod0, applyLodDistances } from '@/render/lod';
 import { findXiClip, makeTurnTail } from '@/entities/xi/XiAnimator';
 import { xiActionTiming, XiActions } from '@/entities/xiActions';
 import { applyXiMaterials, xiFaceSdfParams, xiFaceLit, xiWetColor, xiWetRoughness, xiMaterialKind, XI_SHADOW_TINT } from '@/render/xiMaterials';
@@ -336,6 +339,62 @@ if (existsSync(animsFile) && existsSync(modelFile)) {
     sample(tail, tail.duration);
     near(rootYaw() - y0, 0, 1.5, `${n} 尾段终点抵消`);
   }
+  // 地窖钥匙 prop-key-cellar-s2：extras.attach ↔ 缺省值；grab 帧 22 的 middle_03_r × attach 正好落在架上 socket（不跳）；拿在手里强制 LOD0
+  {
+    const keyFile = new URL('../../art/models/props/prop-key-cellar-s2.glb', import.meta.url);
+    const cellarFile = new URL('../../art/models/env/env-cellar-s2.glb', import.meta.url);
+    if (existsSync(keyFile) && existsSync(cellarFile)) {
+      const [keyG, cellar] = await Promise.all([parse(keyFile), parse(cellarFile)]);
+      const keyRoot = keyG.scene.children.find((o) => o.userData.name === 'prop-key-cellar-s2');
+      assert.ok(keyRoot?.userData.attach, '钥匙根节点 prop-key-cellar-s2 带 extras.attach');
+      const a = readKeyAttach(keyG.scene);
+      assert.ok(a.fromGlb, 'extras.attach 读到');
+      a.translation.forEach((v, i) => near(v, XI_KEY_ATTACH.translation[i], 1e-5, `attach.T[${i}]`));
+      a.rotation.forEach((v, i) => near(v, XI_KEY_ATTACH.rotation[i], 1e-5, `attach.Q[${i}]`));
+      assert.equal(keyRoot.userData.attach.bone, XI_KEY_BONE, 'attach.bone');
+      near(keyRoot.userData.attach.atFrame, xiEventSec('xi-pickup-shelf', 'grab') * XI_FPS, 1e-6, 'attach.atFrame = grab 帧');
+      assert.ok(!readKeyAttach({}).fromGlb && readKeyAttach({ attach: { translation: [1, 2] } }).translation === XI_KEY_ATTACH.translation, '缺 / 坏 extras → 缺省');
+      assert.ok(keyG.scene.getObjectByName('prop-key-cellar-s2-collider'), '碰撞体');
+      // LOD：三级组装成 THREE.LOD；setForceLod0 强制 0 级、放下恢复
+      const st = buildLods(keyG.scene);
+      assert.equal(st.lodGroups, 1, '钥匙 LOD 组');
+      applyLodDistances(keyG.scene, [5, 15, 40]);
+      let lod = null;
+      keyG.scene.traverse((o) => o.isLOD && (lod = o));
+      assert.equal(lod.levels.length, 3);
+      const cam = new THREE.PerspectiveCamera();
+      cam.position.set(0, 0, 30);
+      cam.updateMatrixWorld(true);
+      keyG.scene.updateMatrixWorld(true);
+      lod.update(cam);
+      assert.equal(lod.getCurrentLevel(), 2, '30 m 外本来是 LOD2');
+      assert.equal(setForceLod0(keyG.scene, true), 1);
+      lod.update(cam);
+      assert.equal(lod.getCurrentLevel(), 0, 'forceLod0 → LOD0');
+      setForceLod0(keyG.scene, false);
+      lod.update(cam);
+      assert.equal(lod.getCurrentLevel(), 2, '取消 forceLod0 恢复距离');
+      // grab 帧：汐站在 shelf-interact（原点、朝 +Z），socket 在它的局部坐标里
+      cellar.scene.updateMatrixWorld(true);
+      const ix = cellar.scene.getObjectByName('env-cellar-s2-shelf-interact');
+      const sock = cellar.scene.getObjectByName('env-cellar-s2-key-socket');
+      const sockLocal = ix.matrixWorld.clone().invert().multiply(sock.matrixWorld);
+      const grabT = xiInteractEventSec('xi-pickup-shelf');
+      near(grabT * XI_FPS, 22, 1e-6, 'grab 帧 22');
+      sample(get('xi-pickup-shelf'), grabT);
+      const bone = scene.getObjectByName(XI_KEY_BONE);
+      const att = new THREE.Matrix4().compose(new THREE.Vector3().fromArray(a.translation), new THREE.Quaternion().fromArray(a.rotation), new THREE.Vector3(1, 1, 1));
+      const inHand = bone.matrixWorld.clone().multiply(att);
+      const p0 = new THREE.Vector3(), q0 = new THREE.Quaternion(), p1 = new THREE.Vector3(), q1 = new THREE.Quaternion(), sc = new THREE.Vector3();
+      sockLocal.decompose(p0, q0, sc);
+      inHand.decompose(p1, q1, sc);
+      const jump = p0.distanceTo(p1);
+      const ang = (q0.angleTo(q1) * 180) / Math.PI;
+      assert.ok(jump <= 0.02 && ang <= 5, `grab 帧钥匙跳动 ${(jump * 100).toFixed(1)} cm / ${ang.toFixed(1)}°`);
+      out.push(`地窖钥匙：extras.attach = 缺省 T/Q ✓；grab 帧 22 middle_03_r × attach 对 socket 偏差 ${(jump * 1000).toFixed(1)} mm / ${ang.toFixed(2)}°；LOD 3 级，forceLod0 开 / 关 ✓`);
+    }
+  }
+
   out.push(
     `char-xi.glb 73 骨 / ${skinned} 个蒙皮网格 / hand_r_socket ✓；anims.glb ${tracks} 条轨道全部绑得上；循环 clip 原地（首尾 < 1 cm）；` +
       `step-across ${stepNote}（漂移 ${(maxDrift * 100).toFixed(1)} cm）；turn ±90° @34 帧、尾段抵消 ✓`,

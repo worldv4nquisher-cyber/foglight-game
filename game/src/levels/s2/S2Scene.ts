@@ -70,6 +70,7 @@ export class S2Scene extends LevelScene {
       greybox: this.greybox,
       collider: (m) => this.colliderOf.get(m),
       artRoot: this.art.root,
+      artKey: this.art.cellarKey,
       beamDebug: beamDebugEnabled,
     });
     this.cleanups.push(() => this.puzzles.dispose());

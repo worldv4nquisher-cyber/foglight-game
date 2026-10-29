@@ -3,7 +3,8 @@ import type { Game } from '@/core/Game';
 import { t, type TextId } from '@/content/text';
 import type { PlayerRig } from '@/entities/createPlayer';
 import { XiActions, type XiActionPlayer } from '@/entities/xiActions';
-import { nodeAnim, XI_KEY_BONE, XI_SOCKET_STAND, xiClipDuration, xiInteractEventSec } from '@/entities/xi/clips';
+import { setForceLod0 } from '@/render/lod';
+import { nodeAnim, readKeyAttach, XI_KEY_BONE, XI_SOCKET_STAND, xiClipDuration, xiInteractEventSec } from '@/entities/xi/clips';
 import { ViewpointTarget } from '@/entities/components/ViewpointTarget';
 import type { CameraFollowSystem } from '@/systems/CameraFollowSystem';
 import { boxZone, type HintSystem, type HintZone } from '@/systems/HintSystem';
@@ -58,6 +59,8 @@ export interface S2PuzzleDeps {
   collider: (m: THREE.Mesh) => Collider | undefined;
   /** 美术根节点（拿走钥匙时隐藏 GLB 里同名的钥匙占位） */
   artRoot: THREE.Object3D;
+  /** 美术地窖钥匙（art=1；已放在架上 socket）；null = 用白盒钥匙 */
+  artKey?: THREE.Object3D | null;
   beamDebug: boolean;
 }
 
@@ -78,6 +81,8 @@ export interface S2Puzzles {
     lockOpen: boolean;
     doorOpen: number;
     hasKey: boolean;
+    /** 钥匙正挂在汐手上（xi-pickup-shelf grab → 播完） */
+    keyInHand: boolean;
     digitsSeen: boolean;
     gateOpen: boolean;
     westBlockedSaid: boolean;
@@ -154,6 +159,7 @@ export function buildS2Puzzles(d: S2PuzzleDeps): S2Puzzles {
     lockOpen: false,
     doorOpen: 0,
     hasKey: false,
+    keyInHand: false,
     digitsSeen: false,
     gateOpen: false,
     westBlockedSaid: false,
@@ -334,6 +340,15 @@ export function buildS2Puzzles(d: S2PuzzleDeps): S2Puzzles {
   box('cellar-key-s2-tag', 0.05, 0.004, 0.07, wood, [0.05, 0.002, -0.03], key);
   key.position.set(kx, ky, kz);
   root.add(key);
+  // 美术钥匙（art=1）替换白盒；焦点取美术钥匙的位置（根节点 = 架上 socket）
+  const artKey = d.artKey ?? null;
+  const keyFocus = new THREE.Vector3(kx, ky + 0.03, kz);
+  if (artKey) {
+    key.visible = false;
+    artKey.updateWorldMatrix(true, false);
+    root.updateWorldMatrix(true, false);
+    root.worldToLocal(artKey.getWorldPosition(keyFocus)).y += 0.03;
+  }
   const [shx, , shz] = S2.points.cellarShelfInteract;
   const shelfStand = standAt('cellar-shelf-s2', shx, S2.cellar.floorY, shz, shx - 1, shz);
   // 017：clip 优先读美术节点 env-cellar-s2-shelf-interact 的 anim（xi-pickup-shelf，grab 第 22 帧 = interact:used）
@@ -343,7 +358,7 @@ export function buildS2Puzzles(d: S2PuzzleDeps): S2Puzzles {
     object: key,
     prompt: 'ui.prompt.pickup',
     approach: false,
-    focus: new THREE.Vector3(kx, ky + 0.03, kz),
+    focus: keyFocus,
     interactPoint: shelfStand,
     anim: nodeAnim(d.artRoot, 'env-cellar-s2-shelf-interact', 'xi-pickup-shelf'),
   });
@@ -356,25 +371,29 @@ export function buildS2Puzzles(d: S2PuzzleDeps): S2Puzzles {
       if (id !== S2_IDS.key || state.hasKey) return;
       state.hasKey = true;
       keyIx.enabled = false;
-      // 017：有汐的动画时 grab 帧把钥匙挂到中指末节 middle_03_r（按这一帧的相对偏移，extras.align.keyShelf），clip 播完再收起
+      // 017：有汐的动画时 grab 帧（22）把钥匙挂到中指末节 middle_03_r，clip 播完收进背包。
+      // 美术钥匙：key.matrix = middle_03_r.matrixWorld × attach（根节点 extras.attach），拿在手里强制 LOD0；白盒钥匙：按这一帧的相对偏移挂
       const bone = interaction.animState?.clip === 'xi-pickup-shelf' ? rig.visual.getObjectByName(XI_KEY_BONE) : undefined;
-      const artKeys: THREE.Object3D[] = [];
-      d.artRoot.traverse((o) => {
-        if (/(^|[-_])key([-_.]|$)/i.test(o.name) && !/keeper/i.test(o.name) && !/socket/i.test(o.name) && o.visible) artKeys.push(o);
-      });
-      const shown = artKeys.find((o) => (o as THREE.Mesh).isMesh) ?? (key.visible ? key : null);
-      for (const o of artKeys) if (o !== shown) o.visible = false;
-      if (bone && shown) {
-        bone.updateWorldMatrix(true, false);
-        shown.updateWorldMatrix(true, false);
-        bone.attach(shown);
-        if (shown !== key) key.visible = false;
-        // 握着钥匙垂手回待机：clip 播完收进背包
-        after(xiClipDuration('xi-pickup-shelf') - xiInteractEventSec('xi-pickup-shelf'), () => (shown.visible = false));
-      } else {
-        key.visible = false;
-        if (shown) shown.visible = false;
-      }
+      const shown = artKey ?? key;
+      if (bone) {
+        if (artKey) {
+          const a = readKeyAttach(artKey);
+          bone.add(artKey);
+          artKey.position.fromArray(a.translation);
+          artKey.quaternion.fromArray(a.rotation);
+          artKey.scale.setScalar(1);
+          setForceLod0(artKey, true);
+        } else {
+          bone.updateWorldMatrix(true, false);
+          key.updateWorldMatrix(true, false);
+          bone.attach(key);
+        }
+        state.keyInHand = true;
+        after(xiClipDuration('xi-pickup-shelf') - xiInteractEventSec('xi-pickup-shelf'), () => {
+          shown.visible = false;
+          state.keyInHand = false;
+        });
+      } else shown.visible = false;
       events.emit('sfx:play', { id: 'sfx-key-pickup' });
       game.ui.hud.toast(t('ch1.common.key_obtained'));
       after(0.5, () => say('ch1.s2.key.tag_inspect'));

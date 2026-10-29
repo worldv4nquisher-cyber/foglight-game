@@ -83,6 +83,8 @@ export const manifest: AssetEntry[] = [
   { key: 'env-keeper-house-ch1', type: 'gltf', url: 'assets/art/models/env/env-keeper-house-ch1.glb', group: 's2', optional: true, art: true },
   { key: 'env-keeper-house-ch1-interior', type: 'gltf', url: 'assets/art/models/env/env-keeper-house-ch1-interior.glb', group: 's2', optional: true, art: true },
   { key: 'env-cellar-s2', type: 'gltf', url: 'assets/art/models/env/env-cellar-s2.glb', group: 's2', optional: true, art: true },
+  // 017 收尾：地窖钥匙（架上放 env-cellar-s2-key-socket；xi-pickup-shelf grab 帧挂 middle_03_r，extras.attach）
+  { key: 'prop-key-cellar-s2', type: 'gltf', url: 'assets/art/models/props/prop-key-cellar-s2.glb', group: 's2', optional: true, art: true },
   { key: 'env-cellar-door-s2', type: 'gltf', url: 'assets/art/models/env/env-cellar-door-s2.glb', group: 's2', optional: true, art: true },
   { key: 'env-courtyard-wall-s2', type: 'gltf', url: 'assets/art/models/env/env-courtyard-wall-s2.glb', group: 's2', optional: true, art: true },
   { key: 'env-laundry-rack', type: 'gltf', url: 'assets/art/models/env/env-laundry-rack.glb', group: 's2', optional: true, art: true },
