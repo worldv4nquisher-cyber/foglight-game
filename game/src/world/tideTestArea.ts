@@ -83,12 +83,21 @@ export function buildTideTestArea(opts: {
     const thick = 0.3;
     const dz = zB - zA;
     const dy = yB - yA;
-    const len = Math.hypot(dz, dy) + 0.2;
+    const run = Math.hypot(dz, dy);
+    // 只在低端多伸 0.2 m 埋进地面；高端与岸台顶面齐平（BUG-007：以前两端各伸 0.1，
+    // 高端端面凸出岸台约 3.6 cm，被当成陡坡挡住）
+    const ext = 0.2;
+    const len = run + ext;
+    const s = (yB < yA ? 1 : -1) * (ext / 2) / run; // 中心沿坡往低端挪 ext/2
     const theta = Math.atan2(-dy, dz);
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, thick, len), m);
     mesh.name = name;
     mesh.rotation.x = theta;
-    mesh.position.set(cx, (yA + yB) / 2 - (thick / 2) * Math.cos(theta), (zA + zB) / 2 - (thick / 2) * Math.sin(theta));
+    mesh.position.set(
+      cx,
+      (yA + yB) / 2 + dy * s - (thick / 2) * Math.cos(theta),
+      (zA + zB) / 2 + dz * s - (thick / 2) * Math.sin(theta),
+    );
     mesh.castShadow = mesh.receiveShadow = true;
     root.add(mesh);
     return physics.addMesh(mesh);

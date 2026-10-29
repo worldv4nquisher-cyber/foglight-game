@@ -144,6 +144,8 @@ const segL = new THREE.Line3();
 const triPt = new THREE.Vector3();
 const segPt = new THREE.Vector3();
 const dir = new THREE.Vector3();
+const lipPt = new THREE.Vector3();
+const lipNormal = new THREE.Vector3();
 const push = new THREE.Vector3();
 const before = new THREE.Vector3();
 const capBox = new THREE.Box3();
@@ -178,6 +180,10 @@ export class PhysicsSystem {
   maxSlopeDeg: number = gameplay.player.maxSlopeDeg;
   stepHeight: number = gameplay.player.stepHeight;
   groundSnap: number = gameplay.player.groundSnap;
+  /** 可直接迈过的陡面矮沿高度（BUG-007） */
+  lipHeight = 0.06;
+  /** 判矮沿时往前看多远找可走面 */
+  lipLookahead = 0.12;
   /** 低于此高度视为掉出世界 */
   killY = -30;
   onFallOut?: (body: CharacterBody) => void;
@@ -352,7 +358,7 @@ export class PhysicsSystem {
     this.moveHorizontal(b, moveH);
 
     // ---- 陡坡：中心探到比脚高的陡坡 → 撤回，改为沿坡脚滑
-    if (len > 1e-6 && this.probe(b, p, this.stepHeight, 0.05, true) && !this.hit.walkable && this.hit.y > start.y + 0.02) {
+    if (len > 1e-6 && this.probe(b, p, this.stepHeight, 0.05, true) && !this.hit.walkable && this.hit.y > start.y + 0.02 && !this.isLip(b, start, moveH, len)) {
       const n = this.hit.normal;
       const hl = Math.hypot(n.x, n.z);
       p.copy(start);
@@ -403,6 +409,29 @@ export class PhysicsSystem {
     // 最终再解一次穿插（天花板、移动平台挤压）
     this.resolve(b, p);
     if (dt > 0) b.actualVelocity.subVectors(p, b.prevPosition).divideScalar(dt);
+  }
+
+  /**
+   * BUG-007：中心射线打到的陡面只是一道矮沿（如斜板端面比岸台高出几厘米），
+   * 而它前方紧接着是可走面、且高出量 ≤ lipHeight → 当台阶迈过去，不当陡坡撤回。
+   * 真正的陡坡前方仍是陡面，照旧撤回。调用前 this.hit 是陡面命中；返回 false 时恢复它。
+   */
+  private isLip(b: CharacterBody, start: THREE.Vector3, moveH: THREE.Vector3, len: number): boolean {
+    const rise = this.hit.y - start.y;
+    if (rise > this.lipHeight) return false;
+    const savedY = this.hit.y;
+    lipNormal.copy(this.hit.normal);
+    const savedCollider = this.hit.collider;
+    const k = this.lipLookahead / len;
+    lipPt.set(b.position.x + moveH.x * k, b.position.y, b.position.z + moveH.z * k);
+    const ok = this.probe(b, lipPt, this.stepHeight, 0.05, true) && this.hit.walkable && this.hit.y - start.y <= this.lipHeight;
+    if (!ok) {
+      this.hit.y = savedY;
+      this.hit.normal.copy(lipNormal);
+      this.hit.collider = savedCollider;
+      this.hit.walkable = false;
+    }
+    return ok;
   }
 
   private setGround(b: CharacterBody, on: boolean): void {

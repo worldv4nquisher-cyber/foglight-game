@@ -202,6 +202,38 @@ test('楼梯步态：竖直速度固定 0.5455 m/s（017 xi-stairs 22 帧周期�
   results.push([`  楼梯：上楼 ${up.vy.toFixed(3)} / Shift ${upRun.vy.toFixed(3)} / 下楼 ${down.vy.toFixed(3)} m/s，水平 ${up.vh.toFixed(3)} m/s`]);
 });
 
+test('BUG-007 矮沿：陡端面凸出地面 3.6 cm（旧礁石坡接缝）任何起步相位都能走过去', () => {
+  // 旧 tideTestArea.slab 的做法：两端各伸 0.1 m，高端端面凸出岸台 3.6 cm
+  const physics = new PhysicsSystem();
+  const add = (geo, pos, rotX = 0) => {
+    const m = new THREE.Mesh(geo);
+    m.name = 'x-collider';
+    m.position.copy(pos);
+    m.rotation.x = rotX;
+    m.updateMatrixWorld(true);
+    physics.addMesh(m);
+  };
+  add(new THREE.BoxGeometry(4, 3.6, 4), new THREE.Vector3(0, 0.2, 22)); // 岸台 z 20…24，顶 2.0
+  add(new THREE.BoxGeometry(4, 1, 20), new THREE.Vector3(0, -0.5, 34)); // 坡下地面
+  const theta = Math.atan2(1.9, 5);
+  add(new THREE.BoxGeometry(2, 0.3, Math.hypot(5, 1.9) + 0.2), new THREE.Vector3(0, 1.05 - 0.15 * Math.cos(theta), 26.5 - 0.15 * Math.sin(theta)), theta);
+  const body = new CharacterBody();
+  physics.addBody(body);
+  const stuck = [];
+  for (let k = 0; k < 120; k++) {
+    const z0 = 23 + k * 0.0083;
+    body.teleport(new THREE.Vector3(0, 2.02, z0));
+    for (let i = 0; i < k % 7; i++) physics.step(DT);
+    for (let i = 0; i < 240; i++) {
+      body.velocity.set(0, 0, Math.min(WALK, ((i + 1) * DT * WALK) / 0.12));
+      physics.step(DT);
+    }
+    if (body.position.z < 26) stuck.push(`${z0.toFixed(3)}→${body.position.z.toFixed(3)}`);
+  }
+  assert.deepEqual(stuck, [], `卡在接缝：${stuck.slice(0, 5).join(' ')}`);
+  // 45° 陡坡仍挡住由上面的「45° 坡走不上去」覆盖（矮沿判定只放过 ≤ lipHeight 且前方可走的沿）
+});
+
 test('斜着撞墙：沿墙滑动，不穿、不黏', () => {
   const env = setup();
   const w = env.course.anchors.wall;

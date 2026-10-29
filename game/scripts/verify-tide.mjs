@@ -229,6 +229,24 @@ test('walkableWhen：礁石路入口空气墙涨潮挡住、退潮放行（中�
   assert.equal(c2.enabled, true);
 });
 
+test('BUG-007 复现点：退潮后从岸台 (0/0.5/−0.6, 2.02, 23.0…23.99) 朝南走下礁石坡，任何起步相位都不卡在 z≈23.9 接缝；坡顶不高出岸台', () => {
+  const env = setup({ initial: 'low' });
+  assert.equal(env.area.reefGate.enabled, false, '退潮时入口空气墙关闭');
+  const slope = env.scene.getObjectByName('tide-reef-slope-collider');
+  const top = new THREE.Box3().setFromObject(slope).max.y;
+  assert.ok(top <= 2.0 + 1e-3, `坡顶 ${top.toFixed(3)} 高出岸台 2.0`);
+  const stuck = [];
+  for (let k = 0; k < 60; k++) {
+    const x = [0, 0.5, -0.6][k % 3];
+    const z0 = 23 + k * 0.0165;
+    env.body.teleport(new THREE.Vector3(x, 2.02, z0));
+    env.step(k % 7);
+    env.seconds(3, { move: [0, gameplay.player.walkSpeed] });
+    if (env.body.position.z < 27) stuck.push(`(${x}, ${z0.toFixed(3)}) → z ${env.body.position.z.toFixed(3)}`);
+  }
+  assert.deepEqual(stuck, [], `卡住：${stuck.slice(0, 4).join('；')}`);
+});
+
 test('送回：站在被淹没 > 0.3 m 的地面 → 送回安全点 + 「水太冷了。」；0.3 m 以内、空中、接管中不送', () => {
   const env = setup({ initial: 'low' });
   const { area, tides } = env;
