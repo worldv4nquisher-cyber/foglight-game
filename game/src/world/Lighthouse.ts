@@ -4,6 +4,7 @@ import type { AtmospherePreset } from '@/config/atmosphere';
 /**
  * 占位灯塔：塔身（锥台）+ 灯室（自发光，触发 Bloom）+ 暖色点光源 + 缓慢扫过的体积光束。
  * 灯塔暖光是忧郁冷色画面里唯一的温度，用于对比。
+ * BUG-006：可以以熄灭状态创建（S3 初望灯塔进场是暗的，点灯后才亮灯 + 光束）。熄灭时没有任何暖光（点光源关、灯室不自发光、无光束）。
  */
 export class Lighthouse extends THREE.Group {
   readonly light: THREE.PointLight;
@@ -14,11 +15,13 @@ export class Lighthouse extends THREE.Group {
   private baseIntensity = 60;
   private flicker = 0.08;
   private t = 0;
-  private _on = true;
+  private _on: boolean;
   readonly height = 9;
 
-  constructor() {
+  /** @param opts.lit 初始是否点亮（默认 true：S1 / 菜单远景 / 沙盒；S3 初望灯塔传 false，点灯后 setOn(true)） */
+  constructor(opts: { lit?: boolean } = {}) {
     super();
+    this._on = opts.lit ?? true;
     this.name = 'lighthouse';
     const h = this.height;
 
@@ -115,6 +118,7 @@ export class Lighthouse extends THREE.Group {
     beam2.rotation.y = Math.PI;
     this.beamPivot.add(beam2);
     this.add(this.beamPivot);
+    this.applyOn();
   }
 
   get on(): boolean {
@@ -122,9 +126,19 @@ export class Lighthouse extends THREE.Group {
   }
 
   toggle(): void {
-    this._on = !this._on;
+    this.setOn(!this._on);
+  }
+
+  /** 点亮 / 熄灭（BUG-006） */
+  setOn(on: boolean): void {
+    this._on = on;
+    this.applyOn();
+  }
+
+  private applyOn(): void {
     this.beamPivot.visible = this._on;
-    this.lamp.material.emissiveIntensity = this._on ? 8 : 0.2;
+    this.light.visible = this._on;
+    this.lamp.material.emissiveIntensity = this._on ? 8 : 0;
   }
 
   applyAtmosphere(a: AtmospherePreset): void {
@@ -140,6 +154,6 @@ export class Lighthouse extends THREE.Group {
     this.t += dt;
     this.beamPivot.rotation.y += dt * 0.35;
     const breath = 1 + Math.sin(this.t * 1.7) * this.flicker * 0.6 + Math.sin(this.t * 7.3) * this.flicker * 0.4;
-    this.light.intensity = this._on ? this.baseIntensity * breath : this.baseIntensity * 0.03;
+    this.light.intensity = this._on ? this.baseIntensity * breath : 0;
   }
 }

@@ -19,7 +19,8 @@ export class S3LighthouseScene extends LevelScene {
   readonly name = 's3-lighthouse';
   protected readonly locationId = 'ch1.s3.location.title' as const;
   protected override goalId: TextId | null = 'ch1.s3.goal.light';
-  private lighthouse = new Lighthouse();
+  /** BUG-006：进场是熄灭的，点灯后才亮灯 + 光束 */
+  private lighthouse = new Lighthouse({ lit: false });
   private ending = false;
 
   constructor(game: Game) {
@@ -68,11 +69,16 @@ export class S3LighthouseScene extends LevelScene {
   lightTheLamp(): void {
     if (this.ending) return;
     this.ending = true;
-    if (!this.lighthouse.on) this.lighthouse.toggle();
+    this.lighthouse.setOn(true);
     this.game.audio.beep(440, 0.4, 'sine', 0.05);
     window.setTimeout(() => {
       if (this.game.scenes.current === this) void this.game.flow.completeChapter();
     }, END_DELAY * 1000);
+  }
+
+  /** 灯是否亮着（smoke / 测试读） */
+  get lighthouseOn(): boolean {
+    return this.lighthouse.on;
   }
 
   protected override applyAtmosphere(a: AtmospherePreset): void {

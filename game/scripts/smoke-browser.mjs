@@ -1166,12 +1166,15 @@ const CHECKS = [
       out.push(`慢加载 S2→S3 ${Math.round(s.tr.ms)} ms、进度线 ${withBar.length} 帧（${withBar[0][2].toFixed(2)}→${withBar.at(-1)[2].toFixed(2)}）✓`);
 
       // ---- 5. S3 点灯 → 章节结束页（存档 chapterComplete），场景组全部释放
+      // BUG-006：进 S3 时灯塔熄灭（无光束），点灯后亮
+      if (await evaluate(`__game.scenes.current.lighthouseOn`)) throw new Error('BUG-006：进 S3 时灯塔不应已亮');
       await evaluate(`__game.scenes.current.lightTheLamp(); 1`);
+      if (!(await evaluate(`__game.scenes.current?.name !== 's3-lighthouse' || __game.scenes.current.lighthouseOn`))) throw new Error('BUG-006：点灯后灯塔没亮');
       if (!(await until(`__game.scenes.current?.name === 'chapter-end'`, 30000))) throw new Error('点灯后没进章节结束页');
       s = await st();
       if (!s.save?.chapterComplete) throw new Error('结束页没存 chapterComplete');
       if (s.groups.some((x) => /^s\d$/.test(x))) throw new Error('结束页应释放场景组：' + s.groups.join());
-      out.push('S3 点灯 → 结束页、释放场景组 ✓');
+      out.push('S3 进场灯塔熄灭 → 点灯亮起 → 结束页、释放场景组 ✓');
 
       // ---- 6. 沙盒：正式版不带 debug 打不开；带 ?debug=1 能进，不存档
       await evaluate(`localStorage.clear(); 1`);
