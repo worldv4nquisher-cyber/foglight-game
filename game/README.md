@@ -1,4 +1,4 @@
-# 失落灯塔群岛 · 游戏工程（game/）
+# 雾灯 · 游戏工程（game/）
 
 3D 网页游戏，Three.js + TypeScript + Vite。第三人称探索解谜，三渲二半写实，**桌面浏览器优先、极致画质、忧郁氛围**。
 手机不是目标平台，但保留了基础触屏输入抽象（虚拟摇杆 + 滑动转视角 + 交互键），默认不注册，以后需要时可以启用。
@@ -36,10 +36,11 @@
 | `?simulateFps=40` | 画质自动检测用固定帧率代替实测（`40,60` = 第 1 轮 40、第 2 轮起 60）；需先清空设置（`localStorage.clear()`）才会检测 |
 | `?postfx=0` | 关闭后处理，直接渲染（排查渲染问题） |
 | `?atmo=lonely-night` | 切换气氛预设（默认 `melancholy-dusk`） |
+| `?autostart=1` | 跳过主菜单：有存档直接继续、没有就新游戏（冒烟测试 / 开发用；存档提示改在进场后用 HUD 显示 8 s） |
 | `?scene=testbed` | 角色控制器 / 相机测试场地（坡、台阶、螺旋楼梯、墙、闸门 G、升降台、跨越点、T 黑场送回；带窄门的小屋、测试机关、观察点、C 测试镜头），不存档 |
 | `?debug=1` | 正式构建里也打开 F3 性能面板 / F4 调试面板（输入、速度、碰撞耗时、相机、观察点对准度） |
 
-开发模式下控制台可用 `__game`，如 `__game.quality.set('ultra')`；`__lods()` 列出 LOD 测试物体的当前层级。
+开发模式下控制台可用 `__game`，如 `__game.quality.set('ultra')`、`__game.flow.completeChapter()`（035 结尾演出前手动进章节结束页）；`__lods()` 列出 LOD 测试物体的当前层级。
 
 ## 操作
 
@@ -107,8 +108,8 @@ game/
 - **输入（systems/input/）**：玩法代码只认抽象 action（`interact/sprint/partNext/exitPuzzle/advance/skipHold/pause…` 和轴 `moveX/moveY` + 视角 / 滚轮增量），输入源只写原始按键，由 InputManager 按上下文栈（`InputContext.ts`，`input.pushContext('puzzle')` 返回弹出函数）映射。新增操作：在 `actions.ts` 加 action 并在对应上下文配键位。灵敏度 / Y 反转：`input.setLookSensitivity()` / `setInvertY()`。指针锁定默认开启（`gameConfig.input.pointerLock`）。校验：`npm run test:input`。
 - **资源（assets/）**：见下节。缺失或加载失败一律回退占位几何体/棋盘格纹理，游戏照常运行。
 - **画质（config/quality.ts，v0.1-009）**：纯桌面三档「极致 / 高 / 标准」，参数表键名与数值逐项照抄 `art/style/style-guide.md` §8（`npm run test:quality` 校验，期望值内嵌在 `scripts/verify-quality.mjs`，§8 改了两边一起改）。表里体积雾、CSM、描边、反射、TAA、AgX 等特性在 023–026 实现时直接读这里；现在已生效的是 `renderScale`、`maxPixelRatio`、`shadowType.mapSize`（单张平行光阴影）、`rainParticles.count`、`ao.gtao`（N8AO）、`bloom.mipLevels`、`filmGrain`、`vignette`、`lodDistances`。
-  - **默认极致**，不按 GPU 名称判档（GPU 名只打日志、显示在暂停菜单底部）。
-  - **3 秒自动检测（systems/QualityBenchmark.ts）**：设置里 `qualityDetected=false`（新安装 / 清空设置）时，第一次进入 S1 的 3 秒建立镜头里从极致开始测平均帧率，< 50 fps 降一档后重测 3 秒，最多连降两档；暂停 / 切后台这一轮作废重测，切档后前 5 帧不计。结果写设置（`quality`、`qualityDetectedTier`、`qualitySource='auto'`），之后刷新 / 重启都不再测。降过档且玩家没手动改过时，暂停菜单画质项下显示 `ui.settings.quality_auto_note`。
+  - **默认极致**，不按 GPU 名称判档（GPU 名只打日志、显示在设置画质状态行的悬停提示里）。
+  - **3 秒自动检测（systems/QualityBenchmark.ts）**：设置里 `qualityDetected=false`（新安装 / 清空设置）时，第一次进入 S1 的 3 秒建立镜头里从极致开始测平均帧率，< 50 fps 降一档后重测 3 秒，最多连降两档；暂停 / 切后台这一轮作废重测，切档后前 5 帧不计。结果写设置（`quality`、`qualityDetectedTier`、`qualitySource='auto'`），之后刷新 / 重启都不再测。降过档且玩家没手动改过时，设置界面画质项下显示 `ui.settings.quality_auto_note`。
   - 玩家手动切换（`game.quality.set(tier)`）随时生效并保存，`qualitySource='user'` 后不会再被自动改；检测中途手动改 = 停止检测（aborted）、以玩家为准；检测前已手动选过档 = 跳过（skipped）。这两种都只记「以后不再自动检测」（`qualityDetected=true`），**不写 `qualityDetectedTier`**（保持 null = 没有检测结果），设置里显示「尚未自动检测」。检测没完成就离开 S1（回到主菜单等）= 整次作废、什么都不写，下次进 S1 重测。「恢复默认」不重新检测：有检测结果回到检测结果（来源 auto），没有结果（未检测 / 打断 / 跳过）回到默认极致（来源 default）（BUG-002）。
   - **检测时机**（009 制作人裁定）：第一轮落在建立镜头内——建立镜头播完停在最后一帧，等第一轮测完（热身 5 帧 + 3 s，最多多停 5 s）再交还操作；降档后的复测在玩家能移动后继续。切档引起的画布重建推迟到下一帧渲染之前，不出现可见黑帧（smoke 检查 `__game.debugStats.resizeAfterRender === 0`）。035 开场演出接入后，检测放进演出最后 9 s（3 轮 × 3 s）。
   - **运行时切档**不重载场景：发布 `quality:changed { tier, previous, source }`，Game 改像素比并 resize（重建后处理渲染目标），PostFX 改 AO / bloom / 颗粒，场景丢掉旧阴影贴图按新尺寸重建、改雨量和 LOD 距离。检测完成另发 `quality:detected`。
@@ -174,9 +175,29 @@ game.events.on('interact:used', ({ id }) => { if (id === 'bell') ring(); });
 - **测试场地交互走廊**：`?scene=testbed` 出生点东侧 x = 16 一条南北向通道，东侧依次是 inspect（木箱）、read（告示板）、pickup（底座上的提灯）、place（灯台 A），西侧是 use（钟）、hold（油阀）、place（灯台 B）、push（浮台，向北推 3 m）。demo 主场景的灯塔改为 `use` 交互（站在台座上面向塔按 E）。
 - 校验：`npm run test:interaction`；smoke 里有八种交互、hold 圆环、push、机关 Esc→继续→右键退出、灯塔的浏览器端检查。
 
+## 界面流程：主菜单 / 设置 / 暂停 / 章节结束页（v0.1-008）
+
+流程（GDD §10）在 `core/GameFlow.ts`（`game.flow`），各界面是 `ui/` 下的 DOM 层，背景是实时 3D 场景：
+
+```
+启动(Boot) → 主菜单(menu) ─ 继续 ─────────────→ 加载 → 存档所在场景的开头（已完成本章 → 章节结束页）
+                       ├ 新游戏（有存档先确认覆盖，取消回主菜单）→ 加载 → S1
+                       ├ 设置 ⇄ 返回        └ 制作名单 ⇄ 返回
+游戏中 Esc → 暂停菜单 ─ 继续 / 设置 ⇄ 返回 / 回到主菜单（确认「将回到最近的场景开头。」）→ 主菜单
+点亮灯塔、结尾演出（035）→ flow.completeChapter() → 章节结束页（本章用时 m:ss、提示次数）→ 回到主菜单
+```
+
+- **主菜单**（`ui/MainMenu.ts` + `scenes/MenuScene.ts`）：雾中灯塔剪影 + 海面 + 雨，镜头 60 s 缓慢推进；标题字是文字占位（标题图 030）。没有可读存档时不显示「继续」；存档损坏 / 浏览器不能保存的提示（006）显示在按钮下方。主菜单 / 结束页不能暂停，Esc 从设置 / 制作名单 / 确认框返回首页（事件 `ui:back`）。
+- **设置**（`ui/SettingsPanel.ts`，主菜单与暂停菜单共用一份）：画质三档（下面一行是检测状态：「自动检测：x」/「尚未自动检测」/ 网址参数临时档位，GPU 名在鼠标悬停提示里）、鼠标灵敏度、反转 Y、总 / 音乐 / 音效音量、字幕大小、自动回正、显示帧率、全屏、恢复默认、返回。改动即时生效并写 `foglight.settings.v1`。恢复默认：灵敏度 1.0 等全部默认，画质回「默认档」（检测完成过 → 检测结果，否则极致，BUG-002）。没有点击移动、分辨率缩放选项（v0.1 裁定）。
+- **暂停菜单**（`ui/PauseMenu.ts`）：继续 / 设置 / 回到主菜单。回到主菜单不额外存档，进度停在最近的场景入口，「继续」回到那里。
+- **章节结束页**（`ui/ChapterEnd.ts`，场景 `chapter-end`）：同一个菜单背景但灯塔亮着；进入时存档写 `chapterComplete`（零头秒数一起记上），之后不再计时。
+- 所有菜单都压 `menu` 输入上下文（自由光标），指针锁定自动释放；进入游戏场景后才恢复。
+- 样式（美术规范 §6）：面板 `rgba(26,33,40,0.8)`、琥珀色描边 / 光晕表示悬停与焦点，字体思源黑体 / 思源宋体（标题），字体文件随 010 子集化后打包，现在用系统已装字体回退。
+- 校验：`npm run test:save`（结束页用时、零头记入）、`npm run test:quality`；smoke「v0.1-008」走一遍真实点击流程（无存档无继续、覆盖确认取消、设置即时生效 + 刷新保留、恢复默认、暂停 → 回到主菜单 → 继续回场景开头、结束页、样式、菜单内不锁指针）。
+
 ## 字幕、阅读界面与日志（v0.1-005）
 
-- **文本表**：`docs/gdd/text-ch1.json` → `npm run text:import` → `src/content/text/zh-CN.ts`（ID 原样，`TextId` 联合类型，写错 ID typecheck 报错）。`npm run test:text`：生成结果已提交、代码里引用的 ID 全部存在（缺失 0）、`src/` 与 `index.html` 里没有任何剧情文本（字幕 / 独白 / 查看 / 目标 / 文档 / 提示）≥ 4 个汉字的原句片段。暂停菜单等 UI 杂项里还有少量硬编码 UI 文案，完整设置界面（008）接入时换成 `t('ui.*')`。
+- **文本表**：`docs/gdd/text-ch1.json` → `npm run text:import` → `src/content/text/zh-CN.ts`（ID 原样，`TextId` 联合类型，写错 ID typecheck 报错）。`npm run test:text`：生成结果已提交、代码里引用的 ID 全部存在（缺失 0）、`src/` 与 `index.html` 里没有任何剧情文本（字幕 / 独白 / 查看 / 目标 / 文档 / 提示）≥ 4 个汉字的原句片段。008 起所有界面文案（主菜单 / 设置 / 暂停 / 结束页 / 存档提示）都走 `t('ui.*')`。
 - **字幕** `game.ui.subtitles`（`ui/Subtitles.ts`，逻辑在无 DOM 的 `SubtitleTrack`）：`play(['ch1.…'])` 依次播放，每行 max(2.0 s, 字数 × 0.12 s)（字数 = 去掉空白的字符数，标点计入；参数在 `gameplay.narrative`），到时自动下一行，左键 / 空格立即推进；新的 `play` 顶掉旧的（同一时刻只一条）。「只一次」的行显示时写入存档 `seenLines`，以后 `play` 自动跳过。汐 `#E4E8EA`、父亲 `#8B959D`，不显示名字；底部居中、无底框、浅阴影；字号小 / 中 / 大（18 / 22 / 28 px，设置 `subtitleSize`，暂停菜单「字幕大小」，即时生效）。时间走游戏时间：暂停、阅读 / 日志打开时停。
   - 演出（035）：`subtitles.track.setTimeline([{ at: 46, id: 'ch1.intro.line_home', duration: 4 }])`，每帧 `subtitles.playAt(cutsceneTime)`，按时间计算该显示哪条（跳转 / 倒退也对），演出行锁定不可手动推进，期间独白 / 查看被屏蔽；结束 `track.endTimeline()`。
   - `track.playText(text)` 只给自动化测试用（表里没有正好 30 字的行）。

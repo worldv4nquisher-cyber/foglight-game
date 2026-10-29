@@ -1,0 +1,5 @@
+/** 本章用时显示：秒 → m:ss（分钟不封顶，章节结束页用，v0.1-008） */
+export function formatPlayTime(sec: number): string {
+  const s = Math.max(0, Math.floor(Number.isFinite(sec) ? sec : 0));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}

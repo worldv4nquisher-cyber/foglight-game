@@ -3,9 +3,10 @@ import { Game } from '@/core/Game';
 import { BootScene } from '@/scenes/BootScene';
 import { LoadingScene } from '@/scenes/LoadingScene';
 import { MainScene } from '@/scenes/MainScene';
+import { ChapterEndScene, MenuScene } from '@/scenes/MenuScene';
 import { TestbedScene } from '@/scenes/TestbedScene';
 
-/** 入口：检测 WebGL2 → 创建 Game → 注册场景 → Boot → Loading → Main */
+/** 入口：检测 WebGL2 → 创建 Game → 注册场景 → Boot → 主菜单 →（新游戏 / 继续）Loading → Main（流程见 core/GameFlow） */
 function showFatal(message: string): void {
   const el = document.createElement('div');
   el.className = 'fatal-error';
@@ -35,10 +36,10 @@ function bootstrap(): void {
   game.scenes
     .register('boot', (g) => new BootScene(g))
     .register('loading', (g) => new LoadingScene(g))
+    .register('menu', (g) => new MenuScene(g))
+    .register('chapter-end', (g) => new ChapterEndScene(g))
     .register('main', (g) => new MainScene(g))
     .register('testbed', (g) => new TestbedScene(g));
-  // 主菜单（v0.1-008）还没做：有可读存档就当作「继续」，否则新游戏。坏存档 / 不可写的提示在进场后用 HUD 显示
-  if (!game.save.continueGame()) game.save.newGame('ch1', 'main');
   game.start();
   void game.scenes.change('boot');
 

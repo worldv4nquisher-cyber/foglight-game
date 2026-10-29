@@ -28,3 +28,15 @@ export const gameConfig = {
     touchSensitivity: 0.005,
   },
 } as const;
+
+/**
+ * 制作名单署名（text-ch1 `ui.credits.body` 的 {producer} 等占位，v0.1-008）。
+ * 文本表注明「{} 由制作人填署名」，制作人给出名字前用「—」占位。
+ */
+export const credits = {
+  producer: '—',
+  designer: '—',
+  artist: '—',
+  programmer: '—',
+  audio: '—',
+};

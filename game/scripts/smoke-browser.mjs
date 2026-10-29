@@ -236,7 +236,7 @@ const CHECKS = [
       if (drops.length !== 2 || !/:cutscene$/.test(drops[0]) || /:cutscene$/.test(drops[1])) throw new Error('第一轮应在建立镜头内、第二轮在交还之后：' + qcam.join(', '));
       out.push('simulateFps=40：' + seen.join(' → ') + ' ✓（第一轮在建立镜头内、第二轮玩家可操作后 ✓）');
       // 设置界面（暂停菜单）画质项下显示 quality_auto_note
-      const note = await evaluate(`(async () => { __game.pause('user'); await new Promise((r) => setTimeout(r, 300));
+      const note = await evaluate(`(async () => { __game.pause('user'); __game.ui.pause.openSettings(); await new Promise((r) => setTimeout(r, 300));
         const n = document.querySelector('[data-role="quality-note"]'); const t = n && !n.hidden ? n.textContent : null; __game.resume(); return t; })()`);
       if (note !== '已根据这台电脑自动选择画质，可以随时改回。') throw new Error('降档提示没显示：' + note);
       out.push('降档提示 ✓');
@@ -314,13 +314,13 @@ const CHECKS = [
         await sleep(100);
       }
       if (s.tier !== 'high' || s.bench !== 'running') throw new Error('没进到第二轮 ' + JSON.stringify(s));
-      const b2 = await evaluate(`(async () => { const g = __game; g.pause('user'); await new Promise((r) => setTimeout(r, 200));
+      const b2 = await evaluate(`(async () => { const g = __game; g.pause('user'); g.ui.pause.openSettings(); await new Promise((r) => setTimeout(r, 200));
         [...document.querySelectorAll('.pause-menu [data-role="quality"] button')].find((b) => b.textContent === '标准').click();
         await new Promise((r) => setTimeout(r, 200));
-        const foot = document.querySelector('.pause-menu .menu-foot').textContent;
+        const foot = document.querySelector('.pause-menu .settings-status').textContent;
         const set1 = JSON.parse(localStorage.getItem('foglight.settings.v1'));
         g.settings.resetToDefaults(); await new Promise((r) => setTimeout(r, 200));
-        const foot2 = (g.resume(), g.pause('user'), await new Promise((r) => setTimeout(r, 200)), document.querySelector('.pause-menu .menu-foot').textContent);
+        const foot2 = (g.resume(), g.pause('user'), g.ui.pause.openSettings(), await new Promise((r) => setTimeout(r, 200)), document.querySelector('.pause-menu .settings-status').textContent);
         g.resume();
         return { foot, foot2, state: g.benchmark.state, set1, set2: JSON.parse(localStorage.getItem('foglight.settings.v1')), tier: g.quality.tier };
       })()`);
@@ -369,9 +369,11 @@ const CHECKS = [
       const started = await until(() => ctl.busy, 3000);
       inp.setRaw('smoke', 'KeyE', false);
       if (!started) throw new Error('按 E 没有开始跨越');
+      // 跨越中按住 D（应被忽略）；在跨越结束前松开，避免轮询间隔（50 ms）里结束后的那几帧被 D 推走（原来偶发 0.10 m 偏差）
       inp.setRaw('smoke', 'KeyD', true);
-      await until(() => !ctl.busy, 20000);
+      await sleep(600);
       inp.setRaw('smoke', 'KeyD', false);
+      await until(() => !ctl.busy, 20000);
       const d = body.position.distanceTo(tb.link.end);
       if (d > 0.1) throw new Error('跨越终点偏差 ' + d.toFixed(2));
       // 黑场送回：黑场出现 → 回到出生点并着地 → 黑场消失
@@ -477,7 +479,7 @@ const CHECKS = [
         const end = Date.now() + 3000;
         let st = null;
         while (Date.now() < end) {
-          st = await evaluate(`({ paused: __game.isPaused, foot: document.querySelector('.pause-menu .menu-foot')?.textContent ?? '', shown: !document.querySelector('.pause-menu').hidden })`);
+          st = await evaluate(`(() => { const shown = !document.querySelector('.pause-menu').hidden; if (shown) __game.ui.pause.openSettings(); return { paused: __game.isPaused, foot: document.querySelector('.pause-menu .settings-status')?.textContent ?? '', shown }; })()`);
           if (st.paused && st.shown) break;
           await sleep(100);
         }
@@ -485,7 +487,7 @@ const CHECKS = [
         if (/undefined|null|NaN/.test(st.foot)) throw new Error('暂停菜单底栏有 undefined：' + st.foot);
         if (detected && !st.foot.includes('自动检测：')) throw new Error('已检测状态底栏不对：' + st.foot);
         // 菜单开着时切档（refresh 再跑一次）
-        await evaluate(`(() => { document.querySelector('.pause-menu [data-role="quality"] button:last-child').click(); document.querySelector('.pause-menu [data-role="quality"] button').click(); return 1; })()`);
+        await evaluate(`(() => { document.querySelector('.pause-menu [data-role="quality"] button:last-child').click(); document.querySelector('.pause-menu [data-role="quality"] button').click(); document.querySelector('.pause-menu .settings-panel [data-act="back"]').click(); return 1; })()`);
         const r = await evaluate(`(() => { const b = document.querySelector('.pause-menu [data-act="resume"]').getBoundingClientRect(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 }; })()`);
         await cdp.click(r.x, r.y);
         await sleep(1300);
@@ -708,6 +710,8 @@ const CHECKS = [
       // ---- 4. 字号三档：暂停菜单里点，立即生效
       await cdp.key('Escape', 'Escape', 27);
       if (!(await until(`__game.isPaused`, 3000))) throw new Error('Esc 没暂停');
+      await evaluate(`__game.ui.pause.openSettings(); 1`);
+      await sleep(100);
       const sizes = [];
       for (const sz of ['s', 'l', 'm']) {
         const b = await evaluate(`(() => { const r = document.querySelector('.pause-menu [data-size="${sz}"]').getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; })()`);
@@ -716,6 +720,8 @@ const CHECKS = [
         sizes.push(await evaluate(`getComputedStyle(document.querySelector('.subtitle-line')).fontSize + '/' + __game.settings.get('subtitleSize')`));
       }
       if (sizes.join(',') !== '18px/s,28px/l,22px/m') throw new Error('字号切换不对 ' + sizes.join(','));
+      await evaluate(`document.querySelector('.pause-menu .settings-panel [data-act="back"]').click(); 1`);
+      await sleep(100);
       const resume = await evaluate(`(() => { const b = document.querySelector('.pause-menu [data-act="resume"]').getBoundingClientRect(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 }; })()`);
       await cdp.click(resume.x, resume.y);
       await until(`!__game.isPaused`, 3000);
@@ -804,9 +810,14 @@ const CHECKS = [
       const en = await evaluate(`(() => { const r = document.querySelector('.journal-entry[data-doc="ch1.s2.journal.doc"]').getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; })()`);
       await cdp.click(en.x, en.y);
       if (!(await until(`__game.ui.reader.isOpen`, 3000))) throw new Error('点日志条目没打开阅读界面');
+      // 逐页按 D；2 s 内没翻过去再补按一次（无头 Chrome 帧率低时偶发吞键，原来不检查）
       for (let i = 1; i <= 5; i++) {
-        await cdp.key('KeyD', 'd', 68);
-        await until(`__game.ui.reader.page === ${i}`, 2000);
+        let ok = false;
+        for (let tries = 0; tries < 3 && !ok; tries++) {
+          await cdp.key('KeyD', 'd', 68);
+          ok = await until(`__game.ui.reader.page === ${i}`, 2000);
+        }
+        if (!ok) throw new Error('第 ' + (i + 1) + ' 页翻不过去 ' + JSON.stringify(await rd()));
       }
       st = await rd();
       if (st.n !== 6 || st.page !== 5 || st.body !== TEXT['ch1.outro.journal_entry'] || st.idx !== '6 / 6') throw new Error('结尾后第 6 页不对 ' + JSON.stringify(st));
@@ -816,15 +827,170 @@ const CHECKS = [
       if (!(await until(`!__game.ui.journal.isOpen && __game.input.context === 'explore' && !__game.isFrozen`, 3000))) throw new Error('J 没关日志');
       out.push('日志分组 / 目标更新 / 第 6 页 ✓');
       // 第二种文档（告示）进「信与纸条」
-      await goTo('sample-read');
-      await until(`/E\\s*阅读/.test(${promptText})`, 5000);
+      // 关日志后第一帧可能还没落地 / 交互候选没刷新：等提示出现，没出现就再传送一次（原来这里不检查，偶发漏读）
+      let readPrompt = false;
+      for (let tries = 0; tries < 2 && !readPrompt; tries++) {
+        await goTo('sample-read');
+        readPrompt = await until(`/E\\s*阅读/.test(${promptText})`, 5000);
+      }
+      if (!readPrompt) throw new Error('告示旁没有「E 阅读」：' + (await evaluate(promptText)));
       await cdp.key('KeyE', 'e', 69);
-      await until(`__game.ui.reader.isOpen`, 3000);
+      if (!(await until(`__game.ui.reader.isOpen && __game.ui.reader.docId === 'ch1.s1.notice.doc'`, 3000))) throw new Error('E 没打开告示');
       await cdp.key('Tab', 'Tab', 9);
-      await until(`!__game.ui.reader.isOpen`, 3000);
+      if (!(await until(`!__game.ui.reader.isOpen`, 3000))) throw new Error('Tab 没关告示');
       const groups = await evaluate(`__game.narrative.journal.map((e) => e.group + ':' + e.docId).join(',')`);
       if (groups !== 'father:ch1.s2.journal.doc,letters:ch1.s1.notice.doc') throw new Error('日志分组不对 ' + groups);
       out.push('信与纸条分组 ✓');
+      return out.join('，');
+    },
+  },
+  {
+    name: 'v0.1-008 主菜单 / 设置 / 暂停 / 章节结束页：§10 流程、无存档无「继续」、覆盖确认、设置即时生效并保存、恢复默认、回到主菜单→继续回场景开头、结束页用时与提示次数、样式、菜单内不锁指针',
+    async run({ evaluate, cdp, sleep }) {
+      const out = [];
+      const until = async (expr, ms = 8000) => {
+        const end = Date.now() + ms;
+        while (Date.now() < end) {
+          if (await evaluate(expr).catch(() => false)) return true;
+          await sleep(100);
+        }
+        return false;
+      };
+      const clickSel = async (sel) => {
+        const r = await evaluate(`(() => { const e = document.querySelector(${JSON.stringify(sel)}); if (!e || !e.checkVisibility()) return null; const b = e.getBoundingClientRect(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 }; })()`);
+        if (!r) throw new Error('看不到 ' + sel);
+        await cdp.click(r.x, r.y);
+      };
+      const visible = (sel) => `(() => { const e = document.querySelector(${JSON.stringify(sel)}); return !!e && e.checkVisibility(); })()`;
+      const menuState = `({ scene: __game.scenes.current?.name, ctx: __game.input.context, locked: !!document.pointerLockElement, view: __game.ui.mainMenu.view })`;
+
+      // ---- 1. 无存档进主菜单（不带 autostart）：没有「继续」，菜单上下文、指针不锁
+      await evaluate(`localStorage.clear(); 1`);
+      await cdp.gotoMenu();
+      await sleep(500);
+      let m = await evaluate(`({ ...${menuState}, cont: ${visible('.main-menu [data-act="continue"]')}, newg: ${visible('.main-menu [data-act="new"]')}, title: document.querySelector('.main-title').textContent, ver: document.querySelector('.main-version').textContent })`);
+      if (m.cont || !m.newg) throw new Error('无存档时不该有「继续」' + JSON.stringify(m));
+      if (m.title !== TEXT['ui.title'] || m.ver !== TEXT['ui.menu.version']) throw new Error('标题 / 版本号文字不对 ' + JSON.stringify(m));
+      if (m.ctx !== 'menu' || m.locked) throw new Error('主菜单应是菜单上下文、不锁指针 ' + JSON.stringify(m));
+      // 点画面不会锁指针
+      await cdp.click(100, 650);
+      await sleep(400);
+      if (await evaluate(`!!document.pointerLockElement`)) throw new Error('主菜单里点画面锁定了指针');
+      out.push('无存档：无「继续」、不锁指针 ✓');
+
+      // ---- 2. 样式：面板底色、琥珀色悬停
+      await clickSel('.main-menu [data-act="settings"]');
+      if (!(await until(`__game.ui.mainMenu.view === 'settings'`, 3000))) throw new Error('主菜单「设置」没打开');
+      const st = await evaluate(`(() => { const p = document.querySelector('.main-menu .settings-panel'); return { bg: getComputedStyle(p).backgroundColor, txt: p.textContent }; })()`);
+      if (st.bg !== 'rgba(26, 33, 40, 0.8)') throw new Error('面板底色应为 rgba(26,33,40,0.8)：' + st.bg);
+      if (/点击移动|点击寻路|分辨率|渲染比例/.test(st.txt)) throw new Error('设置里出现了不该有的选项：' + st.txt);
+      if (/undefined|null|NaN|\{[a-z]+\}/.test(st.txt)) throw new Error('设置文字有占位没替换：' + st.txt);
+      const hb = await evaluate(`(() => { const b = document.querySelector('.main-menu .settings-panel [data-act="back"]').getBoundingClientRect(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 }; })()`);
+      await cdp.move(hb.x, hb.y);
+      await sleep(400);
+      const hov = await evaluate(`getComputedStyle(document.querySelector('.main-menu .settings-panel [data-act="back"]')).borderColor`);
+      if (hov !== 'rgb(242, 176, 114)') throw new Error('悬停应为琥珀色描边：' + hov);
+      // 设置即时生效：字幕字号、灵敏度
+      await clickSel('.main-menu .settings-panel [data-size="l"]');
+      await evaluate(`(() => { const r = document.querySelector('.main-menu .settings-panel input[data-act="sens"]') ?? document.querySelector('.main-menu .settings-panel [data-act="sens"] input'); r.value = '2.5'; r.dispatchEvent(new Event('input', { bubbles: true })); r.dispatchEvent(new Event('change', { bubbles: true })); return 1; })()`);
+      await sleep(200);
+      const s1 = await evaluate(`({ size: __game.settings.get('subtitleSize'), sens: __game.settings.get('mouseSensitivity'), stored: JSON.parse(localStorage.getItem('foglight.settings.v1') ?? '{}') })`);
+      if (s1.size !== 'l' || Math.abs(s1.sens - 2.5) > 1e-6 || s1.stored.subtitleSize !== 'l' || Math.abs(s1.stored.mouseSensitivity - 2.5) > 1e-6) throw new Error('设置没即时生效 / 没写入 ' + JSON.stringify(s1));
+      // Esc：从设置返回主菜单首页（主菜单不能暂停）
+      await cdp.key('Escape', 'Escape', 27);
+      if (!(await until(`__game.ui.mainMenu.view === 'home' && !__game.isPaused`, 3000))) throw new Error('主菜单设置里 Esc 应回首页 ' + JSON.stringify(await evaluate(menuState)));
+      // 刷新后仍保留
+      await cdp.gotoMenu();
+      const s2 = await evaluate(`({ size: __game.settings.get('subtitleSize'), sens: __game.settings.get('mouseSensitivity') })`);
+      if (s2.size !== 'l' || Math.abs(s2.sens - 2.5) > 1e-6) throw new Error('刷新后设置没保留 ' + JSON.stringify(s2));
+      // 恢复默认：画质回默认档（有检测结果回检测档，否则极致）、灵敏度 1.0
+      await clickSel('.main-menu [data-act="settings"]');
+      await until(`__game.ui.mainMenu.view === 'settings'`, 3000);
+      await clickSel('.main-menu .settings-panel [data-act="reset"]');
+      await sleep(200);
+      const s3 = await evaluate(`({ q: __game.settings.get('quality'), det: __game.settings.get('qualityDetectedTier'), tier: __game.quality.tier, sens: __game.settings.get('mouseSensitivity'), size: __game.settings.get('subtitleSize') })`);
+      if (s3.q !== (s3.det ?? 'ultra') || s3.tier !== s3.q || s3.sens !== 1 || s3.size !== 'm') throw new Error('恢复默认不对 ' + JSON.stringify(s3));
+      await clickSel('.main-menu .settings-panel [data-act="back"]');
+      // 制作名单 → 返回
+      await clickSel('.main-menu [data-act="credits"]');
+      if (!(await until(`__game.ui.mainMenu.view === 'credits'`, 3000))) throw new Error('制作名单没打开');
+      await cdp.key('Escape', 'Escape', 27);
+      if (!(await until(`__game.ui.mainMenu.view === 'home'`, 3000))) throw new Error('制作名单 Esc 没回首页');
+      out.push(`样式 ✓，设置即时生效 / 刷新保留 ✓，恢复默认 → ${s3.q} + 灵敏度 1.0 ✓，制作名单 ✓`);
+
+      // ---- 3. 新游戏（无存档直接开始）→ 加载 → 主场景；记下开头位置
+      await clickSel('.main-menu [data-act="new"]');
+      if (!(await until(`__game.scenes.current?.name === 'main'`, 60000))) throw new Error('新游戏没进主场景');
+      await sleep(1500);
+      const pos = `(() => { const p = __game.scenes.current.rig.body.position; return { x: p.x, y: p.y, z: p.z }; })()`;
+      const p0 = await evaluate(pos);
+      if (!(await evaluate(`!!localStorage.getItem('foglight.save.v1') && !__game.flow.holdingMenu`))) throw new Error('进场后应有存档、流程不再压菜单上下文');
+      // 走开一段（直接挪身体）
+      await evaluate(`(() => { const b = __game.scenes.current.rig.body; const p = b.position; b.teleport(__game.scenes.current.camera.position.clone().set(p.x + 3, p.y + 0.02, p.z + 3)); return 1; })()`);
+      await sleep(300);
+
+      // ---- 4. 暂停 → 回到主菜单：确认框取消回暂停菜单，确认回主菜单
+      await cdp.click(640, 400);
+      await sleep(400);
+      await cdp.key('Escape', 'Escape', 27);
+      if (!(await until(`__game.isPaused && __game.ui.pause.isOpen`, 3000))) throw new Error('Esc 没暂停');
+      const pp = await evaluate(`({ bg: getComputedStyle(document.querySelector('.pause-panel')).backgroundColor, btns: [...document.querySelectorAll('.pause-panel button')].filter((b) => b.checkVisibility()).map((b) => b.dataset.act).join(','), locked: !!document.pointerLockElement })`);
+      if (pp.btns !== 'resume,settings,to-menu' || pp.bg !== 'rgba(26, 33, 40, 0.8)' || pp.locked) throw new Error('暂停菜单不对 ' + JSON.stringify(pp));
+      await clickSel('.pause-menu [data-act="to-menu"]');
+      if (!(await until(`__game.ui.pause.view === 'confirm'`, 3000))) throw new Error('回到主菜单没弹确认');
+      const cb = await evaluate(`document.querySelector('.pause-menu .confirm-body').textContent`);
+      if (cb !== TEXT['ui.pause.to_menu_confirm']) throw new Error('确认文字不对 ' + cb);
+      await clickSel('.pause-menu .confirm-dialog [data-act="cancel"]');
+      if (!(await until(`__game.ui.pause.view === 'main' && __game.isPaused && __game.scenes.current?.name === 'main'`, 3000))) throw new Error('取消后应回暂停菜单');
+      await clickSel('.pause-menu [data-act="to-menu"]');
+      await until(`__game.ui.pause.view === 'confirm'`, 3000);
+      await clickSel('.pause-menu .confirm-dialog [data-act="confirm"]');
+      if (!(await until(`__game.scenes.current?.name === 'menu' && __game.ui.mainMenu.isOpen && !__game.ui.pause.isOpen`, 20000))) throw new Error('确认后没回主菜单 ' + JSON.stringify(await evaluate(menuState)));
+      m = await evaluate(`({ ...${menuState}, cont: ${visible('.main-menu [data-act="continue"]')}, paused: __game.isPaused })`);
+      if (!m.cont || m.ctx !== 'menu' || m.locked || m.paused) throw new Error('回主菜单后应有「继续」、不锁指针 ' + JSON.stringify(m));
+      out.push('暂停 → 回到主菜单（取消 / 确认）✓');
+
+      // ---- 5. 有存档点「新游戏」：覆盖确认，取消回主菜单、存档不动
+      const saveBefore = await evaluate(`localStorage.getItem('foglight.save.v1')`);
+      await clickSel('.main-menu [data-act="new"]');
+      if (!(await until(`__game.ui.mainMenu.view === 'confirm'`, 3000))) throw new Error('有存档时新游戏没弹覆盖确认');
+      const ot = await evaluate(`document.querySelector('.main-menu .confirm-title').textContent + '|' + document.querySelector('.main-menu .confirm-body').textContent`);
+      if (ot !== TEXT['ui.menu.overwrite_title'] + '|' + TEXT['ui.menu.overwrite_body']) throw new Error('覆盖确认文字不对 ' + ot);
+      await clickSel('.main-menu .confirm-dialog [data-act="cancel"]');
+      if (!(await until(`__game.ui.mainMenu.view === 'home' && __game.scenes.current?.name === 'menu'`, 3000))) throw new Error('取消覆盖应回主菜单');
+      if ((await evaluate(`localStorage.getItem('foglight.save.v1')`)) !== saveBefore) throw new Error('取消覆盖后存档被改了');
+      out.push('覆盖确认 → 取消回主菜单 ✓');
+
+      // ---- 6. 继续 → 回到场景开头
+      await clickSel('.main-menu [data-act="continue"]');
+      if (!(await until(`__game.scenes.current?.name === 'main'`, 60000))) throw new Error('继续没进主场景');
+      await sleep(1500);
+      const p1 = await evaluate(pos);
+      const d = Math.hypot(p1.x - p0.x, p1.z - p0.z);
+      if (d > 0.6) throw new Error(`继续后应在场景开头，偏了 ${d.toFixed(2)} m`);
+      out.push(`继续 → 场景开头（偏 ${d.toFixed(2)} m）✓`);
+
+      // ---- 7. 章节结束页：用时 m:ss、提示次数；回到主菜单；继续回到结束页
+      await evaluate(`(() => { __game.save.addHintUsed(); __game.save.addHintUsed(); return 1; })()`);
+      await sleep(300);
+      await evaluate(`__game.flow.completeChapter().then(() => 1)`);
+      if (!(await until(`__game.scenes.current?.name === 'chapter-end' && ${visible('.chapter-end')}`, 15000))) throw new Error('章节结束页没显示');
+      const ce = await evaluate(`({ time: document.querySelector('[data-role="playtime"]').textContent, hints: document.querySelector('[data-role="hints"]').textContent, save: JSON.parse(localStorage.getItem('foglight.save.v1')), ctx: __game.input.context, locked: !!document.pointerLockElement })`);
+      const tm = /(\d+):(\d\d)/.exec(ce.time);
+      if (!tm) throw new Error('用时不是 m:ss：' + ce.time);
+      const sec = +tm[1] * 60 + +tm[2];
+      if (!ce.save?.chapterComplete || Math.abs(sec - ce.save.playTimeSec) > 1) throw new Error('结束页用时和存档不一致 ' + JSON.stringify(ce));
+      if (!ce.hints.includes('2') || ce.save.hintsUsed !== 2) throw new Error('提示次数不对 ' + JSON.stringify(ce));
+      if (ce.ctx !== 'menu' || ce.locked) throw new Error('结束页应不锁指针 ' + JSON.stringify(ce));
+      await clickSel('.chapter-end [data-act="to-menu"]');
+      if (!(await until(`__game.scenes.current?.name === 'menu' && __game.ui.mainMenu.isOpen`, 15000))) throw new Error('结束页没回主菜单');
+      await clickSel('.main-menu [data-act="continue"]');
+      if (!(await until(`__game.scenes.current?.name === 'chapter-end'`, 15000))) throw new Error('已完成存档继续应回结束页');
+      out.push(`结束页 ${tm[0]} / 提示 2 次 ✓，回主菜单 / 继续回结束页 ✓`);
+
+      // 恢复干净状态
+      await evaluate(`localStorage.clear(); 1`);
+      await cdp.goto('');
       return out.join('，');
     },
   },
@@ -834,7 +1000,7 @@ const extra = process.env.SMOKE_ONLY ? CHECKS.filter((c) => c.name.includes(proc
 // ---------------------------------------------------------------- 起服务 + 浏览器
 const server = await preview({ root, preview: { host: '127.0.0.1', port: 0, strictPort: false, open: false }, logLevel: 'silent' });
 const addr = server.httpServer.address();
-const url = `http://127.0.0.1:${addr.port}/?smoke=1${process.env.SMOKE_QUERY ? '&' + process.env.SMOKE_QUERY : ''}`;
+const url = `http://127.0.0.1:${addr.port}/?smoke=1&autostart=1${process.env.SMOKE_QUERY ? '&' + process.env.SMOKE_QUERY : ''}`;
 const profile = mkdtempSync(join(tmpdir(), 'smoke-chrome-'));
 const chrome = spawn(
   chromePath,
@@ -946,6 +1112,17 @@ const cdp = {
       await new Promise((r) => setTimeout(r, 250));
     }
     throw new Error('换地址后 60 秒内 ' + scene + ' 场景没有就绪');
+  },
+  /** 不带 autostart 打开（默认流程：启动 → 主菜单，v0.1-008），等主菜单就绪 */
+  async gotoMenu() {
+    await send('Page.navigate', { url: url.replace('&autostart=1', '') }, sessionId);
+    await new Promise((r) => setTimeout(r, 300));
+    const end = Date.now() + 60000;
+    while (Date.now() < end) {
+      if (await evaluate(`Boolean(window.__game?.scenes?.current?.name === 'menu' && window.__game.ui.mainMenu.isOpen)`).catch(() => false)) return;
+      await new Promise((r) => setTimeout(r, 250));
+    }
+    throw new Error('60 秒内主菜单没有就绪');
   },
   async key(code, key = code, keyCode = 0) {
     const base = { code, key, windowsVirtualKeyCode: keyCode, nativeVirtualKeyCode: keyCode };

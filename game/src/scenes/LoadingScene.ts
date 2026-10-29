@@ -19,9 +19,8 @@ export class LoadingScene extends BaseScene {
       await new Promise((r) => setTimeout(r, gameConfig.minLoadingMs - elapsed));
     }
     // 注意：enter 内切换场景不要 await（当前切换尚未结束），SceneManager 会排队执行
-    // ?scene=testbed：角色控制器测试场地（v0.1-002 验收用），不存档
-    const next = new URLSearchParams(location.search).get('scene') === 'testbed' ? 'testbed' : 'main';
-    void this.game.scenes.change(next);
+    // 去哪由界面流程决定（新游戏 / 继续 / ?scene=testbed 测试场地，见 GameFlow）
+    void this.game.scenes.change(this.game.flow.next);
   }
 
   override exit(): void {

@@ -23,6 +23,8 @@ export class KeyboardMouseInput implements InputSource {
   private keys = new Set<string>();
   private dragging = false;
   private lastLockChange = 0;
+  /** 上一次 pointerlockchange 时是否处于锁定（没锁过的「解锁」事件不当作 Esc） */
+  private wasLocked = false;
   private lastEscDown = 0;
   private intentionalUnlock = false;
   private wheelAccum = 0;
@@ -175,11 +177,23 @@ export class KeyboardMouseInput implements InputSource {
 
   private onLockChange = (): void => {
     this.lastLockChange = performance.now();
-    if (this.isLocked) return;
+    const wasLocked = this.wasLocked;
+    this.wasLocked = this.isLocked;
+    if (this.isLocked) {
+      // 锁定请求还没批下来时已经切到了要光标的界面（如右键关阅读后立刻按 J 开日志）：批下来后马上主动解锁，
+      // 否则光标被锁在日志 / 菜单里，之后的解锁还会被当成玩家按 Esc 而误暂停
+      if (this.sink.cursorMode === 'free') {
+        this.intentionalUnlock = true;
+        document.exitPointerLock();
+      }
+      return;
+    }
     if (this.intentionalUnlock) {
       this.intentionalUnlock = false;
       return;
     }
+    // 之前根本没锁上（进场时流程放开菜单上下文自动请求锁定、浏览器没批 / 立刻撤回）：不是玩家按 Esc，不暂停（v0.1-008）
+    if (!wasLocked) return;
     // 玩家按 Esc 让浏览器解除了锁定 → 暂停（如果 Esc keydown 也到了页面，已经暂停过，不重复）
     if (this.sink.enabled && performance.now() - this.lastEscDown > ESC_DEDUPE_MS) {
       this.sink.setRaw(SRC, 'Escape', true);

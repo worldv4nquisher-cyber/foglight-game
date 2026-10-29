@@ -1,4 +1,6 @@
-/** 加载界面：标题 + 进度条 + 百分比 */
+import { t } from '@/content/text';
+
+/** 加载界面：标题 + 进度条 + 百分比（文字取自文本表 ui.title / ui.boot.*，v0.1-008） */
 export class LoadingScreen {
   readonly el: HTMLDivElement;
   private bar: HTMLDivElement;
@@ -9,12 +11,14 @@ export class LoadingScreen {
     this.el.className = 'loading-screen';
     this.el.hidden = true;
     this.el.innerHTML = `
-      <div class="loading-title">失落灯塔群岛</div>
-      <div class="loading-sub">The Lost Lighthouse Isles</div>
+      <div class="loading-title"></div>
+      <div class="loading-sub"></div>
       <div class="loading-track"><div class="loading-bar"></div></div>
       <div class="loading-label">0%</div>
     `;
     parent.appendChild(this.el);
+    this.el.querySelector('.loading-title')!.textContent = t('ui.title');
+    this.el.querySelector('.loading-sub')!.textContent = t('ui.boot.headphones');
     this.bar = this.el.querySelector<HTMLDivElement>('.loading-bar')!;
     this.label = this.el.querySelector<HTMLDivElement>('.loading-label')!;
   }

@@ -16,6 +16,8 @@ export interface GameEvents {
   'quality:detected': { tier: QualityTier; drops: number; rounds: Array<{ tier: QualityTier; fps: number; simulated: boolean }> };
   'viewport:resize': { width: number; height: number; pixelRatio: number };
   'ui:toggle-fps': { visible: boolean };
+  /** 不可暂停的场景（主菜单 / 章节结束页）里按 Esc：从子界面返回（v0.1-008） */
+  'ui:back': undefined;
   /** 观察模式（右键）开关与焦点距离（PostFX 景深用，026） */
   'camera:observe': { active: boolean; focusDistance: number };
   'player:land': { impactSpeed: number };

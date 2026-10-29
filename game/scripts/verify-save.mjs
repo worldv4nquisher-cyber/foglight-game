@@ -2,6 +2,7 @@
 // 运行：node --import ./scripts/register-ts-paths.mjs scripts/verify-save.mjs
 import assert from 'node:assert/strict';
 import { SAVE_KEY, SAVE_TEXT, SaveSystem, parseSave } from '@/systems/save/SaveSystem';
+import { formatPlayTime } from '@/ui/format';
 import { DEFAULT_SETTINGS, LEGACY_QUALITY_KEY, SETTINGS_KEY, Settings } from '@/systems/save/Settings';
 
 /** 内存版 localStorage；mode: ok / readonly（setItem 抛 QuotaExceededError，模拟 Safari 隐私模式）/ broken（全部抛错） */
@@ -277,6 +278,23 @@ test('009：qualityDetectedTier 清洗 / 持久化；恢复默认回到检测结
   assert.deepEqual([s.get('quality'), s.get('qualitySource'), s.get('qualityDetected')], ['high', 'auto', true]);
   assert.ok(order.indexOf('qualitySource') < order.indexOf('quality'), '应先写来源再写档位');
   assert.equal(new Settings(st).get('qualityDetectedTier'), 'high');
+});
+
+test('008：章节完成时把不满 10 秒的零头记进用时；之后不再累计；结束页用时 m:ss', () => {
+  const st = new MemStorage();
+  const s = new SaveSystem(st);
+  s.newGame('ch1', 'main');
+  s.save({ chapterId: 'ch1', sceneId: 'main' });
+  s.tick(25.5); // 20 秒记入内存，5.5 秒零头
+  s.addHintUsed();
+  s.save({ chapterId: 'ch1', sceneId: 'end', chapterComplete: true });
+  const d = JSON.parse(st.getItem(SAVE_KEY));
+  assert.equal(d.chapterComplete, true);
+  assert.ok(Math.abs(d.playTimeSec - 25.5) < 1e-6, '用时应含零头：' + d.playTimeSec);
+  assert.equal(d.hintsUsed, 1);
+  s.save({ chapterId: 'ch1', sceneId: 'end', chapterComplete: true });
+  assert.ok(Math.abs(JSON.parse(st.getItem(SAVE_KEY)).playTimeSec - 25.5) < 1e-6, '再次保存不应重复累计');
+  assert.deepEqual([0, 9.9, 59, 60, 61, 754, 3600, -3, NaN].map(formatPlayTime), ['0:00', '0:09', '0:59', '1:00', '1:01', '12:34', '60:00', '0:00', '0:00']);
 });
 
 let failed = 0;

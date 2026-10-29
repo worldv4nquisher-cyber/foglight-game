@@ -1,3 +1,4 @@
+import { t } from '@/content/text';
 import { defaultStorage, probeWritable, safeGet, safeRemove, safeSet, type StorageLike } from './storage';
 
 /**
@@ -13,11 +14,11 @@ export const SAVE_VERSION = 1;
 /** 游玩时间累加粒度（秒） */
 export const PLAYTIME_STEP_SEC = 10;
 
-/** 文案（与 docs/gdd/text-ch1.md 的 ui.save.* 一致；接入文本表后改为按 ID 取） */
+/** 文案（文本表 ui.save.*，v0.1-008 起按 ID 取） */
 export const SAVE_TEXT = {
-  saved: '已保存',
-  corrupt: '存档无法读取，只能开始新游戏。',
-  unavailable: '这个浏览器无法保存进度，关闭页面后进度会丢失。',
+  saved: t('ui.save.saved'),
+  corrupt: t('ui.save.corrupt'),
+  unavailable: t('ui.save.unavailable'),
 } as const;
 
 export interface SaveData {
@@ -230,7 +231,12 @@ export class SaveSystem {
     const p = this.progress!;
     p.chapterId = at.chapterId;
     p.sceneId = at.sceneId;
-    if (at.chapterComplete) p.chapterComplete = true;
+    if (at.chapterComplete && !p.chapterComplete) {
+      // 章节结束页显示的用时要准（v0.1-008）：把不满 10 秒的零头也记上
+      p.playTimeSec += this.pendingTime;
+      this.pendingTime = 0;
+      p.chapterComplete = true;
+    }
     const data: SaveData = {
       version: SAVE_VERSION,
       chapterId: p.chapterId,

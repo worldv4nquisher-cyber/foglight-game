@@ -333,8 +333,8 @@ test('BUG-002：检测被手动改档打断 / 被跳过 → 没有检测结果�
   assert.equal(b.quality.tier, 'ultra');
   assert.equal(b.settings.get('qualitySource'), 'default');
 
-  // 暂停菜单画质状态（底栏）：detected 为 null 时显示「尚未自动检测」
-  const src = readFileSync(new URL('../src/ui/PauseMenu.ts', import.meta.url), 'utf8');
+  // 设置界面（008 起 SettingsPanel，主菜单 / 暂停菜单共用）画质状态行：detected 为 null 时显示「尚未自动检测」
+  const src = readFileSync(new URL('../src/ui/SettingsPanel.ts', import.meta.url), 'utf8');
   assert.ok(/detected\s*\?[^:]+:\s*[^;]*(尚未自动检测|quality_undetected)/.test(src), '设置界面没按 detected 为 null 显示「尚未自动检测」');
 });
 

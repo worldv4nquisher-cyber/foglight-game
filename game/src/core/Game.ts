@@ -1,3 +1,4 @@
+import { GameFlow } from './GameFlow';
 import * as THREE from 'three';
 import { EventBus } from './EventBus';
 import { Time } from './Time';
@@ -47,6 +48,8 @@ export class Game {
   readonly ui: UIManager;
   readonly scenes: SceneManager;
   readonly postfx: PostFX;
+  /** 界面流程：主菜单 / 新游戏 / 继续 / 回到主菜单 / 章节结束（v0.1-008） */
+  readonly flow: GameFlow;
 
   private paused = false;
   /** 冻结计数（阅读界面 / 日志打开时 > 0）：游戏逻辑不跑，UI 照常 */
@@ -95,6 +98,7 @@ export class Game {
     this.disposers.push(this.settings.onChange(() => this.applySettings()));
     this.ui = new UIManager(uiRoot, this);
     this.scenes = new SceneManager(this);
+    this.flow = new GameFlow(this);
 
     // 窗口/容器尺寸变化
     // ResizeObserver 回调在本帧渲染之后才跑：只标记，下一帧渲染前再改画布（否则窗口缩放时闪一帧黑）
@@ -208,7 +212,11 @@ export class Game {
     // 画质检测放在渲染之前：它触发的切档在本帧渲染前生效，不会留下被清空的画布
     this.benchmark.update(now, this.paused || document.hidden);
     this.input.beginFrame();
-    if (this.input.consumePressed('pause')) this.togglePause();
+    if (this.input.consumePressed('pause')) {
+      // 主菜单 / 章节结束页不能暂停：Esc 用来从子界面（设置 / 制作名单 / 确认框）返回
+      if (this.scenes.current?.pausable) this.togglePause();
+      else this.events.emit('ui:back');
+    }
 
     const halted = this.paused || this.freezeCount > 0;
     const steps = time.beginFrame(now, halted);
@@ -219,7 +227,8 @@ export class Game {
       }
       if (!halted) {
         scene.update(time.delta, time.alpha);
-        if (scene.savePoint) this.save.tick(time.delta);
+        // 章节已完成（结束页）不再计时，结束页显示的用时固定
+        if (scene.savePoint && !scene.savePoint.chapterComplete) this.save.tick(time.delta);
       }
       if (scene.usePostFX && this.postfx.active) {
         // 色调映射由后处理的 ToneMappingEffect(ACES) 完成，避免重复
@@ -279,6 +288,7 @@ export class Game {
 
   dispose(): void {
     this.stop();
+    this.flow.dispose();
     this.scenes.dispose();
     this.benchmark.dispose();
     this.quality.dispose();
