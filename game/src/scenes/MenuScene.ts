@@ -22,6 +22,9 @@ function fogTexture(): THREE.CanvasTexture {
   return tex;
 }
 
+/** 主菜单灯塔灯室：微弱冷白（制作人裁定 2026-10-29：第一章点灯前所有远景灯塔熄灭，唯主菜单保留微弱冷白光；章节结束页才是暖光 + 光束） */
+export const MENU_LAMP_COLD = 0x8f9ba3;
+
 /**
  * 菜单背景场景（v0.1-008，GDD §10）：雨中灯塔远景——灯塔剪影 + 雾墙贴片 + 雨粒子，缓慢推镜。
  * 全部程序生成（不加载任何文件），远低于主菜单包 15 MB 预算；不走后处理，不存档，不可暂停。
@@ -82,6 +85,8 @@ export class MenuScene extends BaseScene {
     this.placeCamera(this.time);
     this.beam.rotation.y += dt * 0.3;
     if (this.lit) this.lamp.material.color.setScalar(1).multiplyScalar(0.92 + Math.sin(this.time * 1.7) * 0.06);
+    // 主菜单（点灯前）：只留微弱冷白光，缓慢呼吸，没有光束（v0.1-013 制作人裁定）
+    else this.lamp.material.color.setHex(MENU_LAMP_COLD).multiplyScalar(0.85 + Math.sin(this.time * 0.9) * 0.15);
     for (const [i, f] of this.fogs.entries()) {
       f.position.x += Math.sin(this.time * 0.05 + i) * dt * 0.3 + dt * 0.4;
       if (f.position.x > 60) f.position.x = -60;
@@ -111,7 +116,7 @@ export class MenuScene extends BaseScene {
     cap.position.y = 14.9;
     this.lamp = new THREE.Mesh(
       new THREE.SphereGeometry(0.55, 16, 12),
-      new THREE.MeshBasicMaterial({ color: this.lit ? 0xffb066 : 0x2a2f33, fog: false }),
+      new THREE.MeshBasicMaterial({ color: this.lit ? 0xffb066 : MENU_LAMP_COLD, fog: false }),
     );
     this.lamp.position.y = 13.8;
     g.add(rock, tower, gallery, cap, this.lamp);

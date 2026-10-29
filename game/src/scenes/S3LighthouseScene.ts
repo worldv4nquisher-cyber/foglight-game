@@ -48,7 +48,7 @@ export class S3LighthouseScene extends LevelScene {
       new Interactable({
         id: 's3-lamp',
         kind: 'use',
-        prompt: 'ui.prompt.operate',
+        prompt: 'ui.prompt.ignite',
         object: this.lighthouse,
         focus: new THREE.Vector3(base.x, base.y + 1, base.z),
         reach: 1.4,

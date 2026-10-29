@@ -7,8 +7,8 @@
 //  2. 用游戏同一套 GLTFLoader（+ Meshopt）真正解析一遍，跑 buildLods + prepareOutlineNormals（与 AssetLoader 相同），
 //     确认加载后的结果，并抽样校验 COLOR_0 确实是编码后的平滑法线。
 // 结果分 ✗ 错误（退出码 1）/ ! 警告 / · 信息。
-import { readFileSync } from 'node:fs';
-import { basename } from 'node:path';
+import { existsSync, readFileSync } from 'node:fs';
+import { basename, dirname, resolve as resolvePath } from 'node:path';
 import { CompressedTexture } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
@@ -320,12 +320,21 @@ export async function auditGlb(file, opts = {}) {
     if (img.bufferView !== undefined && bin) {
       const bv = json.bufferViews[img.bufferView];
       size = imageSize(bin.subarray(bv.byteOffset ?? 0, (bv.byteOffset ?? 0) + bv.byteLength));
+    } else if (img.uri && !img.uri.startsWith('data:')) {
+      // v0.1-013：外部 KTX2（art/textures/*.ktx2，GLB 里按相对路径引用）——相对 GLB 文件解析，读文件头量尺寸
+      const ext = resolvePath(dirname(file), decodeURIComponent(img.uri));
+      if (!existsSync(ext)) {
+        errors.push(`外部贴图 ${img.uri} 找不到（相对 GLB 解析为 ${ext}）`);
+        continue;
+      }
+      size = imageSize(readFileSync(ext));
+      if (size) size = { ...size, external: true };
     }
     if (!size) {
       info.push(`贴图 ${label}：${img.mimeType ?? '外部文件'}（未读到尺寸）`);
       continue;
     }
-    info.push(`贴图 ${label}：${size.w}×${size.h} ${size.fmt}`);
+    info.push(`贴图 ${label}：${size.w}×${size.h} ${size.fmt}${size.external ? '（外部文件）' : ''}`);
     if (Math.max(size.w, size.h) > texCap) errors.push(`贴图 ${label} ${size.w}×${size.h} 超过 ${texCap}`);
     if (size.fmt !== 'ktx2') warnings.push(`贴图 ${label} 是 ${size.fmt}，正式交付要 KTX2（§5.7）`);
   }

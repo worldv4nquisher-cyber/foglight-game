@@ -71,6 +71,11 @@ export interface CameraTrackOptions {
   holdUntil?: () => boolean;
   /** holdUntil 的最长等待（s，默认 5） */
   maxHold?: number;
+  /**
+   * 被按住空格跳过时调用：返回一条新轨道则从头接着播它（不再交还），返回 null 照常跳到最后一帧。
+   * v0.1-013 制作人裁定：画质检测第 1 轮没测完就跳过开场演出 → 接一段 3 s 不可跳过（skippable: false）的 S1 建立镜头。
+   */
+  onSkip?: () => CameraTrack | null;
   name?: string;
 }
 
@@ -83,6 +88,7 @@ export class CameraTrack {
   readonly skippable: boolean;
   readonly holdUntil: (() => boolean) | null;
   readonly maxHold: number;
+  readonly onSkip: (() => CameraTrack | null) | null;
   readonly name: string;
   private readonly keys: Array<{ time: number; pose: CameraPose }>;
   private readonly node: THREE.Object3D | null;
@@ -93,6 +99,7 @@ export class CameraTrack {
     this.skippable = opts.skippable ?? true;
     this.holdUntil = opts.holdUntil ?? null;
     this.maxHold = opts.maxHold ?? 5;
+    this.onSkip = opts.onSkip ?? null;
     this.name = opts.name ?? 'track';
     const keys = [...(opts.keys ?? [])].sort((a, b) => a.time - b.time);
     let lastFov = 55;

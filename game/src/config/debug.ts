@@ -13,3 +13,21 @@ export const debugEnabled: boolean =
 /** ?beamDebug=1：画出光线、镜面法线与接收器半径（v0.1-012；只读 URL，不需要 debug=1） */
 export const beamDebugEnabled: boolean =
   typeof location !== 'undefined' && ['1', 'true', ''].includes(new URLSearchParams(location.search).get('beamDebug') ?? 'x');
+
+/**
+ * 美术资源开关（v0.1-013）：清单里 `art: true` 的条目（../art 交付的 GLB / KTX2）是否加载。
+ * - 默认加载；`?art=0` 不加载（只看白盒，等同美术没交付）。
+ * - 冒烟测试（?smoke=1）默认不加载：无头 SwiftShader 下 S1 美术 LOD0 近 300 万面，一帧要数秒，会拖垮所有交互检查；
+ *   专门的美术检查用 `?smoke=1&art=1` 打开。
+ * - `?greybox=1`：美术加载时也显示白盒几何（对位用）。
+ */
+export const artEnabled: boolean = (() => {
+  if (typeof location === 'undefined') return true;
+  const q = new URLSearchParams(location.search);
+  const v = q.get('art');
+  if (v === '0' || v === 'false') return false;
+  if (v === '1' || v === 'true' || v === '') return true;
+  return !q.has('smoke');
+})();
+
+export const greyboxVisible: boolean = typeof location !== 'undefined' && ['1', 'true', ''].includes(new URLSearchParams(location.search).get('greybox') ?? 'x');

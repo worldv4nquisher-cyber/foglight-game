@@ -76,6 +76,33 @@ const CHECKS = [
       return files.join(' + ');`,
   },
   {
+    name: 'v0.1-013 美术外部 KTX2：GLB 里 ../../textures/*.ktx2 按 GLB URL 解析加载、转码成压缩纹理；渔网 alphaHash',
+    code: `
+      const e = (k, f) => ({ key: 'smoke-' + k, type: 'gltf', url: 'assets/art/models/env/' + f + '.glb', group: 's1', optional: true });
+      await g.assets.loadEntries([e('net', 'env-net-rack-a'), e('netb', 'env-net-rack-b')]);
+      if (g.assets.isMissing('smoke-net')) throw new Error('env-net-rack-a 没加载（dist/assets/art 里没有？）');
+      const m = g.assets.getModel('smoke-net');
+      const texs = new Map(); let net = null;
+      m.traverse((o) => { if (!o.isMesh) return; for (const mat of [o.material].flat()) { if (mat.name === 'mat-env-net') net = mat; for (const v of Object.values(mat)) if (v && v.isTexture) texs.set(v.uuid, v); } });
+      if (!net || !net.alphaHash || net.alphaTest !== 0) throw new Error('渔网材质没开 alphaHash：' + JSON.stringify(net && { h: net.alphaHash, t: net.alphaTest }));
+      const list = [...texs.values()];
+      if (list.length < 3) throw new Error('贴图太少 ' + list.length);
+      const bad = list.filter((t) => !t.isCompressedTexture && !(t.isDataTexture) || !(t.mipmaps?.[0]?.width > 1 || t.image?.width > 1));
+      if (bad.length) throw new Error('外部 KTX2 没转码成纹理：' + bad.map((t) => t.name + ':' + (t.image?.width ?? '?')).join(','));
+      const req = performance.getEntriesByType('resource').map((r) => r.name).filter((n) => n.includes('/assets/art/textures/tex-') && n.endsWith('.ktx2'));
+      if (req.length < 3) throw new Error('没有从 assets/art/textures/ 请求 KTX2：' + req.join(','));
+      const w = list.map((t) => t.mipmaps?.[0]?.width ?? t.image?.width);
+      // 两个 GLB 共用 tex-wood-ch1-*：只加载一份（同一个纹理对象）
+      const texB = new Set(); g.assets.getModel('smoke-netb').traverse((o) => { if (o.isMesh) for (const mat of [o.material].flat()) for (const v of Object.values(mat)) if (v && v.isTexture) texB.add(v.uuid); });
+      const sharedN = [...texs.keys()].filter((u) => texB.has(u)).length;
+      if (sharedN < 3) throw new Error('net-rack-a / b 共用的木头贴图没有共享：' + sharedN);
+      const woodReq = req.filter((n) => /tex-wood-ch1-albedo/.test(n)).length;
+      if (woodReq !== 1) throw new Error('tex-wood-ch1-albedo 请求了 ' + woodReq + ' 次');
+      g.assets.unload('smoke-net');
+      g.assets.unload('smoke-netb');
+      return list.length + ' 张（' + [...new Set(w)].join('/') + ' px，' + (list[0].isCompressedTexture ? '压缩纹理 format ' + list[0].format : '未压缩回退') + '），请求 ' + req.map((n) => n.split('/').pop()).join(', ') + '；两 GLB 共享 ' + sharedN + ' 张 ✓；mat-env-net alphaHash ✓';`,
+  },
+  {
     name: 'v0.1-003 建立镜头：进场 3 s 演出（cutscene 上下文），结束交还 explore',
     code: `
       const until = async (pred, ms = 20000) => { const end = Date.now() + ms; while (!pred() && Date.now() < end) await sleep(50); return pred(); };

@@ -1,5 +1,5 @@
 // 自动生成：node scripts/import-text.mjs（来源 docs/gdd/text-ch1.json），不要手改。
-// 章节 ch1 · zh-CN · v1 · 173 条
+// 章节 ch1 · zh-CN · v1 · 175 条
 
 export const TEXT_ZH_CN = {
   "ch1.common.journal_updated": "日志已更新",
@@ -21,6 +21,7 @@ export const TEXT_ZH_CN = {
   "ch1.hint.p4.l1": "小时候我在哪里数船？",
   "ch1.hint.p4.l2": "二楼那扇窗，正对着崖边。",
   "ch1.hint.p4.l3": "站在卧室窗前，往崖边看。",
+  "ch1.hint.p5.ignite.l3": "光已经到了。剩下的那一下，要我自己来。",
   "ch1.hint.p5.l1": "这里的光，要从下面一直走到上面。",
   "ch1.hint.p5.mid_a.l2": "楼梯井里，十米高的地方还有一面镜子。",
   "ch1.hint.p5.mid_a.l3": "爬到中层，转动第一面导光镜，把光打到对面更高的那面镜子上。",
@@ -134,6 +135,7 @@ export const TEXT_ZH_CN = {
   "ui.pause.title": "暂停",
   "ui.pause.to_menu": "回到主菜单",
   "ui.pause.to_menu_confirm": "将回到最近的场景开头。",
+  "ui.prompt.ignite": "E 点灯",
   "ui.prompt.inspect": "E 查看",
   "ui.prompt.open": "E 打开",
   "ui.prompt.operate": "E 操作",
@@ -206,6 +208,7 @@ export const TEXT_META: Record<keyof typeof TEXT_ZH_CN, TextMeta> = {
   "ch1.hint.p4.l1": {"type":"hint","speaker":"xi"},
   "ch1.hint.p4.l2": {"type":"hint","speaker":"xi"},
   "ch1.hint.p4.l3": {"type":"hint","speaker":"xi"},
+  "ch1.hint.p5.ignite.l3": {"type":"hint","speaker":"xi"},
   "ch1.hint.p5.l1": {"type":"hint","speaker":"xi"},
   "ch1.hint.p5.mid_a.l2": {"type":"hint","speaker":"xi"},
   "ch1.hint.p5.mid_a.l3": {"type":"hint","speaker":"xi"},
@@ -319,6 +322,7 @@ export const TEXT_META: Record<keyof typeof TEXT_ZH_CN, TextMeta> = {
   "ui.pause.title": {"type":"ui","speaker":"system"},
   "ui.pause.to_menu": {"type":"ui","speaker":"system"},
   "ui.pause.to_menu_confirm": {"type":"ui","speaker":"system"},
+  "ui.prompt.ignite": {"type":"prompt","speaker":"system","once":true},
   "ui.prompt.inspect": {"type":"prompt","speaker":"system"},
   "ui.prompt.open": {"type":"prompt","speaker":"system"},
   "ui.prompt.operate": {"type":"prompt","speaker":"system"},

@@ -204,6 +204,14 @@ export abstract class LevelScene extends BaseScene {
     return undefined;
   }
 
+  /**
+   * 开场演出被跳过时接着播的镜头（默认无 = 直接跳到最后一帧）。
+   * v0.1-013 制作人裁定：S1 在画质检测第 1 轮没测完时返回 3 s 不可跳过（skippable: false）的建立镜头，播完仍按 hold 最多再等 5 s。
+   */
+  protected establishingAfterSkip(_spawn: SpawnPoint, _hold: (() => boolean) | undefined): CameraTrack | null {
+    return null;
+  }
+
   /** 建立镜头（GDD §4：进入场景 3 s 低速推轨，结束交还控制；按住空格可跳过） */
   private playEstablishing(spawn: SpawnPoint): Promise<void> {
     const hold = this.establishingHold();
@@ -212,6 +220,7 @@ export abstract class LevelScene extends BaseScene {
       duration: gameplay.camera.establishingTime,
       ...(hold ? { holdUntil: hold } : {}),
       keys: this.establishingKeys(spawn),
+      onSkip: () => this.establishingAfterSkip(spawn, hold),
     });
     return this.cameraFollow.playEstablishing(track);
   }

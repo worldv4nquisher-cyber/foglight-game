@@ -9,15 +9,15 @@ export function disposeObject3D(root: THREE.Object3D, opts: { keep?: Set<unknown
     const mat = mesh.material;
     if (mat) {
       for (const m of Array.isArray(mat) ? mat : [mat]) {
-        if (!keep?.has(m)) disposeMaterial(m);
+        if (!keep?.has(m)) disposeMaterial(m, keep);
       }
     }
   });
 }
 
-export function disposeMaterial(material: THREE.Material): void {
+export function disposeMaterial(material: THREE.Material, keep?: Set<unknown>): void {
   for (const value of Object.values(material)) {
-    if (value instanceof THREE.Texture) value.dispose();
+    if (value instanceof THREE.Texture && !keep?.has(value)) value.dispose();
   }
   material.dispose();
 }

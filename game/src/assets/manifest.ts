@@ -37,6 +37,11 @@ export interface AssetEntry {
    * 加载后关掉材质 vertexColors）；'color' = 这个资源的 COLOR_0 是真顶点色，保留 vertexColors。
    */
   vertexColors?: 'outline' | 'color';
+  /**
+   * ../art 交付的美术资源（url 以 assets/art/ 开头，vite.config.ts 的 artAssets 插件在 dev 映射、build 时拷进 dist）。
+   * `?art=0`（以及冒烟测试默认）不加载，按缺失处理（场景退回白盒）。
+   */
+  art?: boolean;
   /** 仅 font：CSS font-family 名（styles.css 的 --ui-font / --ui-serif 排在最前） */
   family?: string;
 }
@@ -49,6 +54,25 @@ export const manifest: AssetEntry[] = [
   { key: 'hero', type: 'gltf', url: 'assets/models/hero.glb', group: 'common', optional: true },
   // ---- s1：LOD / 解谜关键物体测试用例（scripts/gen-lod-test-asset.mjs 生成）：白石（puzzleCritical，固定 LOD0）+ 普通对照石
   { key: 'test-lod-puzzle', type: 'gltf', url: 'assets/models/test-lod-puzzle-critical.glb', group: 's1', optional: true },
+  // ---- s1：美术 018 / 020 交付（../art，外部 KTX2 在 ../art/textures；v0.1-013 接入，摆放以 src/levels/s1/layout.ts 为准）
+  { key: 'env-rock-shore-a', type: 'gltf', url: 'assets/art/models/env/env-rock-shore-a.glb', group: 's1', optional: true, art: true },
+  { key: 'env-rock-shore-b', type: 'gltf', url: 'assets/art/models/env/env-rock-shore-b.glb', group: 's1', optional: true, art: true },
+  { key: 'env-rock-shore-c', type: 'gltf', url: 'assets/art/models/env/env-rock-shore-c.glb', group: 's1', optional: true, art: true },
+  { key: 'env-rock-shore-d', type: 'gltf', url: 'assets/art/models/env/env-rock-shore-d.glb', group: 's1', optional: true, art: true },
+  { key: 'env-rock-shore-e', type: 'gltf', url: 'assets/art/models/env/env-rock-shore-e.glb', group: 's1', optional: true, art: true },
+  { key: 'env-rock-shore-f', type: 'gltf', url: 'assets/art/models/env/env-rock-shore-f.glb', group: 's1', optional: true, art: true },
+  { key: 'env-tidal-flat-s1', type: 'gltf', url: 'assets/art/models/env/env-tidal-flat-s1.glb', group: 's1', optional: true, art: true },
+  { key: 'env-pier-wood-ch1', type: 'gltf', url: 'assets/art/models/env/env-pier-wood-ch1.glb', group: 's1', optional: true, art: true },
+  { key: 'env-shore-ledge-s1', type: 'gltf', url: 'assets/art/models/env/env-shore-ledge-s1.glb', group: 's1', optional: true, art: true },
+  { key: 'env-cliff-s1', type: 'gltf', url: 'assets/art/models/env/env-cliff-s1.glb', group: 's1', optional: true, art: true },
+  { key: 'env-fish-shed-ruin', type: 'gltf', url: 'assets/art/models/env/env-fish-shed-ruin.glb', group: 's1', optional: true, art: true },
+  { key: 'env-net-rack-a', type: 'gltf', url: 'assets/art/models/env/env-net-rack-a.glb', group: 's1', optional: true, art: true },
+  { key: 'env-net-rack-b', type: 'gltf', url: 'assets/art/models/env/env-net-rack-b.glb', group: 's1', optional: true, art: true },
+  { key: 'env-lighthouse-silhouette-far', type: 'gltf', url: 'assets/art/models/env/env-lighthouse-silhouette-far.glb', group: 's1', optional: true, art: true },
+  { key: 'env-lighthouse-island-main-s3tower', type: 'gltf', url: 'assets/art/models/env/env-lighthouse-island-main-s3tower.glb', group: 's1', optional: true, art: true },
+  { key: 'env-lighthouse-ch1', type: 'gltf', url: 'assets/art/models/env/env-lighthouse-ch1.glb', group: 's1', optional: true, art: true },
+  { key: 'prop-boat-rowboat', type: 'gltf', url: 'assets/art/models/props/prop-boat-rowboat.glb', group: 's1', optional: true, art: true },
+  { key: 'prop-boat-rowboat-sunken', type: 'gltf', url: 'assets/art/models/props/prop-boat-rowboat-sunken.glb', group: 's1', optional: true, art: true },
   // ---- s2 / s3：白盒阶段（014 / 015）没有专属资源，美术 019 / 020 交付后登记在这里
   // ---- 更多示例（取消注释即可登记）----
   // { key: 'ground-diffuse', type: 'ktx2', url: 'assets/textures/ground-diffuse.ktx2', group: 's1', optional: true },

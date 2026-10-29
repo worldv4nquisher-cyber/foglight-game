@@ -133,6 +133,11 @@ export class CameraFollowSystem {
   }
 
   /** 是否在过渡中（机关进出 / 演出交还） */
+  /** 正在播的轨道名（不在演出里为 null；smoke / 测试读） */
+  get cutsceneName(): string | null {
+    return this.mode.kind === 'cutscene' ? this.mode.track.name : null;
+  }
+
   get blending(): boolean {
     return this.blend !== null;
   }
@@ -355,7 +360,14 @@ export class CameraFollowSystem {
 
   private updateCutscene(mode: Extract<Mode, { kind: 'cutscene' }>, dt: number): void {
     mode.t += dt;
-    if (mode.track.skippable && this.input.consumePressed('skipHold')) mode.t = mode.track.duration;
+    if (mode.track.skippable && this.input.consumePressed('skipHold')) {
+      const next = mode.track.onSkip?.() ?? null;
+      if (next) {
+        // 跳过后接一段新轨道（如 3 s 不可跳过的建立镜头），从头播
+        mode.track = next;
+        mode.t = 0;
+      } else mode.t = mode.track.duration;
+    }
     const tr = mode.track;
     mode.track.sample(Math.min(mode.t, tr.duration), this.live);
     if (mode.t < tr.duration - 1e-6) return;

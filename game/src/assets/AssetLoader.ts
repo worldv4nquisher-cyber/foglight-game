@@ -7,6 +7,8 @@ import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js
 import type { EventBus } from '@/core/EventBus';
 import { disposeObject3D } from '@/core/dispose';
 import { gameConfig } from '@/config/gameConfig';
+import { artEnabled } from '@/config/debug';
+import { applyMaterialHints } from '@/render/materialHints';
 import { buildLods } from '@/render/lod';
 import { prepareOutlineNormals } from './vertexColors';
 import { fontStats, forgetFont, loadFontOnce } from './fontLoader';
@@ -42,6 +44,8 @@ export class AssetLoader {
   private gltf: GLTFLoader;
   private draco: DRACOLoader;
   private ktx2: KTX2Loader;
+  /** GLB 外部 KTX2 共享缓存（解析后的绝对 URL → 纹理） */
+  private ktx2Cache = new Map<string, Promise<THREE.Texture>>();
   private textureLoader: THREE.TextureLoader;
   private audioLoader: THREE.AudioLoader;
 
@@ -57,6 +61,8 @@ export class AssetLoader {
   private missing = new Set<string>();
   private groups = new Map<string, GroupState>();
   /** 模拟慢网速（?slowLoad=ms），见 parseSlowLoad */
+  /** 是否加载清单里 art: true 的美术资源（v0.1-013，?art=0 / 冒烟测试默认关） */
+  artEnabled: boolean = artEnabled;
   simulateLoadMs = typeof location === 'undefined' ? 0 : parseSlowLoad(location.search);
 
   constructor(
@@ -69,7 +75,23 @@ export class AssetLoader {
     // 构建时 vite.config.ts 的 threeDecodersWasmOnly 插件会把用不到的通用版/JS 回退从 dist 里去掉。
     this.draco = new DRACOLoader().setDecoderPath(DRACO_GLTF_CONFIG);
     this.ktx2 = new KTX2Loader().detectSupport(renderer);
-    this.gltf = new GLTFLoader().setDRACOLoader(this.draco).setKTX2Loader(this.ktx2).setMeshoptDecoder(MeshoptDecoder);
+    // 外部 KTX2（v0.1-013）：美术 GLB 的 images.uri = ../../textures/tex-*.ktx2，GLTFLoader 相对 GLB URL 解析后交给这里。
+    // 同一张贴图被多个 GLB 引用（岩石 a–f + 主岛共用 tex-rock-shore-*）：按解析后的 URL 只下载 / 转码 / 上传一次。
+    const ktx2 = this.ktx2;
+    const cache = this.ktx2Cache;
+    const shared = {
+      load: (url: string, onLoad: (t: THREE.Texture) => void, onProgress?: (e: ProgressEvent) => void, onError?: (e: unknown) => void): void => {
+        const key = new URL(url, typeof location === 'undefined' ? 'http://x/' : location.href).href;
+        let p = cache.get(key);
+        if (!p) {
+          p = ktx2.loadAsync(url, onProgress);
+          cache.set(key, p);
+          p.catch(() => cache.delete(key));
+        }
+        void p.then(onLoad, (e: unknown) => onError?.(e));
+      },
+    } as unknown as KTX2Loader;
+    this.gltf = new GLTFLoader().setDRACOLoader(this.draco).setKTX2Loader(shared).setMeshoptDecoder(MeshoptDecoder);
     this.textureLoader = new THREE.TextureLoader();
     this.audioLoader = new THREE.AudioLoader();
   }
@@ -164,7 +186,14 @@ export class AssetLoader {
   }
 
   async loadEntries(entries: AssetEntry[], onProgress?: (ratio: number) => void): Promise<void> {
-    const todo = entries.filter((e) => !this.has(e.key));
+    const todo = entries.filter((e) => {
+      if (this.has(e.key)) return false;
+      if (e.art && !this.artEnabled) {
+        this.missing.add(e.key); // ?art=0：当作没交付，场景用白盒
+        return false;
+      }
+      return true;
+    });
     const total = todo.length;
     const fileProgress = new Array<number>(total).fill(0);
     const report = (url?: string): void => {
@@ -221,6 +250,8 @@ export class AssetLoader {
         if (import.meta.env.DEV && vc.meshes) {
           console.info(`[assets] ${entry.key}: COLOR_0 作描边平滑法线 ${vc.meshes} 个网格，关掉 vertexColors 的材质 ${vc.materialsFixed} 个`);
         }
+        // 材质提示（v0.1-013：渔网 alphaHint = alphaHash）
+        applyMaterialHints(gltf.scene);
         gltf.scene.traverse((o) => {
           const m = o as THREE.Mesh;
           if (m.isMesh) {
@@ -309,6 +340,25 @@ export class AssetLoader {
     return this.audio.get(key);
   }
 
+  /** 卸载模型后：丢掉不再被任何已缓存模型引用的共享 KTX2 */
+  private pruneKtx2Cache(): void {
+    const used = new Set<unknown>();
+    for (const g of this.models.values())
+      g.scene.traverse((o) => {
+        const m = o as THREE.Mesh;
+        if (m.material) for (const mat of Array.isArray(m.material) ? m.material : [m.material]) for (const v of Object.values(mat)) if (v instanceof THREE.Texture) used.add(v);
+      });
+    for (const [url, p] of this.ktx2Cache)
+      void p.then((t) => {
+        if (!used.has(t) && this.ktx2Cache.get(url) === p) this.ktx2Cache.delete(url);
+      });
+  }
+
+  /** 共享 KTX2 缓存条数（smoke 读） */
+  get sharedKtx2Count(): number {
+    return this.ktx2Cache.size;
+  }
+
   /** 缓存中的几何体/材质/纹理集合，场景 dispose 时跳过它们 */
   sharedResources(): Set<unknown> {
     const set = new Set<unknown>();
@@ -316,7 +366,12 @@ export class AssetLoader {
       g.scene.traverse((o) => {
         const m = o as THREE.Mesh;
         if (m.geometry) set.add(m.geometry);
-        if (m.material) for (const mat of Array.isArray(m.material) ? m.material : [m.material]) set.add(mat);
+        if (m.material)
+          for (const mat of Array.isArray(m.material) ? m.material : [m.material]) {
+            set.add(mat);
+            // 材质里的纹理也是缓存共享的：场景克隆材质（按物体雾等）后 dispose 克隆体时不能连带释放（v0.1-013）
+            for (const v of Object.values(mat)) if (v instanceof THREE.Texture) set.add(v);
+          }
       });
     }
     for (const t of this.textures.values()) set.add(t);
@@ -330,6 +385,7 @@ export class AssetLoader {
     this.textures.get(key)?.dispose();
     this.models.delete(key);
     this.textures.delete(key);
+    if (g) this.pruneKtx2Cache();
     this.audio.delete(key);
     const face = this.fonts.get(key);
     if (face) document.fonts.delete(face);

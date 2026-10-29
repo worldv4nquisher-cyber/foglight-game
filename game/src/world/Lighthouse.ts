@@ -18,10 +18,13 @@ export class Lighthouse extends THREE.Group {
   private _on: boolean;
   readonly height = 9;
 
-  /** @param opts.lit 初始是否点亮（默认 true：S1 / 菜单远景 / 沙盒；S3 初望灯塔传 false，点灯后 setOn(true)） */
+  /**
+   * @param opts.lit 初始是否点亮。默认 false（v0.1-013 制作人裁定：第一章点灯前远景灯塔全部熄灭——S1、S2、测试场地都无暖光无光束）；
+   *   S3 点灯后 setOn(true)；沙盒 demo 灯塔可按 E 手动切换。
+   */
   constructor(opts: { lit?: boolean } = {}) {
     super();
-    this._on = opts.lit ?? true;
+    this._on = opts.lit ?? false;
     this.name = 'lighthouse';
     const h = this.height;
 

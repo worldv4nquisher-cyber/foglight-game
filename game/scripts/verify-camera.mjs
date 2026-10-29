@@ -287,6 +287,50 @@ await test('演出可按住空格 1 s 跳过', () => {
   assert.equal(e.cam.modeName, 'explore');
 });
 
+await test('v0.1-013 裁定：画质检测第 1 轮没测完就跳过开场演出 → 接 3 s 不可跳过的 S1 建立镜头，最后一帧最多再等 5 s 不变', () => {
+  const e = setup();
+  e.target.position.copy(OPEN);
+  e.frame();
+  let ready = false;
+  const hold = () => ready;
+  const shot = (name, skippable, x) =>
+    new CameraTrack({ name, skippable, duration: cfg.establishingTime, ease: false, holdUntil: hold, keys: [0, 1].map((i) => ({ time: i * cfg.establishingTime, position: new THREE.Vector3(x + i, 3, 6), lookAt: new THREE.Vector3(0, 1, 0) })) });
+  const KEYS5 = [0, 1].map((i) => ({ time: i * 5, position: new THREE.Vector3(i, 3, 6), lookAt: new THREE.Vector3(0, 1, 0) }));
+  const opening = new CameraTrack({ name: 'opening', duration: 5, holdUntil: hold, keys: KEYS5, onSkip: () => (ready ? null : shot('s1-establishing-hold', false, 20)) });
+  assert.equal(shot('x', false, 0).skippable, false);
+  assert.equal(testTrack(1).skippable, true, 'skippable 默认开');
+  void e.cam.playEstablishing(opening);
+  // 按住空格 1 s 跳过开场
+  e.input.setRaw('kbm', 'Space', true);
+  e.run(1.1);
+  assert.equal(e.cam.cutsceneName, 's1-establishing-hold', '跳过后应接 3 s 建立镜头');
+  // 继续按住空格（再触发一次跳过）也不能跳
+  e.input.setRaw('kbm', 'Space', false);
+  e.frame();
+  e.input.setRaw('kbm', 'Space', true);
+  e.run(1.2);
+  e.input.setRaw('kbm', 'Space', false);
+  assert.equal(e.cam.cutsceneName, 's1-establishing-hold', '3 s 镜头不可跳过');
+  assert.equal(e.input.context, 'cutscene');
+  e.run(cfg.establishingTime - 1.2 - DT * 2 + 0.3);
+  near(e.camera.position.x, 21, 1e-3, '3 s 播完停在最后一帧');
+  // 最后一帧最多再等 5 s（maxHold 默认 5）
+  e.run(4.5);
+  assert.equal(e.input.context, 'cutscene', '检测没完成时在最后一帧等');
+  e.run(0.6);
+  assert.equal(e.cam.modeName === 'cutscene', false, '超过 5 s 交还');
+  // 第 1 轮已测完时跳过 = 照常跳到最后一帧并交还
+  const e2 = setup();
+  e2.target.position.copy(OPEN);
+  e2.frame();
+  ready = true;
+  void e2.cam.playEstablishing(new CameraTrack({ name: 'opening', duration: 5, holdUntil: hold, keys: KEYS5, onSkip: () => (ready ? null : shot('s1-establishing-hold', false, 20)) }));
+  e2.input.setRaw('kbm', 'Space', true);
+  e2.run(1.1);
+  e2.input.setRaw('kbm', 'Space', false);
+  assert.equal(e2.input.context, 'explore', '检测已完成：跳过直接交还');
+});
+
 await test('建立镜头 3 s：期间不能移动，结束交还控制', () => {
   const e = setup();
   e.target.position.copy(OPEN);

@@ -10,8 +10,8 @@
 //
 //   npm run size            （需要先 npm run build）
 //   node --import ./scripts/register-ts-paths.mjs scripts/check-size.mjs --json   机器可读输出
-import { existsSync, readdirSync, statSync } from 'node:fs';
-import { join, relative, dirname, basename } from 'node:path';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { join, relative, dirname, basename, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { manifest, ASSET_GROUPS } from '../src/assets/manifest.ts';
 
@@ -71,6 +71,33 @@ for (const e of manifest) {
   if (e.type === 'font' && size(p) > BUDGET.fontMB * MB) fail(`字体 ${e.url} ${mb(size(p))} > ${BUDGET.fontMB} MB`);
 }
 
+// v0.1-013：GLB 引用的外部贴图（art/textures/*.ktx2）算进 GLB 所在分组（多组共用的算最早加载的那组）
+const glbUris = (file) => {
+  const b = readFileSync(file);
+  if (b.length < 20 || b.toString('ascii', 0, 4) !== 'glTF') return [];
+  const j = JSON.parse(b.toString('utf8', 20, 20 + b.readUInt32LE(12)));
+  return [...(j.images ?? []), ...(j.buffers ?? [])].map((x) => x.uri).filter((u) => u && !u.startsWith('data:'));
+};
+const externalNames = new Set();
+for (const g of ASSET_GROUPS) {
+  for (const e of manifest.filter((x) => x.group === g && x.type === 'gltf')) {
+    const p = join(DIST, e.url);
+    if (!existsSync(p)) continue;
+    for (const u of glbUris(p)) {
+      const t = resolve(dirname(p), decodeURIComponent(u));
+      externalNames.add(basename(t));
+      if (counted.has(t)) continue;
+      if (!existsSync(t)) {
+        fail(`${e.url} 引用的外部文件 ${u} 不在 dist 里`);
+        continue;
+      }
+      groups[g].bytes += size(t);
+      groups[g].files.push(relative(DIST, t));
+      counted.add(t);
+    }
+  }
+}
+
 const unlisted = walk(join(DIST, 'assets')).filter((f) => !counted.has(f) && !basename(f).startsWith('.'));
 
 const first = groups.common.bytes + groups.s1.bytes;
@@ -84,7 +111,7 @@ function guessGroup(name) {
   if (/^(char-|tex-xi|prop-lantern-brass|tex-props-puzzle|tex-stone-masonry|tex-wood)/.test(name)) return 'common';
   return 's1';
 }
-const listedNames = new Set(manifest.map((e) => basename(e.url)));
+const listedNames = new Set([...manifest.map((e) => basename(e.url)), ...externalNames]);
 const art = { common: 0, s1: 0, s2: 0, s3: 0, files: 0 };
 for (const f of walk(ART)) {
   const rel = relative(ART, f);
