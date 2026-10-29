@@ -1582,8 +1582,24 @@ const CHECKS = [
       if (!(await until(`${tide}.state === 'low' && !${tide}.transitioning`, TIDE_WAIT))) throw new Error('第二次退潮失败');
       const toSlot = `(() => { const p = ${S}.puzzles; p.raft.object.position.set(-0.9, 0.4, 10.5); p.raft.object.updateMatrixWorld(true); p.raftPush.pushT = 1; p.raftPush.locked = true; return 1; })()`;
       await evaluate(toSlot);
+      // 013 补充：「R 放回浮台」第二行提示——浮台离开原位 + 汐在 3.5 m 内才显示；和交互提示同时出现时排在下面一行
+      const p2 = `(document.querySelector('.hud-prompt2:not([hidden])')?.textContent ?? null)`;
+      await tp(-0.9, 1.87, 8.15, 0);
+      if (!(await until(`${p2} === 'R 放回浮台'`, 4000))) throw new Error('浮台在石槽、汐在 3.5 m 内应显示「R 放回浮台」 ' + JSON.stringify(await st()));
+      const lay = await evaluate(`(() => { const h = __game.ui.hud; h.setPrompt('按住 E 推'); const a = document.querySelector('.hud-prompt').getBoundingClientRect(), b = document.querySelector('.hud-prompt2').getBoundingClientRect(); h.setPrompt(null); const c = document.querySelector('.hud-prompt2').getBoundingClientRect(); return { a: a.bottom, b: b.top, alone: Math.abs(c.top - a.top) < 2 }; })()`);
+      if (!(lay.b >= lay.a - 1) || !lay.alone) throw new Error('第二行提示布局不对（应在交互提示下面一行；单独出现时占第一行）' + JSON.stringify(lay));
+      await tp(3.6, 0.14, 6.5, 0);
+      if (!(await until(`${p2} === null`, 4000))) throw new Error('离浮台 3.5 m 外不应显示「R 放回浮台」');
+      await tp(-0.9, 1.87, 8.15, 0);
+      if (!(await until(`${p2} === 'R 放回浮台'`, 4000))) throw new Error('回到浮台旁提示没再出现');
+      await cdp.key('KeyR', 'r', 82);
+      if (!(await until(`${S}.puzzles.raft.object.position.x > 9 && ${p2} === null`, 4000))) throw new Error('R 重置后提示应立刻消失 ' + JSON.stringify(await st()));
+      if ((await evaluate(`${S}.puzzles.resetRaftPromptVisible(new THREE_V(9.1, 0.4, 9), true)`.replace('THREE_V', `${S}.rig.body.position.constructor`)))) throw new Error('浮台在原位不应显示提示');
+      out.push('「R 放回浮台」：石槽 + 3.5 m 内显示、两行布局、3.5 m 外 / 重置后隐藏 ✓');
+      await evaluate(toSlot);
       await tp(-12.5, 2.42, -4, Math.PI / 2);
       await sleep(300);
+      if ((await evaluate(p2)) !== null) throw new Error('离浮台远时不应显示「R 放回浮台」');
       await cdp.key('KeyR', 'r', 82);
       if (!(await until(`${S}.puzzles.raft.object.position.x > 9 && ${S}.puzzles.raftPush.pushT === 0 && !${S}.puzzles.raftPush.locked`, 4000))) throw new Error('退潮 R 没重置浮台 ' + JSON.stringify(await st()));
       out.push('退潮 R 重置浮台 ✓');
@@ -1614,6 +1630,15 @@ const CHECKS = [
       await cross(-0.9, 1.87, 11.55, 0, '浮台 → 远侧台阶');
       if (!(await until(`${S}.puzzles.p2Solved`, 6000))) throw new Error('到远侧台阶没解开谜题 2 ' + JSON.stringify(await st()));
       out.push('两次跨越 → 远侧台阶解开谜题 2 ✓');
+      // 013 补充（制作人裁定）：谜题 2 解开后 R 不再生效、提示不再显示——即使把潮汐 / 浮台条件都伪造成满足
+      const after = await evaluate(`(() => { const p = ${S}.puzzles, t = p.tide, r = p.raft;
+        const ts = t.state, rs = r.state; t.state = 'low'; r.state = 'grounded'; Object.defineProperty(t, 'transitioning', { configurable: true, get: () => false });
+        try { const near = r.object.position.clone(); return { can: p.canResetRaft, moved: p.raftMoved, show: p.resetRaftPromptVisible(near, true), reset: p.resetRaft(), x: +r.object.position.x.toFixed(2) }; }
+        finally { t.state = ts; r.state = rs; delete t.transitioning; } })()`);
+      if (after.can || after.show || after.reset || !after.moved || Math.abs(after.x + 0.9) > 0.05) throw new Error('谜题 2 解开后 R / 提示应禁用 ' + JSON.stringify(after));
+      await sleep(300);
+      if ((await evaluate(`(document.querySelector('.hud-prompt2:not([hidden])')?.textContent ?? null)`)) !== null) throw new Error('谜题 2 解开后不应显示「R 放回浮台」');
+      out.push('谜题 2 解开后 R 失效、提示不显示 ✓');
       const hs = await evaluate(`(() => { const h = ${S}.hints; return ['s1-p1-reef', 's1-p2-raft'].map((id) => h.isSolved ? h.isSolved(id) : null); })()`);
       if (hs.some((v) => v === false)) throw new Error('提示系统没记解开 ' + JSON.stringify(hs));
       // ?art=1：S1 美术件

@@ -12,6 +12,7 @@ export class Hud implements InteractionHud {
   readonly el: HTMLDivElement;
   private hint: HTMLDivElement;
   private prompt: HTMLDivElement;
+  private prompt2: HTMLDivElement;
   private location: HTMLDivElement;
   private toastEl: HTMLDivElement;
   private toastTimer = 0;
@@ -27,6 +28,7 @@ export class Hud implements InteractionHud {
     this.el.innerHTML = `
       <div class="hud-location"></div>
       <div class="hud-prompt" hidden></div>
+      <div class="hud-prompt hud-prompt2" hidden></div>
       <div class="hud-hint"></div>
       <div class="hud-toast" hidden></div>
       <div class="hud-markers"></div>
@@ -41,6 +43,7 @@ export class Hud implements InteractionHud {
     parent.appendChild(this.el);
     this.location = this.el.querySelector<HTMLDivElement>('.hud-location')!;
     this.prompt = this.el.querySelector<HTMLDivElement>('.hud-prompt')!;
+    this.prompt2 = this.el.querySelector<HTMLDivElement>('.hud-prompt2')!;
     this.hint = this.el.querySelector<HTMLDivElement>('.hud-hint')!;
     this.toastEl = this.el.querySelector<HTMLDivElement>('.hud-toast')!;
     this.ring = this.el.querySelector<HTMLDivElement>('.hud-hold')!;
@@ -81,6 +84,20 @@ export class Hud implements InteractionHud {
     this.prompt.hidden = text === null;
     if (text !== null) this.prompt.textContent = text;
     this.prompt.classList.toggle('is-disabled', text !== null && disabled);
+  }
+
+  /**
+   * 第二行提示（v0.1-013 补充，如「R 放回浮台」）：和交互提示同时出现时排在它下面一行；
+   * 交互提示没显示时占第一行的位置（CSS：.hud-prompt[hidden] + .hud-prompt2）。传 null 隐藏。
+   */
+  setSecondaryPrompt(text: string | null): void {
+    this.prompt2.hidden = text === null;
+    if (text !== null) this.prompt2.textContent = text;
+  }
+
+  /** 第二行提示当前文字（隐藏时 null，测试用） */
+  get secondaryPrompt(): string | null {
+    return this.prompt2.hidden ? null : this.prompt2.textContent;
   }
 
   /** 交互小图标（屏幕像素坐标）；active = 可交互的那个（文字提示同时出现） */

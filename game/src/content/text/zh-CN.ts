@@ -1,5 +1,5 @@
 // 自动生成：node scripts/import-text.mjs（来源 docs/gdd/text-ch1.json），不要手改。
-// 章节 ch1 · zh-CN · v1 · 175 条
+// 章节 ch1 · zh-CN · v1 · 176 条
 
 export const TEXT_ZH_CN = {
   "ch1.common.journal_updated": "日志已更新",
@@ -28,7 +28,7 @@ export const TEXT_ZH_CN = {
   "ch1.hint.p5.mid_b.l2": "最后一面镜子，要对着灯。",
   "ch1.hint.p5.mid_b.l3": "转动第二面导光镜，让光照进顶上的点火口。",
   "ch1.hint.p5.valve.l2": "灯要先有油。阀门在最下面。",
-  "ch1.hint.p5.valve.l3": "敲响门边的小钟让水退下去，再拧开底层的油阀。",
+  "ch1.hint.p5.valve.l3": "敲响门边的钟让水退下去，再拧开底层的油阀。",
   "ch1.hint.p5.window_mirror.l2": "窗边那面镜子，能接住外面的光。",
   "ch1.hint.p5.window_mirror.l3": "转动底层窗边的镜子，把窗外的光往上送进楼梯井。",
   "ch1.hint.panel_title": "提示",
@@ -146,6 +146,7 @@ export const TEXT_ZH_CN = {
   "ui.prompt.puzzle_bar": "鼠标 旋转　Shift 精调　Q·E 切换　R 重置　右键 退出",
   "ui.prompt.read": "E 阅读",
   "ui.prompt.reader_bar": "A·D 翻页　右键 关闭",
+  "ui.prompt.reset_raft": "R 放回浮台",
   "ui.prompt.ring": "E 敲钟",
   "ui.prompt.traverse": "E 跨过去",
   "ui.prompt.turn_hold": "按住 E 拧开",
@@ -333,6 +334,7 @@ export const TEXT_META: Record<keyof typeof TEXT_ZH_CN, TextMeta> = {
   "ui.prompt.puzzle_bar": {"type":"prompt","speaker":"system"},
   "ui.prompt.read": {"type":"prompt","speaker":"system"},
   "ui.prompt.reader_bar": {"type":"prompt","speaker":"system"},
+  "ui.prompt.reset_raft": {"type":"prompt","speaker":"system"},
   "ui.prompt.ring": {"type":"prompt","speaker":"system"},
   "ui.prompt.traverse": {"type":"prompt","speaker":"system"},
   "ui.prompt.turn_hold": {"type":"prompt","speaker":"system"},

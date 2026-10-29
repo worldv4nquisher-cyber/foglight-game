@@ -261,6 +261,15 @@ body {
   display: none;
 }
 
+/* v0.1-013 补充：第二行提示（「R 放回浮台」）——交互提示在时排它下面一行，不在时顶到第一行 */
+.hud-prompt2 {
+  bottom: calc(22% - 36px);
+}
+
+.hud-prompt[hidden] + .hud-prompt2 {
+  bottom: 22%;
+}
+
 .hud-hold {
   position: absolute;
   left: 50%;

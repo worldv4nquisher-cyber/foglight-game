@@ -372,6 +372,7 @@ export abstract class LevelScene extends BaseScene {
   override exit(): void {
     this.game.ui.hud.hide();
     this.game.ui.hud.setPrompt(null);
+    this.game.ui.hud.setSecondaryPrompt(null);
   }
 
   override dispose(): void {

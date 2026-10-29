@@ -8,7 +8,7 @@ import { CameraTrack } from '@/systems/CameraFollowSystem';
 import type { CameraKey } from '@/systems/camera/CameraTrack';
 import type { Collider } from '@/systems/PhysicsSystem';
 import { withTideLevel, WET_LINE_GLSL } from '@/render/tideUniforms';
-import type { TextId } from '@/content/text';
+import { t, type TextId } from '@/content/text';
 import { S1, v3 } from './layout';
 import { buildS1Greybox, defaultGreyboxMaterials, type S1Greybox } from './greybox';
 import { buildS1Puzzles, type S1Puzzles } from './puzzles';
@@ -86,7 +86,10 @@ export class S1Scene extends LevelScene {
     this.cleanups.push(() => this.puzzles.dispose());
     const onKey = (e: KeyboardEvent): void => {
       if (e.repeat || e.code !== 'KeyR' || this.game.isPaused || this.game.input.context !== 'explore' || this.rig.controller.busy) return;
-      if (this.puzzles.resetRaft()) this.game.audio.beep(180, 0.2, 'sine', 0.04);
+      if (this.puzzles.resetRaft()) {
+        this.game.audio.beep(180, 0.2, 'sine', 0.04);
+        this.refreshResetPrompt();
+      }
     };
     window.addEventListener('keydown', onKey);
     this.cleanups.push(() => window.removeEventListener('keydown', onKey));
@@ -147,9 +150,23 @@ export class S1Scene extends LevelScene {
     if (this.rig && this.puzzles) this.puzzles.fixedUpdate(dt, this.rig.body.position);
   }
 
+  private resetPromptShown = false;
+
+  /** 「R 放回浮台」第二行提示（013 补充）：条件见 S1Puzzles.resetRaftPromptVisible；R 本身全 S1 有效 */
+  private refreshResetPrompt(): void {
+    const g = this.game;
+    // 与 R 的按键判定一致（下方 keydown）：没暂停、输入在 explore、不在自动跨越 / 黑场送回中
+    const explore = !g.isPaused && g.input.context === 'explore' && !this.rig.controller.busy;
+    const show = this.puzzles.resetRaftPromptVisible(this.rig.body.position, explore);
+    if (show === this.resetPromptShown) return;
+    this.resetPromptShown = show;
+    g.ui.hud.setSecondaryPrompt(show ? t('ui.prompt.reset_raft') : null);
+  }
+
   override update(dt: number, alpha: number): void {
     super.update(dt, alpha);
     if (this.rig) this.art.update(this.camera, this.puzzles.tide.level);
+    if (this.rig && this.puzzles) this.refreshResetPrompt();
   }
 
   override exit(): void {

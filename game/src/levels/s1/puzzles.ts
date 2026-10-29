@@ -42,6 +42,9 @@ export interface S1PuzzleOptions {
   addLink(link: TraversalLink): void;
 }
 
+/** 「R 放回浮台」提示：汐与浮台中心的水平距离上限（m，同交互图标距离） */
+export const RESET_RAFT_PROMPT_DISTANCE = 3.5;
+
 export interface S1Puzzles {
   tide: TideController;
   bell: TideBell;
@@ -50,8 +53,17 @@ export interface S1Puzzles {
   links: TraversalLink[];
   readonly p1Solved: boolean;
   readonly p2Solved: boolean;
-  /** 退潮且浮台搁浅时 R：浮台回原位（谜题 2 重置） */
+  /** 退潮且浮台搁浅时 R：浮台回原位（谜题 2 重置）；谜题 2 解开后不再生效（制作人裁定 013 补充） */
   resetRaft(): boolean;
+  /** R 现在按下是否生效（退潮且不在涨落中、浮台搁浅、谜题 2 未解） */
+  readonly canResetRaft: boolean;
+  /** 浮台离开了原位（推动过 / 卡进石槽） */
+  readonly raftMoved: boolean;
+  /**
+   * 「R 放回浮台」提示是否显示（013 补充）：R 生效 + 浮台离开原位 + 汐在浮台 RESET_RAFT_PROMPT_DISTANCE 内。
+   * explore = 汐在普通探索状态（场景判断：输入在 explore、没暂停、没在自动动作 / 推 / hold 中）。
+   */
+  resetRaftPromptVisible(player: THREE.Vector3, explore: boolean): boolean;
   fixedUpdate(dt: number, player: THREE.Vector3): void;
   dispose(): void;
 }
@@ -248,6 +260,10 @@ export function buildS1Puzzles(o: S1PuzzleOptions): S1Puzzles {
   let channelShown = false;
   let prevFloat = raft.state;
   const say = (id: TextId): void => void ui.subtitles.play([id]);
+  const home = v3(rf.home);
+  const tmpRaft = new THREE.Vector3();
+  const canReset = (): boolean => !p2Solved && tide.state === 'low' && !tide.transitioning && raft.state === 'grounded';
+  const raftMoved = (): boolean => raftPush.locked || raftPush.pushT > 1e-3 || raftRoot.position.distanceTo(home) > 0.05;
   const inPathEnd = circleZone({ x: S1.reefPathEnd[0], z: S1.reefPathEnd[2] }, S1.reefPathEndRadius);
   const inFootprints = circleZone({ x: S1.reefPath[2]![0], z: S1.reefPath[2]![2] }, 1.6);
   const N = S1.nearPlatform;
@@ -282,8 +298,19 @@ export function buildS1Puzzles(o: S1PuzzleOptions): S1Puzzles {
     get p2Solved() {
       return p2Solved;
     },
+    get canResetRaft() {
+      return canReset();
+    },
+    get raftMoved() {
+      return raftMoved();
+    },
+    resetRaftPromptVisible(player, explore) {
+      if (!explore || !canReset() || !raftMoved()) return false;
+      raftRoot.getWorldPosition(tmpRaft);
+      return Math.hypot(player.x - tmpRaft.x, player.z - tmpRaft.z) <= RESET_RAFT_PROMPT_DISTANCE;
+    },
     resetRaft() {
-      if (tide.state !== 'low' || tide.transitioning || raft.state !== 'grounded') return false;
+      if (!canReset()) return false;
       raftRoot.position.copy(v3(rf.home));
       raftRoot.updateMatrixWorld(true);
       raftPush.pushT = 0;
