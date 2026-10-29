@@ -1,5 +1,5 @@
 // 自动生成：node scripts/import-text.mjs（来源 docs/gdd/text-ch1.json），不要手改。
-// 章节 ch1 · zh-CN · v1 · 176 条
+// 章节 ch1 · zh-CN · v1 · 177 条
 
 export const TEXT_ZH_CN = {
   "ch1.common.journal_updated": "日志已更新",
@@ -81,6 +81,7 @@ export const TEXT_ZH_CN = {
   "ch1.s3.goal.base": "底下的水，也听钟的。",
   "ch1.s3.goal.door": "灯塔的门，钥匙能开。",
   "ch1.s3.goal.light": "灯有油了。还差火。",
+  "ch1.s3.ignite.mono": "亮了。……爸爸，回家吧。",
   "ch1.s3.ignition.no_oil": "没有油。",
   "ch1.s3.ignition_note.doc": ["没有火的时候，就借光。"],
   "ch1.s3.lens.inspect": "透镜上落满了盐。",
@@ -269,6 +270,7 @@ export const TEXT_META: Record<keyof typeof TEXT_ZH_CN, TextMeta> = {
   "ch1.s3.goal.base": {"type":"goal","speaker":"father"},
   "ch1.s3.goal.door": {"type":"goal","speaker":"father"},
   "ch1.s3.goal.light": {"type":"goal","speaker":"father"},
+  "ch1.s3.ignite.mono": {"type":"monologue","speaker":"xi","once":true},
   "ch1.s3.ignition.no_oil": {"type":"monologue","speaker":"xi"},
   "ch1.s3.ignition_note.doc": {"type":"doc","speaker":"father"},
   "ch1.s3.lens.inspect": {"type":"inspect","speaker":"xi"},

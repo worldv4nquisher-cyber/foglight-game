@@ -2078,6 +2078,24 @@ const CHECKS = [
       await ff(0.5);
       if ((await evaluate(`window.__lit`)) !== 1) throw new Error('lighthouse:ignited 应只发一次 ' + (await evaluate(`window.__lit`)));
       out.push('按 E：锁输入 → 走位 → 拉杆逐帧转到 −60° → 第 34 帧点燃，lighthouse:ignited 只一次 ✓');
+      // 点灯独白 ch1.s3.ignite.mono：ignited 后 0.5 s 起 3.0 s、锁定不可点掉、只一次；0:04 切远景（章节结束）前消失
+      const ffTo = async (T) => {
+        const now = await evaluate(`__s3.puzzles.outroTime`);
+        if (now < T) await ff(T - now);
+      };
+      const subNow = `(() => { const c = __s3.game.ui.subtitles.current; return c ? { id: c.id, locked: c.locked } : null; })()`;
+      await ffTo(1.0);
+      let sub = await evaluate(subNow);
+      if (sub?.id !== 'ch1.s3.ignite.mono' || !sub.locked) throw new Error('点灯后 1.0 s 应显示锁定的点灯独白 ' + JSON.stringify(sub));
+      if (await evaluate(`__s3.game.ui.subtitles.track.advance()`)) throw new Error('点灯独白不应能点掉');
+      await ffTo(3.6);
+      sub = await evaluate(subNow);
+      if (sub?.id === 'ch1.s3.ignite.mono') throw new Error('点灯独白 3.5 s 后应消失');
+      if (await evaluate(`__s3.game.scenes.current !== __s3`)) throw new Error('0:04 前不应离开 S3');
+      if (!(await evaluate(`__s3.game.narrative.hasSeen('ch1.s3.ignite.mono')`))) throw new Error('点灯独白应记为已看过');
+      await ffTo(4.1);
+      if (!(await until(`__s3.game.scenes.current !== __s3`, 8000))) throw new Error('0:04 后应进章节结束页');
+      out.push('点灯独白 0.5–3.5 s 锁定不可点掉、只一次，0:04 前消失 → 章节结束 ✓');
       await evaluate(`localStorage.removeItem('foglight.save.v1'); 1`);
       try { await cdp.goto(''); } catch (e) { throw new Error('回 S1 失败：' + e.message, { cause: e }); }
       return out.join('，');

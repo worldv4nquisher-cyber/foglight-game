@@ -11,10 +11,9 @@ import type { Collider } from '@/systems/PhysicsSystem';
 import { S3, S3_FRAME, alongDoor, cameraYawFacing, toWorld } from './layout';
 import { buildS3Greybox, defaultS3GreyboxMaterials, type S3Greybox } from './greybox';
 import { buildS3Art, type S3Art } from './art';
-import { buildS3Puzzles, type S3Puzzles } from './puzzles';
+import { buildS3Puzzles, OUTRO_CUT_SEC, type S3Puzzles } from './puzzles';
 
 /** 点灯后多久进章节结束页（s）。结尾演出（035）做好后由演出结束触发 */
-const END_DELAY = 1.5;
 
 /**
  * S3 初望灯塔（v0.1-015 白盒 + 美术 020 接入；布局见 ./layout.ts，取代 010 的占位 S3LighthouseScene）。
@@ -34,6 +33,7 @@ export class S3Scene extends LevelScene {
   private readonly colliderOf = new Map<THREE.Mesh, Collider>();
   private readonly mats = defaultS3GreyboxMaterials();
   private ending = false;
+  private ended = false;
 
   constructor(game: Game) {
     super(game, LEVELS.s3);
@@ -92,16 +92,14 @@ export class S3Scene extends LevelScene {
   }
 
   /**
-   * 点灯：xi-ignite-lever 第 34 帧（puzzles.igniteNow → onIgnite）调到这里；灯亮 → END_DELAY 秒后章节结束页（035 结尾演出接在这里）。
+   * 点灯：xi-ignite-lever 第 34 帧（puzzles.igniteNow → onIgnite）调到这里；灯亮 → 结尾演出 0:04（OUTRO_CUT_SEC，游戏时间）切远景时
+   * 进章节结束页（035 结尾演出接在这里）。0:00–0:04 之间是点灯独白（0.5 s 起 3.0 s，锁定）。
    * smoke / 测试也可直接调用（跳过按 E 演出，同样只发一次 lighthouse:ignited）
    */
   lightTheLamp(): void {
     if (this.ending) return;
     this.ending = true;
     this.puzzles.igniteNow();
-    window.setTimeout(() => {
-      if (this.game.scenes.current === this) void this.game.flow.completeChapter();
-    }, END_DELAY * 1000);
   }
 
   /** 灯是否亮着（smoke / 测试读） */
@@ -113,6 +111,10 @@ export class S3Scene extends LevelScene {
     if (!this.rig) return;
     this.puzzles.fixedUpdate(dt);
     super.fixedUpdate(dt);
+    if (this.ending && !this.ended && this.puzzles.outroTime >= OUTRO_CUT_SEC) {
+      this.ended = true;
+      if (this.game.scenes.current === this) void this.game.flow.completeChapter();
+    }
   }
 
   override update(dt: number, alpha: number): void {

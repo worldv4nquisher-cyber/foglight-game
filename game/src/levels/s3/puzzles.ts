@@ -39,6 +39,15 @@ export const S3_IDS = {
 
 /** 开门时长（s） */
 export const S3_DOOR_SEC = 1.4;
+/**
+ * 点灯独白 `ch1.s3.ignite.mono`「亮了。……爸爸，回家吧。」（text-ch1 §5 结尾演出 0:00，文本表 177 条）：
+ * lighthouse:ignited（xi-ignite-lever 第 34 帧）后 IGNITE_MONO_DELAY 秒显示，持续 IGNITE_MONO_SEC 秒，只一次，演出锁定（时间轴字幕，不可点掉）；
+ * 必须在 0:04 透镜转动、切塔外远景（OUTRO_CUT_SEC）前消失。
+ */
+export const IGNITE_MONO_DELAY = 0.5;
+export const IGNITE_MONO_SEC = 3.0;
+/** 结尾演出 0:04：透镜开始转动、切塔外远景（035 接管；白盒阶段 = 章节结束页） */
+export const OUTRO_CUT_SEC = 4.0;
 /** 「没有油。」最短间隔（s） */
 export const NO_OIL_INTERVAL = 10;
 /** 镜子机关的高度门限（局部 y，离各自站立面）：楼梯从镜子上方 / 下方经过时不出提示 */
@@ -104,6 +113,8 @@ export interface S3Puzzles {
   startIgnite(): boolean;
   /** 立即点燃（ignite 帧；smoke / 测试也可直接调）。全局只生效一次 */
   igniteNow(): void;
+  /** 点燃后经过的游戏时间（s；未点燃 = -1）：结尾演出时间轴（独白 0.5–3.5 s，0:04 切远景） */
+  readonly outroTime: number;
   doorIx: Interactable;
   valveIx: Interactable;
   mirrorIx: Record<S3MirrorKey, Interactable>;
@@ -468,9 +479,26 @@ export function buildS3Puzzles(d: S3PuzzleDeps): S3Puzzles {
   const setLeverAngle = (deg: number): void => {
     leverSwing.rotation.x = XI_IGNITE_LEVER_ALIGN.pullSign * deg * (Math.PI / 180);
   };
+  // 结尾演出时间轴（点燃 = 0:00）：独白走字幕时间轴（锁定、顶掉其他独白），到 0:04 结束时间轴
+  let outroT = -1;
+  const subs = game.ui.subtitles.track;
+  const startOutro = (): void => {
+    outroT = 0;
+    if (game.narrative.hasSeen('ch1.s3.ignite.mono')) return;
+    subs.setTimeline([{ at: IGNITE_MONO_DELAY, id: 'ch1.s3.ignite.mono', duration: IGNITE_MONO_SEC }]);
+    subs.playAt(0);
+  };
+  const stepOutro = (dt: number): void => {
+    if (outroT < 0 || outroT > OUTRO_CUT_SEC) return;
+    outroT += dt;
+    if (!subs.inTimeline) return;
+    if (outroT >= OUTRO_CUT_SEC) subs.endTimeline();
+    else subs.playAt(outroT);
+  };
   const igniteNow = (): void => {
     if (state.ignited) return;
     state.ignited = true;
+    startOutro();
     state.igniting = true;
     leverIx.enabled = false;
     setLeverAngle(XI_IGNITE_LEVER_ALIGN.pullDeg);
@@ -608,8 +636,12 @@ export function buildS3Puzzles(d: S3PuzzleDeps): S3Puzzles {
     mirrorIx,
     state,
     traceReached,
+    get outroTime(): number {
+      return outroT;
+    },
     fixedUpdate(dt: number): void {
       time += dt;
+      stepOutro(dt);
       for (let i = timers.length - 1; i >= 0; i--) {
         const tm = timers[i]!;
         if (time >= tm.at) {

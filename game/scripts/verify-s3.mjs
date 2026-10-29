@@ -8,6 +8,9 @@ import { bearingFrom } from '@/levels/s1/layout';
 import { buildS3Greybox, defaultS3GreyboxMaterials } from '@/levels/s3/greybox';
 import { buildS3Beam, S3_BEAM, rayPointDist } from '@/levels/s3/beam';
 import { PhysicsSystem, CharacterBody } from '@/systems/PhysicsSystem';
+import { IGNITE_MONO_DELAY, IGNITE_MONO_SEC, OUTRO_CUT_SEC } from '@/levels/s3/puzzles';
+import { SubtitleTrack } from '@/ui/Subtitles';
+import { t as text, textMeta } from '@/content/text';
 
 const out = [];
 const near3 = (a, b, tol, tag) => {
@@ -385,6 +388,40 @@ out.push('动线：桥尾 → 门外平台（门关进不去）→ 门内 → �
   const dIx = new THREE.Vector3(...L.interact).distanceTo(new THREE.Vector3(...S3.points.noteRead));
   assert.ok(dPivot >= 1.5 && dIx >= 1.5, `拉杆离纸条太近：枢轴 ${dPivot.toFixed(2)} m / 交互点 ${dIx.toFixed(2)} m`);
   out.push(`拉杆 −60° 逐帧转动：第 34 帧握点到底 ✓；拉杆 ↔ 纸条 枢轴 ${dPivot.toFixed(2)} m / 交互点 ${dIx.toFixed(2)} m（≥ 1.5）✓`);
+}
+
+// ---- 点灯独白 ch1.s3.ignite.mono（text-ch1 §5 0:00：ignited 后 0.5 s、3.0 s、只一次、锁定；0:04 切远景前消失）
+{
+  const ID = 'ch1.s3.ignite.mono';
+  assert.equal(text(ID), '亮了。……爸爸，回家吧。');
+  assert.equal(textMeta(ID).once, true, `${ID} 应只一次`);
+  assert.equal(IGNITE_MONO_DELAY, 0.5);
+  assert.equal(IGNITE_MONO_SEC, 3.0);
+  assert.equal(OUTRO_CUT_SEC, 4.0);
+  assert.ok(IGNITE_MONO_DELAY + IGNITE_MONO_SEC < OUTRO_CUT_SEC, `独白 ${IGNITE_MONO_DELAY}+${IGNITE_MONO_SEC} s 必须在 0:04 切远景前结束`);
+  // 与 puzzles.startOutro / stepOutro 同一套调用：时间轴字幕按 1/60 s 步进
+  const seen = new Set();
+  const track = new SubtitleTrack({ hasSeen: (id) => seen.has(id), markSeen: (id) => seen.add(id) });
+  const shownAt = [];
+  track.setTimeline([{ at: IGNITE_MONO_DELAY, id: ID, duration: IGNITE_MONO_SEC }]);
+  let first = -1;
+  let last = -1;
+  for (let i = 0; i <= OUTRO_CUT_SEC * 60; i++) {
+    const tt = i / 60;
+    const line = track.playAt(tt);
+    if (line) {
+      if (first < 0) first = tt;
+      last = tt;
+      assert.equal(line.locked, true, '点灯独白应锁定');
+      assert.equal(track.advance(), false, '点灯独白不可点掉');
+      shownAt.push(tt);
+    }
+  }
+  track.endTimeline();
+  assert.ok(Math.abs(first - 0.5) < 1 / 60 + 1e-9, `独白应在 0.5 s 出现（实际 ${first}）`);
+  assert.ok(last < OUTRO_CUT_SEC && last >= 3.5 - 1 / 30, `独白应在 3.5 s 消失（最后显示 ${last}）`);
+  assert.ok(seen.has(ID), '显示后记为已看过（只一次）');
+  out.push(`点灯独白 ${ID}：ignited 后 ${first.toFixed(2)}–${(last + 1 / 60).toFixed(2)} s 锁定显示、不可点掉、只一次；0:04 切远景前已消失 ✓`);
 }
 
 for (const l of out) console.log(`✓ ${l}`);
