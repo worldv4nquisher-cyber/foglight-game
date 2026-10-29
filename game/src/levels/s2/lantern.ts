@@ -2,6 +2,8 @@ import * as THREE from 'three';
 
 /** 白盒风灯（原点在灯底）的光源中心高度 */
 export const GB_LANTERN_LIGHT_Y = 0.15;
+/** 美术风灯提手到灯底（读不到 -collider 时的默认；与 017 xi-place-table 对齐） */
+export const ART_LANTERN_HANG = 0.28;
 
 /**
  * 021 风灯 prop-lantern-brass：原点 = 提手（直接挂 hand_r_socket / 灯台 `-socket`，不加偏移）。
@@ -10,7 +12,7 @@ export const GB_LANTERN_LIGHT_Y = 0.15;
 export function artLanternFrame(o: THREE.Object3D): { hang: number; light: THREE.Vector3 } {
   o.updateMatrixWorld(true);
   const inv = o.matrixWorld.clone().invert();
-  let hang = 0.28;
+  let hang = ART_LANTERN_HANG;
   const light = new THREE.Vector3(0, -0.162, 0);
   o.traverse((c) => {
     if (/-collider(\.\d+)?$/i.test(c.name) && (c as THREE.Mesh).isMesh) {

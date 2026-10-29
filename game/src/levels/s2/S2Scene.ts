@@ -72,6 +72,7 @@ export class S2Scene extends LevelScene {
       artRoot: this.art.root,
       artKey: this.art.cellarKey,
       artLantern: this.art.lantern,
+      artLampStands: this.art.lampStands,
       beamDebug: beamDebugEnabled,
     });
     this.cleanups.push(() => this.puzzles.dispose());

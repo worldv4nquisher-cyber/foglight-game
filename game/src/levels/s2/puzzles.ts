@@ -18,7 +18,9 @@ import { S2, v3 } from './layout';
 import { buildS2Beam, type S2Beam } from './beam';
 import type { S2Greybox } from './greybox';
 import { sevenSegment } from './digits';
-import { artLanternFrame, GB_LANTERN_LIGHT_Y } from './lantern';
+import { ART_LANTERN_HANG, artLanternFrame, GB_LANTERN_LIGHT_Y } from './lantern';
+import { S2_LAMP_STAND_KEY } from './art';
+import { greyboxVisible } from '@/config/debug';
 
 /** BUG-014：书桌上「看看而已」的物体的瞄准半径（屏幕 NDC），见 Interactable.aimCone */
 export const S2_DESK_AIM = { chart: 0.13, note: 0.3 } as const;
@@ -67,6 +69,8 @@ export interface S2PuzzleDeps {
   artKey?: THREE.Object3D | null;
   /** 021 美术风灯（art=1；原点 = 提手）；null = 白盒风灯（原点 = 灯底） */
   artLantern?: THREE.Object3D | null;
+  /** 021 美术灯台（art.ts 已放在院墙 lamp socket）：有就隐藏白盒灯台外观、风灯 socket 移到美术 `-socket`（碰撞 / 发光节点不变） */
+  artLampStands?: { east: THREE.Object3D | null; west: THREE.Object3D | null };
   beamDebug: boolean;
 }
 
@@ -312,8 +316,20 @@ export function buildS2Puzzles(d: S2PuzzleDeps): S2Puzzles {
   offs.push(tracer.bind(events));
   const renderer = new WhiteboxBeamRenderer({ debug: d.beamDebug });
   scene.add(renderer.root);
-  // 美术风灯原点在提手：白盒灯台 socket（柱顶 0.70）抬高 hang，灯底仍落在柱顶（光路发射点是独立节点，不受影响）
-  if (lanternFrame) for (const lamp of [beam.lamps.east, beam.lamps.west]) lamp.socket.position.y += lanternFrame.hang;
+  // 灯台 socket：美术灯台 → 读它的 `-socket`（= 提手位置；白盒风灯原点在灯底，再减 hang 落到托盘）；
+  // 只有美术风灯 → 白盒柱顶 0.70 抬高 hang。光路发射点是独立节点（0.846，与美术 -emitter-dir 同高），不受影响
+  for (const lamp of [beam.lamps.east, beam.lamps.west]) {
+    const art = d.artLampStands?.[lamp.key] ?? null;
+    const artSocket = art?.getObjectByName(`${S2_LAMP_STAND_KEY}-socket`) ?? null;
+    if (art && artSocket) {
+      for (const c of lamp.stand.children) if ((c as THREE.Mesh).isMesh) c.visible = greyboxVisible;
+      artSocket.updateWorldMatrix(true, false);
+      lamp.stand.updateWorldMatrix(true, false);
+      const w = artSocket.getWorldPosition(new THREE.Vector3());
+      lamp.socket.position.copy(lamp.stand.worldToLocal(w));
+      if (!lanternFrame) lamp.socket.position.y -= ART_LANTERN_HANG;
+    } else if (lanternFrame) lamp.socket.position.y += lanternFrame.hang;
+  }
   for (const lamp of [beam.lamps.east, beam.lamps.west]) {
     const ix = new Interactable({ id: `lamp-stand-${lamp.key}-s2`, kind: 'place', object: lamp.stand, socket: lamp.socket, item: S2_IDS.lantern, focus: lamp.socket.position.clone().setY(0.8), anim: 'xi-place', animStand: XI_SOCKET_STAND.stand });
     interaction.add(ix);

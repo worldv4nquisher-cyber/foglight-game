@@ -394,6 +394,36 @@ if (hasArt) {
     return `hang ${f.hang.toFixed(3)}、emitter y ${f.light.y.toFixed(3)}、书桌提手离地 ${(S2.points.lanternSocket[1] + f.hang - S2.house.upperFloorY).toFixed(3)} m`;
   });
 
+  await test('021 灯台 prop-lantern-stand-s2：院墙 lamp socket = 白盒灯台位置；-socket 挂风灯后光源中心 = 白盒出光高度', async () => {
+    const wall = await loadGlb('models/env/env-courtyard-wall-s2.glb');
+    const n = S2.artNodes['env-courtyard-wall-s2'];
+    wall.position.set(...n.translation);
+    wall.rotation.y = n.rotationY;
+    wall.updateMatrixWorld(true);
+    const stand = await loadGlb('models/props/prop-lantern-stand-s2.glb');
+    const lantern = await loadGlb('models/props/prop-lantern-brass.glb');
+    const f = artLanternFrame(lantern);
+    const out = [];
+    for (const k of ['east', 'west']) {
+      const s = wall.getObjectByName(`env-courtyard-wall-s2-lamp-${k}-socket`);
+      assert.ok(s, `院墙缺 lamp-${k}-socket`);
+      const w = s.getWorldPosition(new THREE.Vector3());
+      near(w.x, S2.lamps[k][0], 0.01, `${k} x`);
+      near(w.z, S2.lamps[k][2], 0.01, `${k} z`);
+      const st = stand.clone();
+      s.add(st);
+      wall.updateMatrixWorld(true);
+      const sock = st.getObjectByName('prop-lantern-stand-s2-socket');
+      const dir = st.getObjectByName('prop-lantern-stand-s2-emitter-dir');
+      assert.ok(sock && dir, '灯台缺 -socket / -emitter-dir');
+      const sw = sock.getWorldPosition(new THREE.Vector3());
+      near(dir.getWorldPosition(new THREE.Vector3()).y, S2.lampEmitY, 0.01, `${k} -emitter-dir 高`);
+      near(sw.y + f.light.y, S2.lampEmitY, 0.01, `${k} 风灯光源中心`);
+      out.push(`${k} socket (${sw.x.toFixed(2)}, ${sw.y.toFixed(3)}, ${sw.z.toFixed(2)})`);
+    }
+    return out.join('；');
+  });
+
   await test('外部 KTX2：S1 全部 GLB 的 images.uri 相对 GLB 解析后存在（运行时 assets/art/models/env/../../textures/ 同理）', () => {
     const files = [...new Set(Object.values(layout.nodes).flatMap((n) => [n.file, ...(n.socketInstances ?? []).map((s) => s.file)]).filter(Boolean))];
     let n = 0;

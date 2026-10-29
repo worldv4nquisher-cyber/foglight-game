@@ -13,6 +13,9 @@ export const S2_KEY_KEY = 'prop-key-cellar-s2';
 export const S2_KEY_SOCKET = 'env-cellar-s2-key-socket';
 /** 021 黄铜风灯（原点 = 提手；`-emitter` = 光源中心；发光材质 mat-prop-lantern-glow 由程序控制，是全章唯一常驻暖光） */
 export const S2_LANTERN_KEY = 'prop-lantern-brass';
+/** 021 院子灯台（原点在台底、朝 +Z；`-socket` 放风灯提手，`-emitter-dir` 出光高度）；摆在院墙 env-courtyard-wall-s2-lamp-{east,west}-socket */
+export const S2_LAMP_STAND_KEY = 'prop-lantern-stand-s2';
+export const S2_LAMP_STAND_SOCKET = (k: 'east' | 'west'): string => `env-courtyard-wall-s2-lamp-${k}-socket`;
 
 export interface S2Art {
   root: THREE.Group;
@@ -28,6 +31,8 @@ export interface S2Art {
    * 不走环境的「暖色自发光清零」——风灯是暖光例外（GDD §12）。没交付 = null，用白盒风灯
    */
   lantern: THREE.Object3D | null;
+  /** 021 院子灯台（prop-lantern-stand-s2，东 / 西各一份，根节点放在院墙 lamp socket）；没交付 / 没 socket = null，用白盒灯台外观 */
+  lampStands: { east: THREE.Object3D | null; west: THREE.Object3D | null };
 }
 
 /**
@@ -115,6 +120,20 @@ export function buildS2Art(assets: AssetLoader): S2Art {
     applyMaterialHints(lantern);
   }
 
+  // 021 灯台：院墙 GLB 的 lamp socket 定位（不写死坐标），只做外观；碰撞 / 光路仍由白盒灯台承担
+  const lampStands: S2Art['lampStands'] = { east: null, west: null };
+  for (const k of ['east', 'west'] as const) {
+    const socket = root.getObjectByName(S2_LAMP_STAND_SOCKET(k));
+    if (!assets.has(S2_LAMP_STAND_KEY) || !socket) continue;
+    const stand = prepare(assets.getModel(S2_LAMP_STAND_KEY));
+    stand.name = `${S2_LAMP_STAND_KEY}-${k}`;
+    stand.position.set(0, 0, 0);
+    stand.quaternion.identity();
+    stand.scale.setScalar(1);
+    socket.add(stand);
+    lampStands[k] = stand;
+  }
+
   // 远景 S3 岛 + 灯塔（天空层材质，不钉深度）
   let far: THREE.Group | null = null;
   let farLayer: SkyLayerHandle | null = null;
@@ -143,5 +162,5 @@ export function buildS2Art(assets: AssetLoader): S2Art {
     loaded = true;
   }
 
-  return { root, loaded, cellarDoor, far, farLayer, cellarKey, lantern };
+  return { root, loaded, cellarDoor, far, farLayer, cellarKey, lantern, lampStands };
 }
