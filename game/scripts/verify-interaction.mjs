@@ -14,6 +14,7 @@ import { InteractionSystem } from '@/systems/interaction/InteractionSystem';
 import { RotatablePart, nextDetent } from '@/systems/interaction/RotatablePart';
 import { PuzzleGroup, puzzleBarText } from '@/systems/interaction/PuzzleMode';
 import { t as text } from '@/content/text';
+import { asXiClip, pushRate } from '@/entities/xi/clips';
 
 const DT = 1 / 60;
 let now = 0;
@@ -320,7 +321,7 @@ test('use(approach:false)：不走位，按下即触发（demo 灯塔）', () =>
 
 // ---------------------------------------------------------------- hold
 
-function holdEnv() {
+function holdEnv(extra = {}) {
   const env = setup();
   const valve = env.box('valve', [0, 0.9, -1.4], [0.5, 0.5, 0.2]);
   const p = new THREE.Object3D();
@@ -329,7 +330,7 @@ function holdEnv() {
   p.lookAt(0, 0, -10);
   env.scene.add(p);
   p.updateMatrixWorld(true);
-  const it = env.ix.add(new Interactable({ id: 'valve', kind: 'hold', object: valve, interactPoint: p }));
+  const it = env.ix.add(new Interactable({ id: 'valve', kind: 'hold', object: valve, interactPoint: p, ...extra }));
   return { env, it };
 }
 
@@ -603,6 +604,132 @@ test('交互提示文字全部来自文本表', () => {
       .join('\n');
     assert.doesNotMatch(src, /'[^']*[\u4e00-\u9fff][^']*'/, `${f} 有硬编码中文`);
   }
+});
+
+
+// ---------------------------------------------------------------- v0.1-017 交互动作（有汐动画时）
+
+/** 假动画：记录 setPose / clearPose / setLoop；has 按给的 clip 表 */
+function fakeAnim(env, clips) {
+  const log = { poses: [], cleared: 0, loops: [] };
+  env.actor.anim = {
+    has: (c) => clips.includes(c),
+    setPose: (c, t) => log.poses.push([c, t]),
+    clearPose: () => log.cleared++,
+    setLoop: (c, r) => log.loops.push([c, r]),
+  };
+  return log;
+}
+const stepUntil = (env, pred, max = 600) => {
+  let n = 0;
+  while (!pred() && n < max) {
+    env.step(1);
+    n++;
+  }
+  return n;
+};
+
+test('017 放风灯到灯台：先走到 socket 前 0.65 m 面向 socket，xi-place 第 48 帧（1.6 s）才放下，播完 2.33 s 解锁', () => {
+  const env = setup();
+  const anim = fakeAnim(env, ['xi-place', 'xi-pickup']);
+  const lantern = env.box('lantern', [0, 0.3, 1], [0.2, 0.3, 0.2]);
+  const pick = env.ix.add(new Interactable({ id: 'lantern', kind: 'pickup', object: lantern, anim: 'xi-pickup', animStand: 0.65 }));
+  env.ix.trigger(pick);
+  const nGrab = stepUntil(env, () => env.fired.some(([e]) => e === 'item:pickup'));
+  // 走位 ≤ 0.36 s + grab 第 22 帧
+  assert.ok(nGrab * DT >= 22 / 30 - 1e-6 && nGrab * DT <= 22 / 30 + gameplay.interaction.approachMaxTime + 2 * DT, `拿起在 ${(nGrab * DT).toFixed(2)} s`);
+  stepUntil(env, () => !env.actor.locked);
+  const stand = env.scene.add(new THREE.Object3D());
+  const socket = new THREE.Object3D();
+  socket.name = 'stand-socket';
+  socket.position.set(2, 1.008, -1);
+  stand.add(socket);
+  stand.updateMatrixWorld(true);
+  const place = env.ix.add(new Interactable({ id: 'stand', kind: 'place', object: stand, socket, item: 'lantern', anim: 'xi-place', animStand: 0.65 }));
+  env.ix.trigger(place);
+  env.step(1);
+  assert.equal(env.actor.locked, true, '播动作期间锁定');
+  const n = stepUntil(env, () => used(env, 'stand') > 0);
+  const d = Math.hypot(env.body.position.x - 2, env.body.position.z + 1);
+  assert.ok(Math.abs(d - 0.65) < 0.01, `站位离 socket ${d.toFixed(3)} m`);
+  const toSocket = Math.atan2(2 - env.body.position.x, -1 - env.body.position.z);
+  assert.ok(Math.abs(Math.atan2(Math.sin(env.actor.facing - toSocket), Math.cos(env.actor.facing - toSocket))) < 0.01, '面向 socket');
+  assert.ok(n * DT >= 1.6 - DT && n * DT <= 1.6 + gameplay.interaction.approachMaxTime + 2 * DT, `release 在 ${(n * DT).toFixed(2)} s`);
+  const m = stepUntil(env, () => !env.actor.locked);
+  assert.ok(Math.abs((n + m + 1) * DT - (2.3333 + 0.36)) < 0.4, '播完解锁');
+  assert.ok(anim.poses.some(([c, t]) => c === 'xi-place' && Math.abs(t - 70 / 30) < 1e-6), '播到末帧');
+  assert.ok(anim.cleared >= 2, '结束 clearPose');
+});
+
+test('017 交互点节点 extras.anim 优先（地窖木架 xi-pickup-shelf）；approach:false 的 use 有动画时也先走位，grab 第 22 帧生效', () => {
+  const env = setup();
+  fakeAnim(env, ['xi-pickup-shelf', 'xi-pickup-table']);
+  const key = env.box('key', [0, 1.1, -1.5], [0.1, 0.02, 0.05]);
+  const p = new THREE.Object3D();
+  p.name = 'shelf-interact';
+  p.position.set(0, 0, -1.05);
+  p.lookAt(0, 0, -10);
+  p.userData.anim = 'xi-pickup-shelf';
+  env.scene.add(p);
+  p.updateMatrixWorld(true);
+  const it = env.ix.add(new Interactable({ id: 'key', kind: 'use', object: key, approach: false, interactPoint: p, anim: 'xi-pickup-table' }));
+  assert.equal(it.resolveAnim(), 'xi-pickup-shelf', '节点 anim 优先');
+  p.userData.anim = 'xi-pull-lever';
+  assert.equal(it.resolveAnim(), 'xi-ignite-lever', '旧名别名');
+  p.userData.anim = 'xi-pickup-shelf';
+  env.ix.trigger(it);
+  const n = stepUntil(env, () => used(env, 'key') > 0);
+  assert.ok(Math.abs(env.body.position.z + 1.05) < 0.01, '走到木架站位');
+  assert.ok(n * DT >= 22 / 30 - DT && n * DT <= 22 / 30 + gameplay.interaction.approachMaxTime + 2 * DT, `grab 在 ${(n * DT).toFixed(2)} s`);
+  assert.equal(asXiClip('xi-nope'), null);
+});
+
+test('017 阀门 xi-valve-hold：握住 16 帧圆环不动，圆环 2 s 对应转动 16–76 帧，满后播完松手段（到 3.0 s）再解锁', () => {
+  const { env } = holdEnv({ anim: 'xi-valve-hold' });
+  const anim = fakeAnim(env, ['xi-valve-hold']);
+  const progress = [];
+  env.events.on('interact:holdProgress', ({ progress: p }) => progress.push(p));
+  env.step(1, { press: ['KeyE'] });
+  stepUntil(env, () => env.ix.animState?.clip === 'xi-valve-hold');
+  const start = anim.poses.length;
+  env.step(Math.floor(16 / 30 / DT) - 2);
+  assert.ok(progress.every((x) => x === 0), `握住段圆环为 0：${progress.map((x) => x.toFixed(3)).join(',')}`);
+  const n = stepUntil(env, () => used(env, 'valve') > 0);
+  const total = (Math.floor(16 / 30 / DT) - 1 + n) * DT; // 进入 hold 那一步已计 1 步
+  assert.ok(Math.abs(total - (16 / 30 + 2)) < 3 * DT, `完成用时 ${total.toFixed(2)} s`);
+  const turnPoses = anim.poses.slice(start).map(([, t]) => t);
+  assert.ok(Math.abs(Math.max(...turnPoses) - 76 / 30) < 1e-6, '转到 76 帧');
+  assert.equal(env.actor.locked, true, '松手段仍锁定');
+  env.step(1, { release: ['KeyE'] });
+  const m = stepUntil(env, () => !env.actor.locked);
+  assert.ok(Math.abs((m + 1) * DT - (90 - 76) / 30) < 3 * DT, `松手段 ${((m + 1) * DT).toFixed(2)} s`);
+});
+
+test('017 敲钟 xi-ring-bell：interact:used（钟声 / 退潮）在第 30 帧', () => {
+  const { env, it } = useEnv();
+  fakeAnim(env, ['xi-ring-bell']);
+  const bell = env.ix.add(new Interactable({ id: 'bell2', kind: 'use', object: it.object, interactPoint: it.interactPoint, anim: 'xi-ring-bell' }));
+  env.ix.trigger(bell);
+  const n = stepUntil(env, () => used(env, 'bell2') > 0);
+  assert.ok(n * DT >= 1 - DT && n * DT <= 1 + gameplay.interaction.approachMaxTime + 2 * DT, `ring 在 ${(n * DT).toFixed(2)} s`);
+});
+
+test('017 推：push-loop 播放率 = 推速 / 0.8，结束停循环；没有动画时交互即时生效（白盒不变）', () => {
+  const env = setup();
+  const anim = fakeAnim(env, ['xi-push-loop']);
+  const crate = env.box('crate2', [0, 0.3, -1.2]);
+  const it = env.ix.add(new Interactable({ id: 'crate2', kind: 'push', object: crate, track: { from: new THREE.Vector3(0, 0.3, -1.2), to: new THREE.Vector3(0, 0.3, -1.4), speed: 0.812 } }));
+  env.step(1, { press: ['KeyE'] });
+  stepUntil(env, () => anim.loops.length > 0);
+  assert.deepEqual(anim.loops[0], ['xi-push-loop', pushRate(0.812)]);
+  stepUntil(env, () => env.fired.some(([e, q]) => e === 'interact:pushEnd' && q.id === 'crate2'));
+  assert.ok(it.locked);
+  assert.deepEqual(anim.loops.at(-1), [null, undefined], '推完停循环');
+  const env2 = setup();
+  const l2 = env2.box('l2', [0, 0.3, -1], [0.2, 0.3, 0.2]);
+  const p2 = env2.ix.add(new Interactable({ id: 'l2', kind: 'pickup', object: l2, anim: 'xi-pickup', animStand: 0.65 }));
+  env2.ix.trigger(p2);
+  assert.equal(used(env2, 'l2'), 1, '无动画：拿起即时');
 });
 
 // ---------------------------------------------------------------- 汇总

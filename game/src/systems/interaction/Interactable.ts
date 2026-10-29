@@ -4,6 +4,7 @@ import type { InteractKindName } from '@/core/EventBus';
 import type { TextId } from '@/content/text';
 import { Component } from '@/entities/Component';
 import type { PuzzleGroup } from './PuzzleMode';
+import { asXiClip, type XiClipName } from '@/entities/xi/clips';
 
 export type InteractKind = InteractKindName;
 
@@ -64,6 +65,13 @@ export interface InteractableOptions {
    * 例：站在浮台上，「E 跨过去」压过石槽的「E 查看」。
    */
   priority?: number;
+  /**
+   * v0.1-017 汐的交互动作 clip（有动画时：先走到站位，再播 clip，在事件帧生效——拿起 grab / 放下 release / 敲钟 ring…）。
+   * 交互点节点（GLB `-interact`）的 extras.anim 优先；可以是函数（每次触发时求值，如风灯在桌上 / 灯台上用不同 clip）。
+   */
+  anim?: XiClipName | (() => XiClipName | null);
+  /** 没有交互点时，按 socket / 物体到角色的方向、离它这么远站（m；灯台 0.65、桌面 0.45） */
+  animStand?: number;
 }
 
 const INTERACT_NODE = /-interact(\.\d+)?$/i;
@@ -100,6 +108,8 @@ export class Interactable extends Component {
   readonly approach: boolean;
   /** 见 InteractableOptions.priority */
   readonly priority: number;
+  readonly animStand: number | null;
+  private readonly animSpec: XiClipName | (() => XiClipName | null) | null;
   /** push：轨道进度 0–1；到 1 后 locked */
   pushT = 0;
   /** push 到终点 / 一次性物体用完：不再可交互 */
@@ -129,6 +139,8 @@ export class Interactable extends Component {
     this.priority = opts.priority ?? (opts.kind === 'inspect' || opts.kind === 'read' ? 0 : 20);
     this.point = opts.interactPoint ?? findNode(opts.object, INTERACT_NODE);
     this.focusSpec = opts.focus ?? null;
+    this.animSpec = opts.anim ?? null;
+    this.animStand = opts.animStand ?? null;
     if ((opts.kind === 'inspect' || opts.kind === 'read') && !this.textId) throw new Error(`Interactable ${opts.id}: ${opts.kind} 需要 textId`);
     if (opts.kind === 'push' && !this.track) throw new Error(`Interactable ${opts.id}: push 需要 track`);
     if (opts.kind === 'puzzle' && !this.puzzle) throw new Error(`Interactable ${opts.id}: puzzle 需要 puzzle 机关组`);
@@ -154,6 +166,19 @@ export class Interactable extends Component {
     box.setFromObject(this.object);
     if (box.isEmpty()) return this.object.getWorldPosition(out);
     return box.getCenter(out);
+  }
+
+  /** 交互动作 clip：交互点节点 extras.anim（GLTFLoader → userData.anim）优先，其次 opts.anim */
+  resolveAnim(): XiClipName | null {
+    const fromNode = asXiClip(this.point?.userData?.anim);
+    if (fromNode) return fromNode;
+    const a = this.animSpec;
+    return typeof a === 'function' ? a() : a;
+  }
+
+  /** 交互点节点（没有 = null） */
+  get interactPoint(): THREE.Object3D | null {
+    return this.point;
   }
 
   /** 角色站位（世界坐标，y 取节点高度）与朝向（yaw，与 PlayerController.facing 同约定：前方 = (sin, 0, cos)） */

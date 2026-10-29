@@ -178,3 +178,39 @@ export function measureRootZ(values: ArrayLike<number> | null): number {
   const dz = (values[values.length - 1] ?? 0) - (values[2] ?? 0);
   return Math.abs(dz) < 0.02 ? 0 : dz;
 }
+
+// ---------------------------------------------------------------- 交互动作
+
+/**
+ * 交互动作的「生效」事件帧（v0.1-017）：拿起 = grab（物体挂到手上）、放下 = release（物体留在 socket）、
+ * 敲钟 = ring（钟声 + 摆动）、拉杆 = ignite（lighthouse:ignited）、阀门 = turnStart（hold 圆环从这帧开始计）、系船 = tied。
+ */
+export const XI_INTERACT_EVENT: Partial<Record<XiClipName, string>> = {
+  'xi-place': 'release',
+  'xi-place-table': 'release',
+  'xi-pickup': 'grab',
+  'xi-pickup-table': 'grab',
+  'xi-pickup-shelf': 'grab',
+  'xi-ring-bell': 'ring',
+  'xi-ignite-lever': 'ignite',
+  'xi-valve-hold': 'turnStart',
+  'xi-tie-boat': 'tied',
+  'xi-step-across': 'rightLand',
+};
+
+/** 交互动作生效时间（s）：没登记事件的 clip = 播完 */
+export function xiInteractEventSec(name: XiClipName): number {
+  const ev = XI_INTERACT_EVENT[name];
+  return (ev ? xiEventSec(name, ev) : null) ?? xiClipDuration(name);
+}
+
+/** 字符串（GLB 节点 extras.anim 等）→ clip 名；不认识返回 null */
+export function asXiClip(v: unknown): XiClipName | null {
+  if (typeof v !== 'string') return null;
+  if (v in XI_CLIP_SPECS) return v as XiClipName;
+  for (const [k, olds] of Object.entries(XI_CLIP_ALIASES)) if (olds?.includes(v)) return k as XiClipName;
+  return null;
+}
+
+/** 交互站位离 socket 的水平距离（m）：灯台 0.65（extras.align.lanternSocket，返工 1029）、桌面 0.45 */
+export const XI_SOCKET_STAND = { stand: 0.65, table: 0.45 } as const;

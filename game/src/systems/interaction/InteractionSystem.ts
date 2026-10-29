@@ -7,6 +7,7 @@ import type { CharacterBody, PhysicsSystem } from '@/systems/PhysicsSystem';
 import { HeldItem } from './HeldItem';
 import { Highlighter } from './Highlight';
 import type { Interactable } from './Interactable';
+import { pushRate, xiClipDuration, xiEventSec, xiInteractEventSec, type XiClipName } from '@/entities/xi/clips';
 import { PuzzleMode, type PuzzleBarHud, type PuzzleCamera } from './PuzzleMode';
 
 /** 被交互系统驱动的角色（PlayerRig 经 actorFromRig 适配；Node 测试可以给假的） */
@@ -20,7 +21,21 @@ export interface InteractionActor {
   halt(): void;
   /** 手部挂点（手持物挂在这里） */
   readonly hand: THREE.Object3D;
+  /** 汐的动画（v0.1-017；白盒胶囊没有 → 交互保持即时生效） */
+  readonly anim?: InteractionAnim;
 }
+
+/** 交互系统驱动的动画接口（XiAnimator 实现） */
+export interface InteractionAnim {
+  has(clip: XiClipName): boolean;
+  /** 一次性动作停在第 t 秒（每个固定步调用） */
+  setPose(clip: XiClipName, t: number): void;
+  clearPose(): void;
+  setLoop(clip: XiClipName | null, rate?: number): void;
+}
+
+/** 交互动作生效时做什么 */
+type AnimEffect = 'pickup' | 'place' | 'use' | 'none';
 
 /** 交互 HUD（ui/Hud.ts 实现） */
 export interface InteractionHud extends PuzzleBarHud {
@@ -55,11 +70,16 @@ export interface InteractionSystemOptions {
   viewport?: () => { width: number; height: number };
 }
 
+type Then = 'use' | 'hold' | 'push' | 'pickup' | 'place';
+
 type Action =
   | { kind: 'none' }
   /** 自动走到交互点：结束后 then */
-  | { kind: 'approach'; target: Interactable; from: THREE.Vector3; to: THREE.Vector3; fromYaw: number; toYaw: number; t: number; dur: number; then: 'use' | 'hold' | 'push' }
-  | { kind: 'hold'; target: Interactable; t: number }
+  | { kind: 'approach'; target: Interactable; from: THREE.Vector3; to: THREE.Vector3; fromYaw: number; toYaw: number; t: number; dur: number; then: Then }
+  /** hold：clip 有值时（阀门 xi-valve-hold）先播 grip 段（0 → pre 秒，圆环不动），圆环只在 turnStart–turnEnd 计 */
+  | { kind: 'hold'; target: Interactable; t: number; clip: XiClipName | null; pre: number }
+  /** v0.1-017 交互动作：按游戏时间播 clip，在事件帧 at 生效（effect），播完解锁 */
+  | { kind: 'anim'; target: Interactable; clip: XiClipName; t: number; dur: number; at: number; fired: boolean; effect: AnimEffect }
   | { kind: 'push'; target: Interactable }
   | { kind: 'puzzle'; target: Interactable };
 
@@ -169,6 +189,7 @@ export class InteractionSystem {
     if (a.kind === 'approach') this.stepApproach(a, dt);
     else if (a.kind === 'hold') this.stepHold(a, dt);
     else if (a.kind === 'push') this.stepPush(a, dt);
+    else if (a.kind === 'anim') this.stepAnim(a, dt);
 
     const free = this.action.kind === 'none' && input.context === 'explore' && !this.o.actor.busy;
     this.current = free ? this.pickCandidate() : this.action.kind === 'none' ? null : this.current;
@@ -229,10 +250,10 @@ export class InteractionSystem {
         break;
       }
       case 'pickup':
-        if (this.held.pickUp(it.item ?? it.id, it.object)) ev.emit('interact:used', { id: it.id, kind: it.kind });
-        break;
       case 'place':
-        if (it.socket && this.held.place(it.socket)) ev.emit('interact:used', { id: it.id, kind: it.kind });
+        // 有动画：走到站位 → 播 clip → grab / release 帧才真正拿起 / 放下
+        if (this.animFor(it)) this.startApproach(it, it.kind);
+        else this.applyEffect(it, it.kind);
         break;
       case 'puzzle':
         if (!it.puzzle) return;
@@ -245,7 +266,7 @@ export class InteractionSystem {
       case 'use':
       case 'hold':
       case 'push':
-        if (it.approach) this.startApproach(it, it.kind);
+        if (it.approach || this.animFor(it)) this.startApproach(it, it.kind);
         else this.afterApproach(it, it.kind);
         break;
     }
@@ -255,6 +276,70 @@ export class InteractionSystem {
   cancel(): void {
     if (this.action.kind === 'puzzle') this.puzzle.exit();
     this.endAction();
+  }
+
+  /** 这个交互物这次要播的 clip（角色没有动画 / 缺 clip = null，交互即时生效） */
+  animFor(it: Interactable): XiClipName | null {
+    const anim = this.o.actor.anim;
+    if (!anim) return null;
+    const c = it.resolveAnim();
+    return c && anim.has(c) ? c : null;
+  }
+
+  /** 正在播的交互动作（测试 / dev 读） */
+  get animState(): { clip: XiClipName; t: number; fired: boolean } | null {
+    const a = this.action;
+    if (a.kind === 'anim') return { clip: a.clip, t: a.t, fired: a.fired };
+    if (a.kind === 'hold' && a.clip) return { clip: a.clip, t: a.t, fired: false };
+    return null;
+  }
+
+  private applyEffect(it: Interactable, effect: AnimEffect): void {
+    const ev = this.o.events;
+    if (effect === 'pickup') {
+      if (this.held.pickUp(it.item ?? it.id, it.object)) ev.emit('interact:used', { id: it.id, kind: it.kind });
+    } else if (effect === 'place') {
+      if (it.socket && this.held.place(it.socket)) ev.emit('interact:used', { id: it.id, kind: it.kind });
+    } else if (effect === 'use') ev.emit('interact:used', { id: it.id, kind: 'use' });
+  }
+
+  private startAnim(it: Interactable, clip: XiClipName, effect: AnimEffect, t0 = 0): void {
+    this.o.actor.halt();
+    this.o.actor.locked = true;
+    const a: Extract<Action, { kind: 'anim' }> = { kind: 'anim', target: it, clip, t: t0, dur: xiClipDuration(clip), at: xiInteractEventSec(clip), fired: effect === 'none', effect };
+    this.action = a;
+    this.o.actor.anim?.setPose(clip, t0);
+  }
+
+  private stepAnim(a: Extract<Action, { kind: 'anim' }>, dt: number): void {
+    a.t = Math.min(a.dur, a.t + dt);
+    this.o.actor.anim?.setPose(a.clip, a.t);
+    const body = this.o.actor.body;
+    body.velocity.x = body.velocity.z = 0;
+    if (!a.fired && a.t >= a.at - 1e-6) {
+      a.fired = true;
+      this.applyEffect(a.target, a.effect);
+    }
+    if (a.t >= a.dur - 1e-6) this.endAction();
+  }
+
+  /** 有动画、没有交互点的 socket 类（灯台 / 桌面）：按 socket 到角色的方向在 animStand 米外站好、面向 socket */
+  private animStandPoint(it: Interactable): { position: THREE.Vector3; facing: number } | null {
+    if (it.animStand === null || it.interactPoint) return null;
+    const target = (it.kind === 'place' ? it.socket : null) ?? it.object;
+    const p = target.getWorldPosition(new THREE.Vector3());
+    const b = this.o.actor.body.position;
+    let dx = b.x - p.x;
+    let dz = b.z - p.z;
+    const len = Math.hypot(dx, dz);
+    if (len < 1e-4) {
+      dx = -Math.sin(this.o.actor.facing);
+      dz = -Math.cos(this.o.actor.facing);
+    } else {
+      dx /= len;
+      dz /= len;
+    }
+    return { position: new THREE.Vector3(p.x + dx * it.animStand, b.y, p.z + dz * it.animStand), facing: Math.atan2(-dx, -dz) };
   }
 
   dispose(): void {
@@ -320,10 +405,10 @@ export class InteractionSystem {
     this.o.hud.setMarkers(this.markers());
   }
 
-  private startApproach(it: Interactable, then: 'use' | 'hold' | 'push'): void {
+  private startApproach(it: Interactable, then: Then): void {
     const actor = this.o.actor;
     const body = actor.body;
-    const stand = it.standPoint(new THREE.Vector3());
+    const stand = (this.animFor(it) ? this.animStandPoint(it) : null) ?? it.standPoint(new THREE.Vector3());
     const from = body.position.clone();
     const to = new THREE.Vector3(stand.position.x, from.y, stand.position.z);
     const dist = Math.hypot(to.x - from.x, to.z - from.z);
@@ -372,15 +457,28 @@ export class InteractionSystem {
     this.afterApproach(a.target, a.then);
   }
 
-  private afterApproach(it: Interactable, then: 'use' | 'hold' | 'push'): void {
+  private afterApproach(it: Interactable, then: Then): void {
     const ev = this.o.events;
-    if (then === 'use') {
+    const clip = this.animFor(it);
+    if (then === 'use' || then === 'pickup' || then === 'place') {
+      if (clip) {
+        this.startAnim(it, clip, then);
+        return;
+      }
       this.endAction();
-      ev.emit('interact:used', { id: it.id, kind: 'use' });
+      if (then === 'use') ev.emit('interact:used', { id: it.id, kind: 'use' });
+      else this.applyEffect(it, then);
       return;
     }
     this.o.actor.locked = true;
-    this.action = then === 'hold' ? { kind: 'hold', target: it, t: 0 } : { kind: 'push', target: it };
+    if (then === 'hold') {
+      const pre = clip ? (xiEventSec(clip, 'turnStart') ?? 0) : 0;
+      this.action = { kind: 'hold', target: it, t: 0, clip, pre };
+      if (clip) this.o.actor.anim?.setPose(clip, 0);
+    } else {
+      this.action = { kind: 'push', target: it };
+      if (this.o.actor.anim?.has('xi-push-loop')) this.o.actor.anim.setLoop('xi-push-loop', pushRate(it.track?.speed ?? cfg.pushSpeed));
+    }
   }
 
   private stepHold(a: Extract<Action, { kind: 'hold' }>, dt: number): void {
@@ -392,11 +490,20 @@ export class InteractionSystem {
       return;
     }
     a.t += dt;
-    const p = Math.min(1, a.t / a.target.holdSeconds);
+    // 有 clip：前 pre 秒是握住阀门（圆环不动），之后圆环按 holdSeconds 计、clip 在 turnStart–turnEnd 之间同步转
+    const p = Math.min(1, Math.max(0, a.t - a.pre) / a.target.holdSeconds);
+    if (a.clip) {
+      const ts = a.pre;
+      const te = xiEventSec(a.clip, 'turnEnd') ?? xiClipDuration(a.clip);
+      this.o.actor.anim?.setPose(a.clip, a.t < ts ? a.t : ts + p * (te - ts));
+    }
     ev.emit('interact:holdProgress', { id: a.target.id, progress: p });
     if (p >= 1) {
+      const clip = a.clip;
       this.endAction();
       ev.emit('interact:used', { id: a.target.id, kind: 'hold' });
+      // 松手段（turnEnd → 末帧）照常播完，期间仍锁定
+      if (clip) this.startAnim(a.target, clip, 'none', xiEventSec(clip, 'turnEnd') ?? xiClipDuration(clip));
     }
   }
 
@@ -435,9 +542,13 @@ export class InteractionSystem {
   }
 
   private endAction(): void {
-    const had = this.action.kind !== 'none';
+    const prev = this.action;
+    const had = prev.kind !== 'none';
     this.action = { kind: 'none' };
     if (had) this.o.actor.locked = false;
+    const anim = this.o.actor.anim;
+    if (anim && (prev.kind === 'anim' || (prev.kind === 'hold' && prev.clip))) anim.clearPose();
+    if (anim && prev.kind === 'push') anim.setLoop(null);
   }
 }
 
@@ -446,6 +557,7 @@ export function actorFromRig(rig: {
   body: { body: CharacterBody };
   controller: { facing: number; locked: boolean; busy: boolean; halt(): void };
   visual: THREE.Object3D;
+  animator?: InteractionAnim;
 }): InteractionActor {
   let hand = rig.visual.getObjectByName('hand-item');
   if (!hand) {
@@ -476,5 +588,6 @@ export function actorFromRig(rig: {
     },
     halt: () => rig.controller.halt(),
     hand: h,
+    ...(rig.animator ? { anim: rig.animator } : {}),
   };
 }
