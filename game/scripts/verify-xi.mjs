@@ -26,6 +26,8 @@ import {
 } from '@/entities/xi/clips';
 import { findXiClip, makeTurnTail } from '@/entities/xi/XiAnimator';
 import { xiActionTiming, XiActions } from '@/entities/xiActions';
+import { applyXiMaterials, xiFaceSdfParams, xiFaceLit, xiWetColor, xiWetRoughness, xiMaterialKind, XI_SHADOW_TINT } from '@/render/xiMaterials';
+import { stepWetness } from '@/entities/xi/XiLook';
 
 const out = [];
 const near = (a, b, tol, tag) => assert.ok(Math.abs(a - b) <= tol, `${tag}：${a} vs ${b}（容差 ${tol}）`);
@@ -121,6 +123,28 @@ const glbJson = (file) => {
     for (let i = 0; i < 200 && plain.playing; i++) plain.fixedUpdate(DT);
     assert.equal(ctl2.locked, false, '没有动画（白盒）也按 clip 时长计时');
   }
+  // 材质公式（art/tools/README §5）
+  near(xiWetColor(1, 1), 0.78, 1e-9, '全湿颜色 ×0.78');
+  near(xiWetColor(0.5, 0.5), 1 - 0.22 * 0.25, 1e-9, '湿痕颜色');
+  near(xiWetRoughness(0.8, 1, 1), 0.28, 1e-9, '全湿粗糙度 0.28');
+  near(xiWetRoughness(0.8, 0, 1), 0.8, 1e-9, '遮罩 0 不变');
+  near(xiWetRoughness(0.8, 1, 0.5), 0.54, 1e-9, '半湿粗糙度');
+  let sp = xiFaceSdfParams({ x: 0, y: 0, z: 1 });
+  assert.ok(sp.theta === 0 && !sp.flipU, '正前方光 θ = 0');
+  sp = xiFaceSdfParams({ x: -1, y: 0.3, z: 0 });
+  near(sp.theta, 1, 1e-9, '右侧（−X）光 θ = 1');
+  assert.equal(sp.flipU, false, '右侧光直接采样');
+  sp = xiFaceSdfParams({ x: 1, y: 0, z: 1 });
+  near(sp.theta, 0.5, 1e-9, '左前 45° θ = 0.5');
+  assert.equal(sp.flipU, true, '左侧（+X）光 u → 1 − u');
+  assert.ok(xiFaceSdfParams({ x: 0, y: 0, z: -1 }).theta > 1.99, '背光 θ = 2（全暗）');
+  assert.ok(xiFaceLit(0.3, 0.5) && !xiFaceLit(0.6, 0.5), '亮 = θ ≤ sdf');
+  assert.ok(XI_SHADOW_TINT[2] > XI_SHADOW_TINT[1] && XI_SHADOW_TINT[1] > XI_SHADOW_TINT[0], '暗部冷色（B > G > R），不偏暖');
+  assert.equal(xiMaterialKind('mat-char-xi-face'), 'face');
+  assert.equal(xiMaterialKind('mat-env-wood'), null);
+  near(stepWetness(0, 1, 40), 1, 1e-9, '雨里 40 s 湿透');
+  near(stepWetness(1, 0, 75), 0.5, 1e-9, '避雨 150 s 干透');
+  out.push('材质：湿痕 ×(1 − 0.22·wet) / 粗糙度 → 0.28、脸 SDF θ / 左右翻转、暗部冷色、淋湿 / 晾干 ✓');
   out.push('交互动作：事件帧（shelf grab 22、ring 30、place-table release 34、阀门 16–76 = 2 s）、节点 anim 优先 / 别名 / fallback、XiActions 计时 ✓');
   out.push('速度混合：0.5–4 m/s 脚下速度 = 实际速度、1.6 纯 walk / 3.2 纯 jog 播放率 1、走跑相位锁定；楼梯 0.7091→1、推 0.812→1.015 ✓');
 }
@@ -203,6 +227,38 @@ if (existsSync(animsFile) && existsSync(modelFile)) {
   let skinned = 0;
   scene.traverse((o) => o.isSkinnedMesh && skinned++);
   assert.ok(skinned >= 3, 'LOD 三档都是蒙皮网格');
+
+  // 材质补丁：真模型三种材质都换上、shader 注入点在 three 0.186 的 chunk 里都找得到、脸有 TEXCOORD_1
+  {
+    const look = applyXiMaterials(scene, { ramp: new THREE.DataTexture(new Uint8Array(4 * 4), 4, 1), sdf: new THREE.DataTexture(new Uint8Array(4 * 4), 2, 2) });
+    const kinds = new Set();
+    let faceUv1 = false;
+    scene.traverse((o) => {
+      if (!o.isMesh) return;
+      const m = o.material;
+      const kind = xiMaterialKind(m.name);
+      assert.ok(kind, `未识别的材质 ${m.name}`);
+      kinds.add(kind);
+      if (kind === 'face' && o.geometry.getAttribute('uv1')) faceUv1 = true;
+      const L = THREE.ShaderLib.physical;
+      const sh = { uniforms: {}, defines: {}, vertexShader: L.vertexShader, fragmentShader: L.fragmentShader };
+      m.onBeforeCompile(sh);
+      assert.ok(sh.fragmentShader.includes('#define RE_Direct RE_Direct_Xi'), `${m.name} ramp 光照注入`);
+      assert.ok(sh.fragmentShader.includes('xiWet = texelRoughness.a'), `${m.name} 湿痕注入`);
+      assert.ok(sh.uniforms.uXiWetness && sh.uniforms.uXiRamp, `${m.name} uniforms`);
+      if (kind === 'face') assert.ok('XI_SDF_FACE' in sh.defines && sh.vertexShader.includes('vXiFaceUv = uv1'), '脸 SDF 注入');
+    });
+    assert.deepEqual([...kinds].sort(), ['body', 'face', 'hair']);
+    assert.equal(look.patched, 3, '三个材质各克隆一份');
+    assert.ok(faceUv1, '脸网格有 TEXCOORD_1（SDF UV）');
+    look.wetness = 2;
+    assert.equal(look.wetness, 1, 'wetness 夹到 [0,1]');
+    scene.rotation.y = Math.PI / 2;
+    look.update();
+    out.push('材质补丁：body / face / hair 三个材质克隆后注入 ramp 光照 + 湿痕、脸 SDF（uv1）✓');
+    scene.rotation.y = 0;
+    scene.updateMatrixWorld(true);
+  }
 
   let tracks = 0;
   for (const c of clips)

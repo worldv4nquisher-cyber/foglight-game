@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import { applyXiMaterials } from '@/render/xiMaterials';
+import { XiLookComponent } from '@/entities/xi/XiLook';
 import type { Game } from '@/core/Game';
 import { gameplay } from '@/config/gameplay';
 import type { PhysicsSystem } from '@/systems/PhysicsSystem';
@@ -14,6 +16,8 @@ export interface PlayerRig {
   visual: THREE.Group;
   /** 汐的动画（只有 char-xi 模型 + 动画都在时才有；白盒胶囊没有） */
   animator?: XiAnimator;
+  /** 汐的材质（ramp 卡通明暗 + 脸 SDF + 湿痕；有 char-xi 和 tex-xi-ramp 时才有） */
+  look?: XiLookComponent;
 }
 
 /** 汐模型 / 动画的资源 key（manifest，美术资源，common 组） */
@@ -21,6 +25,9 @@ export const XI_MODEL_KEY = 'char-xi';
 export const XI_ANIMS_KEY = 'char-xi-anims';
 /** 右手提物挂点（char-xi.glb 里的骨骼；风灯 prop socket） */
 export const XI_HAND_SOCKET = 'hand_r_socket';
+/** 汐的卡通 ramp / 脸部 SDF 贴图（manifest common 组，art） */
+export const XI_RAMP_KEY = 'tex-xi-ramp';
+export const XI_SDF_KEY = 'tex-xi-sdf-face';
 
 /**
  * 创建玩家实体（LevelScene / TestbedScene 共用）：模型 + KinematicBody（胶囊 1.5 × 0.25）+ PlayerController。
@@ -81,7 +88,12 @@ export function createPlayer(game: Game, physics: PhysicsSystem, spawn: THREE.Ve
     const hand = visual.getObjectByName('hand-item');
     animator = entity.add(new XiAnimator({ model, clips, lantern: () => !!hand && hand.children.length > 0 }));
   }
-  return { entity, body, controller, visual, ...(animator ? { animator } : {}) };
+  let look: XiLookComponent | undefined;
+  if (model && game.assets.has(XI_RAMP_KEY)) {
+    const sdf = game.assets.has(XI_SDF_KEY) ? game.assets.getTexture(XI_SDF_KEY) : null;
+    look = entity.add(new XiLookComponent(applyXiMaterials(model, { ramp: game.assets.getTexture(XI_RAMP_KEY), sdf })));
+  }
+  return { entity, body, controller, visual, ...(animator ? { animator } : {}), ...(look ? { look } : {}) };
 }
 
 /** dev 面板（F4）里的角色物理读数：实际水平速度、是否着地、碰撞耗时 */
@@ -92,6 +104,7 @@ export function debugPlayerLine(rig: PlayerRig, physics: PhysicsSystem): string 
   return (
     `速度 ${v.toFixed(2)} m/s · ${state} · y ${b.position.y.toFixed(2)}\n` +
     `碰撞 ${physics.lastStepMs.toFixed(3)} ms / 步 · 碰撞体 ${physics.colliders.length}` +
-    (rig.animator ? `\n动画 ${rig.animator.state} · 走 ${rig.animator.blend.walk.toFixed(2)}×${rig.animator.blend.walkRate.toFixed(2)} 跑 ${rig.animator.blend.jog.toFixed(2)}×${rig.animator.blend.jogRate.toFixed(2)}` : '')
+    (rig.animator ? `\n动画 ${rig.animator.state} · 走 ${rig.animator.blend.walk.toFixed(2)}×${rig.animator.blend.walkRate.toFixed(2)} 跑 ${rig.animator.blend.jog.toFixed(2)}×${rig.animator.blend.jogRate.toFixed(2)}` : '') +
+    (rig.look ? ` · wet ${rig.look.look.wetness.toFixed(2)}` : '')
   );
 }

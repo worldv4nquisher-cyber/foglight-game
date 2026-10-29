@@ -577,7 +577,7 @@ const CHECKS = [
     },
   },
   {
-    name: 'v0.1-017 汐模型 + 动画：?scene=testbed&art=1 真模型（73 骨 / LOD / hand_r_socket 挂手持点）、31 个 clip、走 1.6 / 跑 3.2 播放率 1、停下回 idle、原地转身 +90°',
+    name: 'v0.1-017 汐模型 + 动画：?scene=testbed&art=1 真模型（73 骨 / LOD / hand_r_socket 挂手持点）、31 个 clip、走 1.6 / 跑 3.2 播放率 1、停下回 idle、原地转身 +90°、汐材质（ramp / 脸 SDF / 湿痕）shader 链接',
     async run({ evaluate, cdp, sleep }) {
       const until = async (expr, ms = 8000) => {
         const end = Date.now() + ms;
@@ -599,6 +599,11 @@ const CHECKS = [
       if (info.clips !== 31 || info.missing.length) throw new Error('clip 不全 ' + JSON.stringify(info));
       if (info.bones < 73 || info.skinned < 3) throw new Error('模型不对 ' + JSON.stringify(info));
       if (info.hand !== 'hand_r_socket') throw new Error('hand-item 没挂在 hand_r_socket：' + info.hand);
+      // 材质：ramp 卡通明暗 + 脸 SDF + 湿痕 shader 真编译（编译错误 three 会打 console.error，由总表把关；这里查程序都链接成功）
+      await sleep(500);
+      const mat = await evaluate(`(() => { const r = __testbed.rig; const progs = (__game.renderer.info.programs ?? []).filter((p) => /xi-(body|face|hair)/.test(p.cacheKey));
+        const gl = __game.renderer.getContext(); return { patched: r.look?.patched ?? 0, progs: progs.length, linked: progs.every((p) => gl.getProgramParameter(p.program, gl.LINK_STATUS)) }; })()`);
+      if (mat.patched !== 3 || mat.progs < 2 || !mat.linked) throw new Error('汐材质没生效 / shader 没链接 ' + JSON.stringify(mat));
       const st = `(() => { const a = __testbed.rig.animator; const b = __testbed.rig.body.body; return { s: a.state, w: a.blend.walk, wr: a.blend.walkRate, j: a.blend.jog, jr: a.blend.jogRate, v: Math.hypot(b.actualVelocity.x, b.actualVelocity.z) }; })()`;
       await evaluate(`__game.input.setRaw('smoke', 'KeyA', true)`);
       const walk = await until(`(() => { const r = ${st}; return r.s === 'walk' && Math.abs(r.v - 1.6) < 0.08 && Math.abs(r.wr - 1) < 0.06 ? r : null; })()`);
@@ -611,7 +616,7 @@ const CHECKS = [
       const turn = await evaluate(`(async () => { const r = __testbed.rig; const f0 = r.controller.facing; const t0 = performance.now();
         await r.animator.turnInPlace('l'); return { d: (r.controller.facing - f0) * 180 / Math.PI, ms: performance.now() - t0, locked: r.controller.locked, s: r.animator.state }; })()`);
       if (Math.abs(turn.d - 90) > 0.5 || turn.locked) throw new Error('原地转身不对 ' + JSON.stringify(turn));
-      return `char-xi ${info.bones} 骨 / ${info.skinned} 蒙皮网格、31 clip、hand-item → hand_r_socket；走 ${walk.v.toFixed(2)} m/s 播放率 ${walk.wr.toFixed(2)}、跑 ${jog.v.toFixed(2)} m/s 播放率 ${jog.jr.toFixed(2)}、停下 idle；转身 +${turn.d.toFixed(1)}°（${(turn.ms / 1000).toFixed(2)} s）✓`;
+      return `char-xi ${info.bones} 骨 / ${info.skinned} 蒙皮网格、31 clip、hand-item → hand_r_socket；材质 ${mat.patched} 个 / shader ${mat.progs} 个已链接；走 ${walk.v.toFixed(2)} m/s 播放率 ${walk.wr.toFixed(2)}、跑 ${jog.v.toFixed(2)} m/s 播放率 ${jog.jr.toFixed(2)}、停下 idle；转身 +${turn.d.toFixed(1)}°（${(turn.ms / 1000).toFixed(2)} s）✓`;
     },
   },
   {

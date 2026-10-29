@@ -51,7 +51,7 @@ export const manifest: AssetEntry[] = [
   { key: 'font-sans', type: 'font', url: 'assets/fonts/foglight-sans.woff2', group: 'menu', family: 'Foglight Sans' },
   { key: 'font-serif', type: 'font', url: 'assets/fonts/foglight-serif.woff2', group: 'menu', family: 'Foglight Serif' },
   // ---- common：主角模型（美术 016 交付前文件不存在，自动回退为胶囊占位，演示缺失回退流程）
-  // v0.1-017 汐定稿：模型（73 骨，LOD 118k / 48.5k / 24.3k，外部贴图 tex-xi-*.ktx2）+ 30 个动画 clip（只有骨骼，1.4 MB，各场景都用 → common）
+  // v0.1-017 汐定稿：模型（73 骨，LOD 118k / 48.5k / 24.3k，外部贴图 tex-xi-*.ktx2）+ 31 个动画 clip（只有骨骼，1.44 MB，各场景都用 → common）
   { key: 'char-xi', type: 'gltf', url: 'assets/art/models/characters/char-xi.glb', group: 'common', optional: true, art: true },
   { key: 'char-xi-anims', type: 'gltf', url: 'assets/art/models/characters/char-xi-anims.glb', group: 'common', optional: true, art: true },
   // GLB 没引用、材质 extras 点名的两张：色阶 ramp、SDF 脸部阴影（art/tools/README §5）

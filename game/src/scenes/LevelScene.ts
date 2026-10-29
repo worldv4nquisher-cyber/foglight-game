@@ -363,6 +363,8 @@ export abstract class LevelScene extends BaseScene {
     this.water?.update(dt);
     for (const b of this.bells) b.update(dt);
     this.rain?.update(dt, this.camera);
+    // 汐淋雨变湿（室外有雨），室内 / 无雨慢慢干
+    if (this.rig.look) this.rig.look.wetTarget = this.rain && this.rain.visible ? 1 : 0;
     // 阴影相机跟随玩家（保证近处阴影精度），光照方向不变
     const a = this.atmosphere!;
     const p = this.rig.entity.object3D.position;
