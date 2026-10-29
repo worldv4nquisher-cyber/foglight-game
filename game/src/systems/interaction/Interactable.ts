@@ -70,8 +70,10 @@ export interface InteractableOptions {
    * 交互点节点（GLB `-interact`）的 extras.anim 优先；可以是函数（每次触发时求值，如风灯在桌上 / 灯台上用不同 clip）。
    */
   anim?: XiClipName | (() => XiClipName | null);
-  /** 没有交互点时，按 socket / 物体到角色的方向、离它这么远站（m；灯台 0.65、桌面 0.45） */
-  animStand?: number;
+  /** 没有交互点时，按 socket / 物体到角色的方向、离它这么远站（m；灯台 0.65、桌面 0.45）；函数 = 每次触发时求值 */
+  animStand?: number | (() => number | null);
+  /** false = 交互系统不自动播 clip（关卡脚本自己演出，如点火拉杆）；resolveAnim 仍可读 */
+  autoAnim?: boolean;
 }
 
 const INTERACT_NODE = /-interact(\.\d+)?$/i;
@@ -108,7 +110,8 @@ export class Interactable extends Component {
   readonly approach: boolean;
   /** 见 InteractableOptions.priority */
   readonly priority: number;
-  readonly animStand: number | null;
+  readonly autoAnim: boolean;
+  private readonly animStandSpec: number | (() => number | null) | null;
   private readonly animSpec: XiClipName | (() => XiClipName | null) | null;
   /** push：轨道进度 0–1；到 1 后 locked */
   pushT = 0;
@@ -140,7 +143,8 @@ export class Interactable extends Component {
     this.point = opts.interactPoint ?? findNode(opts.object, INTERACT_NODE);
     this.focusSpec = opts.focus ?? null;
     this.animSpec = opts.anim ?? null;
-    this.animStand = opts.animStand ?? null;
+    this.animStandSpec = opts.animStand ?? null;
+    this.autoAnim = opts.autoAnim ?? true;
     if ((opts.kind === 'inspect' || opts.kind === 'read') && !this.textId) throw new Error(`Interactable ${opts.id}: ${opts.kind} 需要 textId`);
     if (opts.kind === 'push' && !this.track) throw new Error(`Interactable ${opts.id}: push 需要 track`);
     if (opts.kind === 'puzzle' && !this.puzzle) throw new Error(`Interactable ${opts.id}: puzzle 需要 puzzle 机关组`);
@@ -173,6 +177,12 @@ export class Interactable extends Component {
     const fromNode = asXiClip(this.point?.userData?.anim);
     if (fromNode) return fromNode;
     const a = this.animSpec;
+    return typeof a === 'function' ? a() : a;
+  }
+
+  /** 动态站位距离（m；没有 = null） */
+  animStandDist(): number | null {
+    const a = this.animStandSpec;
     return typeof a === 'function' ? a() : a;
   }
 

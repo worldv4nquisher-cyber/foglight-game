@@ -1,10 +1,13 @@
 import type { PlayerController } from '@/entities/components/PlayerController';
+import { xiClipDuration, xiInteractEventSec, type XiClipName } from '@/entities/xi/clips';
+import type { InteractionAnim } from '@/systems/interaction/InteractionSystem';
 
 /**
- * 汐的短动作接口（v0.1-014）：动画系统还没做，先留接口 + 占位实现。
- * 动画到了以后换成真正播 clip 的实现：时长取 clip 长度，`marker` 在 clip 事件帧（如 xi-place-table 的「放下」帧）回调。
+ * 汐的短动作（v0.1-014 接口，v0.1-017 换成按 clip 驱动）：时长 = clip 长度，`marker` 在 clip 的交互事件帧
+ * （xi-place-table release 第 34 帧、xi-ignite-lever ignite 第 34 帧…，见 XI_INTERACT_EVENT）回调。
+ * 有汐的动画（art=1）时每个物理步按游戏时间 setPose；白盒胶囊只计时，节奏一致。
  */
-export type XiActionName = 'xi-place-table' | 'xi-ignite-lever';
+export type XiActionName = XiClipName;
 
 export interface XiActionOptions {
   /** 动作中的关键帧（放下物体那一刻）回调 */
@@ -22,13 +25,6 @@ export interface XiActionPlayer {
   /** 场景退出：放弃进行中的动作（不回调） */
   cancel(): void;
 }
-
-/** 占位时长（s）与关键帧位置（0–1）：按 017 动作清单的估计值，动画交付后以 clip 为准 */
-const PLACEHOLDER: Record<XiActionName, { duration: number; marker: number }> = {
-  'xi-place-table': { duration: 1.0, marker: 0.6 },
-  // 017 已交付：46 帧 / 1.5 s（30 fps），ignite 事件帧 = 第 34 帧（1.133 s）；verify-s3 比对 GLB extras
-  'xi-ignite-lever': { duration: 1.5, marker: 34 / 30 / 1.5 },
-};
 
 /**
  * xi-ignite-lever 的拉杆对位（017 第 2 批 char-xi-anims.glb → animations[xi-ignite-lever].extras.align.igniteLever，
@@ -59,20 +55,21 @@ export function igniteLeverAngleAt(t: number): number {
   return A[i]! + (A[i + 1]! - A[i]!) * u;
 }
 
-/** 动作时长 / 关键帧时间（s），给脚本对位用（拉杆逐帧转动等） */
+/** 动作时长 / 关键帧时间（s）：来自 clip 表（verify-xi 比对 GLB extras） */
 export function xiActionTiming(name: XiActionName): { duration: number; markerSec: number } {
-  const p = PLACEHOLDER[name];
-  return { duration: p.duration, markerSec: p.duration * p.marker };
+  return { duration: xiClipDuration(name), markerSec: xiInteractEventSec(name) };
 }
 
-/** 占位：不播动画，只锁角色、按时长计时、在关键帧回调 */
-export class PlaceholderXiActions implements XiActionPlayer {
-  private cur: { name: XiActionName; t: number; markerDone: boolean; opts: XiActionOptions; resolve: () => void } | null = null;
+/** 按 clip 播短动作：锁角色、按游戏时间计时（暂停不走）、在事件帧回调；有动画时驱动姿势 */
+export class XiActions implements XiActionPlayer {
+  private cur: { name: XiActionName; t: number; duration: number; markerSec: number; markerDone: boolean; opts: XiActionOptions; resolve: () => void } | null = null;
 
   private readonly controller: PlayerController;
+  private readonly anim: InteractionAnim | null;
 
-  constructor(controller: PlayerController) {
+  constructor(controller: PlayerController, anim?: InteractionAnim | null) {
     this.controller = controller;
+    this.anim = anim ?? null;
   }
 
   get playing(): XiActionName | null {
@@ -83,24 +80,27 @@ export class PlaceholderXiActions implements XiActionPlayer {
     this.cancel();
     this.controller.halt();
     this.controller.locked = true;
+    const { duration, markerSec } = xiActionTiming(name);
+    if (this.anim?.has(name)) this.anim.setPose(name, 0);
     return new Promise((resolve) => {
-      this.cur = { name, t: 0, markerDone: false, opts, resolve };
+      this.cur = { name, t: 0, duration, markerSec, markerDone: false, opts, resolve };
     });
   }
 
   fixedUpdate(dt: number): void {
     const c = this.cur;
     if (!c) return;
-    const spec = PLACEHOLDER[c.name];
-    c.t = Math.min(spec.duration, c.t + dt);
+    c.t = Math.min(c.duration, c.t + dt);
+    if (this.anim?.has(c.name)) this.anim.setPose(c.name, c.t);
     c.opts.onTick?.(c.t);
-    if (!c.markerDone && c.t >= spec.duration * spec.marker - 1e-6) {
+    if (!c.markerDone && c.t >= c.markerSec - 1e-6) {
       c.markerDone = true;
       c.opts.onMarker?.();
     }
-    if (c.t >= spec.duration - 1e-6) {
+    if (c.t >= c.duration - 1e-6) {
       this.cur = null;
       this.controller.locked = false;
+      this.anim?.clearPose();
       c.resolve();
     }
   }
@@ -109,5 +109,6 @@ export class PlaceholderXiActions implements XiActionPlayer {
     if (!this.cur) return;
     this.cur = null;
     this.controller.locked = false;
+    this.anim?.clearPose();
   }
 }

@@ -85,6 +85,7 @@ export class S3Scene extends LevelScene {
       collider: (m) => this.colliderOf.get(m),
       beamDebug: beamDebugEnabled,
       onIgnite: () => this.lightTheLamp(),
+      artRoot: this.art.root,
     });
     this.tides.add(this.puzzles.tide);
     this.bells.push(this.puzzles.bell);

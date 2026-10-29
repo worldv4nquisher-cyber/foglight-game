@@ -2,7 +2,7 @@ import type * as THREE from 'three';
 import { gameplay } from '@/config/gameplay';
 import type { EventBus } from '@/core/EventBus';
 import type { TextId } from '@/content/text';
-import { Interactable } from '@/systems/interaction/Interactable';
+import { Interactable, type InteractableOptions } from '@/systems/interaction/Interactable';
 import type { TideController } from './TideController';
 
 export interface TideBellOptions {
@@ -18,6 +18,8 @@ export interface TideBellOptions {
   reach?: number;
   prompt?: TextId;
   events: EventBus;
+  /** v0.1-017 汐的敲钟动作（xi-ring-bell：钟声 / 切潮在第 30 帧 ring） */
+  anim?: InteractableOptions['anim'];
 }
 
 /**
@@ -51,6 +53,7 @@ export class TideBell {
       ...(opts.interactPoint ? { interactPoint: opts.interactPoint } : {}),
       ...(opts.focus ? { focus: opts.focus } : {}),
       reach: opts.reach ?? 0.3,
+      ...(opts.anim ? { anim: opts.anim } : {}),
     });
     this.interactable.blocked = () => this.tide.transitioning;
     this.off = opts.events.on('interact:used', ({ id }) => {

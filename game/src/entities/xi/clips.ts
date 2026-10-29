@@ -214,3 +214,18 @@ export function asXiClip(v: unknown): XiClipName | null {
 
 /** 交互站位离 socket 的水平距离（m）：灯台 0.65（extras.align.lanternSocket，返工 1029）、桌面 0.45 */
 export const XI_SOCKET_STAND = { stand: 0.65, table: 0.45 } as const;
+
+/**
+ * 美术交互点节点上的 anim（GLB extras.anim → userData.anim）：在美术根节点里按名字找，找不到 / 不认识 → fallback。
+ * 返回函数：美术是异步加载的（art=1），每次触发时再查。
+ */
+export function nodeAnim(
+  root: { getObjectByName(name: string): { userData: Record<string, unknown> } | undefined } | null | undefined,
+  nodeName: string,
+  fallback: XiClipName | null,
+): () => XiClipName | null {
+  return () => asXiClip(root?.getObjectByName(nodeName)?.userData.anim) ?? fallback;
+}
+
+/** xi-pickup-shelf 的 grab 帧把钥匙挂到这根骨骼（中指末节；extras.align.keyShelf.attachBone，verify-xi 比对） */
+export const XI_KEY_BONE = 'middle_03_r';

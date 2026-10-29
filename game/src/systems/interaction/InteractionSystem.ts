@@ -281,7 +281,7 @@ export class InteractionSystem {
   /** 这个交互物这次要播的 clip（角色没有动画 / 缺 clip = null，交互即时生效） */
   animFor(it: Interactable): XiClipName | null {
     const anim = this.o.actor.anim;
-    if (!anim) return null;
+    if (!anim || !it.autoAnim) return null;
     const c = it.resolveAnim();
     return c && anim.has(c) ? c : null;
   }
@@ -325,7 +325,8 @@ export class InteractionSystem {
 
   /** 有动画、没有交互点的 socket 类（灯台 / 桌面）：按 socket 到角色的方向在 animStand 米外站好、面向 socket */
   private animStandPoint(it: Interactable): { position: THREE.Vector3; facing: number } | null {
-    if (it.animStand === null || it.interactPoint) return null;
+    const dist = it.animStandDist();
+    if (dist === null || it.interactPoint) return null;
     const target = (it.kind === 'place' ? it.socket : null) ?? it.object;
     const p = target.getWorldPosition(new THREE.Vector3());
     const b = this.o.actor.body.position;
@@ -339,7 +340,7 @@ export class InteractionSystem {
       dx /= len;
       dz /= len;
     }
-    return { position: new THREE.Vector3(p.x + dx * it.animStand, b.y, p.z + dz * it.animStand), facing: Math.atan2(-dx, -dz) };
+    return { position: new THREE.Vector3(p.x + dx * dist, b.y, p.z + dz * dist), facing: Math.atan2(-dx, -dz) };
   }
 
   dispose(): void {

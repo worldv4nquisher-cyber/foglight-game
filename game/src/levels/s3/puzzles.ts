@@ -3,7 +3,8 @@ import type { Game } from '@/core/Game';
 import { gameplay } from '@/config/gameplay';
 import type { TextId } from '@/content/text';
 import type { PlayerRig } from '@/entities/createPlayer';
-import { PlaceholderXiActions, igniteLeverAngleAt, XI_IGNITE_LEVER_ALIGN, type XiActionPlayer } from '@/entities/xiActions';
+import { XiActions, igniteLeverAngleAt, XI_IGNITE_LEVER_ALIGN, type XiActionPlayer } from '@/entities/xiActions';
+import { nodeAnim } from '@/entities/xi/clips';
 import type { CameraFollowSystem } from '@/systems/CameraFollowSystem';
 import type { HintSystem } from '@/systems/HintSystem';
 import type { Collider, PhysicsSystem } from '@/systems/PhysicsSystem';
@@ -69,6 +70,8 @@ export interface S3PuzzleDeps {
   beamDebug: boolean;
   /** 点灯（场景负责结束流程） */
   onIgnite: () => void;
+  /** 美术根节点（art=1；交互点节点的 extras.anim 从这里读） */
+  artRoot?: THREE.Object3D;
 }
 
 export interface S3Lamp {
@@ -287,7 +290,7 @@ export function buildS3Puzzles(d: S3PuzzleDeps): S3Puzzles {
   d.physics.addMesh(bellCollider);
   const bellPoint = standAt(S3_IDS.bell, S3.points.bellInteract, bx, bz);
   root.updateMatrixWorld(true);
-  const bell = new TideBell({ id: S3_IDS.bell, tide, object: bellRoot, swing, interactPoint: bellPoint, focus: W([bx, by + 1.6, bz]), events });
+  const bell = new TideBell({ id: S3_IDS.bell, tide, object: bellRoot, swing, interactPoint: bellPoint, focus: W([bx, by + 1.6, bz]), events, anim: nodeAnim(d.artRoot, 'tide-bell-s3-interact', 'xi-ring-bell') });
   interaction.add(bell.interactable);
 
   // ======================================================== 塔门（use：1.4 s 向内开 −100°，开始转动就撤碰撞）
@@ -347,7 +350,7 @@ export function buildS3Puzzles(d: S3PuzzleDeps): S3Puzzles {
   const vStand: [number, number, number] = [vx * (1 - 0.4 / r0), S3.groundFloorY, vz * (1 - 0.4 / r0)];
   const valveStand = standAt(S3_IDS.valve, vStand, vx, vz);
   root.updateMatrixWorld(true);
-  const valveIx = new Interactable({ id: S3_IDS.valve, kind: 'hold', prompt: 'ui.prompt.turn_hold', object: valve, interactPoint: valveStand, focus: W(S3.points.oilValve), holdSeconds: 2 });
+  const valveIx = new Interactable({ id: S3_IDS.valve, kind: 'hold', prompt: 'ui.prompt.turn_hold', object: valve, interactPoint: valveStand, focus: W(S3.points.oilValve), holdSeconds: 2, anim: 'xi-valve-hold' });
   interaction.add(valveIx);
   let wheelSpin = 0;
   offs.push(
@@ -460,6 +463,9 @@ export function buildS3Puzzles(d: S3PuzzleDeps): S3Puzzles {
     focus: W(L.gripRest),
     approach: false,
     priority: 20,
+    // 点灯是关卡脚本的演出（锁输入 → 走位 → 拉杆），交互系统不自动播；clip 优先读美术节点 ignite-lever-interact 的 anim
+    anim: nodeAnim(d.artRoot, 'ignite-lever-interact', 'xi-ignite-lever'),
+    autoAnim: false,
   });
   leverIx.enabled = false;
   interaction.add(leverIx);
@@ -538,8 +544,8 @@ export function buildS3Puzzles(d: S3PuzzleDeps): S3Puzzles {
     return true;
   };
   const playLever = (rig: PlayerRig): void => {
-    actions ??= new PlaceholderXiActions(rig.controller);
-    void actions.play('xi-ignite-lever', { onTick: (t) => setLeverAngle(igniteLeverAngleAt(t)), onMarker: igniteNow }).then(() => {
+    actions ??= new XiActions(rig.controller, rig.animator);
+    void actions.play(leverIx.resolveAnim() ?? 'xi-ignite-lever', { onTick: (t) => setLeverAngle(igniteLeverAngleAt(t)), onMarker: igniteNow }).then(() => {
       rig.controller.locked = true;
     });
   };

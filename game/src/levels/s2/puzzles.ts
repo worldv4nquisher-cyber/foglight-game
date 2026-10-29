@@ -2,7 +2,8 @@ import * as THREE from 'three';
 import type { Game } from '@/core/Game';
 import { t, type TextId } from '@/content/text';
 import type { PlayerRig } from '@/entities/createPlayer';
-import { PlaceholderXiActions, type XiActionPlayer } from '@/entities/xiActions';
+import { XiActions, type XiActionPlayer } from '@/entities/xiActions';
+import { nodeAnim, XI_KEY_BONE, XI_SOCKET_STAND, xiClipDuration, xiInteractEventSec } from '@/entities/xi/clips';
 import { ViewpointTarget } from '@/entities/components/ViewpointTarget';
 import type { CameraFollowSystem } from '@/systems/CameraFollowSystem';
 import { boxZone, type HintSystem, type HintZone } from '@/systems/HintSystem';
@@ -179,7 +180,16 @@ export function buildS2Puzzles(d: S2PuzzleDeps): S2Puzzles {
   lantern.add(lanternLight);
   const held = interaction.held;
   held.pickUp(S2_IDS.lantern, lantern);
-  const pickLantern = new Interactable({ id: 'lantern-s2', kind: 'pickup', object: lantern, item: S2_IDS.lantern });
+  // 017：风灯在书桌上 → xi-pickup-table（站 0.45 m），在灯台上 → xi-pickup（站 0.65 m）；deskSocket 在下面创建
+  const onDesk = (): boolean => lantern.parent?.name === S2_IDS.deskSocket;
+  const pickLantern = new Interactable({
+    id: 'lantern-s2',
+    kind: 'pickup',
+    object: lantern,
+    item: S2_IDS.lantern,
+    anim: () => (onDesk() ? 'xi-pickup-table' : 'xi-pickup'),
+    animStand: () => (onDesk() ? XI_SOCKET_STAND.table : XI_SOCKET_STAND.stand),
+  });
   interaction.add(pickLantern);
 
   // ======================================================== 二层书桌：日志、纸条、抽屉信纸、海图、风灯 socket
@@ -204,7 +214,7 @@ export function buildS2Puzzles(d: S2PuzzleDeps): S2Puzzles {
   const chart = prop(box('chart-s2', 0.02, 0.5, 0.7, paper, [S2.house.inner.x0 + 0.015, 4.35, -0.3]));
   inspect('chart-s2', chart, 'ch1.s2.chart.inspect');
   // 书桌放风灯（读过日志之后玩家也可以放回来）
-  const deskPlace = new Interactable({ id: 'desk-lantern-s2', kind: 'place', object: deskSocket, socket: deskSocket, item: S2_IDS.lantern, focus: deskSocket.position.clone().setY(S2.furniture.desk.top + 0.15) });
+  const deskPlace = new Interactable({ id: 'desk-lantern-s2', kind: 'place', object: deskSocket, socket: deskSocket, item: S2_IDS.lantern, focus: deskSocket.position.clone().setY(S2.furniture.desk.top + 0.15), anim: 'xi-place-table', animStand: XI_SOCKET_STAND.table });
   deskPlace.enabled = false;
   interaction.add(deskPlace);
 
@@ -219,7 +229,7 @@ export function buildS2Puzzles(d: S2PuzzleDeps): S2Puzzles {
   windowGlow.visible = false;
   root.add(windowGlow);
 
-  const actions: XiActionPlayer = new PlaceholderXiActions(rig.controller);
+  const actions: XiActionPlayer = new XiActions(rig.controller, rig.animator);
   offs.push(
     events.on('interact:used', ({ id }) => {
       if (id !== S2_IDS.journal) return;
@@ -273,7 +283,7 @@ export function buildS2Puzzles(d: S2PuzzleDeps): S2Puzzles {
   const renderer = new WhiteboxBeamRenderer({ debug: d.beamDebug });
   scene.add(renderer.root);
   for (const lamp of [beam.lamps.east, beam.lamps.west]) {
-    const ix = new Interactable({ id: `lamp-stand-${lamp.key}-s2`, kind: 'place', object: lamp.stand, socket: lamp.socket, item: S2_IDS.lantern, focus: lamp.socket.position.clone().setY(0.8) });
+    const ix = new Interactable({ id: `lamp-stand-${lamp.key}-s2`, kind: 'place', object: lamp.stand, socket: lamp.socket, item: S2_IDS.lantern, focus: lamp.socket.position.clone().setY(0.8), anim: 'xi-place', animStand: XI_SOCKET_STAND.stand });
     interaction.add(ix);
   }
   for (const [k, m] of [['a', beam.mirrorA], ['b', beam.mirrorB]] as const) {
@@ -326,7 +336,17 @@ export function buildS2Puzzles(d: S2PuzzleDeps): S2Puzzles {
   root.add(key);
   const [shx, , shz] = S2.points.cellarShelfInteract;
   const shelfStand = standAt('cellar-shelf-s2', shx, S2.cellar.floorY, shz, shx - 1, shz);
-  const keyIx = new Interactable({ id: S2_IDS.key, kind: 'use', object: key, prompt: 'ui.prompt.pickup', approach: false, focus: new THREE.Vector3(kx, ky + 0.03, kz), interactPoint: shelfStand });
+  // 017：clip 优先读美术节点 env-cellar-s2-shelf-interact 的 anim（xi-pickup-shelf，grab 第 22 帧 = interact:used）
+  const keyIx = new Interactable({
+    id: S2_IDS.key,
+    kind: 'use',
+    object: key,
+    prompt: 'ui.prompt.pickup',
+    approach: false,
+    focus: new THREE.Vector3(kx, ky + 0.03, kz),
+    interactPoint: shelfStand,
+    anim: nodeAnim(d.artRoot, 'env-cellar-s2-shelf-interact', 'xi-pickup-shelf'),
+  });
   interaction.add(keyIx);
   const [skx, sky, skz] = S2.points.cellarSketch;
   const sketch = box('sketch-s2', 0.21, 0.004, 0.3, paper, [skx, sky + 0.002, skz]);
@@ -336,10 +356,25 @@ export function buildS2Puzzles(d: S2PuzzleDeps): S2Puzzles {
       if (id !== S2_IDS.key || state.hasKey) return;
       state.hasKey = true;
       keyIx.enabled = false;
-      key.visible = false;
+      // 017：有汐的动画时 grab 帧把钥匙挂到中指末节 middle_03_r（按这一帧的相对偏移，extras.align.keyShelf），clip 播完再收起
+      const bone = interaction.animState?.clip === 'xi-pickup-shelf' ? rig.visual.getObjectByName(XI_KEY_BONE) : undefined;
+      const artKeys: THREE.Object3D[] = [];
       d.artRoot.traverse((o) => {
-        if (/(^|[-_])key([-_.]|$)/i.test(o.name) && !/keeper/i.test(o.name)) o.visible = false;
+        if (/(^|[-_])key([-_.]|$)/i.test(o.name) && !/keeper/i.test(o.name) && !/socket/i.test(o.name) && o.visible) artKeys.push(o);
       });
+      const shown = artKeys.find((o) => (o as THREE.Mesh).isMesh) ?? (key.visible ? key : null);
+      for (const o of artKeys) if (o !== shown) o.visible = false;
+      if (bone && shown) {
+        bone.updateWorldMatrix(true, false);
+        shown.updateWorldMatrix(true, false);
+        bone.attach(shown);
+        if (shown !== key) key.visible = false;
+        // 握着钥匙垂手回待机：clip 播完收进背包
+        after(xiClipDuration('xi-pickup-shelf') - xiInteractEventSec('xi-pickup-shelf'), () => (shown.visible = false));
+      } else {
+        key.visible = false;
+        if (shown) shown.visible = false;
+      }
       events.emit('sfx:play', { id: 'sfx-key-pickup' });
       game.ui.hud.toast(t('ch1.common.key_obtained'));
       after(0.5, () => say('ch1.s2.key.tag_inspect'));

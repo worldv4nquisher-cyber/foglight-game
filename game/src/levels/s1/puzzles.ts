@@ -131,7 +131,7 @@ export function buildS1Puzzles(o: S1PuzzleOptions): S1Puzzles {
   bellPoint.position.set(bx + 1.05, by, bz);
   bellPoint.lookAt(bx, by, bz);
   root.add(bellPoint);
-  const bell = new TideBell({ id: S1_IDS.bell, tide, object: bellRoot, swing, interactPoint: bellPoint, focus: new THREE.Vector3(bx, by + 1.6, bz), events });
+  const bell = new TideBell({ id: S1_IDS.bell, tide, object: bellRoot, swing, interactPoint: bellPoint, focus: new THREE.Vector3(bx, by + 1.6, bz), events, anim: 'xi-ring-bell' });
   interaction.add(bell.interactable);
 
   // ---- 浮台（2.0 × 3.0 × 0.3；根节点 = 甲板顶面）
