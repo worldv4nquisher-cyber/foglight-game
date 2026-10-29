@@ -1869,6 +1869,29 @@ const CHECKS = [
       let s = await st();
       if (s.holding !== 'lantern' || s.glow || s.goal !== 'ch1.s2.goal.home') throw new Error('进 S2 应拿着风灯、窗口不亮、目标 home ' + JSON.stringify(s));
 
+      // ---- BUG-014：书桌站位（deskInteract，朝 −X）默认视角下 E 选日志 / 风灯，不选墙上海图；抬头看海图、低头看纸条仍能选中
+      const deskView = async (dyaw, pitch) => {
+        await evaluate(`(() => { const s = __s2; const st = s.interaction.get('journal-s2').standPoint(new s.rig.body.position.constructor()); const p = st.position; s.rig.body.teleport(p.clone().setY(p.y + 0.02)); s.rig.controller.facing = st.facing; s.cameraFollow.yaw = st.facing + Math.PI + ${dyaw}; s.cameraFollow.pitch = ${pitch}; return 1; })()`);
+        await gsleep(1000, 6);
+        return evaluate(`(() => { const s = __s2, I = s.interaction, V = s.rig.body.position.constructor; const ndc = (id) => { const it = I.get(id); const n = it.focus(new V()).project(s.camera); return +Math.hypot(n.x, n.y).toFixed(2); };
+          return { cur: I.current?.id ?? null, chart: ndc('chart-s2'), note: ndc('xi-note-s2'), journal: ndc('journal-s2'), lantern: ndc('lantern-s2') }; })()`);
+      };
+      const DEF_PITCH = await evaluate(`__s2.cameraFollow.pitch`);
+      const aimAt = async (id, views) => {
+        const seen = [];
+        for (const [dy, p] of views) {
+          const v = await deskView(dy, p);
+          seen.push([dy, p, v.cur, v[id === 'chart-s2' ? 'chart' : 'note']]);
+          if (v.cur === id) return seen;
+        }
+        throw new Error(`朝 ${id} 看时选不中 ` + JSON.stringify(seen));
+      };
+      let dv = await deskView(0, DEF_PITCH);
+      if (dv.cur !== 'journal-s2') throw new Error('书桌站位默认视角应选中日志（不是海图 / 纸条）' + JSON.stringify(dv));
+      const chartSeen = await aimAt('chart-s2', [[0, 0.15], [0.3, 0.15], [0.3, 0], [0, 0.3], [0.4, 0.2]]);
+      const noteSeen = await aimAt('xi-note-s2', [[0, -0.3], [0.3, -0.3], [0.3, -0.45], [0, -0.45]]);
+      out.push(`BUG-014 书桌站位：默认视角（俯仰 ${(+DEF_PITCH).toFixed(2)}）选日志（海图 NDC ${dv.chart} 让位）✓，抬头选海图（${chartSeen.at(-1).slice(0, 2).join('/')}，NDC ${chartSeen.at(-1)[3]}）✓，低头选纸条（${noteSeen.at(-1).slice(0, 2).join('/')}，NDC ${noteSeen.at(-1)[3]}）✓`);
+
       // ---- 读日志：汐走到书桌站位 → xi-place-table（占位 1 s）→ 风灯上书桌 → 打开日志
       await tp(-3.9, 3.05, -0.25);
       await gsleep(300);
@@ -1888,6 +1911,11 @@ const CHECKS = [
       s = await st();
       if (!s.journalRead || s.goal !== 'ch1.s2.goal.cellar') throw new Error('读完日志目标应为 cellar ' + JSON.stringify(s));
       out.push(`日志：走到站位 + 占位动作后风灯在书桌 socket（前 ${fwd.toFixed(3)} / 右 ${right.toFixed(3)} m）、窗口暖光、目标 → cellar ✓`);
+      // BUG-014：读完日志、风灯在书桌上，站位默认视角 E 选风灯
+      dv = await deskView(0, DEF_PITCH);
+      if (dv.cur !== 'lantern-s2') throw new Error('读完日志后书桌站位默认视角应选中风灯 ' + JSON.stringify(dv));
+      await aimAt('chart-s2', [[0, 0.15], [0.3, 0.15], [0.3, 0], [0, 0.3], [0.4, 0.2]]);
+      out.push(`BUG-014：读完日志后默认视角选风灯（NDC ${dv.lantern}，海图 ${dv.chart} 让位）✓，抬头仍选海图 ✓`);
 
       // ---- 拿起风灯 → 西灯台（被晾衣架挡，5 s 后独白一次）
       await trig('lantern-s2');

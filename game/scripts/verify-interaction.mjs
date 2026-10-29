@@ -144,6 +144,42 @@ test('优先级：附近有跨越点（默认 10）时 inspect / read（0）让�
 });
 
 
+test('BUG-014 aimCone：没对准的「看看而已」（0）让给画面里的操作类（20）；对准了照样选；画面里没有更高优先级时照常参与；不设 aimCone 的行为不变', () => {
+  const env = setup();
+  const ndcOf = (it) => {
+    const v = it.focus(new THREE.Vector3()).project(env.camera);
+    return Math.hypot(v.x, v.y);
+  };
+  // 书桌缩影：墙上海图在屏幕中心偏上（离中心最近），日志在桌面偏下
+  const chartM = env.box('chart', [0.15, 1.35, -1.9], [0.5, 0.4, 0.02]);
+  const journalM = env.box('journal', [-0.35, 0.35, -1.5], [0.3, 0.05, 0.2]);
+  const chart = env.ix.add(new Interactable({ id: 'chart', kind: 'inspect', object: chartM, textId: 'ch1.s1.nets.inspect', reach: 0.3, aimCone: 0.13 }));
+  const journal = env.ix.add(new Interactable({ id: 'journal', kind: 'use', object: journalM, approach: false }));
+  env.step(1);
+  const [dc, dj] = [ndcOf(chart), ndcOf(journal)];
+  assert.ok(dc > 0.13 && dc < dj, `前提：海图在 aimCone 外、但比日志离中心近（${dc.toFixed(2)} / ${dj.toFixed(2)}）`);
+  assert.equal(env.ix.current?.id, 'journal', '默认视角选日志，不选海图');
+  // 「朝海图看」：把海图挪到准星上
+  chartM.position.set(0, 0.85, -1.9);
+  chartM.updateMatrixWorld(true);
+  env.step(1);
+  assert.ok(ndcOf(chart) <= 0.13);
+  assert.equal(env.ix.current?.id, 'chart', '对准海图时选海图');
+  // 日志不可用（例如在画面外）→ 海图没对准也照常参与
+  chartM.position.set(0.15, 1.35, -1.9);
+  chartM.updateMatrixWorld(true);
+  journal.enabled = false;
+  env.step(1);
+  assert.equal(env.ix.current?.id, 'chart', '画面里没有更高优先级的候选时 aimCone 不起作用');
+  journal.enabled = true;
+  // 不设 aimCone：还是离屏幕中心最近的赢（旧行为）
+  const plain = env.ix.add(new Interactable({ id: 'plain', kind: 'inspect', object: env.box('plain', [0.15, 1.3, -1.85], [0.1, 0.1, 0.1]), textId: 'ch1.s1.nets.inspect', reach: 0.3 }));
+  env.step(1);
+  assert.ok(ndcOf(plain) < dj);
+  assert.equal(env.ix.current?.id, 'plain', '没设 aimCone 的按离屏幕中心最近选（行为不变）');
+});
+
+
 test('判定：距离 ≤ 1.8 m 且朝向夹角 ≤ 60° 才显示提示；E 触发', () => {
   const env = setup();
   const crate = env.box('crate', [0, 0.3, -2]); // 焦点（包围盒中心）距角色 2 m，reach 0.3 → 1.7 m

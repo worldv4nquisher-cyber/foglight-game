@@ -126,6 +126,8 @@ export class InteractionSystem {
   private action: Action = { kind: 'none' };
   private prompt: string | null = null;
   private promptDisabled = false;
+  /** pickCandidate 复用的临时数组 */
+  private readonly pickScratch: { it: Interactable; d2: number; score: number }[] = [];
   private holdShown: number | null = null;
   private readonly o: InteractionSystemOptions;
 
@@ -378,21 +380,32 @@ export class InteractionSystem {
   }
 
   private pickCandidate(): Interactable | null {
-    let best: Interactable | null = null;
-    let bestScore = Infinity;
     const lp = this.o.linkPriority?.() ?? null;
+    // 1. 可选候选 + 焦点在屏幕上的位置；相机背后的点投影会翻转：排到最后
+    const cands = this.pickScratch;
+    cands.length = 0;
+    let topInView = -Infinity;
     for (const it of this.items) {
       if (lp !== null && it.priority < lp) continue;
       if (!this.canInteract(it)) continue;
       it.focus(tmpA);
       ndc.copy(tmpA).project(this.o.camera);
-      // 相机背后的点投影会翻转：排到最后
-      const score = ndc.z > 1 ? 1e6 + ndc.x * ndc.x + ndc.y * ndc.y : ndc.x * ndc.x + ndc.y * ndc.y;
-      if (score < bestScore) {
-        bestScore = score;
-        best = it;
+      const behind = ndc.z > 1;
+      const d2 = ndc.x * ndc.x + ndc.y * ndc.y;
+      cands.push({ it, d2, score: behind ? 1e6 + d2 : d2 });
+      if (!behind && Math.abs(ndc.x) <= 1 && Math.abs(ndc.y) <= 1) topInView = Math.max(topInView, it.priority);
+    }
+    // 2. 离屏幕中心最近的；BUG-014：设了 aimCone 的没对准时，让给画面里优先级更高的候选
+    let best: Interactable | null = null;
+    let bestScore = Infinity;
+    for (const c of cands) {
+      if (c.it.aimCone !== null && c.it.priority < topInView && c.d2 > c.it.aimCone * c.it.aimCone) continue;
+      if (c.score < bestScore) {
+        bestScore = c.score;
+        best = c.it;
       }
     }
+    cands.length = 0;
     return best;
   }
 

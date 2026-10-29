@@ -66,6 +66,12 @@ export interface InteractableOptions {
    */
   priority?: number;
   /**
+   * BUG-014「瞄准才选」半径（屏幕 NDC 距离，0–1.4）：设了的话，只有焦点离屏幕中心 ≤ aimCone 时
+   * 才能压过画面里优先级更高的候选；没对准时让位（画面里没有更高优先级的候选时照常参与）。
+   * 例：S2 书桌前的海图 / 纸条（看看而已，0）在默认视角让给日志 / 风灯（20），抬头看海图仍选海图。
+   */
+  aimCone?: number;
+  /**
    * v0.1-017 汐的交互动作 clip（有动画时：先走到站位，再播 clip，在事件帧生效——拿起 grab / 放下 release / 敲钟 ring…）。
    * 交互点节点（GLB `-interact`）的 extras.anim 优先；可以是函数（每次触发时求值，如风灯在桌上 / 灯台上用不同 clip）。
    */
@@ -110,6 +116,8 @@ export class Interactable extends Component {
   readonly approach: boolean;
   /** 见 InteractableOptions.priority */
   readonly priority: number;
+  /** 见 InteractableOptions.aimCone */
+  readonly aimCone: number | null;
   readonly autoAnim: boolean;
   private readonly animStandSpec: number | (() => number | null) | null;
   private readonly animSpec: XiClipName | (() => XiClipName | null) | null;
@@ -140,6 +148,7 @@ export class Interactable extends Component {
     this.socket = opts.socket ?? (opts.kind === 'place' ? findNode(opts.object, SOCKET_NODE) : null);
     this.approach = opts.approach ?? (opts.kind === 'use' || opts.kind === 'hold' || opts.kind === 'push');
     this.priority = opts.priority ?? (opts.kind === 'inspect' || opts.kind === 'read' ? 0 : 20);
+    this.aimCone = opts.aimCone ?? null;
     this.point = opts.interactPoint ?? findNode(opts.object, INTERACT_NODE);
     this.focusSpec = opts.focus ?? null;
     this.animSpec = opts.anim ?? null;

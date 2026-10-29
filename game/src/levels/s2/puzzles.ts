@@ -19,6 +19,9 @@ import { buildS2Beam, type S2Beam } from './beam';
 import type { S2Greybox } from './greybox';
 import { sevenSegment } from './digits';
 
+/** BUG-014：书桌上「看看而已」的物体的瞄准半径（屏幕 NDC），见 Interactable.aimCone */
+export const S2_DESK_AIM = { chart: 0.13, note: 0.3 } as const;
+
 /**
  * S2 谜题 3「借光开锁」+ 地窖 + 谜题 4「窗中的数字」+ 文本挂点（v0.1-014 part2，白盒）。
  *
@@ -139,13 +142,13 @@ export function buildS2Puzzles(d: S2PuzzleDeps): S2Puzzles {
     root.add(o);
     return o;
   };
-  const inspect = (id: string, object: THREE.Object3D, textId: TextId, focus?: THREE.Vector3, reach = 0): Interactable => {
-    const it = new Interactable({ id, kind: 'inspect', object, textId, ...(focus ? { focus } : {}), reach });
+  const inspect = (id: string, object: THREE.Object3D, textId: TextId, focus?: THREE.Vector3, reach = 0, aimCone?: number): Interactable => {
+    const it = new Interactable({ id, kind: 'inspect', object, textId, ...(focus ? { focus } : {}), reach, ...(aimCone !== undefined ? { aimCone } : {}) });
     interaction.add(it);
     return it;
   };
-  const read = (id: string, object: THREE.Object3D, textId: TextId, focus?: THREE.Vector3): Interactable => {
-    const it = new Interactable({ id, kind: 'read', object, textId, ...(focus ? { focus } : {}) });
+  const read = (id: string, object: THREE.Object3D, textId: TextId, focus?: THREE.Vector3, aimCone?: number): Interactable => {
+    const it = new Interactable({ id, kind: 'read', object, textId, ...(focus ? { focus } : {}), ...(aimCone !== undefined ? { aimCone } : {}) });
     interaction.add(it);
     return it;
   };
@@ -217,11 +220,14 @@ export function buildS2Puzzles(d: S2PuzzleDeps): S2Puzzles {
   interaction.add(journalIx);
   const note = prop(box('xi-note-s2', 0.15, 0.005, 0.1, paper, [-5.15, 3.755, -0.68]));
   note.rotation.y = 0.3;
-  read('xi-note-s2', note, 'ch1.s2.xi_note.doc', new THREE.Vector3(-5.15, 3.78, -0.68));
+  // BUG-014：书桌站位默认视角（俯仰 −0.16）下各焦点离屏幕中心（NDC）：海图 0.16、纸条 0.35、风灯 0.31–0.37、日志 0.43–0.47、抽屉 0.64。
+  // 海图 / 纸条（看看而已，优先级 0）设「瞄准才选」半径：没对准时让给画面里的日志 / 风灯（20）；
+  // 抬头看海图（≤0.13，实测 0.02–0.11）、低头看纸条（≤0.30，实测 0.26–0.27）仍能选中。抽屉在默认视角本来就排在日志后面，不设。
+  read('xi-note-s2', note, 'ch1.s2.xi_note.doc', new THREE.Vector3(-5.15, 3.78, -0.68), S2_DESK_AIM.note);
   const drawer = prop(box('desk-drawer-s2', 0.04, 0.12, 0.4, wood, [S2.furniture.desk.x[1] + 0.02, 3.55, -0.5]));
   read('reply-draft-s2', drawer, 'ch1.s2.reply_draft.doc');
   const chart = prop(box('chart-s2', 0.02, 0.5, 0.7, paper, [S2.house.inner.x0 + 0.015, 4.35, -0.3]));
-  inspect('chart-s2', chart, 'ch1.s2.chart.inspect');
+  inspect('chart-s2', chart, 'ch1.s2.chart.inspect', undefined, 0, S2_DESK_AIM.chart);
   // 书桌放风灯（读过日志之后玩家也可以放回来）
   const deskPlace = new Interactable({ id: 'desk-lantern-s2', kind: 'place', object: deskSocket, socket: deskSocket, item: S2_IDS.lantern, focus: deskSocket.position.clone().setY(S2.furniture.desk.top + 0.15), anim: 'xi-place-table', animStand: XI_SOCKET_STAND.table });
   deskPlace.enabled = false;
