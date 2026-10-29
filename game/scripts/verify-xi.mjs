@@ -24,8 +24,12 @@ import {
   xiInteractEventSec,
   XI_KEY_BONE,
   XI_KEY_ATTACH,
+  XI_STEP_ACROSS,
+  stepAcrossSpan,
   readKeyAttach,
 } from '@/entities/xi/clips';
+import { TraversalLink } from '@/entities/components/TraversalLink';
+import { s1StepLinks, S1 } from '@/levels/s1/layout';
 import { buildLods, setForceLod0, applyLodDistances } from '@/render/lod';
 import { findXiClip, makeTurnTail } from '@/entities/xi/XiAnimator';
 import { xiActionTiming, XiActions } from '@/entities/xiActions';
@@ -145,6 +149,36 @@ const glbJson = (file) => {
   assert.ok(XI_SHADOW_TINT[2] > XI_SHADOW_TINT[1] && XI_SHADOW_TINT[1] > XI_SHADOW_TINT[0], '暗部冷色（B > G > R），不偏暖');
   assert.equal(xiMaterialKind('mat-char-xi-face'), 'face');
   assert.equal(xiMaterialKind('mat-env-wood'), null);
+  // 跨越路径位移 = translateM · smoothstep(clip 帧 / 48)：S1 四条跨越水平跨度都是 0.85 m，TraversalLink.sample 的水平进度
+  // 在每个跨越进度上 = stepAcrossRootZ（XiAnimator 按跨越进度映射 clip 时间：clipT = u · 1.6 s）→ 脚不滑
+  {
+    const sp = stepAcrossSpan(8.5, 1);
+    near(sp.start, 8.3, 1e-9, '缝前 0.2 m 起跳');
+    near(sp.end, 9.15, 1e-9, '前移 0.85 m');
+    near(stepAcrossSpan(9, -1).end, 8.35, 1e-9, '反向');
+    const links = s1StepLinks();
+    assert.equal(links.length, 4);
+    const lx = S1.linkNear[0];
+    const y = S1.nearPlatform.topY;
+    let maxErr = 0;
+    for (const l of links) {
+      near(Math.abs(l.end - l.start), XI_STEP_ACROSS.translateM, 1e-9, 'S1 跨越水平跨度');
+      const P = (z) => new THREE.Vector3(lx, y, z);
+      const tl = new TraversalLink({ start: P(l.start), end: P(l.end), path: [P((l.start + l.end) / 2).setY(y + 0.25)] });
+      const v = new THREE.Vector3();
+      for (let f = 0; f <= 48; f++) {
+        const u = f / 48;
+        tl.sample(u, v);
+        const along = Math.abs(v.z - l.start);
+        maxErr = Math.max(maxErr, Math.abs(along - stepAcrossRootZ(u * xiClipDuration('xi-step-across'))));
+      }
+    }
+    assert.ok(maxErr < 1e-6, `跨越路径水平位移偏离 0.85·smoothstep：${maxErr}`);
+    // S1 缝沿：岸台北沿 → 浮台南沿 0.5 m、浮台北沿 → 台阶南沿 0.5 m（= gap.farM − gap.nearM）
+    near(S1.raft.slot[2] - S1.raft.size[2] / 2 - S1.nearPlatform.max[1], XI_STEP_ACROSS.gapFarM - XI_STEP_ACROSS.gapNearM, 1e-9, 'S1 近缝宽');
+    near(S1.farSteps.z0 - (S1.raft.slot[2] + S1.raft.size[2] / 2), XI_STEP_ACROSS.gapFarM - XI_STEP_ACROSS.gapNearM, 1e-9, 'S1 远缝宽');
+    out.push('step-across：extras inPlace / 0.85 m / smoothstep / 缝 0.2–0.7 ✓；S1 四条跨越水平跨度 0.85 m、路径位移 = 0.85·smoothstep(帧/48)（偏差 < 1 µm）✓');
+  }
   near(stepWetness(0, 1, 40), 1, 1e-9, '雨里 40 s 湿透');
   near(stepWetness(1, 0, 75), 0.5, 1e-9, '避雨 150 s 干透');
   {
@@ -196,6 +230,17 @@ if (!existsSync(animsFile)) {
       assert.equal(ex.rootMotion.profile, 'smoothstep', `${a.name} 根运动曲线`);
     }
     assert.equal(!!s.lantern, !!ex.prop, `${a.name} 提灯标记`);
+  }
+  // step-across：美术改成 inPlace:true，保留 translateM 0.85 + smoothstep；缝 near 0.2 / far 0.7
+  {
+    const ex = j.animations.find((a) => a.name === 'xi-step-across').extras;
+    assert.equal(ex.rootMotion.inPlace, true, 'step-across extras.rootMotion.inPlace');
+    assert.deepEqual(ex.rootMotion.translateM, [0, 0, XI_STEP_ACROSS.translateM], 'translateM');
+    assert.equal(ex.rootMotion.profile, 'smoothstep');
+    assert.equal(ex.rootMotion.startFrame, 0);
+    assert.equal(ex.rootMotion.endFrame, XI_CLIP_SPECS['xi-step-across'].frames - 1);
+    near(ex.gap.nearM, XI_STEP_ACROSS.gapNearM, 1e-6, 'gap.nearM');
+    near(ex.gap.farM, XI_STEP_ACROSS.gapFarM, 1e-6, 'gap.farM');
   }
   const shelf = j.animations.find((a) => a.name === 'xi-pickup-shelf').extras.align.keyShelf;
   assert.equal(shelf.attachBone, XI_KEY_BONE, 'keyShelf 挂骨');
@@ -334,7 +379,7 @@ if (existsSync(animsFile) && existsSync(modelFile)) {
   const f1 = footL.getWorldPosition(new THREE.Vector3());
   const stepNote =
     measured === 0
-      ? `原地（hips 首尾差 0、左脚 48 帧回原位 ${(Math.abs(f1.z - f0.z) * 100).toFixed(1)} cm）≠ README「根运动 0.85 m」→ 不抵消，位移全由跨越路径给`
+      ? `原地（extras inPlace:true、hips 首尾差 0、左脚 48 帧回原位 ${(Math.abs(f1.z - f0.z) * 100).toFixed(1)} cm）→ 不抵消，0.85 m 位移全由跨越路径按 smoothstep 给`
       : `根运动实测 ${measured.toFixed(3)} m，代码抵消`;
 
   for (const [n, yaw] of [

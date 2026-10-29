@@ -12,7 +12,7 @@ import { TraversalLink } from '@/entities/components/TraversalLink';
 import { Entity } from '@/entities/Entity';
 import type { EntityManager } from '@/entities/EntityManager';
 import type { TextId } from '@/content/text';
-import { S1, pierPoint, v3 } from './layout';
+import { S1, pierPoint, s1StepLinks, v3 } from './layout';
 
 /** 谜题 / 提示 / 交互 id（提示系统二级高亮、smoke 都按这些找） */
 export const S1_IDS = {
@@ -187,15 +187,12 @@ export function buildS1Puzzles(o: S1PuzzleOptions): S1Puzzles {
   // ---- 跨越（近岸平台 ↔ 浮台 ↔ 远侧台阶）：浮台在石槽里浮到位、潮水不在变化时可用
   const deckY = S1.nearPlatform.topY;
   const ready = (): boolean => raft.state === 'floating' && raft.inAnchor && !tide.transitioning && Math.abs(raftRoot.position.y - deckY) < 0.05;
-  const [lx, , lnz] = S1.linkNear;
-  const lfz = S1.linkFar[2];
-  const raftNear = rf.slot[2] - rf.size[2] / 2 + 0.45;
-  const raftFar = rf.slot[2] + rf.size[2] / 2 - 0.45;
+  const lx = S1.linkNear[0];
   const P = (z: number): THREE.Vector3 => new THREE.Vector3(lx, deckY, z);
-  // 跨 0.5 m 的缝：中点抬高 0.25 m（小跳）
+  // 跨 0.5 m 的缝：中点抬高 0.25 m（小跳）；起终点按 step-across 几何（缝前 0.2 m 起跳、前移 0.85 m，s1StepLinks）
   const hop = (a: number, b: number): THREE.Vector3[] => [P((a + b) / 2).setY(deckY + 0.25)];
   const link = (a: number, b: number, radius: number): TraversalLink => new TraversalLink({ start: P(a), end: P(b), path: hop(a, b), radius, condition: ready });
-  const links = [link(lnz - 0.35, raftNear, 0.7), link(raftNear, lnz - 0.35, 0.6), link(raftFar, lfz + 0.4, 0.6), link(lfz + 0.4, raftFar, 0.7)];
+  const links = s1StepLinks().map((s, i) => link(s.start, s.end, i % 3 === 0 ? 0.7 : 0.6));
   links.forEach((l, i) => {
     const e = new Entity(`s1-link-${i}`);
     e.add(l);

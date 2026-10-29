@@ -164,7 +164,7 @@ export const pushRate = (speed: number): number => speed / XI_CLIP_SPECS['xi-pus
 /**
  * step-across 的根运动（hips 沿 +Z，smoothstep 覆盖整个 clip）：t 秒时已前进的距离（m）。
  * total 默认取 README / extras 的 0.85 m；运行时用 clip 里 hips 轨道实测的值（measureRootZ）——
- * 2026-10-29 交付的 anims.glb 实际是原地的（hips 首尾差 0，脚第 48 帧回到原位），按实测值 0 不做抵消。
+ * anims.glb 是原地的（extras.rootMotion.inPlace = true，hips 首尾差 0）→ 抵消量 0；同一条曲线也是跨越路径的水平位移（XI_STEP_ACROSS）。
  */
 export function stepAcrossRootZ(t: number, total: number = XI_CLIP_SPECS['xi-step-across'].rootTranslateZ): number {
   const s = XI_CLIP_SPECS['xi-step-across'];
@@ -256,4 +256,18 @@ export function readKeyAttach(
   const ok = (v: unknown, n: number): v is number[] => Array.isArray(v) && v.length === n && v.every((x) => typeof x === 'number' && Number.isFinite(x));
   if (a && ok(a.translation, 3) && ok(a.rotation, 4)) return { translation: a.translation, rotation: a.rotation, fromGlb: true };
   return { translation: XI_KEY_ATTACH.translation, rotation: XI_KEY_ATTACH.rotation, fromGlb: false };
+}
+
+/**
+ * step-across 的跨越几何（anims.glb extras：rootMotion.inPlace = true、translateM [0,0,0.85]、profile smoothstep；gap near 0.20 / far 0.70）：
+ * clip 原地，游戏沿 TraversalLink 前移 translateM，进度曲线 smoothstep 覆盖第 0–48 帧（TraversalLink.sample 同一条曲线、
+ * XiAnimator 按跨越进度映射 clip 时间）→ 水平位移 = translateM · smoothstep(帧 / 48)，脚不滑。
+ * 起点 = 缝近沿前 nearM，终点 = 起点 + translateM（落在缝远沿后 0.15 m）。
+ */
+export const XI_STEP_ACROSS = { translateM: 0.85, gapNearM: 0.2, gapFarM: 0.7 } as const;
+
+/** 沿一维方向（dir = ±1）跨过从 edge 开始的缝：返回起点 / 终点坐标 */
+export function stepAcrossSpan(edge: number, dir: 1 | -1): { start: number; end: number } {
+  const start = edge - dir * XI_STEP_ACROSS.gapNearM;
+  return { start, end: start + dir * XI_STEP_ACROSS.translateM };
 }

@@ -142,7 +142,9 @@ export class XiAnimator extends Component {
       this.slots.set(name, { action: a, w: 0, target: 0, fade: 1 / FADE });
     }
     const sa = this.clips.get('xi-step-across');
-    this.stepRootZ = measureRootZ(sa?.tracks.find((t) => t.name === 'hips.position')?.values ?? null);
+    // extras.rootMotion.inPlace = true（2026-10-30 起 README / extras 一致）→ 不抵消；没写 inPlace 的旧文件按 hips 轨道实测
+    const rm = (sa?.userData as { rootMotion?: { inPlace?: boolean } } | undefined)?.rootMotion;
+    this.stepRootZ = rm?.inPlace === true ? 0 : measureRootZ(sa?.tracks.find((t) => t.name === 'hips.position')?.values ?? null);
     for (const [name, yaw] of [
       ['xi-turn-l90', 90],
       ['xi-turn-r90', -90],
