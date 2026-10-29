@@ -37,7 +37,8 @@
     "test:fonts": "node --import ./scripts/register-ts-paths.mjs scripts/subset-fonts.mjs --check",
     "test:flow": "node --import ./scripts/register-ts-paths.mjs scripts/verify-flow.mjs",
     "test:s2": "node --import ./scripts/register-ts-paths.mjs scripts/verify-s2.mjs",
-    "test:render": "node --import ./scripts/register-ts-paths.mjs scripts/verify-render.mjs"
+    "test:render": "node --import ./scripts/register-ts-paths.mjs scripts/verify-render.mjs",
+    "export:blockout-s2": "node --import ./scripts/register-ts-paths.mjs scripts/export-blockout-s2.mjs"
   },
   "dependencies": {
     "n8ao": "^2.0.1",

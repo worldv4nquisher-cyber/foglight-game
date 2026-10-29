@@ -104,6 +104,11 @@ export abstract class LevelScene extends BaseScene {
   /** 进入完成后的场景专属逻辑（事件订阅等）。cleanups 里登记清理 */
   protected afterEnter(): void {}
 
+  /** 附近没有可交互物时的提示（S2 观察点「按住右键 观察」）；默认无 */
+  protected extraPrompt(): string | null {
+    return null;
+  }
+
   /** 放一个出口（buildLevel 里调用）：走进触发体 → 去 target 场景的 entry 入口 */
   protected addExit(opts: Omit<SceneExitOptions, 'player' | 'onEnter'>): void {
     this.pendingExits.push({
@@ -269,7 +274,7 @@ export abstract class LevelScene extends BaseScene {
         read: (id) => this.game.ui.reader.open(id),
       },
       // 跨越点（TraversalLink，S1 浮台）：附近没有可交互物时显示跨越提示
-      fallbackPrompt: () => this.rig.controller.nearLink?.prompt ?? null,
+      fallbackPrompt: () => this.extraPrompt() ?? this.rig.controller.nearLink?.prompt ?? null,
     });
   }
 

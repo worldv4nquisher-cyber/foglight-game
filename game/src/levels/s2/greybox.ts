@@ -4,7 +4,7 @@ import { S2, slopeY } from './layout';
 /**
  * S2 白盒几何（v0.1-014）：纯 three.js（不碰 DOM），场景和白盒导出共用。
  * 命名约定同 S1 / 美术 GLB：`*-collider` = 碰撞体（白盒可见），`*-wall` = 空气墙（不可见），`*-indoor` = 室内相机触发体。
- * 地窖门扇、拨盘门、镜子、灯台等会动 / 有状态的东西不在这里，由 puzzles.ts 创建（cellarDoor 例外：门扇碰撞在这里，puzzles 控制开关）。
+ * 镜子、灯台、拨盘等会动 / 有状态的东西不在这里，由 beam.ts / puzzles.ts 创建（地窖门、拨盘铁门例外：门扇碰撞在这里，puzzles 控制开关）。
  */
 export interface S2Greybox {
   root: THREE.Group;
@@ -16,6 +16,9 @@ export interface S2Greybox {
   /** 地窖门扇（合页节点；门扇碰撞是它的子网格，puzzles 旋转它并开关碰撞） */
   cellarDoor: THREE.Group;
   cellarDoorLeaf: THREE.Mesh;
+  /** 拨盘铁门（合页节点；门扇碰撞是子网格） */
+  dialGate: THREE.Group;
+  dialGateLeaf: THREE.Mesh;
   /** 白石占位（puzzleCritical） */
   whiteStones: THREE.Group;
   /** 观察点空节点（viewpoint-s2：眼睛位置、朝向目标，extras fov） */
@@ -228,7 +231,14 @@ export function buildS2Greybox(mats: S2GreyboxMaterials = defaultS2GreyboxMateri
   addBox('s2-chimney', [Fu.chimney.x[0], 0, Fu.chimney.z[0]], [Fu.chimney.x[1], H.ceiling, Fu.chimney.z[1]], mats.plaster);
   addBox('s2-bed', [Fu.bed.x[0], F, Fu.bed.z[0]], [Fu.bed.x[1], F + Fu.bed.h, Fu.bed.z[1]], mats.wood);
   addBox('s2-chest', [Fu.chest.x[0], F, Fu.chest.z[0]], [Fu.chest.x[1], F + Fu.chest.h, Fu.chest.z[1]], mats.wood);
-  addBox('s2-desk', [Fu.desk.x[0], F, Fu.desk.z[0]], [Fu.desk.x[1], Fu.desk.top, Fu.desk.z[1]], mats.wood);
+  // 书桌碰撞体前沿内收 8 cm（桌面下留腿位）：书桌站位 deskInteract x −4.6 与美术 / 017 clip 对齐，
+  // 胶囊半径 0.25 到 −4.85，桌沿 −4.8 会让交互走位判“路被挡”原地不动；桌面板照常到 −4.8
+  addBox('s2-desk', [Fu.desk.x[0], F, Fu.desk.z[0]], [Fu.desk.x[1] - 0.08, Fu.desk.top, Fu.desk.z[1]], mats.wood);
+  {
+    const lip = boxMesh([Fu.desk.x[1] - 0.08, Fu.desk.top - 0.04, Fu.desk.z[0]], [Fu.desk.x[1], Fu.desk.top, Fu.desk.z[1]], mats.wood);
+    lip.castShadow = lip.receiveShadow = true;
+    addDecor('s2-desk-lip', lip);
+  }
   // 二层平顶（挡相机）
   addBox('s2-ceiling', [I.x0, H.ceiling, I.z0], [I.x1, H.ceiling + 0.15, I.z1], mats.plaster);
 
@@ -243,6 +253,7 @@ export function buildS2Greybox(mats: S2GreyboxMaterials = defaultS2GreyboxMateri
     }
   }
   addBox('s2-cellar-shelf', [Fu.cellarShelf.x[0], C.floorY, Fu.cellarShelf.z[0]], [Fu.cellarShelf.x[1], C.floorY + Fu.cellarShelf.h, Fu.cellarShelf.z[1]], mats.wood);
+  addBox('s2-cellar-shelf-back', [Fu.cellarShelf.x[0] - 0.08, C.floorY, Fu.cellarShelf.z[0]], [Fu.cellarShelf.x[0], C.floorY + Fu.cellarShelf.backH, Fu.cellarShelf.z[1]], mats.wood);
   {
     const k = Fu.cellarCrate;
     addBox('s2-cellar-crate', [k.c[0] - k.w / 2, k.c[1], k.c[2] - k.d / 2], [k.c[0] + k.w / 2, k.c[1] + k.h, k.c[2] + k.d / 2], mats.wood);
@@ -260,6 +271,19 @@ export function buildS2Greybox(mats: S2GreyboxMaterials = defaultS2GreyboxMateri
   cellarDoor.add(cellarDoorLeaf);
   colliders.push(cellarDoorLeaf);
   root.add(cellarDoor);
+
+  // ---- 拨盘铁门（谜题 4）：门扇碰撞在这里（关着挡门洞），puzzles 放拨盘、对上 317 后转开并关掉碰撞
+  const dialGate = new THREE.Group();
+  dialGate.name = 's2-dial-gate-hinge';
+  const dg = S2.dialGate;
+  dialGate.position.set(dg.hinge[0], dg.hinge[1], dg.hinge[2]);
+  const dialGateLeaf = new THREE.Mesh(new THREE.BoxGeometry(dg.width, dg.height, 0.1), mats.stone);
+  dialGateLeaf.name = 's2-dial-gate-collider';
+  dialGateLeaf.position.set(-dg.width / 2, dg.height / 2, 0);
+  dialGateLeaf.castShadow = dialGateLeaf.receiveShadow = true;
+  dialGate.add(dialGateLeaf);
+  colliders.push(dialGateLeaf);
+  root.add(dialGate);
 
   // ---- 东侧小院：石墙（高 1.1、厚 0.5 向院内）、院门柱、晾衣架（blocksLight）
   const Y = S2.yard;
@@ -319,5 +343,5 @@ export function buildS2Greybox(mats: S2GreyboxMaterials = defaultS2GreyboxMateri
   }
 
   root.updateMatrixWorld(true);
-  return { root, colliders, walls, decor, indoor, cellarDoor, cellarDoorLeaf, whiteStones, viewpoint };
+  return { root, colliders, walls, decor, indoor, cellarDoor, cellarDoorLeaf, dialGate, dialGateLeaf, whiteStones, viewpoint };
 }

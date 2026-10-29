@@ -11,6 +11,9 @@ import type { TextId } from '@/content/text';
 import { S2, S2_FAR, v3 } from './layout';
 import { buildS2Greybox, defaultS2GreyboxMaterials, type S2Greybox } from './greybox';
 import { buildS2Art, type S2Art } from './art';
+import { buildS2Puzzles, type S2Puzzles } from './puzzles';
+import { beamDebugEnabled } from '@/config/debug';
+import type { Collider } from '@/systems/PhysicsSystem';
 
 /**
  * S2 守灯人小屋（v0.1-014 白盒 + 美术 019 接入 + S3 灯塔远景；布局见 ./layout.ts）。取代 010 的占位 S2KeeperHouseScene。
@@ -24,6 +27,8 @@ export class S2Scene extends LevelScene {
   protected override goalId: TextId | null = 'ch1.s2.goal.home';
   greybox!: S2Greybox;
   art!: S2Art;
+  puzzles!: S2Puzzles;
+  private readonly colliderOf = new Map<THREE.Mesh, Collider>();
   private readonly mats = defaultS2GreyboxMaterials();
 
   constructor(game: Game) {
@@ -39,7 +44,7 @@ export class S2Scene extends LevelScene {
 
     this.greybox = buildS2Greybox(this.mats);
     this.scene.add(this.greybox.root);
-    for (const m of this.greybox.colliders) this.physics.addMesh(m);
+    for (const m of this.greybox.colliders) this.colliderOf.set(m, this.physics.addMesh(m));
     for (const m of this.greybox.walls) this.physics.addMesh(m, { kind: 'wall' });
     this.cameraFollow.indoorVolumes = collectIndoorVolumes(this.greybox.root);
 
@@ -50,6 +55,49 @@ export class S2Scene extends LevelScene {
     this.setGreyboxVisible(!this.art.loaded || greyboxVisible);
 
     this.addExit({ target: 's3', entry: 'from-s2', center: v3(S2.exitToS3), radius: 1.2 });
+  }
+
+  protected override buildInteractables(): void {
+    this.puzzles = buildS2Puzzles({
+      game: this.game,
+      scene: this.scene,
+      physics: this.physics,
+      interaction: this.interaction,
+      hints: this.hints,
+      rig: this.rig,
+      cameraFollow: this.cameraFollow,
+      camera: this.camera,
+      greybox: this.greybox,
+      collider: (m) => this.colliderOf.get(m),
+      artRoot: this.art.root,
+      beamDebug: beamDebugEnabled,
+    });
+    this.cleanups.push(() => this.puzzles.dispose());
+  }
+
+  /** 观察点上替代 E 提示（text-ch1：ch1.s2.viewpoint.prompt） */
+  protected override extraPrompt(): string | null {
+    return this.puzzles?.viewpointPrompt() ?? null;
+  }
+
+  override fixedUpdate(dt: number): void {
+    if (!this.rig) return;
+    this.puzzles.fixedUpdate(dt);
+    super.fixedUpdate(dt);
+  }
+
+  override update(dt: number, alpha: number): void {
+    super.update(dt, alpha);
+    if (!this.rig) return;
+    this.puzzles.update(dt);
+    if (this.game.ui.debug.visible) {
+      const s = this.puzzles.state;
+      const b = this.puzzles.beam;
+      this.game.ui.debug.set(
+        'S2',
+        `镜 A ${b.mirrorA.part.angles[0]}° B ${b.mirrorB.part.angles[0]}° · 锁 ${b.lock.state} · 门 ${(s.doorOpen * 100).toFixed(0)}% · 钥匙 ${s.hasKey ? '有' : '无'} · 观察 ${(this.puzzles.viewpoint.alignment * 100).toFixed(0)}% · 拨盘 ${this.puzzles.dials.map((p) => Math.round((p.angles[0] ?? 0) / 36) % 10).join('')}${s.gateOpen ? ' 开' : ''}`,
+      );
+    }
   }
 
   /** 没有美术时的远景占位：S3 灯塔位置一根高柱（天空层材质） */
@@ -70,8 +118,9 @@ export class S2Scene extends LevelScene {
   setGreyboxVisible(on: boolean): void {
     for (const m of this.greybox.colliders) m.visible = on;
     for (const d of this.greybox.decor) d.visible = on || d === this.greybox.whiteStones;
-    // 门扇碰撞盒：有美术门扇时跟着白盒开关
+    // 门扇碰撞盒：有美术门扇时跟着白盒开关；拨盘铁门没有美术，始终显示
     this.greybox.cellarDoorLeaf.visible = on || !this.art.cellarDoor;
+    this.greybox.dialGateLeaf.visible = true;
   }
 
   protected override afterEnter(): void {

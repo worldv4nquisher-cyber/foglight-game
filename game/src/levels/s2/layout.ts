@@ -62,7 +62,7 @@ export const S2 = {
   cellar: { x: [-2.6, 1.4] as V2, z: [-1.4, 3.4] as V2, floorY: -2.4, steps: 12, landingZ: 3.1, stepsX: [0.15, 1.4] as V2, bottomZ: 0.35 },
   /** 地窖门扇（019 env-cellar-door-s2：合页在原点，绕 +Y 负角开约 100°） */
   cellarDoor: { hinge: [0.985, 0, 3.86] as V3, openAngle: (-100 * Math.PI) / 180, width: 0.72, height: 1.77 },
-  /** 光感锁（北墙外墙面，受光面中心 y = beamY 0.85；019 占位 socket 在 1.2，美术需下移） */
+  /** 光感锁（北墙外墙面，受光面中心 y = beamY 0.85；美术 019 socket 已于 2026-10-29 返工下移到 0.85） */
   lightLock: [-4.8, 0.85, 4.0] as V3,
 
   /** 室内家具（碰撞 + 交互位） */
@@ -74,7 +74,8 @@ export const S2 = {
     chest: { x: [-2.82, -2.36] as V2, z: [2.6, 3.32] as V2, h: 0.52 },
     /** 书桌（二层东墙）：桌面 3.75 */
     desk: { x: [-5.4, -4.8] as V2, z: [-0.85, 0.25] as V2, top: 3.75 },
-    cellarShelf: { x: [-2.56, -2.14] as V2, z: [1.0, 2.2] as V2, h: 1.8 },
+    /** 地窖木架：架面离地窖地面 1.1 m（制作人裁定：钥匙架面约 1.1 m；019 占位钥匙在 0.965 m，美术需上移 ≈13.5 cm），背板到 1.8 */
+    cellarShelf: { x: [-2.56, -2.14] as V2, z: [1.0, 2.2] as V2, h: 1.1, backH: 1.8 },
     cellarCrate: { c: [-1.9, -2.4, -0.85] as V3, w: 0.8, d: 0.6, h: 0.9 },
   },
   /** 交互 / socket 点（019 GLB 节点，世界坐标） */
@@ -86,9 +87,10 @@ export const S2 = {
     cups: [-2.55, 0.75, 1.6] as V3,
     bed: [-3.9, 3.6, 2.15] as V3,
     westWindowInteract: [1.15, 4.4, 1.0] as V3,
-    cellarKey: [-2.35, -1.435, 1.35] as V3,
-    cellarSketch: [-2.35, -1.435, 1.8] as V3,
-    cellarShelfInteract: [-1.74, -1.3, 1.6] as V3,
+    cellarKey: [-2.35, -1.3, 1.35] as V3,
+    cellarSketch: [-2.35, -1.3, 1.8] as V3,
+    /** 美术返工 2026-10-29（s2-layout.json points.cellarShelfInteract）：站在地窖地面上、面朝 −X，钥匙在正前 0.45、偏右 5 cm */
+    cellarShelfInteract: [-1.9, -2.4, 1.4] as V3,
   },
 
   /** 东侧小院：石墙高 1.1、厚 0.5（向院内），南墙院门 x −9.6…−8.4，北墙西段 x −9.5…−6.25 敞开（镜 B → 光感锁的光路） */
@@ -103,6 +105,8 @@ export const S2 = {
   mirrors: { a: [-13.2, 0.85, 3.0] as V3, b: [-7.2, 0.85, 8.6] as V3 },
   /** 北墙（z 11.5…12，高 1.2）+ 拨盘铁门洞 x 3.4…5.0 */
   northWall: { z: [11.5, 12] as V2, h: 1.2, gate: [3.4, 5.0] as V2 },
+  /** 拨盘铁门（谜题 4）：合页在西门柱内侧，门扇关着挡住门洞，开 = 绕 +Y 转 95° 向北；三个 36° 拨盘在门扇南面 y 1.15，从左（西）到右（东） */
+  dialGate: { hinge: [5.0, 0, 11.75] as V3, width: 1.6, height: 1.9, openAngle: (95 * Math.PI) / 180, dialY: 1.15, dialX: [4.65, 4.2, 3.75] as readonly number[], code: [3, 1, 7] as readonly number[] },
 
   /** 谜题 4 观察点：二层西窗内（站位地面 = 眼睛 − 1.35），朝白石组，观察 FOV 30° */
   viewpoint: { eye: [0.95, 4.35, 1.0] as V3, lookAt: [18, 0.2, 1] as V3, fov: 30, toleranceDeg: 6, fadeFromDeg: 12 },
