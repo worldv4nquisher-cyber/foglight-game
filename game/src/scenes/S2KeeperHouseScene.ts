@@ -14,7 +14,7 @@ export const S2_EXIT_TO_S3 = new THREE.Vector3(9, 0, -11);
  */
 export class S2KeeperHouseScene extends LevelScene {
   readonly name = 's2-keeper-house';
-  protected readonly locationName = '守灯人小屋';
+  protected readonly locationId = 'ch1.s2.location.title' as const;
   protected override goalId: TextId | null = 'ch1.s2.goal.home';
 
   constructor(game: Game) {

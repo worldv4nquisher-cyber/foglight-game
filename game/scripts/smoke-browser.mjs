@@ -948,8 +948,10 @@ const CHECKS = [
       if (/undefined|null|NaN|\{[a-z]+\}/.test(st.txt)) throw new Error('设置文字有占位没替换：' + st.txt);
       const hb = await evaluate(`(() => { const b = document.querySelector('.main-menu .settings-panel [data-act="back"]').getBoundingClientRect(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 }; })()`);
       await cdp.move(hb.x, hb.y);
-      await sleep(400);
-      const hov = await evaluate(`getComputedStyle(document.querySelector('.main-menu .settings-panel [data-act="back"]')).borderColor`);
+      // 悬停有 CSS 过渡，机器负载高时 400 ms 可能还没走完：最多等 3 s 到终值
+      const hovExpr = `getComputedStyle(document.querySelector('.main-menu .settings-panel [data-act="back"]')).borderColor`;
+      await until(`${hovExpr} === 'rgb(242, 176, 114)'`, 3000);
+      const hov = await evaluate(hovExpr);
       if (hov !== 'rgb(242, 176, 114)') throw new Error('悬停应为琥珀色描边：' + hov);
       // 设置即时生效：字幕字号、灵敏度
       await clickSel('.main-menu .settings-panel [data-size="l"]');
@@ -1104,8 +1106,12 @@ const CHECKS = [
       let s = await st();
       if (s.groups.slice().sort().join() !== 'boot,common,menu,s1') throw new Error('进 S1 时应已加载 boot/menu/common/s1：' + s.groups.join());
       if (s.save?.sceneId !== 's1') throw new Error('进 S1 没存档 ' + JSON.stringify(s.save));
+      // BUG-005：地名标题、左下角操作提示来自文本表
+      const hudTxt = await evaluate(`({ loc: document.querySelector('.hud-location')?.textContent, hint: document.querySelector('.hud-hint')?.textContent, kbd: document.querySelectorAll('.hud-hint kbd').length })`);
+      const wantHint = TEXT['ui.hud.controls'].replace(/\s+/g, '');
+      if (hudTxt.loc !== TEXT['ch1.s1.location.title'] || (hudTxt.hint ?? '').replace(/\s+/g, '') !== wantHint || hudTxt.kbd < 9) throw new Error('S1 地名 / 操作提示不是文本表里的 ' + JSON.stringify(hudTxt));
       if (!(await until(`__game.assets.isGroupLoaded('s2')`, 30000))) throw new Error('S1 没有后台预加载 s2');
-      out.push('新游戏 common+s1 → S1、存档 s1、预加载 s2 ✓');
+      out.push('新游戏 common+s1 → S1、存档 s1、地名 / 操作提示走文本表、预加载 s2 ✓');
 
       // ---- 3. S1 → S2：黑场预算 0.96 s（淡出 + 至少 0.3 s 全黑 + 淡入；无头下按「每段最多超一帧」核对）、换场景时全黑、存档 s2、释放 s1、显存对象减少
       await sleep(300);
@@ -1130,6 +1136,8 @@ const CHECKS = [
       }
       if (s.save?.sceneId !== 's2') throw new Error('进 S2 没存档 ' + JSON.stringify(s.save));
       if (s.entry !== 'from-s1') throw new Error('入口不对 ' + s.entry);
+      const loc2 = await evaluate(`document.querySelector('.hud-location')?.textContent`);
+      if (loc2 !== TEXT['ch1.s2.location.title']) throw new Error('S2 地名不是文本表里的 ' + loc2);
       if (s.groups.includes('s1')) throw new Error('s1 没释放：' + s.groups.join());
       await sleep(400);
       const after = (await st()).mem;

@@ -16,7 +16,8 @@ import { Water } from '@/world/Water';
 import { Rain } from '@/world/Rain';
 import { applyLodDistances } from '@/render/lod';
 import type { LevelDef } from './levels';
-import type { TextId } from '@/content/text';
+import { t, type TextId } from '@/content/text';
+import { keyHintHtml } from '@/ui/keyHint';
 
 /** 建立镜头迟迟不结束时（慢机器上画质检测拖住），进场多久后无论如何开始预加载下一个场景 */
 const PRELOAD_FALLBACK_MS = 8000;
@@ -61,8 +62,8 @@ export abstract class LevelScene extends BaseScene {
   entryId = '';
   /** 场景有没有室外水面 / 雨（室内场景关掉） */
   protected outdoor = true;
-  /** 进入时显示的地点名（HUD） */
-  protected abstract readonly locationName: string;
+  /** 进入时显示的地名标题（HUD，文本表 ch1.sN.location.title；地名以 gdd §5.5 世界观名词表为准） */
+  protected abstract readonly locationId: TextId;
   /** 进入时设置的当前目标（日志顶部）；null = 不改 */
   protected goalId: TextId | null = null;
   /** 建立镜头结束后是否后台预加载下一个场景（沙盒关掉） */
@@ -134,11 +135,8 @@ export abstract class LevelScene extends BaseScene {
     );
 
     ui.hud.show();
-    ui.hud.setHint(
-      '<kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 移动　<kbd>Shift</kbd> 小跑　' +
-        '<kbd>点击画面</kbd> 锁定鼠标转视角　<kbd>E</kbd> 互动　<kbd>右键</kbd> 观察　<kbd>滚轮</kbd> 远近　<kbd>Esc</kbd> 暂停',
-    );
-    ui.hud.setLocation(this.locationName);
+    ui.hud.setHint(keyHintHtml(t('ui.hud.controls')));
+    ui.hud.setLocation(t(this.locationId));
     this.afterEnter();
     const est = this.playEstablishing(spawn);
     // 建立镜头结束（玩家可操作）后再后台预加载下一个场景：不和首场景加载 / 画质检测抢带宽和主线程；

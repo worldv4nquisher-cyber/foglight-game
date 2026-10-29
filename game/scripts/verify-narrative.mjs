@@ -5,7 +5,8 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { hardcodedStory, missingIds } from './import-text.mjs';
+import { hardcodedCjk, hardcodedStory, missingIds } from './import-text.mjs';
+import { keyHintHtml } from '@/ui/keyHint';
 import { EventBus } from '@/core/EventBus';
 import { InputManager } from '@/systems/input/InputManager';
 import { actionsForCode, CONTEXTS } from '@/systems/input/actions';
@@ -315,6 +316,55 @@ test('import-text 检查：代码引用的缺失 ID = 0；硬编码剧情中文�
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+// BUG-005：src 里写死的玩家可见中文 = 0；反例（字面量 / 模板 / 地名）能抓到，日志 / 报错 / 调试 / 注释 / GLSL 注释放行
+{
+  const name = 'BUG-005 硬编码中文检查：src 为 0，反例能抓到，日志 / 报错 / 调试面板 / 注释 / text-ok 放行';
+  const dir = mkdtempSync(join(tmpdir(), 'cjk-'));
+  try {
+    assert.deepEqual(await hardcodedCjk(), []);
+    writeFileSync(
+      join(dir, 'bad.ts'),
+      [
+        "hud.setLocation('雾岬 · 第一座灯塔');",
+        "const a = `<kbd>E</kbd> 互动`;",
+        'const b = `${x} 秒后`;',
+      ].join('\n'),
+    );
+    writeFileSync(
+      join(dir, 'ok.ts'),
+      [
+        '// 注释里写 守灯人小屋 没关系',
+        "/* 块注释 落潮滩 */ console.warn('[x] 加载失败', 1);",
+        "throw new Error('缺少容器');",
+        "ui.debug.set('相机', 'x');",
+        "function debugLine() { return '速度'; }",
+        "const shader = `// 着色器注释 中文\nvoid main() {}`;",
+        "// text-ok: F3 调试\nconst c = '三角面';",
+        "const d = t('ch1.s1.location.title');",
+      ].join('\n'),
+    );
+    const found = await hardcodedCjk(dir);
+    const bad = found.filter(([w]) => /bad\.ts/.test(w));
+    assert.equal(bad.length, 3, JSON.stringify(found));
+    assert.equal(found.length, 3, '放行的写法被误报：' + JSON.stringify(found));
+    results.push(['ok', name]);
+  } catch (e) {
+    results.push(['FAIL', name, e]);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+test('BUG-005 操作提示从文本表生成：按键框 + 说明，转义', () => {
+  assert.equal(keyHintHtml('W A S D 移动　Esc 暂停'), '<kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 移动　<kbd>Esc</kbd> 暂停');
+  assert.equal(keyHintHtml('点击画面 锁定鼠标转视角'), '<kbd>点击画面</kbd> 锁定鼠标转视角');
+  assert.equal(keyHintHtml('<b> 坏'), '<kbd>&lt;b&gt;</kbd> 坏');
+  const html = keyHintHtml(t('ui.hud.controls'));
+  assert.ok((html.match(/<kbd>/g) ?? []).length >= 9, html);
+  for (const id of ['ch1.s1.location.title', 'ch1.s2.location.title', 'ch1.s3.location.title']) assert.ok(isTextId(id) && t(id).length >= 3, id);
+  assert.deepEqual([t('ch1.s1.location.title'), t('ch1.s2.location.title'), t('ch1.s3.location.title')], ['落潮滩', '守灯人小屋', '初望灯塔']);
 });
 
 // ---------------------------------------------------------------- 汇总

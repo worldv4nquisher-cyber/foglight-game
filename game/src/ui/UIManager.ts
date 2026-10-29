@@ -60,7 +60,7 @@ export class UIManager {
     const detailed = debugEnabled || new URLSearchParams(location.search).has('smoke');
     this.fps = new FpsCounter(root, gameConfig.showFpsByDefault || game.settings.get('showFps'), {
       detailed,
-      label: () => this.game.quality.preset.label,
+      label: () => t(this.game.quality.preset.labelId),
       stats: () => this.perfStats(),
       vram: () => estimateVram(this.game.renderer, this.game.scenes.current?.scene ?? null),
     });
@@ -133,6 +133,7 @@ export class UIManager {
     const { renderer, quality, benchmark, settings } = this.game;
     const info = renderer.info;
     const p = quality.preset;
+    // text-ok: 以下是 F3 详细面板（只在 dev / ?debug=1）的读数
     const src = quality.urlOverride ? 'URL' : { default: '默认', auto: '自动', user: '手动' }[settings.get('qualitySource')];
     return {
       calls: info.render.calls,
@@ -141,9 +142,11 @@ export class UIManager {
       textures: info.memory.textures,
       maxDrawCalls: p.maxDrawCalls,
       sceneVisibleTris: p.sceneVisibleTris,
-      label: `${p.label}（${src}）`,
+      label: `${t(p.labelId)}（${src}）`,
       benchmark: benchmark.running
-        ? `自动检测中：${p.label} ${benchmark.elapsed.toFixed(1)} s` +
+        ? // text-ok: F3 调试
+          `自动检测中：${t(p.labelId)} ${benchmark.elapsed.toFixed(1)} s` +
+          // text-ok: F3 调试
           (benchmark.rounds.length ? ` · 已测 ${benchmark.rounds.map((r) => `${r.tier} ${r.fps.toFixed(0)}`).join(' / ')}` : '')
         : null,
     };

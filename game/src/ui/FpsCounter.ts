@@ -97,13 +97,16 @@ export class FpsCounter {
         const dcWarn = stats.calls > stats.maxDrawCalls ? ' ⚠' : '';
         const triWarn = stats.triangles > stats.sceneVisibleTris ? ' ⚠' : '';
         lines.push(`draw call ${stats.calls} / ${stats.maxDrawCalls}${dcWarn}`);
+        // text-ok: F3 详细面板（detailed 只在 dev / ?debug=1）
         lines.push(`三角面 ${fmt(stats.triangles)} / ${fmt(stats.sceneVisibleTris)}${triWarn}`);
       }
       if (this.vram) {
         const v = this.vram;
+        // text-ok: F3 详细面板（detailed 只在 dev / ?debug=1）
         lines.push(`显存≈ ${v.totalMB.toFixed(0)} MB（几何 ${v.geometryMB.toFixed(0)} · 贴图 ${v.textureMB.toFixed(0)} · RT ${v.targetMB.toFixed(0)}）`);
       }
       if (stats) {
+        // text-ok: F3 详细面板（detailed 只在 dev / ?debug=1）
         lines.push(`画质 ${stats.label} · 几何 ${stats.geometries} · 贴图 ${stats.textures}`);
         if (stats.benchmark) lines.push(stats.benchmark);
       }

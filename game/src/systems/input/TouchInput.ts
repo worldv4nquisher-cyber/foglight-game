@@ -1,4 +1,5 @@
 import { gameConfig } from '@/config/gameConfig';
+import { t } from '@/content/text';
 import type { InputSink, InputSource } from './InputManager';
 
 const SRC = 'touch';
@@ -30,7 +31,7 @@ export class TouchInput implements InputSource {
       <div class="touch-zone touch-zone-left"></div>
       <div class="touch-zone touch-zone-right"></div>
       <div class="joystick-base"><div class="joystick-knob"></div></div>
-      <button class="touch-btn touch-btn-interact" type="button" aria-label="交互">交互</button>
+      <button class="touch-btn touch-btn-interact" type="button" aria-label="${t('ui.touch.interact')}">${t('ui.touch.interact')}</button>
     `;
     uiRoot.appendChild(this.root);
     this.stickBase = this.root.querySelector<HTMLDivElement>('.joystick-base')!;

@@ -37,7 +37,7 @@ function mulberry32(seed: number): () => number {
  */
 export class S1EbbShoreScene extends LevelScene {
   readonly name: string = 's1-ebb-shore';
-  protected readonly locationName = '落潮滩';
+  protected readonly locationId = 'ch1.s1.location.title' as const;
   protected override goalId: TextId | null = 'ch1.s1.goal.find_bell';
   /** 沙盒（dev 用的 demo 岛）：不存档、不跑画质检测、没有出口、不预加载 */
   protected readonly sandbox: boolean;

@@ -20,7 +20,7 @@
 | `npm run lint` / `lint:fix` | ESLint（flat config + typescript-eslint 类型感知规则） |
 | `npm run test` | 全部 Node 校验：LOD / puzzleCritical、资源后处理与 GLB 自检（`test:assets`）、输入（`test:input`）、存档（`test:save`）、角色物理（`test:physics`）、相机（`test:camera`）、画质参数表与自动检测（`test:quality`，逐键对照 style-guide §8）、文本表是否最新 / 代码引用的文本 ID 是否都在（`test:text`）、交互与机关（`test:interaction`）、字幕 / 阅读 / 日志（`test:narrative`；`test:text` 同时检查代码里没有硬编码的剧情中文） |
 | `npm run text:import` | 从 `docs/gdd/text-ch1.json` 重新生成 `src/content/text/zh-CN.ts`（文案改了跑一次；`test:text` 会检查生成结果是否已提交） |
-| `node scripts/verify-lod.mjs <a.glb> [b.glb…]` | **GLB 交付自检**（美术交付前跑，也可 `npm run verify:glb -- <文件>`）：LOD 层级与各级三角面、puzzleCritical、`-collider` / `-interact` 等特殊节点、COLOR_0 平滑法线、面数预算、材质与贴图。不带参数 = 原来的 LOD 自测。见下文「GLB 交付自检」 |
+| `npm run verify:glb -- <a.glb> [b.glb…]` | **GLB 交付自检**（美术交付前跑；文件路径按你执行 npm 的目录解析，在 art/ 下可用 `npm --prefix ../game run verify:glb -- <文件>`）：LOD 层级与各级三角面、puzzleCritical、`-collider` / `-interact` 等特殊节点、COLOR_0 平滑法线、面数预算、材质与贴图。不带参数 = 原来的 LOD 自测。见下文「GLB 交付自检」 |
 | `npm run assets:test-lod` | 重新生成 LOD 测试模型 `public/assets/models/test-lod-puzzle-critical.glb` |
 | `npm run check` | typecheck + lint + test + build + size 一次跑完（提交前跑） |
 | `npm run size` | 分包体积（v0.1-010）：按 manifest 分组统计 `dist/`，主菜单包 ≤ 15 MB、首场景包（common+s1）≤ 150 MB、字体子集 ≤ 2 MB；同时按文件名预估 `../art` 已交付但还没登记的美术。`--json` 输出机器可读结果 |
@@ -103,6 +103,8 @@ game/
 ├─ eslint.config.js / tsconfig.json / tsconfig.node.json / vite.config.ts
 └─ dist/                    构建产物（不提交）
 ```
+
+Node 脚本：package.json 里所有 `node scripts/…` 都带 `--import ./scripts/register-ts-paths.mjs`（`@/` 别名 + 省略 .ts 扩展名），请通过 `npm run …` 调用；直接 `node scripts/x.mjs` 遇到 src 里的 `@/` 运行时导入会报 Cannot find package '@/…'（BUG-005 起 `test:assets` 检查）。
 
 代码规范：TypeScript `strict` + `noUncheckedIndexedAccess`；`@/` 指向 `src/`；类型导入用 `import type`；不允许悬空 Promise。
 
@@ -264,10 +266,10 @@ GLTFLoader 看到 COLOR_0 会自动给材质开 `vertexColors`，固有色会被
 
 ```bash
 cd game
-node scripts/verify-lod.mjs ../art/models/props/prop-lantern-brass.glb                 # 一个文件
-node scripts/verify-lod.mjs ../art/models/props/*.glb ../art/models/characters/*.glb   # 多个
-node scripts/verify-lod.mjs ../art/models/props/prop-x.glb --budget=12000              # 手动指定 LOD0 面数上限
-node scripts/verify-lod.mjs ../art/models/props/prop-x.glb --json                      # 机器可读输出
+npm run verify:glb -- ../art/models/props/prop-lantern-brass.glb                 # 一个文件
+npm run verify:glb -- ../art/models/props/*.glb ../art/models/characters/*.glb   # 多个
+npm run verify:glb -- ../art/models/props/prop-x.glb --budget=12000              # 手动指定 LOD0 面数上限
+npm run verify:glb -- ../art/models/props/prop-x.glb --json                      # 机器可读输出
 ```
 
 先直接读 GLB 的 JSON（Meshopt 压缩也能数面），再用游戏同一套 GLTFLoader + `buildLods` + `prepareOutlineNormals` 真正加载一遍。KTX2（`KHR_texture_basisu`）贴图在 Node 里不转码（尺寸从文件头读），加载时给一个空纹理占位。输出 `·` 信息、`!` 警告、`✗` 错误；**有错误退出码 1**，只有警告算通过。
@@ -337,7 +339,7 @@ DRACO / Basis 解码器由 three 随包打包（带哈希文件名、可离线�
   __game.scenes.current.scene.getObjectByName('lod-test').position.z -= 40; __lods()
   __game.quality.set('standard'); __lods()   // rock-control:1，white-stone / tide-gauge:0
   ```
-- 美术交付的 GLB 用 `node scripts/verify-lod.mjs <文件>` 自检（见「GLB 交付自检」）。
+- 美术交付的 GLB 用 `npm run verify:glb -- <文件>` 自检（见「GLB 交付自检」）。
 - `npm run test`：用真实 GLTFLoader 解析测试 GLB，校验 extras → userData、低级 LOD 被丢弃并释放、三档距离下对照石的层级，以及运行时标记的兜底。
 
 ## 以后打包成 App / PC

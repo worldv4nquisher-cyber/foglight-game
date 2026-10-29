@@ -17,7 +17,7 @@ const END_DELAY = 1.5;
  */
 export class S3LighthouseScene extends LevelScene {
   readonly name = 's3-lighthouse';
-  protected readonly locationName = '初望灯塔';
+  protected readonly locationId = 'ch1.s3.location.title' as const;
   protected override goalId: TextId | null = 'ch1.s3.goal.light';
   private lighthouse = new Lighthouse();
   private ending = false;

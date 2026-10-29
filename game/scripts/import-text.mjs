@@ -99,7 +99,10 @@ export function hardcodedStory(dir = join(root, 'src')) {
       if (p === textDir) continue;
       if (statSync(p).isDirectory()) walk(p);
       else if (/\.(ts|css|html)$/.test(f)) {
-        const src = readFileSync(p, 'utf8');
+        // 注释里提到地名 / 文案没关系（BUG-005 起地名进了文本表，注释里常会写「S2 守灯人小屋」）
+        const src = readFileSync(p, 'utf8')
+          .replace(/\/\*[\s\S]*?\*\//g, '')
+          .replace(/(^|[^:'"`\\])\/\/.*$/gm, '$1');
         for (const [frag, id] of frags) if (src.includes(frag)) found.push([frag, id, relative(root, p)]);
       }
     }
@@ -114,12 +117,94 @@ export function hardcodedStory(dir = join(root, 'src')) {
   return found;
 }
 
+/**
+ * BUG-005：文本表之外的玩家可见中文。用 TypeScript 语法树扫 src 下全部 .ts（文本表目录除外）的字符串 / 模板字面量，
+ * 含汉字就报出来（注释不算）。允许的例外——都是开发者看的、玩家正式流程里看不到的：
+ *   - console.*(…) 的参数、new Error(…) / throw 的消息
+ *   - F4 调试面板 `*.debug.set(…)` 的参数；名字以 debug 开头的函数 / 方法体（debugLine、debugPlayerLine）
+ *   - DEV_ONLY 里整份文件（测试场地、调试面板等，附原因）
+ *   - 字面量所在行或上一行写了 `text-ok: 原因`（F3 详细面板这类混在玩家文件里的调试行）
+ * 另外检查 src 下 .css 的 content 字符串、index.html（<title> 必须等于 ui.title；<noscript> 无法走文本表，放行）。
+ * 返回 [文件:行, 字面量][]
+ */
+export const DEV_ONLY = {
+  'src/scenes/TestbedScene.ts': '测试场地（?scene=testbed，正式版要 debug）',
+  'src/ui/DebugPanel.ts': 'F4 调试面板（仅 dev / ?debug=1）',
+  'src/config/atmosphere.ts': '氛围预设内部名，只在代码里区分预设',
+  'src/assets/vertexColors.ts': '资源检查结果，只进控制台日志',
+};
+const HAN = /[\u3400-\u9fff]/;
+
+export async function hardcodedCjk(dir = join(root, 'src')) {
+  const ts = (await import('typescript')).default;
+  const textDir = dirname(outPath);
+  const found = [];
+  const files = [];
+  const walk = (d) => {
+    for (const f of readdirSync(d)) {
+      const p = join(d, f);
+      if (p === textDir) continue;
+      if (statSync(p).isDirectory()) walk(p);
+      else files.push(p);
+    }
+  };
+  walk(dir);
+  for (const p of files) {
+    const rel = relative(root, p).split('\\').join('/');
+    if (rel in DEV_ONLY) continue;
+    const src = readFileSync(p, 'utf8');
+    if (p.endsWith('.css')) {
+      for (const m of src.matchAll(/content\s*:\s*(['"])(.*?)\1/g)) if (HAN.test(m[2])) found.push([`${rel}:${src.slice(0, m.index).split('\n').length}`, m[2]]);
+      continue;
+    }
+    if (!p.endsWith('.ts')) continue;
+    const lines = src.split('\n');
+    const sf = ts.createSourceFile(p, src, ts.ScriptTarget.Latest, true);
+    const allowed = (node) => {
+      for (let n = node.parent; n; n = n.parent) {
+        if (ts.isCallExpression(n)) {
+          const callee = n.expression.getText(sf);
+          if (/^console\.\w+$/.test(callee) || /(^|\.)debug\.set$/.test(callee)) return true;
+        }
+        if ((ts.isNewExpression(n) || ts.isCallExpression(n)) && /(^|\.)\w*Error$/.test(n.expression.getText(sf))) return true;
+        if (ts.isThrowStatement(n)) return true;
+        if ((ts.isFunctionDeclaration(n) || ts.isMethodDeclaration(n) || ts.isGetAccessorDeclaration(n)) && n.name && /^debug/.test(n.name.getText(sf))) return true;
+      }
+      const line = sf.getLineAndCharacterOfPosition(node.getStart(sf)).line;
+      return /text-ok/.test(lines[line] ?? '') || /text-ok/.test(lines[line - 1] ?? '');
+    };
+    const visit = (node) => {
+      const isLit =
+        ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node) || ts.isTemplateHead(node) || ts.isTemplateMiddle(node) || ts.isTemplateTail(node);
+      // 着色器源码里的 GLSL 注释不算
+      const body = isLit ? node.text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '') : '';
+      if (isLit && HAN.test(body) && !allowed(node)) {
+        const line = sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1;
+        found.push([`${rel}:${line}`, node.text.length > 40 ? node.text.slice(0, 40) + '…' : node.text]);
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(sf);
+  }
+  // index.html：<title> 要和文本表一致；<noscript> 是关掉 JS 时的系统提示，走不了文本表，放行
+  const html = existsSync(join(root, 'index.html')) ? readFileSync(join(root, 'index.html'), 'utf8') : '';
+  const title = html.match(/<title>(.*?)<\/title>/)?.[1];
+  if (title !== undefined && title !== strings['ui.title']) found.push(['index.html <title>', `${title}（应与 ui.title「${strings['ui.title']}」一致）`]);
+  const rest = html.replace(/<title>.*?<\/title>/s, '').replace(/<noscript>.*?<\/noscript>/s, '').replace(/<!--.*?-->/gs, '');
+  for (const m of rest.matchAll(/[^<>\n]*[\u3400-\u9fff][^<>\n]*/g)) found.push(['index.html', m[0].trim()]);
+  return found;
+}
+
 export function missingIds() {
   return scanIds().filter(([id]) => !(id in strings));
 }
 
 const isMain = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isMain) {
+  await main();
+}
+
+async function main() {
   const out = generate();
   let fail = 0;
   if (checkOnly) {
@@ -145,5 +230,11 @@ if (isMain) {
     console.log(`✗ 文本表之外硬编码的剧情中文：${story.length} 处`);
     for (const [frag, id, f] of story) console.log(`    「${frag}」（${id}）  ${f}`);
   } else console.log(`✓ 文本表之外没有硬编码的剧情中文（检查 ${storyFragments().size} 个剧情短句片段）`);
+  const cjk = await hardcodedCjk();
+  if (cjk.length) {
+    fail++;
+    console.log(`✗ 文本表之外写死的玩家可见中文：${cjk.length} 处（改用 t(id)；纯调试文字放 DEV_ONLY 或在行尾 / 上一行注 text-ok: 原因）`);
+    for (const [where, lit] of cjk) console.log(`    ${where}  「${lit}」`);
+  } else console.log(`✓ src 全部场景 / UI / 系统代码里没有写死的玩家可见中文（例外：日志 / 报错 / 调试面板 / ${Object.keys(DEV_ONLY).length} 个调试文件）`);
   process.exit(fail ? 1 : 0);
 }

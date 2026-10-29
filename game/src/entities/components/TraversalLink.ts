@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { gameplay } from '@/config/gameplay';
+import { t as text } from '@/content/text';
 import { Component } from '../Component';
 
 export interface TraversalLinkOptions {
@@ -46,7 +47,7 @@ export class TraversalLink extends Component {
     this.points = [this.start, ...(opts.path ?? []).map((p) => p.clone()), this.end];
     this.radius = opts.radius ?? 0.8;
     this.walkInto = opts.walkInto ?? true;
-    this.prompt = opts.prompt ?? 'E　跨过去';
+    this.prompt = opts.prompt ?? text('ui.prompt.traverse');
     this.condition = opts.condition;
     let len = 0;
     for (let i = 1; i < this.points.length; i++) {

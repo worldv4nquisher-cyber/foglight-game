@@ -36,7 +36,7 @@ if (fileArgs.length) {
   const reports = [];
   for (const f of fileArgs) {
     try {
-      const r = await auditGlb(resolve(process.cwd(), f), { budget });
+      const r = await auditGlb(resolve(process.env.INIT_CWD ?? process.cwd(), f), { budget });
       reports.push(r);
       if (!flags.includes('--json')) allOk = printReport(r) && allOk;
       else allOk = r.errors.length === 0 && allOk;

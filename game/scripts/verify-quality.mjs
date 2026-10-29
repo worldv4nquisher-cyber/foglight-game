@@ -162,7 +162,7 @@ test('与 §8 冲突的旧字段已去掉（雨 30k/15k/6k、阴影 4096/2048/20
 });
 
 test('三档 label / tier 对应，视距覆盖 impostor 距离', () => {
-  assert.deepEqual(TIERS.map((t) => QUALITY_PRESETS[t].label), ['极致', '高', '标准']);
+  assert.deepEqual(TIERS.map((t) => QUALITY_PRESETS[t].labelId), ['ui.settings.quality_ultra', 'ui.settings.quality_high', 'ui.settings.quality_standard']);
   for (const t of TIERS) {
     assert.equal(QUALITY_PRESETS[t].tier, t);
     assert.ok(QUALITY_PRESETS[t].viewDistance >= QUALITY_PRESETS[t].impostorDistance);

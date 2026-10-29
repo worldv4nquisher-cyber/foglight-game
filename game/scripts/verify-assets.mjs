@@ -2,9 +2,11 @@
 //  1. COLOR_0 = 描边平滑法线：GLTFLoader 解析带 COLOR_0 的 GLB → prepareOutlineNormals 关掉 vertexColors、保留 color 属性、校验数据；
 //  2. GLB 交付自检（scripts/lib/glb-audit.mjs，node scripts/verify-lod.mjs <文件> 用的同一套）在内存生成的 GLB 上的判定。
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
+const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { Document, NodeIO } from '@gltf-transform/core';
@@ -242,6 +244,25 @@ try {
   ok('LOD：关键物体带低级 LOD 警告并在加载器里丢弃；普通物体 3 级组装成 THREE.LOD、各级面数统计');
 } finally {
   rmSync(dir, { recursive: true, force: true });
+}
+
+
+// BUG-005（工具）：package.json 里所有 node 脚本都带路径别名钩子（src 里出现 `@/` 运行时导入也能跑）；
+// 美术直接 `npm run verify:glb -- <文件>` 可用，文件路径按调用 npm 时的目录（INIT_CWD）解析
+{
+  const { spawnSync } = await import('node:child_process');
+  const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
+  const bare = Object.entries(pkg.scripts).flatMap(([k, v]) =>
+    v.split('&&').map((c) => c.trim()).filter((c) => /^node\s/.test(c) && !c.includes('--import ./scripts/register-ts-paths.mjs')).map((c) => `${k}: ${c}`),
+  );
+  assert.deepEqual(bare, [], 'package.json 里这些 node 命令没带 --import ./scripts/register-ts-paths.mjs');
+  const hook = spawnSync(process.execPath, ['--import', './scripts/register-ts-paths.mjs', '--input-type=module', '-e', "const m = await import('@/content/text'); if (typeof m.t !== 'function') process.exit(3);"], { cwd: root, encoding: 'utf8' });
+  assert.equal(hook.status, 0, hook.stderr);
+  const glb = join(root, 'public/assets/models/test-lod-puzzle-critical.glb');
+  const r = spawnSync('npm', ['run', '-s', 'verify:glb', '--', 'public/assets/models/test-lod-puzzle-critical.glb'], { cwd: root, encoding: 'utf8', env: { ...process.env, INIT_CWD: root } });
+  // 测试模型故意缺 -collider 等（退出码 1），这里只验证脚本能启动并出报告，没有模块解析错误
+  assert.ok(existsSync(glb) && (r.status === 0 || r.status === 1) && /错误 \d+，警告 \d+/.test(r.stdout) && !/Cannot find|ERR_MODULE/.test(r.stderr), r.stdout + r.stderr);
+  ok('package.json 的 node 脚本都带 register-ts-paths（@/ 别名），npm run verify:glb -- <文件> 可直接跑');
 }
 
 console.log(`\n资源加载后处理 / 交付自检校验通过（${passed} 项）`);

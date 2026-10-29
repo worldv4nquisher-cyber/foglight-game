@@ -1,5 +1,5 @@
 // 自动生成：node scripts/import-text.mjs（来源 docs/gdd/text-ch1.json），不要手改。
-// 章节 ch1 · zh-CN · v1 · 165 条
+// 章节 ch1 · zh-CN · v1 · 173 条
 
 export const TEXT_ZH_CN = {
   "ch1.common.journal_updated": "日志已更新",
@@ -42,6 +42,7 @@ export const TEXT_ZH_CN = {
   "ch1.s1.goal.cross_channel": "沟太宽，就找能浮起来的东西。",
   "ch1.s1.goal.find_bell": "钟在码头东边。潮水听它的。",
   "ch1.s1.goal.reef_path": "潮退了，礁石也是路。",
+  "ch1.s1.location.title": "落潮滩",
   "ch1.s1.neighbor_note.doc": ["守灯的：\n\n船明早走，我们不等雾散了。\n孩子跟我们走，你放心。\n你自己也别撑太久。\n网留给你，用得上就用。\n\n——阿岩"],
   "ch1.s1.nets.inspect": "网晾得发白了，没有人收。",
   "ch1.s1.notice.doc": ["告示\n\n即日起，本岛信船停航。\n外海灯塔多处熄灭，雾中航行危险，复航日期另行通知。\n未撤离的住户，请随本月最后一班船离岛。\n\n——群岛航运所　一月"],
@@ -64,6 +65,7 @@ export const TEXT_ZH_CN = {
   "ch1.s2.key.tag_inspect": "钥匙上挂着木牌：初望。",
   "ch1.s2.lantern_stand_west.blocked": "光被晾衣架挡住了。",
   "ch1.s2.light_lock.inspect": "锁上没有钥匙孔，只有一块透镜。",
+  "ch1.s2.location.title": "守灯人小屋",
   "ch1.s2.reply_draft.doc": ["汐：\n\n初望灯还亮着，每天夜里都亮。\n\n（后面几行被划掉了，看不清。）"],
   "ch1.s2.sketch.doc": ["你小时候总在这里数船。"],
   "ch1.s2.stove.inspect": "灶是冷的。",
@@ -81,6 +83,7 @@ export const TEXT_ZH_CN = {
   "ch1.s3.ignition.no_oil": "没有油。",
   "ch1.s3.ignition_note.doc": ["没有火的时候，就借光。"],
   "ch1.s3.lens.inspect": "透镜上落满了盐。",
+  "ch1.s3.location.title": "初望灯塔",
   "ch1.s3.logbook.doc": ["值班簿\n\n二月二十日　夜　雾　灯正常。北角方向无光。\n二月二十八日　夜　雾　油压低，补油。\n（水渍，日期看不清）　夜　大雾　灯光减弱，透镜结盐。\n（水渍，日期看不清）　夜　雾　灯暗。余油封在阀门后面。备船。"],
   "ch1.s3.sky_light.mono": "云裂开了一点。",
   "ch1.s3.stairwell.mono_look_up": "最上面，是灯。",
@@ -109,6 +112,9 @@ export const TEXT_ZH_CN = {
   "ui.end.restart": "重新开始",
   "ui.end.tbc": "未完待续",
   "ui.end.to_menu": "回到主菜单",
+  "ui.fatal.title": "无法启动游戏",
+  "ui.fatal.webgl2": "你的浏览器或显卡不支持 WebGL 2。请使用最新版 Chrome / Edge / Firefox / Safari，并开启硬件加速。",
+  "ui.hud.controls": "W A S D 移动　Shift 小跑　点击画面 锁定鼠标转视角　E 互动　右键 观察　滚轮 远近　Esc 暂停",
   "ui.journal.chapter1": "第一章 · 归岸",
   "ui.journal.empty": "还什么都没有。",
   "ui.journal.goal": "当前目标",
@@ -139,6 +145,7 @@ export const TEXT_ZH_CN = {
   "ui.prompt.read": "E 阅读",
   "ui.prompt.reader_bar": "A·D 翻页　右键 关闭",
   "ui.prompt.ring": "E 敲钟",
+  "ui.prompt.traverse": "E 跨过去",
   "ui.prompt.turn_hold": "按住 E 拧开",
   "ui.prompt.unlock": "E 开锁",
   "ui.save.corrupt": "存档无法读取，只能开始新游戏。",
@@ -167,6 +174,7 @@ export const TEXT_ZH_CN = {
   "ui.settings.volume_music": "音乐",
   "ui.settings.volume_sfx": "音效",
   "ui.title": "雾灯",
+  "ui.touch.interact": "交互",
 } as const;
 
 export type TextType = 'subtitle' | 'title' | 'monologue' | 'inspect' | 'goal' | 'journal' | 'doc' | 'hint' | 'prompt' | 'ui';
@@ -219,6 +227,7 @@ export const TEXT_META: Record<keyof typeof TEXT_ZH_CN, TextMeta> = {
   "ch1.s1.goal.cross_channel": {"type":"goal","speaker":"father"},
   "ch1.s1.goal.find_bell": {"type":"goal","speaker":"father"},
   "ch1.s1.goal.reef_path": {"type":"goal","speaker":"father"},
+  "ch1.s1.location.title": {"type":"title","speaker":"system"},
   "ch1.s1.neighbor_note.doc": {"type":"doc","speaker":"none"},
   "ch1.s1.nets.inspect": {"type":"inspect","speaker":"xi"},
   "ch1.s1.notice.doc": {"type":"doc","speaker":"none"},
@@ -241,6 +250,7 @@ export const TEXT_META: Record<keyof typeof TEXT_ZH_CN, TextMeta> = {
   "ch1.s2.key.tag_inspect": {"type":"inspect","speaker":"xi"},
   "ch1.s2.lantern_stand_west.blocked": {"type":"monologue","speaker":"xi"},
   "ch1.s2.light_lock.inspect": {"type":"inspect","speaker":"xi"},
+  "ch1.s2.location.title": {"type":"title","speaker":"system"},
   "ch1.s2.reply_draft.doc": {"type":"doc","speaker":"father"},
   "ch1.s2.sketch.doc": {"type":"doc","speaker":"father"},
   "ch1.s2.stove.inspect": {"type":"inspect","speaker":"xi"},
@@ -258,6 +268,7 @@ export const TEXT_META: Record<keyof typeof TEXT_ZH_CN, TextMeta> = {
   "ch1.s3.ignition.no_oil": {"type":"monologue","speaker":"xi"},
   "ch1.s3.ignition_note.doc": {"type":"doc","speaker":"father"},
   "ch1.s3.lens.inspect": {"type":"inspect","speaker":"xi"},
+  "ch1.s3.location.title": {"type":"title","speaker":"system"},
   "ch1.s3.logbook.doc": {"type":"doc","speaker":"father"},
   "ch1.s3.sky_light.mono": {"type":"monologue","speaker":"xi","once":true},
   "ch1.s3.stairwell.mono_look_up": {"type":"monologue","speaker":"xi","once":true},
@@ -286,6 +297,9 @@ export const TEXT_META: Record<keyof typeof TEXT_ZH_CN, TextMeta> = {
   "ui.end.restart": {"type":"ui","speaker":"system"},
   "ui.end.tbc": {"type":"ui","speaker":"system"},
   "ui.end.to_menu": {"type":"ui","speaker":"system"},
+  "ui.fatal.title": {"type":"ui","speaker":"system"},
+  "ui.fatal.webgl2": {"type":"ui","speaker":"system"},
+  "ui.hud.controls": {"type":"ui","speaker":"system"},
   "ui.journal.chapter1": {"type":"ui","speaker":"system"},
   "ui.journal.empty": {"type":"ui","speaker":"system"},
   "ui.journal.goal": {"type":"ui","speaker":"system"},
@@ -316,6 +330,7 @@ export const TEXT_META: Record<keyof typeof TEXT_ZH_CN, TextMeta> = {
   "ui.prompt.read": {"type":"prompt","speaker":"system"},
   "ui.prompt.reader_bar": {"type":"prompt","speaker":"system"},
   "ui.prompt.ring": {"type":"prompt","speaker":"system"},
+  "ui.prompt.traverse": {"type":"prompt","speaker":"system"},
   "ui.prompt.turn_hold": {"type":"prompt","speaker":"system"},
   "ui.prompt.unlock": {"type":"prompt","speaker":"system"},
   "ui.save.corrupt": {"type":"ui","speaker":"system"},
@@ -344,4 +359,5 @@ export const TEXT_META: Record<keyof typeof TEXT_ZH_CN, TextMeta> = {
   "ui.settings.volume_music": {"type":"ui","speaker":"system"},
   "ui.settings.volume_sfx": {"type":"ui","speaker":"system"},
   "ui.title": {"type":"ui","speaker":"system"},
+  "ui.touch.interact": {"type":"ui","speaker":"system"},
 };

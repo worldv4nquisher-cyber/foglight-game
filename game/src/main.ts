@@ -1,5 +1,6 @@
 import './ui/styles.css';
 import { Game } from '@/core/Game';
+import { t } from '@/content/text';
 import { BootScene } from '@/scenes/BootScene';
 import { LoadingScene } from '@/scenes/LoadingScene';
 import { S1EbbShoreScene, SandboxScene } from '@/scenes/S1EbbShoreScene';
@@ -12,7 +13,8 @@ import { TestbedScene } from '@/scenes/TestbedScene';
 function showFatal(message: string): void {
   const el = document.createElement('div');
   el.className = 'fatal-error';
-  el.innerHTML = `<h2>无法启动游戏</h2><p></p>`;
+  el.innerHTML = '<h2></h2><p></p>';
+  el.querySelector('h2')!.textContent = t('ui.fatal.title');
   el.querySelector('p')!.textContent = message;
   document.body.appendChild(el);
 }
@@ -30,7 +32,7 @@ function bootstrap(): void {
   const uiRoot = document.getElementById('ui-root');
   if (!container || !uiRoot) throw new Error('缺少 #app / #ui-root 容器');
   if (!hasWebGL2()) {
-    showFatal('你的浏览器或显卡不支持 WebGL 2。请使用最新版 Chrome / Edge / Firefox / Safari，并开启硬件加速。');
+    showFatal(t('ui.fatal.webgl2'));
     return;
   }
 

@@ -178,6 +178,7 @@ export class AssetLoader {
           });
         } catch (err) {
           this.missing.add(entry.key);
+          // text-ok: 只进控制台日志
           const msg = `[assets] ${entry.optional ? '可选资源缺失，使用占位' : '加载失败'}: ${entry.key} (${entry.url})`;
           if (entry.optional) console.info(msg);
           else console.error(msg, err);

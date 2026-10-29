@@ -2,6 +2,7 @@ import type * as THREE from 'three';
 import type { EventBus } from '@/core/EventBus';
 import type { LodDistances } from '@/render/lod';
 import type { Settings } from '@/systems/save/Settings';
+import type { TextId } from '@/content/text';
 
 /**
  * 画质档位（纯桌面），参数以 `art/style/style-guide.md` §8 为准（v0.1-009）。
@@ -20,7 +21,8 @@ export type OutlineHullTarget = 'character' | 'prop' | 'near' | 'interactive';
 
 export interface QualityPreset {
   tier: QualityTier;
-  label: string;
+  /** 档位名的文本 ID（玩家可见，经 t() 显示；本文件不能运行时导入文本表，见下方说明）。 */
+  labelId: TextId;
 
   // ---------------------------------------------------------- style-guide §8（键名 = 表中 key）
   /** 渲染分辨率缩放（乘在像素比上） */
@@ -93,7 +95,7 @@ export interface QualityPreset {
 export const QUALITY_PRESETS: Record<QualityTier, QualityPreset> = {
   ultra: {
     tier: 'ultra',
-    label: '极致',
+    labelId: 'ui.settings.quality_ultra',
     renderScale: 1,
     maxPixelRatio: 2,
     heroCharTris: 120_000,
@@ -132,7 +134,7 @@ export const QUALITY_PRESETS: Record<QualityTier, QualityPreset> = {
   },
   high: {
     tier: 'high',
-    label: '高',
+    labelId: 'ui.settings.quality_high',
     renderScale: 1,
     maxPixelRatio: 1.5,
     heroCharTris: 50_000,
@@ -171,7 +173,7 @@ export const QUALITY_PRESETS: Record<QualityTier, QualityPreset> = {
   },
   standard: {
     tier: 'standard',
-    label: '标准',
+    labelId: 'ui.settings.quality_standard',
     renderScale: 0.8,
     maxPixelRatio: 1,
     heroCharTris: 50_000,
