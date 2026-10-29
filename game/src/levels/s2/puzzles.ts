@@ -18,6 +18,7 @@ import { S2, v3 } from './layout';
 import { buildS2Beam, type S2Beam } from './beam';
 import type { S2Greybox } from './greybox';
 import { sevenSegment } from './digits';
+import { artLanternFrame, GB_LANTERN_LIGHT_Y } from './lantern';
 
 /** BUG-014：书桌上「看看而已」的物体的瞄准半径（屏幕 NDC），见 Interactable.aimCone */
 export const S2_DESK_AIM = { chart: 0.13, note: 0.3 } as const;
@@ -64,6 +65,8 @@ export interface S2PuzzleDeps {
   artRoot: THREE.Object3D;
   /** 美术地窖钥匙（art=1；已放在架上 socket）；null = 用白盒钥匙 */
   artKey?: THREE.Object3D | null;
+  /** 021 美术风灯（art=1；原点 = 提手）；null = 白盒风灯（原点 = 灯底） */
+  artLantern?: THREE.Object3D | null;
   beamDebug: boolean;
 }
 
@@ -186,9 +189,20 @@ export function buildS2Puzzles(d: S2PuzzleDeps): S2Puzzles {
   handle.name = 's2-lantern-handle';
   handle.position.y = 0.27;
   lantern.add(handle);
+  // 021 美术风灯（art=1）：替换白盒灯的外观（白盒件移除），风灯组原点改为提手——挂手 / 灯台 socket 都不加偏移，书桌 socket 抬高 hang
+  const artLantern = d.artLantern ?? null;
+  const lanternFrame = artLantern ? artLanternFrame(artLantern) : null;
+  if (artLantern) {
+    // 白盒件直接拿掉（焦点按风灯组包围盒中心算，留着隐藏的白盒件会把焦点抬高）
+    for (const c of [...lantern.children]) lantern.remove(c);
+    artLantern.position.set(0, 0, 0);
+    artLantern.quaternion.identity();
+    lantern.add(artLantern);
+  }
   const lanternLight = new THREE.PointLight(0xffb060, 1.8, 7, 2);
   lanternLight.name = 's2-lantern-light';
-  lanternLight.position.y = 0.15;
+  if (lanternFrame) lanternLight.position.copy(lanternFrame.light);
+  else lanternLight.position.y = GB_LANTERN_LIGHT_Y;
   lantern.add(lanternLight);
   const held = interaction.held;
   held.pickUp(S2_IDS.lantern, lantern);
@@ -213,7 +227,8 @@ export function buildS2Puzzles(d: S2PuzzleDeps): S2Puzzles {
   const [lsx, lsy, lsz] = S2.points.lanternSocket;
   const deskSocket = new THREE.Object3D();
   deskSocket.name = S2_IDS.deskSocket;
-  deskSocket.position.set(lsx, lsy, lsz);
+  // 美术风灯原点在提手：桌面 socket 抬到提手高度（桌面 + 灯高 0.28 = 二层地板上 1.03 m，与 017 xi-place-table 对齐值一致）
+  deskSocket.position.set(lsx, lsy + (lanternFrame?.hang ?? 0), lsz);
   root.add(deskSocket);
   const journal = prop(box('journal-s2', 0.22, 0.03, 0.3, wood, [jx, jy + 0.015, jz]));
   const journalIx = new Interactable({ id: S2_IDS.journal, kind: 'use', object: journal, prompt: 'ui.prompt.read', interactPoint: deskStand, focus: new THREE.Vector3(jx, jy + 0.05, jz) });
@@ -297,6 +312,8 @@ export function buildS2Puzzles(d: S2PuzzleDeps): S2Puzzles {
   offs.push(tracer.bind(events));
   const renderer = new WhiteboxBeamRenderer({ debug: d.beamDebug });
   scene.add(renderer.root);
+  // 美术风灯原点在提手：白盒灯台 socket（柱顶 0.70）抬高 hang，灯底仍落在柱顶（光路发射点是独立节点，不受影响）
+  if (lanternFrame) for (const lamp of [beam.lamps.east, beam.lamps.west]) lamp.socket.position.y += lanternFrame.hang;
   for (const lamp of [beam.lamps.east, beam.lamps.west]) {
     const ix = new Interactable({ id: `lamp-stand-${lamp.key}-s2`, kind: 'place', object: lamp.stand, socket: lamp.socket, item: S2_IDS.lantern, focus: lamp.socket.position.clone().setY(0.8), anim: 'xi-place', animStand: XI_SOCKET_STAND.stand });
     interaction.add(ix);

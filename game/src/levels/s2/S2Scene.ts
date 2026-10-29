@@ -71,6 +71,7 @@ export class S2Scene extends LevelScene {
       collider: (m) => this.colliderOf.get(m),
       artRoot: this.art.root,
       artKey: this.art.cellarKey,
+      artLantern: this.art.lantern,
       beamDebug: beamDebugEnabled,
     });
     this.cleanups.push(() => this.puzzles.dispose());

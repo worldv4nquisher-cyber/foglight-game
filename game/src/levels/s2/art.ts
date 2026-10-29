@@ -11,6 +11,8 @@ export const S2_FAR_KEYS = { island: 'env-lighthouse-island-main-s3tower-s2far',
 /** 地窖钥匙模型 key / 架上 socket 节点（env-cellar-s2.glb） */
 export const S2_KEY_KEY = 'prop-key-cellar-s2';
 export const S2_KEY_SOCKET = 'env-cellar-s2-key-socket';
+/** 021 黄铜风灯（原点 = 提手；`-emitter` = 光源中心；发光材质 mat-prop-lantern-glow 由程序控制，是全章唯一常驻暖光） */
+export const S2_LANTERN_KEY = 'prop-lantern-brass';
 
 export interface S2Art {
   root: THREE.Group;
@@ -21,6 +23,11 @@ export interface S2Art {
   farLayer: SkyLayerHandle | null;
   /** 地窖钥匙（prop-key-cellar-s2）：根节点精确放在 env-cellar-s2-key-socket（无偏移）；没交付 / 没 socket = null，用白盒钥匙 */
   cellarKey: THREE.Object3D | null;
+  /**
+   * 021 黄铜风灯（prop-lantern-brass）：不放进场景，交给 puzzles 挂进风灯手持物（替换白盒灯）。
+   * 不走环境的「暖色自发光清零」——风灯是暖光例外（GDD §12）。没交付 = null，用白盒风灯
+   */
+  lantern: THREE.Object3D | null;
 }
 
 /**
@@ -95,6 +102,19 @@ export function buildS2Art(assets: AssetLoader): S2Art {
     keySocket.add(cellarKey);
   }
 
+  // 021 风灯：只隐藏碰撞体 / 灯，保留暖色发光材质（风灯是唯一暖光，亮度由 puzzles 控制）
+  let lantern: THREE.Object3D | null = null;
+  if (assets.has(S2_LANTERN_KEY)) {
+    lantern = assets.getModel(S2_LANTERN_KEY);
+    lantern.name = S2_LANTERN_KEY;
+    lantern.traverse((c) => {
+      if (COLLIDER_NAME.test(c.name) || c.userData.collider === true || (c as THREE.Light).isLight) c.visible = false;
+      const mesh = c as THREE.Mesh;
+      if (mesh.isMesh && c.visible) mesh.castShadow = mesh.receiveShadow = true;
+    });
+    applyMaterialHints(lantern);
+  }
+
   // 远景 S3 岛 + 灯塔（天空层材质，不钉深度）
   let far: THREE.Group | null = null;
   let farLayer: SkyLayerHandle | null = null;
@@ -123,5 +143,5 @@ export function buildS2Art(assets: AssetLoader): S2Art {
     loaded = true;
   }
 
-  return { root, loaded, cellarDoor, far, farLayer, cellarKey };
+  return { root, loaded, cellarDoor, far, farLayer, cellarKey, lantern };
 }

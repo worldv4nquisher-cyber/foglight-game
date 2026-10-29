@@ -83,6 +83,8 @@ export const manifest: AssetEntry[] = [
   { key: 'env-keeper-house-ch1', type: 'gltf', url: 'assets/art/models/env/env-keeper-house-ch1.glb', group: 's2', optional: true, art: true },
   { key: 'env-keeper-house-ch1-interior', type: 'gltf', url: 'assets/art/models/env/env-keeper-house-ch1-interior.glb', group: 's2', optional: true, art: true },
   { key: 'env-cellar-s2', type: 'gltf', url: 'assets/art/models/env/env-cellar-s2.glb', group: 's2', optional: true, art: true },
+  // 021 黄铜风灯（S2 进场就在汐手上；以后 S3 灯室书桌 / S1 开场要用时在该组另登记一个 key，同 s2far 的做法）
+  { key: 'prop-lantern-brass', type: 'gltf', url: 'assets/art/models/props/prop-lantern-brass.glb', group: 's2', optional: true, art: true },
   // 017 收尾：地窖钥匙（架上放 env-cellar-s2-key-socket；xi-pickup-shelf grab 帧挂 middle_03_r，extras.attach）
   { key: 'prop-key-cellar-s2', type: 'gltf', url: 'assets/art/models/props/prop-key-cellar-s2.glb', group: 's2', optional: true, art: true },
   { key: 'env-cellar-door-s2', type: 'gltf', url: 'assets/art/models/env/env-cellar-door-s2.glb', group: 's2', optional: true, art: true },

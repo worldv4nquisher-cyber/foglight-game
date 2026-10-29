@@ -20,6 +20,8 @@ import { applyObjectFog, fogExp2Factor, OBJECT_FOG_GLSL, readFogHint } from '@/r
 import { applyMaterialHints } from '@/render/materialHints';
 import { QUALITY_PRESETS } from '@/config/quality';
 import { gameplay } from '@/config/gameplay';
+import { artLanternFrame } from '@/levels/s2/lantern';
+import { S2 } from '@/levels/s2/layout';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const ART = resolve(ROOT, '../art');
@@ -372,6 +374,24 @@ if (hasArt) {
     assert.equal(makeTideVariantSwitch(root, { high: ['rope-high'], low: ['nope'], switchLevel: 0.8 }), null, '缺一版 = 不切换');
     assert.equal(makeTideVariantSwitch(root, S1.boatRope), null, '当前未配节点名 = 保持现状');
     return `节点名待美术（S1.boatRope high ${S1.boatRope.high.length} / low ${S1.boatRope.low.length}）`;
+  });
+
+  await test('021 风灯 prop-lantern-brass：原点 = 提手，hang（提手到灯底）/ -emitter 与 017 对齐值一致', async () => {
+    const lantern = await loadGlb('models/props/prop-lantern-brass.glb');
+    let critical = false;
+    lantern.traverse((o) => (critical ||= o.userData?.puzzleCritical === true));
+    assert.ok(critical, 'puzzleCritical（加载器强制 LOD0）');
+    const f = artLanternFrame(lantern);
+    near(f.hang, 0.28, 0.005, '提手到灯底');
+    near(f.light.y, -0.162, 0.002, '-emitter 高度（提手下）');
+    // 书桌：桌面 3.75 + hang = 二层地板 3.0 上 1.03 m（017 xi-place-table 提手高）
+    near(S2.points.lanternSocket[1] + f.hang - S2.house.upperFloorY, 1.03, 0.005, '书桌 socket 提手高');
+    let glow = 0;
+    lantern.traverse((o) => {
+      if (o.isMesh) for (const m of [o.material].flat()) if (m.emissive && m.emissive.getHex() !== 0) glow++;
+    });
+    assert.ok(glow >= 1, '灯罩发光材质要保留（程序不清零）');
+    return `hang ${f.hang.toFixed(3)}、emitter y ${f.light.y.toFixed(3)}、书桌提手离地 ${(S2.points.lanternSocket[1] + f.hang - S2.house.upperFloorY).toFixed(3)} m`;
   });
 
   await test('外部 KTX2：S1 全部 GLB 的 images.uri 相对 GLB 解析后存在（运行时 assets/art/models/env/../../textures/ 同理）', () => {
