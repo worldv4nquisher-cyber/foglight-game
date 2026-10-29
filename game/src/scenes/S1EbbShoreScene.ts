@@ -30,10 +30,8 @@ function mulberry32(seed: number): () => number {
 }
 
 /**
- * S1 落潮滩（v0.1-010 场景流程；白盒 / 谜题 1–2 在 013 做）。
- * 现在还是 v0.1 占位 demo 的阴暗海岛：海岛地面 + 岩石 + 旋转立方体 + demo 灯塔（E 开关）+ LOD 测试石，
- * 加上入口 start、去 S2 的出口（西北角石路尽头的两根石柱之间）。
- * 首次进入 S1 时跑画质自动检测（009），建立镜头等第一轮测完。
+ * v0.1 demo 岛（原 S1 占位；013 起正式 S1 是 `@/levels/s1/S1Scene`，这里只作为 `?scene=sandbox` 的基类）：
+ * 海岛地面 + 岩石 + 旋转立方体 + demo 灯塔（E 开关）+ LOD 测试石，入口 start、去 S2 的出口。
  */
 export class S1EbbShoreScene extends LevelScene {
   readonly name: string = 's1-ebb-shore';

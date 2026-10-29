@@ -693,9 +693,9 @@ const CHECKS = [
       await evaluate(`document.exitPointerLock(); 1`);
       await sleep(400);
       if (await evaluate('__game.isPaused')) await evaluate('__game.resume()');
-      // demo 灯塔（主场景）
-      await cdp.goto('');
-      if (!(await until(`__game.input.context === 'explore' && !__game.isPaused`, 30000))) throw new Error('主场景开场演出没交还');
+      // demo 灯塔（沙盒 = 原 v0.1 demo 岛；013 起 S1 是正式白盒，第一章点灯前没有可开关的灯塔）
+      await cdp.goto('scene=sandbox&debug=1', 'sandbox');
+      if (!(await until(`__game.input.context === 'explore' && !__game.isPaused`, 30000))) throw new Error('沙盒开场演出没交还');
       const on0 = await evaluate(`__game.scenes.current.lighthouseOn`);
       await evaluate(`(() => { const s = __game.scenes.current; s.rig.body.teleport(new s.rig.body.position.constructor(11, 2.45, -8.3)); s.rig.controller.facing = Math.PI; return 1; })()`);
       const lp = await until(`/E\\s*操作/.test(${prompt()})`, 10000);
@@ -1018,7 +1018,8 @@ const CHECKS = [
       const p0 = await evaluate(pos);
       if (!(await evaluate(`!!localStorage.getItem('foglight.save.v1') && !__game.flow.holdingMenu`))) throw new Error('进场后应有存档、流程不再压菜单上下文');
       // 走开一段（直接挪身体）
-      await evaluate(`(() => { const b = __game.scenes.current.rig.body; const p = b.position; b.teleport(__game.scenes.current.camera.position.clone().set(p.x + 3, p.y + 0.02, p.z + 3)); return 1; })()`);
+      // 沿码头往陆地方向走 3 m（013：起点在码头尽头，往旁边挪会掉进涨潮的水里被送回）
+      await evaluate(`(() => { const b = __game.scenes.current.rig.body; const p = b.position; b.teleport(__game.scenes.current.camera.position.clone().set(p.x - 2.83, p.y + 0.02, p.z + 0.99)); return 1; })()`);
       await sleep(300);
 
       // ---- 4. 暂停 → 回到主菜单：确认框取消回暂停菜单，确认回主菜单
@@ -1107,10 +1108,11 @@ const CHECKS = [
       /** 把角色放进当前场景出口（出口是「外 → 内」触发：先放到外面一步再放进去） */
       const walkIntoExit = (i = 0) =>
         evaluate(`(async () => { const s = __game.scenes.current; const ex = s.exits[${i}]; const c = ex.opts.center.clone();
-          s.rig.body.teleport(c.clone().add(new c.constructor(3, 0.02, 3)));
+          // S1 出口在崖顶平台上（013）：从东侧 2.5 m 外进；其它场景照旧斜对角 3 m
+          s.rig.body.teleport(c.clone().add(s.name === 's1-ebb-shore' ? new c.constructor(2.5, 0.02, 0) : new c.constructor(3, 0.02, 3)));
           // 等两帧（无头软件渲染一帧可能上百 ms）：出口要先看到「在外面」的一步，进去才算走进
           for (let k = 0; k < 2; k++) await new Promise((r) => requestAnimationFrame(r));
-          s.rig.body.teleport(c.clone().setY(0.02)); return ex.target; })()`);
+          s.rig.body.teleport(c.clone().setY(c.y + 0.02)); return ex.target; })()`);
 
       // ---- 1. 启动：只加载 boot + menu（字体子集），主菜单出现时间
       await evaluate(`localStorage.clear(); 1`);
@@ -1483,6 +1485,144 @@ const CHECKS = [
       out.push('beamDebug 调试线 ✓');
       await cdp.goto('');
       return out.join('；');
+    },
+  },
+  {
+    name: 'v0.1-013 S1 白盒 + 谜题 1、2：开场涨潮 1.6、礁石小径入口涨潮挡住、敲钟退潮 → 小径尽头解开谜题 1（目标换成过沟）、浮台推进石槽 → 涨潮浮到 1.85（±5 cm）→ 两次跨越到远侧台阶解开谜题 2、不在石槽里涨潮 2 s 漂回、退潮 R 重置浮台、落水送回岸台、交互物齐全；?art=1 美术件加载（岩石 instancing、S3 灯塔熄灭）',
+    async run({ evaluate, cdp, sleep }) {
+      const out = [];
+      const until = async (expr, ms = 8000) => {
+        const end = Date.now() + ms;
+        let v;
+        while (Date.now() < end) {
+          v = await evaluate(expr);
+          if (v) return v;
+          await sleep(100);
+        }
+        return false;
+      };
+      if ((await evaluate(`__game.scenes.current?.name`)) !== 's1-ebb-shore' || !(await evaluate(`!!window.__s1`))) await cdp.goto('');
+      if (!(await until(`!!(window.__s1 && __s1.puzzles) && __game.input.context === 'explore' && !__game.isPaused`, 40000))) throw new Error('S1 没就绪');
+      const S = `__s1`;
+      const tide = `${S}.puzzles.tide`;
+      const tp = (x, y, z, facing) =>
+        evaluate(`(() => { const s = ${S}; s.interaction.cancel?.(); s.rig.body.teleport(new s.rig.body.position.constructor(${x}, ${y}, ${z})); ${facing !== undefined ? `s.rig.controller.facing = ${facing};` : ''} return 1; })()`);
+      const ring = async () => {
+        await evaluate(`__game.events.emit('interact:used', { id: 'tide-bell-s1', kind: 'use' }); 1`);
+        await sleep(200);
+      };
+      const st = () =>
+        evaluate(`(() => { const s = ${S}, p = s.puzzles, b = s.rig.body.position, r = p.raft.object.position; return { tide: p.tide.state, level: +p.tide.level.toFixed(3), tr: p.tide.transitioning, raft: p.raft.state, raftPos: [r.x, r.y, r.z].map((v) => +v.toFixed(2)), inAnchor: p.raft.inAnchor, p1: p.p1Solved, p2: p.p2Solved, pos: [b.x, b.y, b.z].map((v) => +v.toFixed(2)), goal: __game.narrative.goal, busy: s.rig.controller.busy }; })()`);
+      let s = await st();
+      if (s.tide !== 'high' || Math.abs(s.level - 1.6) > 1e-3) throw new Error('开场应涨潮 1.6 ' + JSON.stringify(s));
+      if (Math.hypot(s.pos[0] - 2.277, s.pos[2] + 11.772) > 0.3 || Math.abs(s.pos[1] - 2.2) > 0.1) throw new Error('起点不在码头尽头 ' + JSON.stringify(s));
+      const ids = await evaluate(`${S}.interaction.items.map((i) => i.id)`);
+      for (const id of ['tide-bell-s1', 'raft-s1', 'stone-slot-s1', 's1-boat', 's1-tide-pillar', 's1-nets-a', 's1-nets-b', 's1-shed', 's1-notice', 's1-neighbor-note'])
+        if (!ids.includes(id)) throw new Error('缺交互物 ' + id + '：' + ids.join());
+      if (!(await evaluate(`${S}.rig.controller.links.length === 4 && ${S}.exits.length === 1`))) throw new Error('跨越点 / 出口数量不对');
+      out.push('开场涨潮 1.6、起点码头尽头、交互物 / 跨越点 / 出口齐 ✓');
+      // 013 裁定：检测第 1 轮没测完就跳过开场 → 3 s 不可跳过的 S1 建立镜头（最后一帧最多等 5 s）；测完了跳过就直接交还
+      const skipShot = await evaluate(`(() => {
+        const s = __s1, b = __game.benchmark, sp = s.spawns.get('start');
+        const done = s.establishingAfterSkip(sp, () => true);
+        Object.defineProperty(b, 'firstRoundDone', { configurable: true, get: () => false });
+        try {
+          const t = s.establishingAfterSkip(sp, () => b.firstRoundDone);
+          return { realDone: b.constructor.prototype.__lookupGetter__('firstRoundDone').call(b), doneNull: done === null, name: t?.name, skippable: t?.skippable, duration: t?.duration, hold: !!t?.holdUntil, maxHold: t?.maxHold };
+        } finally { delete b.firstRoundDone; }
+      })()`);
+      if (skipShot.name !== 's1-establishing-hold' || skipShot.skippable !== false || skipShot.duration !== 3 || !skipShot.hold || skipShot.maxHold !== 5) throw new Error('S1 跳过后的建立镜头不对 ' + JSON.stringify(skipShot));
+      if (skipShot.realDone && !skipShot.doneNull) throw new Error('检测已完成时跳过不该再补镜头');
+      out.push('跳过开场 → 3 s 不可跳过建立镜头（等 5 s）✓');
+
+      // 礁石小径入口：涨潮挡住
+      const gate = `${S}.physics.colliders.find((c) => c.name === 's1-reef-gate-wall')`;
+      if (!(await evaluate(`${gate}.enabled`))) throw new Error('涨潮时礁石小径入口空气墙应启用');
+      // 站到钟前：E 提示 + 敲钟
+      await tp(-14.45, 2.42, -6.2, -Math.PI / 2);
+      if (!(await until(`/E/.test(document.querySelector('.hud-prompt')?.textContent ?? '')`, 6000))) throw new Error('钟前没有交互提示');
+      await ring();
+      if (!(await until(`${tide}.state === 'low' && !${tide}.transitioning`, 40000))) throw new Error('敲钟没退潮 ' + JSON.stringify(await st()));
+      if (await evaluate(`${gate}.enabled`)) throw new Error('退潮后入口空气墙应关闭');
+      if (!(await until(`__game.narrative.goal === 'ch1.s1.goal.reef_path'`, 3000))) throw new Error('第一次退潮后目标应换成礁石小径 ' + JSON.stringify(await st()));
+      out.push('敲钟 → 退潮、入口打开、目标换成礁石小径 ✓');
+      // 台阶顶走下去一点（物理能走）：站在台阶上不被墙挡
+      await tp(-9.7, 2.42, -3.0, Math.PI / 2);
+      await evaluate(`${S}.cameraFollow.yaw = -Math.PI / 2; 1`); // 相机朝 +X（台阶往下的方向）
+      await evaluate(`__game.input.setRaw('smoke', 'KeyW', true); 1`);
+      const walked = await until(`${S}.rig.body.position.x > -8.4`, 8000);
+      await evaluate(`__game.input.setRaw('smoke', 'KeyW', false); 1`);
+      if (!walked) throw new Error('退潮后走不下台阶 ' + JSON.stringify(await st()));
+      // 小径尽头
+      await tp(1.8, 0.14, 3.4);
+      if (!(await until(`${S}.puzzles.p1Solved && __game.narrative.goal === 'ch1.s1.goal.cross_channel'`, 6000))) throw new Error('小径尽头没解开谜题 1 ' + JSON.stringify(await st()));
+      out.push('台阶可走、小径尽头解开谜题 1 → 目标过沟 ✓');
+
+      // 浮台：不在石槽里涨潮 → 漂回
+      await evaluate(`(() => { const p = ${S}.puzzles; p.raft.object.position.set(5, 0.4, 10.5); p.raft.object.updateMatrixWorld(true); p.raftPush.pushT = 0.4; return 1; })()`);
+      await tp(-12.5, 2.42, -4.5);
+      await tp(-14.45, 2.42, -6.2, -Math.PI / 2);
+      await ring();
+      if (!(await until(`${S}.puzzles.raft.state === 'drifting'`, 30000))) throw new Error('不在石槽里涨潮应漂回 ' + JSON.stringify(await st()));
+      if (!(await until(`${tide}.state === 'high' && !${tide}.transitioning && ${S}.puzzles.raft.state !== 'drifting'`, 40000))) throw new Error('漂回没结束 ' + JSON.stringify(await st()));
+      s = await st();
+      if (Math.hypot(s.raftPos[0] - 9.1, s.raftPos[2] - 10.5) > 0.05) throw new Error('漂回位置不对 ' + JSON.stringify(s));
+      out.push('不在石槽涨潮 → 漂回原位 ✓');
+
+      // 落水送回：涨潮时站到沙地上
+      await tp(5, 0.14, 0);
+      if (!(await until(`(() => { const b = ${S}.rig.body.position; return Math.hypot(b.x + 12.5, b.z + 4) < 0.3 && Math.abs(b.y - 2.4) < 0.1 && !${S}.rig.controller.busy; })()`, 20000))) throw new Error('落水没送回岸台安全点 ' + JSON.stringify(await st()));
+      out.push('落水送回岸台 ✓');
+
+      // 退潮 → 推进石槽（直接把轨道走完）→ R 重置 → 再推进 → 涨潮浮到 1.85
+      await tp(-14.45, 2.42, -6.2, -Math.PI / 2);
+      await ring();
+      if (!(await until(`${tide}.state === 'low' && !${tide}.transitioning`, 40000))) throw new Error('第二次退潮失败');
+      const toSlot = `(() => { const p = ${S}.puzzles; p.raft.object.position.set(-0.9, 0.4, 10.5); p.raft.object.updateMatrixWorld(true); p.raftPush.pushT = 1; p.raftPush.locked = true; return 1; })()`;
+      await evaluate(toSlot);
+      await tp(-12.5, 2.42, -4, Math.PI / 2);
+      await sleep(300);
+      await cdp.key('KeyR', 'r', 82);
+      if (!(await until(`${S}.puzzles.raft.object.position.x > 9 && ${S}.puzzles.raftPush.pushT === 0 && !${S}.puzzles.raftPush.locked`, 4000))) throw new Error('退潮 R 没重置浮台 ' + JSON.stringify(await st()));
+      out.push('退潮 R 重置浮台 ✓');
+      await evaluate(toSlot);
+      await tp(-14.45, 2.42, -6.2, -Math.PI / 2);
+      await ring();
+      if (!(await until(`${tide}.state === 'high' && !${tide}.transitioning`, 40000))) throw new Error('涨潮失败');
+      s = await st();
+      if (s.raft !== 'floating' || !s.inAnchor || Math.abs(s.raftPos[1] - 1.85) > 0.05) throw new Error('石槽里涨潮应浮到 1.85 ' + JSON.stringify(s));
+      out.push(`石槽里浮到 ${s.raftPos[1]} ✓`);
+
+      // 近岸平台 → 浮台 → 远侧台阶（E 跨越）
+      const cross = async (x, y, z, facing, label) => {
+        await tp(x, y, z, facing);
+        if (!(await until(`!!${S}.rig.controller.nearLink`, 6000))) throw new Error(label + '：没有跨越提示 ' + JSON.stringify(await st()));
+        await evaluate(`__game.input.setRaw('smoke', 'KeyE', true); 1`);
+        await sleep(80);
+        await evaluate(`__game.input.setRaw('smoke', 'KeyE', false); 1`);
+        if (!(await until(`${S}.rig.controller.busy`, 4000))) throw new Error(label + '：E 没开始跨越');
+        if (!(await until(`!${S}.rig.controller.busy`, 15000))) throw new Error(label + '：跨越没结束');
+      };
+      await cross(-0.9, 1.87, 8.15, 0, '近岸平台 → 浮台');
+      s = await st();
+      if (Math.abs(s.pos[2] - 9.45) > 0.15 || Math.abs(s.pos[1] - 1.85) > 0.1) throw new Error('没站到浮台上 ' + JSON.stringify(s));
+      await sleep(500);
+      s = await st();
+      if (Math.abs(s.pos[1] - 1.85) > 0.1 || s.tide !== 'high') throw new Error('站在浮台上不稳 / 被送回 ' + JSON.stringify(s));
+      await cross(-0.9, 1.87, 11.55, 0, '浮台 → 远侧台阶');
+      if (!(await until(`${S}.puzzles.p2Solved`, 6000))) throw new Error('到远侧台阶没解开谜题 2 ' + JSON.stringify(await st()));
+      out.push('两次跨越 → 远侧台阶解开谜题 2 ✓');
+      const hs = await evaluate(`(() => { const h = ${S}.hints; return ['s1-p1-reef', 's1-p2-raft'].map((id) => h.isSolved ? h.isSolved(id) : null); })()`);
+      if (hs.some((v) => v === false)) throw new Error('提示系统没记解开 ' + JSON.stringify(hs));
+      // ?art=1：S1 美术件
+      await cdp.goto('art=1');
+      if (!(await until(`!!window.__s1?.art`, 30000))) throw new Error('art=1 没进 S1');
+      const art = await evaluate(`(() => { const a = __s1.art; let lit = 0; a.tower?.traverse((o) => { const m = o.material; for (const x of Array.isArray(m) ? m : m ? [m] : []) if (x.emissive && x.emissive.getHex() !== 0 && x.emissiveIntensity > 0) lit++; }); let warm = 0; __s1.scene.traverse((o) => { if ((o.isPointLight || o.isSpotLight) && o.visible && o.intensity > 0 && o.color.r > o.color.b + 0.1) warm++; }); return { loaded: a.loaded, rocks: a.rocks.reduce((n, r) => n + r.placements.length, 0), tower: !!a.tower, island: !!a.island, lit, warm, greybox: __s1.greybox.root.visible }; })()`);
+      if (!art.loaded || !art.tower || !art.island || art.rocks < 100) throw new Error('S1 美术件没加载全 ' + JSON.stringify(art));
+      if (art.lit || art.warm) throw new Error('点灯前远景灯塔应熄灭、无环境暖光 ' + JSON.stringify(art));
+      out.push(`art=1 美术件（岩石 ${art.rocks} 实例、主岛 + 灯塔熄灭）✓`);
+      await cdp.goto('');
+      return out.join('，');
     },
   },
 ];

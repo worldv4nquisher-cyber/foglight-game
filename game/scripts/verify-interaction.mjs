@@ -545,7 +545,7 @@ test('提示高亮：描边 3 s 后消失并发 highlight:end', () => {
 // ---------------------------------------------------------------- 接入
 
 test('demo 灯塔改走交互系统，场景里不再直接读 E', () => {
-  for (const f of ['src/scenes/S1EbbShoreScene.ts', 'src/scenes/S3LighthouseScene.ts', 'src/scenes/LevelScene.ts', 'src/scenes/TestbedScene.ts', 'src/world/Lighthouse.ts']) {
+  for (const f of ['src/scenes/S1EbbShoreScene.ts', 'src/scenes/S3LighthouseScene.ts', 'src/scenes/LevelScene.ts', 'src/scenes/TestbedScene.ts', 'src/world/Lighthouse.ts', 'src/levels/s1/S1Scene.ts', 'src/levels/s1/puzzles.ts']) {
     const src = readFileSync(f, 'utf8');
     assert.doesNotMatch(src, /consumePressed\('interact'\)/, f);
   }

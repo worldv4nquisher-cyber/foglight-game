@@ -16,18 +16,20 @@ export const tideUniforms = {
  */
 export function withTideLevel<T extends THREE.Material>(material: T, fragment: string): T {
   const prev = material.onBeforeCompile.bind(material);
+  const prevKey = material.customProgramCacheKey.bind(material);
   material.onBeforeCompile = (shader, renderer) => {
     prev(shader, renderer);
     shader.uniforms.uTideLevel = tideUniforms.uTideLevel;
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\nvarying float vTideWorldY;')
-      .replace('#include <project_vertex>', '#include <project_vertex>\nvTideWorldY = (modelMatrix * vec4(transformed, 1.0)).y;');
+      .replace('#include <project_vertex>', '#include <project_vertex>\n#ifdef USE_INSTANCING\nvTideWorldY = (modelMatrix * instanceMatrix * vec4(transformed, 1.0)).y;\n#else\nvTideWorldY = (modelMatrix * vec4(transformed, 1.0)).y;\n#endif');
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <common>', '#include <common>\nuniform float uTideLevel;\nvarying float vTideWorldY;')
       .replace('#include <color_fragment>', `#include <color_fragment>\n${fragment}`);
     material.userData.tideShader = shader;
   };
-  material.customProgramCacheKey = () => `tide:${fragment.length}:${fragment.slice(0, 24)}`;
+  // 串上之前的 key（013：和按物体雾 withObjectFog 叠用时两者都要进程序缓存键）
+  material.customProgramCacheKey = () => `${prevKey()}|tide:${fragment.length}:${fragment.slice(0, 24)}`;
   material.needsUpdate = true;
   return material;
 }

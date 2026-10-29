@@ -23,6 +23,8 @@ export async function recallToSafePoint(game: Game, rig: PlayerRig, zone: TideCo
 /** 没有正式音效资源时的合成占位音（音频资源到了改走 assets.getAudio(id)） */
 const FALLBACK: Record<string, { freq: number; duration: number; type: OscillatorType }> = {
   'sfx-tide-bell': { freq: 330, duration: 1.2, type: 'sine' },
+  // S1 潮汐钟靠近时风吹轻响（013 占位）
+  'sfx-bell-wind': { freq: 990, duration: 0.6, type: 'sine' },
 };
 
 /** `sfx:play` → 有资源播资源，否则合成占位音。返回取消订阅 */

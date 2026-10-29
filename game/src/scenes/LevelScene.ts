@@ -268,6 +268,8 @@ export abstract class LevelScene extends BaseScene {
         say: (id) => this.game.ui.subtitles.play([id]),
         read: (id) => this.game.ui.reader.open(id),
       },
+      // 跨越点（TraversalLink，S1 浮台）：附近没有可交互物时显示跨越提示
+      fallbackPrompt: () => this.rig.controller.nearLink?.prompt ?? null,
     });
   }
 

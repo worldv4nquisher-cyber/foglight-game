@@ -396,7 +396,7 @@ test('uTideLevel：TideSet 写全局 uniform；withTideLevel 注入材质着色�
   assert.match(shader.fragmentShader, /uniform float uTideLevel;/);
   assert.match(shader.fragmentShader, /#include <color_fragment>\s+float tideDepth/);
   assert.match(shader.vertexShader, /vTideWorldY = \(modelMatrix/);
-  assert.ok(mat.customProgramCacheKey().startsWith('tide:'));
+  assert.ok(mat.customProgramCacheKey().includes('|tide:'), '缓存键串上原 key（013）');
   const w = new Water(10, 4);
   w.setLevel(1.2);
   assert.equal(w.level, 1.2);
