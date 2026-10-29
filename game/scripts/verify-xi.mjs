@@ -15,6 +15,9 @@ import {
   xiEventSec,
   locoBlend,
   locoGroundSpeed,
+  locoRateComp,
+  LOCO_FADE,
+  LOCO_RATE_COMP_MAX,
   stairsRate,
   pushRate,
   stepAcrossRootZ,
@@ -35,6 +38,7 @@ import { buildLods, setForceLod0, applyLodDistances } from '@/render/lod';
 import { findXiClip, makeTurnTail } from '@/entities/xi/XiAnimator';
 import { xiActionTiming, XiActions } from '@/entities/xiActions';
 import { applyXiMaterials, xiFaceSdfParams, xiFaceLit, xiWetColor, xiWetRoughness, xiMaterialKind, XI_SHADOW_TINT } from '@/render/xiMaterials';
+import { stepLocomotion } from '@/systems/locomotion';
 import { stepWetness, xiWetTarget, isIndoor } from '@/entities/xi/XiLook';
 
 const out = [];
@@ -68,6 +72,48 @@ const glbJson = (file) => {
   near(stairsRate(0.7091), 1, 1e-9, '楼梯水平 0.7091 m/s 播放率 1');
   near(stairsRate(0.5455 / (0.2 / 0.26)), 1, 2e-4, '级高 0.20 / 踏面 0.26 的楼梯上竖直 0.5455 → 播放率 1');
   near(pushRate(0.8), 1, 1e-9, 'push-loop 0.8 m/s 播放率 1');
+  // batch8 起步 / 停步滑步：60 fps 一帧一步，控制器 stepLocomotion（0.12 s 加速 / 0.1 s 减速）+ XiAnimator 同款线性权重淡化，
+  // 脚下速度 = Σ w·rate·strideSpeed / max(1, Σw)（rate 乘 locoRateComp），滑步 = |根速度 − 脚下速度|；限值 < 0.5 m/s
+  {
+    const slip = ({ fade, comp, sprint, stopSprint = sprint }) => {
+      const st = { vx: 0, vz: 0, facing: 0 };
+      const w = { idle: 1, walk: 0, jog: 0 };
+      const b = locoBlend(0);
+      const run = (moveY, sp) => {
+        let max = 0;
+        let dist = 0;
+        for (let i = 0; i < 36; i++) {
+          stepLocomotion(st, { moveX: 0, moveY, sprint: sp, cameraYaw: 0 }, 1 / 60);
+          const v = Math.hypot(st.vx, st.vz);
+          locoBlend(v, b);
+          for (const k of ['idle', 'walk', 'jog']) w[k] = w[k] < b[k] ? Math.min(b[k], w[k] + fade / 60) : Math.max(b[k], w[k] - fade / 60);
+          const k = comp ? locoRateComp(v, w, b) : 1;
+          const foot = (w.walk * b.walkRate * k * XI_CLIP_SPECS['xi-walk'].strideSpeed + w.jog * b.jogRate * k * XI_CLIP_SPECS['xi-jog'].strideSpeed) / Math.max(1, w.idle + w.walk + w.jog);
+          max = Math.max(max, Math.abs(v - foot));
+          dist += Math.abs(v - foot) / 60;
+        }
+        return { max, dist };
+      };
+      return { start: run(1, sprint), stop: run(0, stopSprint) };
+    };
+    const rows = [];
+    for (const [tag, o] of [['走', { sprint: false }], ['跑', { sprint: true }], ['跑停（松 Shift）', { sprint: true, stopSprint: false }]]) {
+      const before = slip({ ...o, fade: 1 / 0.2, comp: false });
+      const after = slip({ ...o, fade: 1 / LOCO_FADE, comp: true });
+      rows.push(`${tag} 起步 ${before.start.max.toFixed(2)}→${after.start.max.toFixed(2)} m/s（${(before.start.dist * 100).toFixed(1)}→${(after.start.dist * 100).toFixed(1)} cm）停步 ${before.stop.max.toFixed(2)}→${after.stop.max.toFixed(2)} m/s`);
+      assert.ok(after.start.max < 0.5, `${tag}起步滑步 ${after.start.max.toFixed(3)} m/s 应 < 0.5`);
+      assert.ok(after.stop.max < 0.5, `${tag}停步滑步 ${after.stop.max.toFixed(3)} m/s 应 < 0.5`);
+      if (tag === '走') near(before.start.max, 0.667, 0.005, '改前走路起步峰值（QA 推算 0.67）');
+    }
+    out.push(`起停滑步（60 fps 推算，改前→改后）：${rows.join('；')}`);
+    // 稳态不补偿（k = 1），补偿有上下限
+    for (let v = 0.05; v <= 3.6; v += 0.05) {
+      const bb = locoBlend(v);
+      near(locoRateComp(v, bb, bb), 1, 1e-9, `稳态 ${v.toFixed(2)} m/s 不补偿`);
+    }
+    assert.equal(locoRateComp(1.6, { idle: 1, walk: 0.05, jog: 0 }, locoBlend(1.6)), LOCO_RATE_COMP_MAX, '补偿上限');
+    assert.equal(locoRateComp(0.01, { idle: 0, walk: 1, jog: 0 }, locoBlend(0.01)), 1, '停下不补偿');
+  }
   near(pushRate(0.812), 1.015, 1e-9, '004 实测 0.812 m/s → 1.015');
   near(stepAcrossRootZ(0), 0, 1e-9, 'step-across 根运动起点');
   near(stepAcrossRootZ(1.6), 0.85, 1e-9, 'step-across 根运动 0.85 m（README 值）');

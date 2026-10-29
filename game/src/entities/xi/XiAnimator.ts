@@ -8,7 +8,9 @@ import {
   XI_CLIP_SPECS,
   XI_FPS,
   XI_CLIP_FALLBACK,
+  LOCO_FADE,
   locoBlend,
+  locoRateComp,
   measureRootZ,
   stairsRate,
   stepAcrossRootZ,
@@ -303,6 +305,8 @@ export class XiAnimator extends Component {
 
     let state: string;
     let rootZ = 0;
+    /** 本帧是纯移动层：根速度（m/s），用于权重淡化后的播放率补偿 */
+    let locoSpeed: number | null = null;
     const turn = this.turn;
     if (turn) {
       state = turn.turned ? 'turn-tail' : 'turn';
@@ -366,8 +370,10 @@ export class XiAnimator extends Component {
         this.ensurePlaying(s);
       } else this.setLoco(this.speed, lantern);
     } else {
-      this.setLoco(this.speed, lantern);
+      // 移动层内部按 LOCO_FADE 淡化 + 起停播放率补偿（batch8 起步滑步），见下面权重更新之后
+      this.setLoco(this.speed, lantern, 1 / LOCO_FADE);
       state = this.blend.jog > 0.5 ? 'jog' : this.blend.walk > 0.5 ? 'walk' : 'idle';
+      locoSpeed = this.speed;
     }
     this.state = state;
     this.rootOffset.position.z = rootZ;
@@ -380,6 +386,7 @@ export class XiAnimator extends Component {
       s.action.setEffectiveWeight(s.w);
       if (s.w <= 0 && s.target <= 0 && s.action.isRunning() && !XiAnimator.LOCO.has(s.action.getClip().name)) s.action.stop();
     }
+    if (locoSpeed !== null) this.compensateLoco(locoSpeed, lantern);
     this.mixer.update(dt);
   }
 
@@ -415,6 +422,18 @@ export class XiAnimator extends Component {
       const jd = jog.action.getClip().duration;
       jog.action.time = ((walk.action.time % wd) / wd) * jd;
     }
+  }
+
+  /** 起停瞬间权重还没到位：walk / jog 播放率同乘 locoRateComp（稳态 k = 1，不改变） */
+  private compensateLoco(speed: number, lantern: boolean): void {
+    const sfx = lantern ? '-lantern' : '';
+    const idle = this.slots.get(`xi-idle${sfx}`) ?? this.slots.get('xi-idle');
+    const walk = this.slots.get(`xi-walk${sfx}`) ?? this.slots.get('xi-walk');
+    const jog = this.slots.get(`xi-jog${sfx}`) ?? this.slots.get('xi-jog');
+    const k = locoRateComp(speed, { idle: idle?.w ?? 0, walk: walk?.w ?? 0, jog: jog?.w ?? 0 }, this.blend);
+    if (k === 1) return;
+    if (walk) walk.action.timeScale = this.blend.walkRate * k;
+    if (jog) jog.action.timeScale = this.blend.jogRate * k;
   }
 
   private drive(s: Slot, target: number, rate: number, fade: number): void {

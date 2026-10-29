@@ -155,6 +155,27 @@ export function locoGroundSpeed(b: LocoBlend): number {
   return (b.walk * b.walkRate * WALK.strideSpeed + b.jog * b.jogRate * JOG.strideSpeed) / w;
 }
 
+/**
+ * 起步 / 停步防滑步（batch8）：移动层（idle / walk / jog 之间）权重淡化时间（s）。
+ * 控制器 0.12 s 加速到位，原来沿用通用 FADE 0.2 s 时权重跟不上速度，起步瞬间脚下比地面慢最多 0.67 m/s（走）/ 1.53 m/s（跑）。
+ * 从动作 / 循环回到移动层仍用 0.2 s。
+ */
+export const LOCO_FADE = 0.1;
+/** 起停瞬间播放率补偿上限（倍）：权重还没到位时把 walk / jog 播放率放大 / 缩小，最多这么多倍 */
+export const LOCO_RATE_COMP_MAX = 1.5;
+
+/**
+ * 权重还在淡化时的播放率补偿系数 k（walk / jog 的 timeScale 同乘 k，相位锁定不变）：
+ * 让实际权重下的脚下速度 Σ w·rate·strideSpeed / max(1, Σw) 尽量等于根速度 s；稳态（权重 = 目标）时 k = 1。
+ * s < 0.05（停下）不补偿。
+ */
+export function locoRateComp(s: number, w: { idle: number; walk: number; jog: number }, b: LocoBlend): number {
+  if (s < IDLE_BELOW) return 1;
+  const got = (w.walk * b.walkRate * WALK.strideSpeed + w.jog * b.jogRate * JOG.strideSpeed) / Math.max(1, w.idle + w.walk + w.jog);
+  if (got < 1e-6) return 1;
+  return Math.min(LOCO_RATE_COMP_MAX, Math.max(1 / LOCO_RATE_COMP_MAX, s / got));
+}
+
 /** 楼梯：按实际水平速度（m/s）同步 stairs-up/down 播放率（clip 水平 0.7091 / 竖直 0.5455 m/s） */
 export const stairsRate = (horizontalSpeed: number): number => horizontalSpeed / XI_CLIP_SPECS['xi-stairs-up'].strideSpeed;
 
