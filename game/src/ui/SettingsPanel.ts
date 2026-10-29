@@ -143,8 +143,9 @@ export class SettingsPanel {
     const note = this.el.querySelector<HTMLParagraphElement>('[data-role="quality-note"]')!;
     note.hidden = !q.showAutoNote;
     note.textContent = q.showAutoNote ? t('ui.settings.quality_auto_note') : '';
-    // 检测状态：只有检测**完成**才写「自动检测：x」，被打断 / 跳过显示「尚未自动检测」（BUG-002）
-    const detected = q.detected;
+    // 检测状态（策划定稿）：全部检测**完成**后才显示 quality_detected；没跑过 / 被打断 / 被跳过 / 重测进行中
+    // 都显示 quality_undetected（BUG-002）；网址参数临时档位显示 quality_url
+    const detected = this.game.benchmark.running ? null : q.detected;
     const status = this.el.querySelector<HTMLParagraphElement>('[data-role="quality-status"]')!;
     status.textContent = q.urlOverride
       ? t('ui.settings.quality_url')

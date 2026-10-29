@@ -359,7 +359,7 @@ test('import-text 检查：代码引用的缺失 ID = 0；硬编码剧情中文�
 
 test('BUG-005 操作提示从文本表生成：按键框 + 说明，转义', () => {
   assert.equal(keyHintHtml('W A S D 移动　Esc 暂停'), '<kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 移动　<kbd>Esc</kbd> 暂停');
-  assert.equal(keyHintHtml('点击画面 锁定鼠标转视角'), '<kbd>点击画面</kbd> 锁定鼠标转视角');
+  assert.equal(keyHintHtml('点击画面 锁定视角'), '<kbd>点击画面</kbd> 锁定视角');
   assert.equal(keyHintHtml('<b> 坏'), '<kbd>&lt;b&gt;</kbd> 坏');
   const html = keyHintHtml(t('ui.hud.controls'));
   assert.ok((html.match(/<kbd>/g) ?? []).length >= 9, html);

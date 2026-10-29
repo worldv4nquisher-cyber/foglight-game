@@ -12,7 +12,7 @@ import type { Settings } from '@/systems/save/Settings';
  * - 从极致开始测 3 秒平均帧率，< 50 fps 降一档，降档后重测 3 秒，仍 < 50 再降；最多连降两档（极致 → 高 → 标准）。
  * - 结果写进设置：`quality`、`qualityDetectedTier`、`qualitySource='auto'`。**只有检测完成才写 qualityDetectedTier**（BUG-002）。
  * - 玩家在检测过程中手动改了画质：立即停止（aborted），以玩家选择为准；只写 `qualityDetected=true`（不再自动检测），
- *   `qualityDetectedTier` 保持 null，设置界面显示「尚未自动检测」，「恢复默认」回到默认极致。检测前已手动选过档同理（skipped）。
+ *   `qualityDetectedTier` 保持 null，设置界面显示 ui.settings.quality_undetected，「恢复默认」回到默认极致。检测前已手动选过档同理（skipped）。
  * - 暂停 / 切后台时丢弃当前这一轮，恢复后重新计时。检测没完成就离开 S1（`cancel()`）：整次作废、不写设置，下次进 S1 重测。
  * - `?simulateFps=40` 用固定帧率代替实测（等待时间照旧 3 s / 轮）；`?simulateFps=40,60` 按轮次依次取值，不够的沿用最后一个。
  * - URL `?quality=xx` 临时覆盖时不跑（避免把调试档位写进设置）。

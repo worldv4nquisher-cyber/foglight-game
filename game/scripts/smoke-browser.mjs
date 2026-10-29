@@ -334,7 +334,8 @@ const CHECKS = [
         return { foot, foot2, state: g.benchmark.state, set1, set2: JSON.parse(localStorage.getItem('foglight.settings.v1')), tier: g.quality.tier };
       })()`);
       if (b2.state !== 'aborted') throw new Error('检测应被打断 ' + JSON.stringify(b2));
-      if (!/^尚未自动检测/.test(b2.foot) || !/^尚未自动检测/.test(b2.foot2)) throw new Error('底栏应显示「尚未自动检测」：' + b2.foot + ' / ' + b2.foot2);
+      const undet = TEXT['ui.settings.quality_undetected'];
+      if (!b2.foot.startsWith(undet) || !b2.foot2.startsWith(undet)) throw new Error('底栏应显示「' + undet + '」：' + b2.foot + ' / ' + b2.foot2);
       if (b2.set1.qualityDetectedTier !== null || b2.set1.quality !== 'standard' || b2.set1.qualitySource !== 'user') throw new Error('打断后设置不对 ' + JSON.stringify(b2.set1));
       if (b2.tier !== 'ultra' || b2.set2.quality !== 'ultra' || b2.set2.qualitySource !== 'default' || b2.set2.qualityDetectedTier !== null) throw new Error('恢复默认应回极致 ' + JSON.stringify(b2));
       out.push('BUG-002 打断后「尚未自动检测」、恢复默认 → 极致 ✓');
@@ -515,7 +516,7 @@ const CHECKS = [
         }
         if (!st?.paused || !st.shown) throw new Error('Esc 没打开暂停菜单 ' + JSON.stringify(st));
         if (/undefined|null|NaN/.test(st.foot)) throw new Error('暂停菜单底栏有 undefined：' + st.foot);
-        if (detected && !st.foot.includes('自动检测：')) throw new Error('已检测状态底栏不对：' + st.foot);
+        if (detected && !st.foot.includes(TEXT['ui.settings.quality_detected'].split('{tier}')[0])) throw new Error('已检测状态底栏不对：' + st.foot);
         // 菜单开着时切档（refresh 再跑一次）
         await evaluate(`(() => { document.querySelector('.pause-menu [data-role="quality"] button:last-child').click(); document.querySelector('.pause-menu [data-role="quality"] button').click(); document.querySelector('.pause-menu .settings-panel [data-act="back"]').click(); return 1; })()`);
         const r = await evaluate(`(() => { const b = document.querySelector('.pause-menu [data-act="resume"]').getBoundingClientRect(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 }; })()`);
@@ -1111,7 +1112,10 @@ const CHECKS = [
       const wantHint = TEXT['ui.hud.controls'].replace(/\s+/g, '');
       if (hudTxt.loc !== TEXT['ch1.s1.location.title'] || (hudTxt.hint ?? '').replace(/\s+/g, '') !== wantHint || hudTxt.kbd < 9) throw new Error('S1 地名 / 操作提示不是文本表里的 ' + JSON.stringify(hudTxt));
       if (!(await until(`__game.assets.isGroupLoaded('s2')`, 30000))) throw new Error('S1 没有后台预加载 s2');
-      out.push('新游戏 common+s1 → S1、存档 s1、地名 / 操作提示走文本表、预加载 s2 ✓');
+      // 桌面专做（GDD §15）：v0.1 不注册 TouchInput，页面上没有任何触屏按钮 / 摇杆
+      const touchEls = await evaluate(`document.querySelectorAll('.touch-controls, .touch-btn, .joystick-base').length`);
+      if (touchEls !== 0) throw new Error('v0.1 不应显示触屏控件，找到 ' + touchEls + ' 个');
+      out.push('新游戏 common+s1 → S1、存档 s1、地名 / 操作提示走文本表、无触屏控件、预加载 s2 ✓');
 
       // ---- 3. S1 → S2：黑场预算 0.96 s（淡出 + 至少 0.3 s 全黑 + 淡入；无头下按「每段最多超一帧」核对）、换场景时全黑、存档 s2、释放 s1、显存对象减少
       await sleep(300);
