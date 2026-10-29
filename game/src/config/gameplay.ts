@@ -116,6 +116,17 @@ export const gameplay = {
     /** 高亮默认时长（s，提示系统二级提示） */
     highlightSeconds: 3,
   },
+  /** 三级提示（GDD §7、§9；v0.1-007）。计时 = 玩家在谜题区域里的游戏时间（离开暂停、不清零） */
+  hint: {
+    /** 进入区域多久解锁一级（s） */
+    level1Delay: 180,
+    /** 一级之后再多久解锁二级（s） */
+    level2Delay: 180,
+    /** 二级之后再多久解锁三级（s） */
+    level3Delay: 240,
+    /** 二级高亮关键物体的时长（s） */
+    highlightSeconds: 3,
+  },
   /** 机关操作模式（GDD §7；v0.1-004） */
   puzzle: {
     /** 档位角（°）与按住 Shift 的精调档位（°） */

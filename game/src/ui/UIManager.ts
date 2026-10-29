@@ -18,6 +18,7 @@ import { Journal } from './Journal';
 import { Reader } from './Reader';
 import { Subtitles } from './Subtitles';
 import { Toast } from './Toast';
+import { HintPanel } from './HintPanel';
 import { gameplay } from '@/config/gameplay';
 import { t } from '@/content/text';
 
@@ -49,6 +50,8 @@ export class UIManager {
   readonly journal: Journal;
   /** 左下角短提示（「日志已更新」） */
   readonly toastLeft: Toast;
+  /** 三级提示：右下角风灯图标 + H 弹窗（007）；场景进入时 bind(本场景的 HintSystem) */
+  readonly hints: HintPanel;
   private offs: Array<() => void> = [];
 
   constructor(
@@ -70,6 +73,7 @@ export class UIManager {
     this.hud = new Hud(root);
     this.subtitles = new Subtitles(root, game.narrative, game.events);
     this.toastLeft = new Toast(root);
+    this.hints = new HintPanel(root, { input: game.input, events: game.events });
     const freeze = (): (() => void) => game.freeze();
     this.reader = new Reader(root, { input: game.input, narrative: game.narrative, events: game.events, freeze });
     this.journal = new Journal(root, { input: game.input, narrative: game.narrative, events: game.events, reader: this.reader, freeze });
@@ -98,6 +102,7 @@ export class UIManager {
       game.events.on('scene:change', () => {
         this.subtitles.track.clear();
         this.toastLeft.clear();
+        this.hints.close();
         this.journal.close();
         this.reader.close(false);
       }),
@@ -170,6 +175,7 @@ export class UIManager {
     const covered =
       this.reader.isOpen || this.journal.isOpen || this.pause.isOpen || this.mainMenu.isOpen || this.chapterEnd.isOpen || this.game.flow.transitioning;
     this.toastLeft.update(dt, covered);
+    this.hints.update(covered || this.settings.isOpen || this.confirm.isOpen);
   }
 
   dispose(): void {
@@ -189,6 +195,7 @@ export class UIManager {
     this.reader.dispose();
     this.subtitles.dispose();
     this.toastLeft.dispose();
+    this.hints.dispose();
     this.root.replaceChildren();
   }
 }

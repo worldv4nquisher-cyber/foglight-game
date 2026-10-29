@@ -1009,3 +1009,97 @@ body {
   letter-spacing: 0.4em;
   color: var(--ui-dim);
 }
+
+/* ---- 三级提示（v0.1-007）：右下角小风灯 + H 弹窗。不挡鼠标（弹窗不冻结游戏，玩家可以边看边走） */
+.hint-root {
+  position: absolute;
+  inset: 0;
+  pointer-events: none !important;
+  z-index: 9;
+}
+
+.hint-root.covered {
+  visibility: hidden;
+}
+
+.hint-lantern {
+  position: absolute;
+  /* 「已保存」小字（.hud-toast，右下 bottom 14px）上方 */
+  right: 20px;
+  bottom: 42px;
+  color: var(--ui-dim);
+  opacity: 0;
+  transition: opacity 1.2s ease, color 0.6s ease;
+}
+
+.hint-lantern.visible {
+  opacity: 0.75;
+}
+
+.hint-lantern.fresh {
+  opacity: 1;
+  color: var(--ui-text);
+}
+
+.hint-flame {
+  fill: var(--ui-warm);
+  opacity: 0.55;
+}
+
+.hint-lantern.fresh .hint-flame {
+  opacity: 0.95;
+  filter: drop-shadow(0 0 3px var(--ui-amber-glow));
+}
+
+.hint-panel {
+  position: absolute;
+  right: 18px;
+  bottom: 82px;
+  width: min(80vw, 24em);
+  padding: 1em 1.3em 0.8em;
+  background: var(--ui-bg);
+  border: 1px solid var(--ui-border);
+  border-radius: 4px;
+  color: var(--ui-text);
+}
+
+.hint-panel[hidden] {
+  display: none;
+}
+
+.hint-title {
+  margin: 0 0 0.6em;
+  font-family: var(--ui-serif);
+  font-weight: normal;
+  font-size: 15px;
+  color: var(--ui-dim);
+  letter-spacing: 0.1em;
+}
+
+.hint-row {
+  display: flex;
+  gap: 0.8em;
+  align-items: baseline;
+  padding: 0.3em 0;
+}
+
+.hint-level {
+  flex: none;
+  width: 1.4em;
+  font-family: var(--ui-serif);
+  font-size: 13px;
+  color: var(--ui-warm);
+}
+
+.hint-text {
+  margin: 0;
+  font-family: var(--ui-serif);
+  font-size: 15px;
+  line-height: 1.7;
+}
+
+.hint-row.locked .hint-level,
+.hint-row.locked .hint-text {
+  color: var(--ui-dim);
+  opacity: 0.7;
+}

@@ -12,6 +12,8 @@ import { ViewpointTarget } from '@/entities/components/ViewpointTarget';
 import { buildTestCourse, type TestCourse } from '@/world/testCourse';
 import { InteractionSystem, actorFromRig } from '@/systems/interaction/InteractionSystem';
 import { buildInteractionSamples, type InteractionSamples } from '@/world/interactionSamples';
+import { circleZone, type HintSystem } from '@/systems/HintSystem';
+import { createSceneHints } from './sceneHints';
 
 /**
  * 角色控制器 / 相机测试场地（v0.1-002、003）：地址栏加 ?scene=testbed 进入。不存档。
@@ -34,6 +36,8 @@ export class TestbedScene extends BaseScene {
   viewpoint!: ViewpointTarget;
   interaction!: InteractionSystem;
   samples!: InteractionSamples;
+  /** 007 测试谜题：test-bell（钟旁，敲钟 = 解开）、test-steps（油阀旁，分步骤：拧开油阀 = 完成第 1 步） */
+  hints!: HintSystem;
   private tipMat: THREE.MeshBasicMaterial | null = null;
   private liftT = 0;
   private liftBaseY = 0;
@@ -122,6 +126,7 @@ export class TestbedScene extends BaseScene {
       () => this.interaction.dispose(),
       () => this.cameraFollow.dispose(),
     );
+    this.buildHintTests();
 
     const { ui } = this.game;
     ui.hud.show();
@@ -143,6 +148,43 @@ export class TestbedScene extends BaseScene {
     if (import.meta.env.DEV || new URLSearchParams(location.search).has('smoke')) {
       Object.assign(window, { __testbed: this });
     }
+  }
+
+  /**
+   * 007 测试谜题（两块地面圆圈）：
+   * - test-bell：钟旁 (15.5, -2) 半径 1.4 m，文案用谜题 1，二级高亮钟；敲钟（interact:used sample-bell）= 解开。
+   * - test-steps：油阀旁 (15.5, 1) 半径 1.2 m，文案用谜题 5 的四个步骤；拧开油阀 = 完成 valve，之后二、三级换成 window_mirror。
+   */
+  private buildHintTests(): void {
+    const [hints, unbind] = createSceneHints(this.game, this.interaction, this.scene);
+    this.hints = hints;
+    hints.add({ id: 'test-bell', zone: circleZone({ x: 15.5, z: -2 }, 1.4), l1: 'ch1.hint.p1.l1', l2: 'ch1.hint.p1.l2', l3: 'ch1.hint.p1.l3', highlight: ['sample-bell'] });
+    hints.add({
+      id: 'test-steps',
+      zone: circleZone({ x: 15.5, z: 1 }, 1.2),
+      l1: 'ch1.hint.p5.l1',
+      steps: [
+        { id: 'valve', l2: 'ch1.hint.p5.valve.l2', l3: 'ch1.hint.p5.valve.l3', highlight: ['sample-valve'] },
+        { id: 'window_mirror', l2: 'ch1.hint.p5.window_mirror.l2', l3: 'ch1.hint.p5.window_mirror.l3', highlight: ['sample-stand-b'] },
+        { id: 'mid_a', l2: 'ch1.hint.p5.mid_a.l2', l3: 'ch1.hint.p5.mid_a.l3', highlight: ['sample-mechanism'] },
+        { id: 'mid_b', l2: 'ch1.hint.p5.mid_b.l2', l3: 'ch1.hint.p5.mid_b.l3', highlight: ['sample-mechanism'] },
+      ],
+    });
+    const markMat = new THREE.MeshBasicMaterial({ color: 0xd8b070, transparent: true, opacity: 0.35 });
+    for (const [x, z, r, name] of [[15.5, -2, 1.4, 'hint-zone-test-bell'], [15.5, 1, 1.2, 'hint-zone-test-steps']] as const) {
+      const ring = new THREE.Mesh(new THREE.RingGeometry(r - 0.05, r, 48), markMat);
+      ring.rotation.x = -Math.PI / 2;
+      ring.position.set(x, 0.012, z);
+      ring.name = name;
+      this.scene.add(ring);
+    }
+    this.cleanups.push(
+      unbind,
+      this.game.events.on('interact:used', ({ id }) => {
+        if (id === 'sample-bell') hints.solve('test-bell');
+        if (id === 'sample-valve') hints.completeStep('test-steps', 'valve');
+      }),
+    );
   }
 
   /** 相机测试物：机关底座外观、观察点地面标记与目标立柱 */
@@ -221,6 +263,7 @@ export class TestbedScene extends BaseScene {
     this.entities.fixedUpdate(dt);
     this.physics.step(dt);
     this.rig.body.afterPhysics();
+    this.hints.fixedUpdate(dt, this.rig.body.position);
   }
 
   override update(dt: number, alpha: number): void {
@@ -235,6 +278,7 @@ export class TestbedScene extends BaseScene {
     if (this.game.ui.debug.visible) {
       this.game.ui.debug.set('角色', debugPlayerLine(this.rig, this.physics));
       this.game.ui.debug.set('相机', this.cameraFollow.debugLine());
+      this.game.ui.debug.set('提示', this.hints.debugLine());
       const v = this.viewpoint;
       this.game.ui.debug.set('观察点', v.inRegion ? `对准度 ${v.alignment.toFixed(2)} · 偏差 ${v.angleDeg.toFixed(1)}°` : '不在观察点');
     }

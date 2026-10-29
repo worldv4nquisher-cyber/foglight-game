@@ -1183,6 +1183,95 @@ const CHECKS = [
       return out.join('，');
     },
   },
+  {
+    name: 'v0.1-007 三级提示：?hintScale=0.02 时区域内 3.6 s（游戏时间）出风灯、H 弹窗（未解锁 locked）、二级高亮钟 3 s、三级全文、离开暂停、分步骤换文案、敲钟解开后图标消失、hintsUsed 计数',
+    async run({ evaluate, cdp, sleep }) {
+      const out = [];
+      await cdp.goto('scene=testbed&hintScale=0.02', 'testbed');
+      const until = async (expr, ms = 8000) => {
+        const end = Date.now() + ms;
+        let v;
+        while (Date.now() < end) {
+          v = await evaluate(expr).catch(() => false);
+          if (v) return v;
+          await sleep(80);
+        }
+        return v;
+      };
+      // 按 H 并等弹窗状态翻转（高负载时帧很慢）
+      const tapH = async () => {
+        const was = await evaluate('__game.ui.hints.isOpen');
+        await evaluate(`__game.input.setRaw('smoke', 'KeyH', true); 1`);
+        await sleep(60);
+        await evaluate(`__game.input.setRaw('smoke', 'KeyH', false); 1`);
+        if ((await until(`__game.ui.hints.isOpen !== ${was}`, 6000)) !== true) throw new Error('按 H 弹窗没有' + (was ? '关闭' : '打开'));
+      };
+      const panel = `(() => { const p = document.querySelector('.hint-panel'); return { open: !!p && !p.hidden, rows: [...document.querySelectorAll('.hint-row')].map((r) => (r.classList.contains('locked') ? '×' : '') + r.querySelector('.hint-text').textContent) }; })()`;
+      const lantern = `document.querySelector('.hint-lantern').classList.contains('visible')`;
+      await evaluate(`(() => { if (!__game.save.active) __game.save.newGame('ch1', 'testbed'); window.__hx = []; for (const n of ['hint:unlocked', 'hint:open', 'highlight:start']) __game.events.on(n, (p) => __hx.push([n, p])); return 1; })()`);
+      const used0 = await evaluate('__game.save.hintsUsed');
+      if (await evaluate('__testbed.hints.thresholds[0]') > 3.61) throw new Error('hintScale 没生效 ' + (await evaluate('__testbed.hints.thresholds')));
+      if (await evaluate(lantern)) throw new Error('进场就有风灯');
+      // 不在区域里按 H：三行 locked（「再等等，四处看看」）
+      await tapH();
+      let p = await evaluate(panel);
+      if (!p.open || p.rows.length !== 3 || !p.rows.every((r) => r === '×再等等，四处看看'))
+        throw new Error('区域外 H 弹窗不对 ' + JSON.stringify(p));
+      await tapH();
+      // 站进钟旁区域，等 9 s（游戏时间）解锁一级
+      const stand = `(() => { const tb = __testbed; tb.interaction.cancel(); tb.rig.body.teleport(new tb.rig.body.position.constructor(15.3, 0.05, -2)); return 1; })()`;
+      await evaluate(stand);
+      const t0 = Date.now();
+      if (!(await until(lantern, 90000))) throw new Error('区域内 45 s 风灯没出现 ' + (await evaluate('__testbed.hints.debugLine()')));
+      out.push(`一级 ${((Date.now() - t0) / 1000).toFixed(1)} s（墙钟）出风灯`);
+      await tapH();
+      p = await evaluate(panel);
+      if (!p.open || p.rows[0].startsWith('×') || !p.rows[1].startsWith('×') || !p.rows[2].startsWith('×')) throw new Error('一级弹窗不对 ' + JSON.stringify(p));
+      if ((await evaluate('__game.save.hintsUsed')) !== used0 + 1) throw new Error('看一级没记 hintsUsed');
+      if (!(await evaluate(`__game.input.context === 'explore' && !__game.isPaused`))) throw new Error('弹窗不应暂停 / 换上下文');
+      // 弹窗开着时升到二级：自动刷新 + 高亮钟
+      await evaluate(`__testbed.hints.debugSetTime('test-bell', 7.3); 1`);
+      const hl = await until(`__hx.find(([n, p]) => n === 'highlight:start' && p.ids.includes('sample-bell'))`, 4000);
+      if (!hl || hl[1].seconds !== 3) throw new Error('二级没高亮钟 3 s ' + JSON.stringify(await evaluate('__hx')));
+      p = await evaluate(panel);
+      if (p.rows[1].startsWith('×') || !p.rows[2].startsWith('×')) throw new Error('二级弹窗不对 ' + JSON.stringify(p));
+      await evaluate(`__testbed.hints.debugSetTime('test-bell', 12.1); 1`);
+      await until(`!document.querySelectorAll('.hint-row.locked').length`, 6000);
+      p = await evaluate(panel);
+      if (p.rows.some((r) => r.startsWith('×'))) throw new Error('三级弹窗不对 ' + JSON.stringify(p));
+      if ((await evaluate('__game.save.hintsUsed')) !== used0 + 3) throw new Error('hintsUsed 应 +3，实际 ' + ((await evaluate('__game.save.hintsUsed')) - used0));
+      out.push('一二三级 ✓ hintsUsed +3');
+      await tapH();
+      // 离开区域：计时暂停
+      await evaluate(`(() => { const tb = __testbed; tb.rig.body.teleport(new tb.rig.body.position.constructor(0, 0.05, 4)); return 1; })()`);
+      await sleep(300);
+      const ta = await evaluate(`__testbed.hints.time('test-bell')`);
+      await sleep(1500);
+      const tb2 = await evaluate(`__testbed.hints.time('test-bell')`);
+      if (Math.abs(tb2 - ta) > 0.05) throw new Error(`区域外计时没停 ${ta} → ${tb2}`);
+      // 分步骤：油阀区域，二级取 valve；完成 valve 后换成 window_mirror
+      await evaluate(`__testbed.hints.debugSetTime('test-steps', 7.3); 1`);
+      await evaluate(`(() => { const tb = __testbed; tb.rig.body.teleport(new tb.rig.body.position.constructor(15.5, 0.05, 1)); return 1; })()`);
+      await until(`__testbed.hints.currentId === 'test-steps'`, 4000);
+      await tapH();
+      p = await evaluate(panel);
+      const valveL2 = await evaluate(`__game.ui.hints.view?.lines[1]?.textId`);
+      if (valveL2 !== 'ch1.hint.p5.valve.l2') throw new Error('步骤二级应为 valve ' + valveL2 + JSON.stringify(p));
+      await evaluate(`__testbed.hints.completeStep('test-steps', 'valve'); 1`);
+      const ok = await until(`__testbed.hints.view().step === 'window_mirror' && __game.ui.hints.view?.lines[1]?.textId === 'ch1.hint.p5.window_mirror.l2'`, 3000);
+      if (!ok) throw new Error('完成 valve 后弹窗没换成 window_mirror');
+      await tapH();
+      out.push('分步骤换文案 ✓');
+      // 敲钟 = 解开 test-bell；区域内不再显示它
+      await evaluate(`__game.events.emit('interact:used', { id: 'sample-bell', kind: 'use' }); __testbed.hints.solve('test-steps'); 1`);
+      if (!(await evaluate(`__testbed.hints.isSolved('test-bell')`))) throw new Error('敲钟没解开 test-bell');
+      if (!(await until(`!document.querySelector('.hint-lantern').classList.contains('visible')`, 3000))) throw new Error('全解开后风灯没消失');
+      out.push('解开后风灯消失 ✓');
+      await evaluate(`localStorage.clear(); 1`);
+      await cdp.goto('');
+      return out.join('；');
+    },
+  },
 ];
 const extra = process.env.SMOKE_ONLY ? CHECKS.filter((c) => process.env.SMOKE_ONLY.split('|').some((k) => c.name.includes(k))) : CHECKS;
 

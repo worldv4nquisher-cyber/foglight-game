@@ -18,7 +18,7 @@
 | `npm run preview` | 本地预览 `dist/`（http://localhost:4173） |
 | `npm run typecheck` | TypeScript 严格模式检查（src + vite.config） |
 | `npm run lint` / `lint:fix` | ESLint（flat config + typescript-eslint 类型感知规则） |
-| `npm run test` | 全部 Node 校验：LOD / puzzleCritical、资源后处理与 GLB 自检（`test:assets`）、输入（`test:input`）、存档（`test:save`）、角色物理（`test:physics`）、相机（`test:camera`）、画质参数表与自动检测（`test:quality`，逐键对照 style-guide §8）、文本表是否最新 / 代码引用的文本 ID 是否都在（`test:text`）、交互与机关（`test:interaction`）、字幕 / 阅读 / 日志（`test:narrative`；`test:text` 同时检查代码里没有硬编码的剧情中文） |
+| `npm run test` | 全部 Node 校验：LOD / puzzleCritical、资源后处理与 GLB 自检（`test:assets`）、输入（`test:input`）、存档（`test:save`）、角色物理（`test:physics`）、相机（`test:camera`）、画质参数表与自动检测（`test:quality`，逐键对照 style-guide §8）、文本表是否最新 / 代码引用的文本 ID 是否都在（`test:text`）、交互与机关（`test:interaction`）、字幕 / 阅读 / 日志（`test:narrative`）、三级提示（`test:hint`；`test:text` 同时检查代码里没有硬编码的剧情中文） |
 | `npm run text:import` | 从 `docs/gdd/text-ch1.json` 重新生成 `src/content/text/zh-CN.ts`（文案改了跑一次；`test:text` 会检查生成结果是否已提交） |
 | `npm run verify:glb -- <a.glb> [b.glb…]` | **GLB 交付自检**（美术交付前跑；文件路径按你执行 npm 的目录解析，在 art/ 下可用 `npm --prefix ../game run verify:glb -- <文件>`）：LOD 层级与各级三角面、puzzleCritical、`-collider` / `-interact` 等特殊节点、COLOR_0 平滑法线、面数预算、材质与贴图。不带参数 = 原来的 LOD 自测。见下文「GLB 交付自检」 |
 | `npm run assets:test-lod` | 重新生成 LOD 测试模型 `public/assets/models/test-lod-puzzle-critical.glb` |
@@ -43,6 +43,7 @@
 | `?scene=sandbox` | 沙盒：v0.1 demo 岛（原主场景，含画质检测以外的全部样例；开发服务器或带 `?debug=1`），不存档、没有出口 |
 | `?slowLoad=1500` | 模拟慢网：除 boot/menu 外每个资源组至少加载 1500 ms（进度按时间线性），用来看加载页和切换黑场里的细线进度 |
 | `?scene=testbed` | 角色控制器 / 相机测试场地（坡、台阶、螺旋楼梯、墙、闸门 G、升降台、跨越点、T 黑场送回；带窄门的小屋、测试机关、观察点、C 测试镜头），不存档 |
+| `?hintScale=0.05` | 三级提示计时乘系数（0.05 = 9 / 18 / 30 s 解锁一二三级，方便试玩提示；开发服务器 / `?debug=1` / 冒烟时才生效） |
 | `?debug=1` | 正式构建里也打开 F3 性能面板 / F4 调试面板（输入、速度、碰撞耗时、相机、观察点对准度） |
 
 开发模式下控制台可用 `__game`，如 `__game.quality.set('ultra')`、`__game.flow.completeChapter()`（035 结尾演出前手动进章节结束页）；`__lods()` 列出 LOD 测试物体的当前层级。
@@ -214,6 +215,18 @@ game.events.on('interact:used', ({ id }) => { if (id === 'bell') ring(); });
 - **存档**：存的是场景 ID（`s1` / `s2` / `s3`），旧存档里的 `main` 视为 `s1`。
 - 校验：`npm run test:flow`（manifest 分组、场景链、存档映射、切换时长、出口触发、模型命名、模拟切换已加载 / 慢加载）、`npm run size`；smoke「v0.1-010」走一遍：启动只加载主菜单包和字体、新游戏 → S1 → 预加载 S2 → 走进出口到 S2（全黑时换、存档、释放 S1）→ 慢加载到 S3（细线进度）→ 点灯 → 结束页、沙盒仅 debug。
 - 本机试玩：`npm run dev` → 主菜单「新游戏」，在 S1 往西北走到两根石柱之间；`http://localhost:5173/?slowLoad=1500` 看进度线；`?scene=s2` / `?scene=s3` 直接进某个场景（正式构建加 `&debug=1`）。
+
+## 三级提示（v0.1-007）
+
+- 每道谜题在场景里登记一块「谜题区域」：`this.hints.add({ id, zone: circleZone(...) | boxZone(...), l1, l2, l3, highlight })`（LevelScene / TestbedScene 都有 `hints`，在 `buildInteractables()` 里登记；013–015 摆谜题时加）。分步骤的谜题（谜题 5）用 `steps: [{ id, l2, l3, highlight }]`，`completeStep(id, stepId)` 完成一步，二、三级永远取第一个未完成的步骤；解开调用 `solve(id)`。
+- 计时只在玩家站在区域内时走（场景 fixedUpdate 里累计：暂停 / 冻结时不走），离开暂停不清零；进入区域 3 分钟解锁一级、6 分钟二级、10 分钟三级（数值在 `src/config/gameplay.ts` 的 `hint`）。计时不进存档，重新进场景从 0 开始。
+- 一级解锁后右下角（「已保存」小字上方）淡入小风灯，有新层级没看过时更亮；谜题解开后风灯消失。
+- 按 H（explore / puzzle 上下文）开关提示弹窗，三行：已解锁的显示文本，未解锁的显示「再等等，四处看看」（`ch1.hint.locked`）。弹窗不暂停游戏、不换输入上下文，可以开着走。没有当前谜题时三行都是 locked。
+- 「当前谜题」= 玩家所在区域里未解开的谜题；不在任何区域时 = 最近进过的未解开谜题。
+- 二级起每次打开弹窗都给关键物体描边高亮 3 s（`InteractionSystem.highlight`，`hint` 样式）；`highlight` 可以是函数（如谜题 5 涨潮时同时亮钟和油阀）。
+- 提示次数：每道谜题每个层级第一次在弹窗里看到时记 1 次（一次看到二、三级记 2 次；换步骤不再记），立即写入存档的 `hintsUsed`（不改存档点、不弹「已保存」），章节结束页显示。
+- 测试场地 `?scene=testbed&hintScale=0.05`：钟旁地面圆圈 = `test-bell`（谜题 1 文案，二级高亮钟，敲钟 = 解开）；油阀旁圆圈 = `test-steps`（谜题 5 文案，拧开油阀 = 完成第一步，之后二三级换成「窗边镜子」）。F4 面板「提示」一行显示计时 / 阈值 / 层级 / 步骤。
+- 校验：`npm run test:hint`；smoke「v0.1-007」用 `?hintScale=0.02` 走真实 H 键。
 
 ## 字幕、阅读界面与日志（v0.1-005）
 

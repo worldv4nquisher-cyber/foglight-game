@@ -61,6 +61,10 @@ export interface GameEvents {
   'reader:open': { docId: string; pages: number };
   'reader:close': { docId: string };
   'journal:open': undefined;
+  /** 007：提示层级解锁（右下角风灯淡入）/ H 弹窗开关（level = 弹窗打开时已解锁的层级；puzzleId=null 表示不在任何谜题里） */
+  'hint:unlocked': { puzzleId: string; level: 1 | 2 | 3 };
+  'hint:open': { puzzleId: string | null; level: number; step: string | null };
+  'hint:close': undefined;
   'journal:close': undefined;
 }
 

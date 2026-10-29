@@ -222,6 +222,33 @@ export class SaveSystem {
     if (this.progress) this.progress.hintsUsed++;
   }
 
+  /** 提示使用次数（007） */
+  get hintsUsed(): number {
+    return this.progress?.hintsUsed ?? 0;
+  }
+
+  /**
+   * 只把内存里的进度（已读、提示次数、用时）写进已有存档，不改存档点（场景 / 入口仍是上次自动存档的）、不弹「已保存」。
+   * 007：看了新层级的提示立刻写盘，刷新 / 关页面也不会丢。还没有存档时不写（等进场自动存档）。
+   */
+  flush(): boolean {
+    const p = this.progress;
+    const last = this._lastSave;
+    if (!p || !last) return false;
+    const data: SaveData = {
+      ...last,
+      readDocs: [...p.readDocs],
+      seenLines: [...p.seenLines],
+      playTimeSec: p.playTimeSec,
+      hintsUsed: p.hintsUsed,
+      chapterComplete: p.chapterComplete,
+      savedAt: this.now(),
+    };
+    const ok = this.writable && safeSet(this.storage, SAVE_KEY, JSON.stringify(data));
+    this._lastSave = data;
+    return ok;
+  }
+
   /**
    * 自动存档：记录当前场景（入口）并写盘。没有进行中的进度时（比如开发时直接进场景）自动按新游戏开始。
    * 返回是否真正写进了 localStorage（不可写时为 false，但内存里的「继续」本次会话仍可用）。

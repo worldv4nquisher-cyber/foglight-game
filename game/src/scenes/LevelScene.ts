@@ -18,6 +18,8 @@ import { applyLodDistances } from '@/render/lod';
 import type { LevelDef } from './levels';
 import { t, type TextId } from '@/content/text';
 import { keyHintHtml } from '@/ui/keyHint';
+import type { HintSystem } from '@/systems/HintSystem';
+import { createSceneHints } from './sceneHints';
 
 /** 建立镜头迟迟不结束时（慢机器上画质检测拖住），进场多久后无论如何开始预加载下一个场景 */
 const PRELOAD_FALLBACK_MS = 8000;
@@ -53,6 +55,8 @@ export abstract class LevelScene extends BaseScene {
   protected sun = new THREE.DirectionalLight();
   protected hemi = new THREE.HemisphereLight();
   interaction!: InteractionSystem;
+  /** 三级提示（007）：谜题区域在 buildInteractables 里用 this.hints.add({ id, zone, l1, … }) 登记（013–015） */
+  hints!: HintSystem;
 
   /** 入口点（buildLevel 里登记；也可以从模型 collectSceneMarkers 收集） */
   readonly spawns = new Map<string, SpawnPoint>();
@@ -109,6 +113,9 @@ export abstract class LevelScene extends BaseScene {
     const spawn = this.pickSpawn();
     this.buildPlayer(spawn);
     this.buildInteraction();
+    const [hints, unbindHints] = createSceneHints(this.game, this.interaction, this.scene);
+    this.hints = hints;
+    this.cleanups.push(unbindHints);
     this.buildInteractables();
     for (const opts of this.pendingExits) {
       const e = new Entity(`exit-${opts.target}`, new THREE.Object3D());
@@ -303,6 +310,7 @@ export abstract class LevelScene extends BaseScene {
     this.physics.step(dt);
     this.rig.body.afterPhysics();
     this.clampPlayer(this.rig.body.position);
+    this.hints.fixedUpdate(dt, this.rig.body.position);
   }
 
   override update(dt: number, alpha: number): void {
@@ -313,6 +321,7 @@ export abstract class LevelScene extends BaseScene {
     if (this.game.ui.debug.visible) {
       this.game.ui.debug.set('角色', debugPlayerLine(this.rig, this.physics));
       this.game.ui.debug.set('相机', this.cameraFollow.debugLine());
+      this.game.ui.debug.set('提示', this.hints.debugLine());
       this.game.ui.debug.set('场景', `${this.name} · 入口 ${this.entryId} · 资源组 ${this.game.assets.loadedGroups.join(' ')}`);
     }
     this.sky.follow(this.camera);
