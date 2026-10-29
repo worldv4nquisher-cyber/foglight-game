@@ -80,7 +80,8 @@ type Action =
   | { kind: 'hold'; target: Interactable; t: number; clip: XiClipName | null; pre: number }
   /** v0.1-017 交互动作：按游戏时间播 clip，在事件帧 at 生效（effect），播完解锁 */
   | { kind: 'anim'; target: Interactable; clip: XiClipName; t: number; dur: number; at: number; fired: boolean; effect: AnimEffect }
-  | { kind: 'push'; target: Interactable }
+  /** push：有 xi-push-start 时先原地播完它（start 秒，物体不动），再进 push-loop 一起移动；停下（松手 / 到端点）播 xi-push-end */
+  | { kind: 'push'; target: Interactable; t: number; start: number }
   | { kind: 'puzzle'; target: Interactable };
 
 const cfg = gameplay.interaction;
@@ -477,8 +478,11 @@ export class InteractionSystem {
       this.action = { kind: 'hold', target: it, t: 0, clip, pre };
       if (clip) this.o.actor.anim?.setPose(clip, 0);
     } else {
-      this.action = { kind: 'push', target: it };
-      if (this.o.actor.anim?.has('xi-push-loop')) this.o.actor.anim.setLoop('xi-push-loop', pushRate(it.track?.speed ?? cfg.pushSpeed));
+      const anim = this.o.actor.anim;
+      const start = anim?.has('xi-push-start') ? xiClipDuration('xi-push-start') : 0;
+      this.action = { kind: 'push', target: it, t: 0, start };
+      if (start > 0) anim?.setPose('xi-push-start', 0);
+      else this.startPushLoop(it);
     }
   }
 
@@ -508,11 +512,42 @@ export class InteractionSystem {
     }
   }
 
+  private startPushLoop(it: Interactable): void {
+    const anim = this.o.actor.anim;
+    if (anim?.has('xi-push-loop')) anim.setLoop('xi-push-loop', pushRate(it.track?.speed ?? cfg.pushSpeed));
+  }
+
+  /** 停止推：已经在推（过了 push-start）且有 xi-push-end → 原地播完收手（期间仍锁定）；push-start 中途松手直接淡回 */
+  private stopPush(a: Extract<Action, { kind: 'push' }>): void {
+    const pushing = a.t >= a.start;
+    this.endAction();
+    if (pushing && this.o.actor.anim?.has('xi-push-end')) this.startAnim(a.target, 'xi-push-end', 'none');
+  }
+
+  /** 推的阶段（测试 / smoke 读）：start = 播 xi-push-start，loop = 推着走；不在推 = null */
+  get pushPhase(): 'start' | 'loop' | null {
+    const a = this.action;
+    if (a.kind !== 'push') return null;
+    return a.t < a.start ? 'start' : 'loop';
+  }
+
   private stepPush(a: Extract<Action, { kind: 'push' }>, dt: number): void {
     const it = a.target;
     const track = it.track;
     if (!track || !it.enabled || !this.o.input.isDown('interact')) {
-      this.endAction();
+      this.stopPush(a);
+      return;
+    }
+    if (a.t < a.start) {
+      // 弯腰上手（原地），最后一帧 = push-loop 第 0 帧
+      a.t = Math.min(a.start, a.t + dt);
+      this.o.actor.anim?.setPose('xi-push-start', a.t);
+      const b = this.o.actor.body;
+      b.velocity.x = b.velocity.z = 0;
+      if (a.t >= a.start) {
+        this.o.actor.anim?.clearPose();
+        this.startPushLoop(it);
+      }
       return;
     }
     const len = track.from.distanceTo(track.to);
@@ -536,7 +571,7 @@ export class InteractionSystem {
     this.o.events.emit('interact:pushMoved', { id: it.id, t: it.pushT });
     if (it.pushT >= 1) {
       it.locked = true;
-      this.endAction();
+      this.stopPush(a);
       this.o.events.emit('interact:pushEnd', { id: it.id });
       this.o.events.emit('interact:used', { id: it.id, kind: 'push' });
     }
@@ -549,7 +584,10 @@ export class InteractionSystem {
     if (had) this.o.actor.locked = false;
     const anim = this.o.actor.anim;
     if (anim && (prev.kind === 'anim' || (prev.kind === 'hold' && prev.clip))) anim.clearPose();
-    if (anim && prev.kind === 'push') anim.setLoop(null);
+    if (anim && prev.kind === 'push') {
+      anim.setLoop(null);
+      if (prev.t < prev.start) anim.clearPose();
+    }
   }
 }
 
