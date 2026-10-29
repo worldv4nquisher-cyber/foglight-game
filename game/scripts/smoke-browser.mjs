@@ -2094,7 +2094,8 @@ const CHECKS = [
         if (!window.__pushOff) window.__pushOff = __game.events.on('interact:pushMoved', ({ id }) => { const q = window.__push; if (id !== 'raft-s1' || !q) return; q.n++; if (q.move === null) { q.move = g(); q.phase = __s1.interaction.pushPhase; } });
         return r.t0; })()`);
       await key(true);
-      await evaluate(`(__s1.interaction.trigger(__s1.puzzles.raftPush), 1)`);
+      // t0 与 trigger 在页面同一段同步代码里取（不含 CDP 往返时间）
+      await evaluate(`(window.__push.t0 = __game.time.fixedTick * __game.time.fixedDelta, __s1.interaction.trigger(__s1.puzzles.raftPush), 1)`);
       if (!(await until(`__s1.interaction.pushPhase === 'start' && __s1.rig.animator.posing === 'xi-push-start'`, 4000))) {
         await key(false);
         throw new Error('推浮台没先播 xi-push-start ' + JSON.stringify(await evaluate(`({ ph: __s1.interaction.pushPhase, pose: __s1.rig.animator.posing })`)));
