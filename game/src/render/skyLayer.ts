@@ -17,6 +17,11 @@ export interface SkyLayerOptions {
   color: number;
   /** 按物体雾密度（FogExp2 同义） */
   fogDensity: number;
+  /**
+   * 深度钉到远平面（默认 true）。false：只用天空层材质（unlit 单色 + 按物体雾、LOD 折叠到最后一级、不投影），
+   * 深度照常——给在视距内、但比视线低、需要被近景（海面）正确遮住的远景（S2 看 143 m 外的 S3 灯塔，v0.1-014）。
+   */
+  pinDepth?: boolean;
 }
 
 export interface SkyLayerHandle {
@@ -66,7 +71,8 @@ export function makeSkyLayer(root: THREE.Object3D, opts: SkyLayerOptions): SkyLa
   });
   for (const l of lods) collapseToLast(l);
   const fog = { value: opts.fogDensity };
-  const material = withSkyDepth(withObjectFog(new THREE.MeshBasicMaterial({ color: opts.color }), fog));
+  const base = withObjectFog(new THREE.MeshBasicMaterial({ color: opts.color }), fog);
+  const material = opts.pinDepth === false ? base : withSkyDepth(base);
   material.name = 'mat-sky-layer';
   root.traverse((o) => {
     o.frustumCulled = false;

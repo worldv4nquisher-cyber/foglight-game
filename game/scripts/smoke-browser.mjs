@@ -1153,6 +1153,8 @@ const CHECKS = [
       // ---- 3. S1 → S2：黑场预算 0.96 s（淡出 + 至少 0.3 s 全黑 + 淡入；无头下按「每段最多超一帧」核对）、换场景时全黑、存档 s2、释放 s1、显存对象减少
       await sleep(300);
       const before = (await st()).mem;
+      // 释放 S1：014 起 S2 是完整白盒（几何体比 S1 无美术时还多），不能再用「总数减少」判断——改成 S1 场景里的几何体收到 dispose
+      await evaluate(`(() => { window.__s1Geo = { total: 0, disposed: 0 }; const seen = new Set(); __game.scenes.current.scene.traverse((o) => { const g = o.geometry; if (!g || seen.has(g)) return; seen.add(g); __s1Geo.total++; g.addEventListener('dispose', () => __s1Geo.disposed++); }); return 1; })()`);
       await evaluate(`window.__fadeLog = []; (function poll() { if (!__game.flow.transitioning && window.__fadeLog.length > 5) return; window.__fadeLog.push([__game.scenes.current?.name, __game.ui.fade.opacity, __game.ui.fade.progress]); requestAnimationFrame(poll); })(); 1`);
       await walkIntoExit(0);
       if (!(await until(`__game.scenes.current?.name === 's2-keeper-house' && !__game.flow.transitioning`, 40000))) throw new Error('走进出口没去 S2 ' + JSON.stringify(await evaluate(`(() => { const s = __game.scenes.current; const ex = s.exits?.[0]; return { scene: s.name, paused: __game.isPaused, tr: __game.flow.transitioning, ex: ex && { inside: ex.inside, primed: ex.primed, enabled: ex.enabled, c: ex.opts.center, contains: ex.contains(s.rig.body.position) }, pos: s.rig.body.position, ctrl: s.rig.controller.locked }; })()`)));
@@ -1178,8 +1180,9 @@ const CHECKS = [
       if (s.groups.includes('s1')) throw new Error('s1 没释放：' + s.groups.join());
       await sleep(400);
       const after = (await st()).mem;
-      if (!(after.geometries < before.geometries)) throw new Error(`几何体没减少 ${before.geometries} → ${after.geometries}`);
-      out.push(`S1→S2 ${Math.round(s.tr.ms)} ms（全黑 ${Math.round(s.tr.holdMs)} ms、最长帧 ${Math.round(s.tr.maxFrameMs)} ms，无头软件渲染）、存档 s2、释放 s1、几何体 ${before.geometries}→${after.geometries} 纹理 ${before.textures}→${after.textures} ✓`);
+      const s1Geo = await evaluate(`window.__s1Geo`);
+      if (!(s1Geo.total > 0 && s1Geo.disposed / s1Geo.total >= 0.8)) throw new Error('S1 几何体没释放 ' + JSON.stringify(s1Geo));
+      out.push(`S1→S2 ${Math.round(s.tr.ms)} ms（全黑 ${Math.round(s.tr.holdMs)} ms、最长帧 ${Math.round(s.tr.maxFrameMs)} ms，无头软件渲染）、存档 s2、释放 s1（S1 几何体 ${s1Geo.disposed}/${s1Geo.total} 已 dispose）、几何体 ${before.geometries}→${after.geometries} 纹理 ${before.textures}→${after.textures} ✓`);
 
       // ---- 4. 慢加载（?slowLoad=4000）：直接进 S2（?scene=s2&debug=1），马上走进出口 → s3 没加载完：黑场里显示细线进度，加载完才换场景
       await cdp.goto('slowLoad=4000&debug=1&scene=s2', 's2-keeper-house');
@@ -1649,6 +1652,49 @@ const CHECKS = [
       if (art.lit || art.warm) throw new Error('点灯前远景灯塔应熄灭、无环境暖光 ' + JSON.stringify(art));
       out.push(`art=1 美术件（岩石 ${art.rocks} 实例、主岛 + 灯塔熄灭）✓`);
       await cdp.goto('');
+      return out.join('，');
+    },
+  },
+  {
+    name: 'v0.1-014 S2 白盒：?scene=s2 入口 / 海面 −16 / 室内触发体 / 出口、无环境暖光、远景 S3 灯塔（白盒高柱占位）；?art=1 美术 019 七件 + 远景岛塔（天空层材质、熄灭）+ 地窖门扇挂合页',
+    async run({ evaluate, cdp, sleep }) {
+      const out = [];
+      const until = async (expr, ms = 8000) => {
+        const end = Date.now() + ms;
+        let v;
+        while (Date.now() < end) {
+          v = await evaluate(expr);
+          if (v) return v;
+          await sleep(100);
+        }
+        return v;
+      };
+      const probe = `(() => { const s = __s2; let warm = 0, glow = 0; s.scene.traverse((o) => {
+          if ((o.isPointLight || o.isSpotLight || o.isRectAreaLight) && o.visible && o.intensity > 0 && o.color.r > o.color.b + 0.1) warm++;
+          if (o.isMesh && o.visible) for (const m of Array.isArray(o.material) ? o.material : [o.material]) if (m && m.emissive && m.emissive.getHex() !== 0 && m.emissiveIntensity > 0) glow++; });
+        const far = s.scene.getObjectByName('s2-far-s3') ?? s.scene.getObjectByName('s2-far-s3-placeholder');
+        return { name: s.name, entry: s.entryId, pos: s.rig.body.position.toArray().map((v) => +v.toFixed(2)), water: s.water?.position.y, indoor: s.cameraFollow.indoorVolumes.length,
+          exit: s.exits[0]?.opts.center.toArray(), target: s.exits[0]?.opts.target, warm, glow, far: far?.name, farSky: !!far?.userData.skyLayer,
+          art: s.art.loaded, keys: s.art.root.children.map((c) => c.name), door: !!s.art.cellarDoor && s.art.cellarDoor.parent === s.greybox.cellarDoor, gb: s.greybox.colliders[0].visible }; })()`;
+      await cdp.goto('debug=1&scene=s2', 's2-keeper-house');
+      if (!(await until(`!!window.__s2?.rig`, 30000))) throw new Error('?scene=s2 没进 S2');
+      let s = await evaluate(probe);
+      if (s.entry !== 'from-s1' || Math.abs(s.pos[0]) > 0.3 || Math.abs(s.pos[2] + 12.5) > 0.3 || Math.abs(s.pos[1]) > 0.1) throw new Error('S2 入口不对 ' + JSON.stringify(s));
+      if (s.water !== -16 || s.indoor !== 2 || s.target !== 's3' || JSON.stringify(s.exit) !== '[5,0,23]') throw new Error('S2 海面 / 室内 / 出口不对 ' + JSON.stringify(s));
+      if (s.warm || s.glow) throw new Error('S2 环境不应有暖光 / 自发光（暖光只属于风灯）' + JSON.stringify(s));
+      if (s.far !== 's2-far-s3-placeholder' || !s.farSky || !s.gb) throw new Error('白盒 S2 远景占位 / 白盒显示不对 ' + JSON.stringify(s));
+      out.push('白盒：入口 (0, 0, −12.5)、海面 −16、室内触发体 ×2、出口 → s3、无暖光、远景占位 ✓');
+      await cdp.goto('debug=1&scene=s2&art=1', 's2-keeper-house');
+      if (!(await until(`!!window.__s2?.rig`, 60000))) throw new Error('art=1 没进 S2');
+      s = await evaluate(probe);
+      const want = ['env-clifftop-s2', 'env-keeper-house-ch1', 'env-keeper-house-ch1-interior', 'env-cellar-s2', 'env-courtyard-wall-s2', 'env-laundry-rack', 's2-far-s3'];
+      if (!s.art || want.some((k) => !s.keys.includes(k)) || !s.door) throw new Error('S2 美术件没加载全 ' + JSON.stringify(s));
+      if (s.far !== 's2-far-s3' || !s.farSky || s.gb) throw new Error('S2 远景 / 白盒隐藏不对 ' + JSON.stringify(s));
+      if (s.warm || s.glow) throw new Error('S2 美术接入后不应有环境暖光 / 自发光 ' + JSON.stringify(s));
+      out.push('art=1：019 七件 + 地窖门扇挂合页、远景岛塔天空层熄灭、白盒隐藏、无暖光 ✓');
+      // 进 S2 会存档 s2，autostart 会接着存档进 S2：清掉存档再回 S1（后面的检查默认在 S1）
+      await evaluate(`localStorage.removeItem('foglight.save.v1'); 1`);
+      try { await cdp.goto(''); } catch (e) { throw new Error('回 S1 失败：' + e.message + ' ' + JSON.stringify(await evaluate(`({ scene: __game?.scenes?.current?.name, href: location.href, menu: __game?.ui?.mainMenu?.isOpen, err: window.__lastError ?? null })`).catch((x) => String(x))), { cause: e }); }
       return out.join('，');
     },
   },

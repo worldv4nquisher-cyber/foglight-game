@@ -73,7 +73,18 @@ export const manifest: AssetEntry[] = [
   { key: 'env-lighthouse-ch1', type: 'gltf', url: 'assets/art/models/env/env-lighthouse-ch1.glb', group: 's1', optional: true, art: true },
   { key: 'prop-boat-rowboat', type: 'gltf', url: 'assets/art/models/props/prop-boat-rowboat.glb', group: 's1', optional: true, art: true },
   { key: 'prop-boat-rowboat-sunken', type: 'gltf', url: 'assets/art/models/props/prop-boat-rowboat-sunken.glb', group: 's1', optional: true, art: true },
-  // ---- s2 / s3：白盒阶段（014 / 015）没有专属资源，美术 019 / 020 交付后登记在这里
+  // ---- s2：美术 019 交付（v0.1-014 接入，摆放以 src/levels/s2/layout.ts 为准）
+  { key: 'env-clifftop-s2', type: 'gltf', url: 'assets/art/models/env/env-clifftop-s2.glb', group: 's2', optional: true, art: true },
+  { key: 'env-keeper-house-ch1', type: 'gltf', url: 'assets/art/models/env/env-keeper-house-ch1.glb', group: 's2', optional: true, art: true },
+  { key: 'env-keeper-house-ch1-interior', type: 'gltf', url: 'assets/art/models/env/env-keeper-house-ch1-interior.glb', group: 's2', optional: true, art: true },
+  { key: 'env-cellar-s2', type: 'gltf', url: 'assets/art/models/env/env-cellar-s2.glb', group: 's2', optional: true, art: true },
+  { key: 'env-cellar-door-s2', type: 'gltf', url: 'assets/art/models/env/env-cellar-door-s2.glb', group: 's2', optional: true, art: true },
+  { key: 'env-courtyard-wall-s2', type: 'gltf', url: 'assets/art/models/env/env-courtyard-wall-s2.glb', group: 's2', optional: true, art: true },
+  { key: 'env-laundry-rack', type: 'gltf', url: 'assets/art/models/env/env-laundry-rack.glb', group: 's2', optional: true, art: true },
+  // S2 远景 S3 岛 + 灯塔（与 s1 同一文件，s2 组另登记一份：S1→S2 释放 s1 组后仍可用）
+  { key: 'env-lighthouse-island-main-s3tower-s2far', type: 'gltf', url: 'assets/art/models/env/env-lighthouse-island-main-s3tower.glb', group: 's2', optional: true, art: true },
+  { key: 'env-lighthouse-ch1-s2far', type: 'gltf', url: 'assets/art/models/env/env-lighthouse-ch1.glb', group: 's2', optional: true, art: true },
+  // ---- s3：白盒阶段（015）没有专属资源，美术 020 交付后登记在这里
   // ---- 更多示例（取消注释即可登记）----
   // { key: 'ground-diffuse', type: 'ktx2', url: 'assets/textures/ground-diffuse.ktx2', group: 's1', optional: true },
   // { key: 'sfx-footstep', type: 'audio', url: 'assets/audio/sfx-footstep.ogg', group: 'common', optional: true },
