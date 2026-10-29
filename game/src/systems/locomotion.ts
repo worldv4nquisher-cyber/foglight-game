@@ -91,6 +91,7 @@ export class StairGait {
   private distSinceStep = 0;
   /** 相邻两级之间实测的「级高 / 踏面」；没有就用滑动窗口估 */
   private treadSlope: number | null = null;
+  private treads: number[] = [];
   private _speed: number | null = null;
   private _slope = 0;
 
@@ -106,6 +107,7 @@ export class StairGait {
     this.lastStep = -Infinity;
     this.distSinceStep = 0;
     this.treadSlope = null;
+    this.treads.length = 0;
     this._speed = null;
   }
 
@@ -120,8 +122,11 @@ export class StairGait {
     if (Math.abs(dy) >= stairCfg.stepMin && Math.abs(dy) <= cfg.stepHeight + cfg.groundSnap) {
       // 相邻两级：级高 / 两次迈步之间走过的水平距离 = 楼梯坡度（比滑动窗口稳，不会在两级之间忽快忽慢）
       if (this.time - this.lastStep <= stairCfg.holdSec * 2 && this.distSinceStep >= 0.1) {
+        // 最近两级的平均（BUG-013：原来是指数平均 (旧 + 新) / 2，从小跑 / 平台进楼梯时第一级量得偏陡，要 4–5 级才收敛到 ±1%）
         const k = Math.abs(dy) / this.distSinceStep;
-        this.treadSlope = this.treadSlope == null ? k : (this.treadSlope + k) / 2;
+        this.treads.push(k);
+        if (this.treads.length > 2) this.treads.shift();
+        this.treadSlope = this.treads.reduce((a, b) => a + b, 0) / this.treads.length;
       }
       this.lastStep = this.time;
       this.distSinceStep = 0;
@@ -130,6 +135,7 @@ export class StairGait {
     while (this.samples.length && this.samples[0]!.t < this.time - stairCfg.windowSec) this.samples.shift();
     if (this.time - this.lastStep > stairCfg.holdSec) {
       this.treadSlope = null;
+      this.treads.length = 0;
       this._speed = null;
       return null;
     }

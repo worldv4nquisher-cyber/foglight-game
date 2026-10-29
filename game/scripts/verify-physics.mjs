@@ -9,6 +9,8 @@ import { buildTestCourse } from '@/world/testCourse';
 import { TraversalLink, pickTraversalLink } from '@/entities/components/TraversalLink';
 import { buildS1Greybox } from '@/levels/s1/greybox';
 import { S1, s1StepLinks } from '@/levels/s1/layout';
+import { buildS2Greybox } from '@/levels/s2/greybox';
+import { S2 } from '@/levels/s2/layout';
 
 const DT = 1 / 60;
 const results = [];
@@ -176,6 +178,61 @@ function stairRun(sprint, dir, seconds = 8) {
   return { vy: (rec[i1].y - rec[ia].y) / T, vh: h / T, onFrac: rec.slice(ia, i1).filter((r) => r.on).length / (i1 - ia), n: steps.length };
 }
 
+/**
+ * BUG-013 测量口径：楼梯是离散台阶，y 是阶梯函数。取「第一次迈级 → 最后一次迈级」两个跳变时刻算竖直速度（整数个周期，没有量化误差）。
+ * 「窗口内第一个 / 最后一个采样点」的端点法会多算一整段平台（首点刚上某级、末点在最后一级平台末尾），按 n 级要低约 1/(n+1)，
+ * 采样稀疏时还会 ±1 级抖动——QA batch7 的 0.505–0.518 就是这个口径（同一条轨迹逐 tick 采样用端点法得 0.498）。
+ */
+function riserToRiser(rec, lo, hi) {
+  const steps = [];
+  for (let i = 1; i < rec.length; i++) if (Math.abs(rec[i].y - rec[i - 1].y) > 0.08 && rec[i].y > lo && rec[i].y < hi) steps.push(i);
+  const a = steps[0];
+  const b = steps.at(-1);
+  return { vy: (rec[b].y - rec[a].y) / ((b - a) * DT), n: steps.length };
+}
+
+test('BUG-013 S2 室内直梯（16 × 0.1875、踏步 0.244）：按控制器走法上 / 下楼，纯楼梯段竖直速度 0.5455 ±1%（迈级到迈级口径）', () => {
+  const gb = buildS2Greybox();
+  const ph = new PhysicsSystem();
+  for (const m of gb.colliders) ph.addMesh(m);
+  for (const m of gb.walls) ph.addMesh(m, { kind: 'wall' });
+  const S = S2.stair;
+  const zc = (S.z[0] + S.z[1]) / 2;
+  const top = S.count * S.rise;
+  const V = gameplay.player.stairs.verticalSpeed;
+  const out = [];
+  for (const [dir, sprint] of [
+    [1, false],
+    [1, true],
+    [-1, false],
+    [-1, true],
+  ]) {
+    const b = new CharacterBody();
+    ph.addBody(b);
+    b.teleport(dir > 0 ? new THREE.Vector3(S.x0 - 0.8, 0.02, zc) : new THREE.Vector3(S.x0 + S.count * S.run + 0.3, top + 0.02, zc));
+    for (let i = 0; i < 20; i++) ph.step(DT);
+    const gait = new StairGait();
+    const loco = { vx: 0, vz: 0, facing: dir > 0 ? Math.PI / 2 : -Math.PI / 2 };
+    const rec = [];
+    for (let i = 0; i < 600; i++) {
+      const sp = gait.update(DT, b.position.y - b.prevPosition.y, Math.hypot(b.position.x - b.prevPosition.x, b.position.z - b.prevPosition.z), b.onGround);
+      // 上楼朝 +X（相机 yaw −π/2），下楼朝 −X
+      stepLocomotion(loco, { moveX: 0, moveY: 1, sprint, cameraYaw: dir > 0 ? -Math.PI / 2 : Math.PI / 2, fixedSpeed: sp }, DT);
+      b.velocity.x = loco.vx;
+      b.velocity.z = loco.vz;
+      ph.step(DT);
+      rec.push({ y: b.position.y });
+    }
+    ph.removeBody(b);
+    // 纯楼梯段：去掉首尾各 3 级——平台 → 楼梯的过渡（StairGait 前两级还在估坡度、Shift 从小跑减速）不算
+    const r = riserToRiser(rec, 3 * S.rise + 0.05, top - 3 * S.rise - 0.05);
+    assert.ok(r.n >= 8, `${dir > 0 ? '上' : '下'}楼只迈了 ${r.n} 级`);
+    assert.ok(Math.abs(Math.abs(r.vy) - V) <= V * 0.01, `S2 直梯${dir > 0 ? '上' : '下'}楼${sprint ? '（Shift）' : ''}：竖直 ${r.vy.toFixed(4)} m/s，期望 ${V} ±1%`);
+    out.push(`${dir > 0 ? '上' : '下'}${sprint ? 'Shift' : ''} ${Math.abs(r.vy).toFixed(4)}`);
+  }
+  console.log(`  （S2 直梯竖直速度：${out.join(' / ')} m/s）`);
+});
+
 test('楼梯步态：竖直速度固定 0.5455 m/s（017 xi-stairs 22 帧周期），上下楼一样，Shift 不加速', () => {
   const V = gameplay.player.stairs.verticalSpeed;
   assert.equal(V, 0.5455);
@@ -184,7 +241,7 @@ test('楼梯步态：竖直速度固定 0.5455 m/s（017 xi-stairs 22 帧周期�
   const down = stairRun(true, -1);
   for (const [tag, r, sign] of [['上楼慢走', up, 1], ['上楼按 Shift', upRun, 1], ['下楼按 Shift', down, -1]]) {
     assert.ok(r.onFrac > 0.95, `${tag}：楼梯步态只占 ${(r.onFrac * 100).toFixed(0)}%`);
-    assert.ok(Math.abs(r.vy * sign - V) < 0.03, `${tag}：竖直 ${r.vy.toFixed(3)} m/s，期望 ±${V}`);
+    assert.ok(Math.abs(r.vy * sign - V) <= V * 0.01, `${tag}：竖直 ${r.vy.toFixed(4)} m/s，期望 ±${V} ±1%（迈级到迈级口径）`);
   }
   assert.ok(Math.abs(up.vh - upRun.vh) < 0.03, `Shift 不应影响楼梯速度：${up.vh.toFixed(3)} / ${upRun.vh.toFixed(3)}`);
   // 30° 坡不是楼梯：按 Shift 照常小跑
@@ -201,7 +258,7 @@ test('楼梯步态：竖直速度固定 0.5455 m/s（017 xi-stairs 22 帧周期�
     env.physics.step(DT);
   }
   assert.ok(!any, '30° 坡不应当成楼梯');
-  results.push([`  楼梯：上楼 ${up.vy.toFixed(3)} / Shift ${upRun.vy.toFixed(3)} / 下楼 ${down.vy.toFixed(3)} m/s，水平 ${up.vh.toFixed(3)} m/s`]);
+  results.push([`  楼梯：上楼 ${up.vy.toFixed(4)} / Shift ${upRun.vy.toFixed(4)} / 下楼 ${down.vy.toFixed(4)} m/s，水平 ${up.vh.toFixed(3)} m/s`]);
 });
 
 test('BUG-007 矮沿：陡端面凸出地面 3.6 cm（旧礁石坡接缝）任何起步相位都能走过去', () => {
