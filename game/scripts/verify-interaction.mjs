@@ -235,6 +235,21 @@ function useEnv({ wall = false, approach } = {}) {
   return { env, it, point };
 }
 
+test('use：按 E 那一步就开始走位，按 E → interact:used ≤ 0.4 − 2 个固定步（给输入帧延迟留余量；QA batch5 实测 0.433 s）', () => {
+  const { env } = useEnv();
+  env.actor.facing = Math.PI + 0.9; // 斜着，需要转身
+  env.look?.();
+  env.step(1, { press: ['KeyE'] });
+  let steps = 1;
+  assert.equal(env.ix.actionKind, 'approach');
+  while (used(env, 'bell') === 0 && steps < 200) {
+    env.step(1, steps === 1 ? { release: ['KeyE'] } : {});
+    steps++;
+  }
+  const secs = steps * DT;
+  assert.ok(secs <= 0.4 - 2 * DT + 1e-9, `按 E → used ${secs.toFixed(3)} s`);
+});
+
 test('use：自动走到交互点并转向，用时 ≤ 0.4 s，结束后发 interact:used', () => {
   const { env, it, point } = useEnv();
   assert.ok(env.ix.canInteract(it));

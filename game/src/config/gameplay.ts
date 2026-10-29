@@ -168,8 +168,12 @@ export const gameplay = {
     iconDistance: 3.5,
     /** 没有 -interact 节点时，站位取物体前方（+Z）多远（m） */
     defaultPointDistance: 1.0,
-    /** use / hold / push 自动走到交互点：最长时间（s，含转向）与最短时间（只转身时） */
-    approachMaxTime: 0.4,
+    /**
+     * use / hold / push 自动走到交互点：最长时间（s，含转向）与最短时间（只转身时）。
+     * 验收是「按 E → interact:used ≤ 0.4 s」：走位从按下 E 的那个固定步就开始走（不再空等一步），
+     * 另外留约 2 个固定步（≈ 0.033 s）给输入到达的帧延迟，所以走位本身封顶 0.36 s（QA batch5 实测 0.433 s）
+     */
+    approachMaxTime: 0.36,
     approachMinTime: 0.15,
     /** hold：按住 E 的默认时长（s，油阀 2 s） */
     holdSeconds: 2,

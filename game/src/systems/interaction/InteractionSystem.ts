@@ -170,7 +170,12 @@ export class InteractionSystem {
 
     const free = this.action.kind === 'none' && input.context === 'explore' && !this.o.actor.busy;
     this.current = free ? this.pickCandidate() : this.action.kind === 'none' ? null : this.current;
-    if (free && this.current && input.consumePressed('interact')) this.trigger(this.current);
+    if (free && this.current && input.consumePressed('interact')) {
+      this.trigger(this.current);
+      // 按下 E 的这一步就开始走位（以前要等下一步才走，白白多一个固定步）
+      const b = this.action;
+      if (b.kind === 'approach' && b.t === 0 && b.dur > 0) this.stepApproach(b, dt);
+    }
     this.refreshPrompt();
   }
 
@@ -322,7 +327,7 @@ export class InteractionSystem {
     if (dist > 1e-3 && !this.pathClear(from, to, body)) to.copy(from);
     const moveDist = from.distanceTo(to);
     const turn = Math.abs(angleDiff(actor.facing, stand.facing));
-    // 时长：平移按 2.5 m/s、转身按 180°/0.4 s 取较长者，限制在 [0.15, 0.4] s；已经站好且朝向对了就不走
+    // 时长：平移按 2.5 m/s、转身按 180°/approachMaxTime 取较长者，限制在 [approachMinTime, approachMaxTime]；已经站好且朝向对了就不走
     const dur =
       moveDist < 0.02 && turn < 0.05
         ? 0
