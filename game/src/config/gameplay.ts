@@ -197,6 +197,11 @@ export const gameplay = {
     holdSeconds: 2,
     /** push：沿轨道移动速度（m/s，浮台） */
     pushSpeed: 0.8,
+    /**
+     * push（art=1，有 xi-push-start）：从按住 E 起 pushStartMoveAt 秒物体开始动（制作人：≤ 0.6 s），
+     * push-start 后半段与移动重叠，速度按 smoothstep 从 0 加到 pushSpeed（到 push-start 末帧满速，接 push-loop 不跳速）
+     */
+    pushStartMoveAt: 0.5,
     /** 高亮默认时长（s，提示系统二级提示） */
     highlightSeconds: 3,
   },

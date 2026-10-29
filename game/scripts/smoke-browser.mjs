@@ -2056,7 +2056,7 @@ const CHECKS = [
     },
   },
   {
-    name: 'v0.1-017 交互动作 art=1（S1 / S3）：S1 推浮台 xi-push-start → push-loop → xi-push-end；S3 敲钟 xi-ring-bell、开阀 xi-valve-hold、拉杆 xi-ignite-lever',
+    name: 'v0.1-017 交互动作 art=1（S1 / S3）：S1 推浮台 xi-push-start（按住 E ≤ 0.6 s 浮台开始动）→ push-loop → xi-push-end；S3 敲钟 xi-ring-bell、开阀 xi-valve-hold、拉杆 xi-ignite-lever',
     async run({ evaluate, cdp, sleep }) {
       const clock = () => evaluate(`({ e: __game.time.fixedTick * __game.time.fixedDelta, f: __game.time.frame })`);
       // 等待按游戏时间（负载高时真实时间不可靠），真实时间封顶 180 s
@@ -2089,34 +2089,31 @@ const CHECKS = [
       if (!(await until(`__s1.puzzles.raft.state === 'grounded' && __s1.puzzles.raftPush.enabled`, 6000))) throw new Error('退潮后浮台没搁浅 / 不能推 ' + (await evaluate(`__s1.puzzles.raft.state`)));
       await evaluate(standAt('__s1', '__s1.puzzles.raftPush'));
       await sleep(200);
-      const raftPos = `__s1.puzzles.raft.object.position.toArray()`;
-      const r0 = await evaluate(raftPos);
+      // 页面侧记录：按住 E（trigger）那一刻的游戏时间、浮台第一次 pushMoved 的游戏时间与当时阶段
+      await evaluate(`(() => { const g = () => __game.time.fixedTick * __game.time.fixedDelta; const r = (window.__push = { t0: g(), move: null, phase: null, n: 0 });
+        if (!window.__pushOff) window.__pushOff = __game.events.on('interact:pushMoved', ({ id }) => { const q = window.__push; if (id !== 'raft-s1' || !q) return; q.n++; if (q.move === null) { q.move = g(); q.phase = __s1.interaction.pushPhase; } });
+        return r.t0; })()`);
       await key(true);
       await evaluate(`(__s1.interaction.trigger(__s1.puzzles.raftPush), 1)`);
       if (!(await until(`__s1.interaction.pushPhase === 'start' && __s1.rig.animator.posing === 'xi-push-start'`, 4000))) {
         await key(false);
         throw new Error('推浮台没先播 xi-push-start ' + JSON.stringify(await evaluate(`({ ph: __s1.interaction.pushPhase, pose: __s1.rig.animator.posing })`)));
       }
-      // push-start 期间逐次采样浮台位置（游戏时间等待），最后一个 start 采样必须还在原位
-      let startMove = 0;
-      let samples = 0;
-      for (const c0 = await clock(), end = Date.now() + 180000; Date.now() < end; ) {
-        const v = await evaluate(`({ ph: __s1.interaction.pushPhase, pose: __s1.rig.animator.posing, loop: __s1.rig.animator.looping, r: ${raftPos} })`);
-        if (v.ph === 'start') {
-          samples++;
-          startMove = Math.max(startMove, Math.hypot(v.r[0] - r0[0], v.r[2] - r0[2]));
-        } else if (v.ph === 'loop' && v.loop === 'xi-push-loop' && !v.pose) break;
-        else {
-          await key(false);
-          throw new Error('xi-push-start 后没进 push-loop ' + JSON.stringify(v));
-        }
-        if ((await clock()).e - c0.e > 3) {
-          await key(false);
-          throw new Error('push-start 3 s 游戏时间没结束 ' + JSON.stringify(v));
-        }
-        await sleep(30);
+      // 制作人拍板：从按住 E 到浮台开始动 ≤ 0.6 s（push-start 后半段与移动重叠），之后平滑进 push-loop
+      if (!(await until(`window.__push.move !== null`, 3000))) {
+        await key(false);
+        throw new Error('push-start 期间浮台没开始动 ' + JSON.stringify(await evaluate(`window.__push`)));
       }
-      if (startMove > 1e-3) throw new Error(`push-start 期间浮台不该动（${(startMove * 100).toFixed(1)} cm，${samples} 次采样）`);
+      const pm = await evaluate(`window.__push`);
+      const tMove = pm.move - pm.t0;
+      if (tMove > 0.6 + 1 / 60 + 1e-6 || pm.phase !== 'start') {
+        await key(false);
+        throw new Error(`从按住 E 到浮台开始动 ${tMove.toFixed(3)} s（应 ≤ 0.6 s，且在 push-start 内）` + JSON.stringify(pm));
+      }
+      if (!(await until(`__s1.interaction.pushPhase === 'loop' && __s1.rig.animator.looping === 'xi-push-loop' && !__s1.rig.animator.posing`, 3000))) {
+        await key(false);
+        throw new Error('xi-push-start 后没进 push-loop ' + JSON.stringify(await evaluate(`({ ph: __s1.interaction.pushPhase, pose: __s1.rig.animator.posing, loop: __s1.rig.animator.looping })`)));
+      }
       if (!(await until(`__s1.puzzles.raftPush.pushT > 0.08`, 6000))) {
         await key(false);
         throw new Error('push-loop 中浮台没前进 ' + (await evaluate(`__s1.puzzles.raftPush.pushT`)));
@@ -2126,7 +2123,7 @@ const CHECKS = [
       const pT = await evaluate(`__s1.puzzles.raftPush.pushT`);
       if (!(await until(`!__s1.interaction.animState && !__s1.rig.controller.locked && !__s1.rig.animator.looping`, 4000))) throw new Error('xi-push-end 播完没解锁');
       if (Math.abs((await evaluate(`__s1.puzzles.raftPush.pushT`)) - pT) > 1e-6) throw new Error('push-end 期间浮台不该再动');
-      out.push(`S1 推浮台：push-start（${samples} 次采样浮台不动）→ push-loop（推到 ${pT.toFixed(2)}）→ 松手 xi-push-end → 解锁 ✓`);
+      out.push(`S1 推浮台：按住 E ${tMove.toFixed(3)} s 浮台开始动（push-start 内）→ push-loop（推到 ${pT.toFixed(2)}）→ 松手 xi-push-end → 解锁 ✓`);
 
       // ---------------- S3：敲钟 / 开阀 / 拉杆
       await evaluate(`localStorage.removeItem('foglight.save.v1'); 1`);

@@ -10,7 +10,7 @@ import { InputManager } from '@/systems/input/InputManager';
 import { lockClickPassesThrough } from '@/systems/input/actions';
 import { CharacterBody, PhysicsSystem } from '@/systems/PhysicsSystem';
 import { Interactable } from '@/systems/interaction/Interactable';
-import { InteractionSystem } from '@/systems/interaction/InteractionSystem';
+import { InteractionSystem, pushStartRamp } from '@/systems/interaction/InteractionSystem';
 import { RotatablePart, nextDetent } from '@/systems/interaction/RotatablePart';
 import { PuzzleGroup, puzzleBarText } from '@/systems/interaction/PuzzleMode';
 import { t as text } from '@/content/text';
@@ -732,7 +732,7 @@ test('017 推：push-loop 播放率 = 推速 / 0.8，结束停循环；没有动
   assert.equal(used(env2, 'l2'), 1, '无动画：拿起即时');
 });
 
-test('017 推：xi-push-start 原地播完（1.2 s，物体不动）→ push-loop 一起走 → 松手播 xi-push-end（1.2 s 锁定）；再推到端点也播 end', () => {
+test('017 推：按住 E 起 ≤ 0.6 s 物体开始动（push-start 后半段与移动重叠、smoothstep 加速、接 push-loop 不跳速）→ 松手播 xi-push-end（1.2 s 锁定）；再推到端点也播 end', () => {
   const env = setup();
   const anim = fakeAnim(env, ['xi-push-start', 'xi-push-loop', 'xi-push-end']);
   const crate = env.box('crate3', [0, 0.3, -1.2]);
@@ -741,9 +741,32 @@ test('017 推：xi-push-start 原地播完（1.2 s，物体不动）→ push-loo
   stepUntil(env, () => env.ix.actionKind === 'push');
   assert.equal(env.ix.pushPhase, 'start');
   const z0 = crate.position.z;
-  const nStart = stepUntil(env, () => env.ix.pushPhase === 'loop');
+  // 逐步记录 push-start 期间物体位置（从进入 push 动作 = 按住 E 起算）
+  const zs = [z0];
+  let tMove = null;
+  while (env.ix.pushPhase === 'start') {
+    env.step(1);
+    zs.push(crate.position.z);
+    if (tMove === null && Math.abs(crate.position.z - z0) > 1e-9) tMove = (zs.length - 1) * DT;
+    assert.ok(zs.length < 200, 'push-start 没结束');
+  }
+  const nStart = zs.length - 1;
   assert.ok(Math.abs(nStart * DT - 1.2) <= 2 * DT, `push-start ${(nStart * DT).toFixed(3)} s`);
-  assert.equal(crate.position.z, z0, 'push-start 期间物体不动');
+  // 制作人拍板：从按住 E 到物体开始动 ≤ 0.6 s（且不是一按就动：前 0.4 s 原地弯腰）
+  assert.ok(tMove !== null && tMove <= 0.6 + 1e-9, `物体 ${tMove?.toFixed(3)} s 才开始动（应 ≤ 0.6 s）`);
+  assert.ok(tMove >= 0.4, `物体 ${tMove.toFixed(3)} s 就开始动（push-start 前段应原地）`);
+  const at06 = Math.round(0.6 / DT);
+  assert.ok(z0 - zs[at06] > 1e-3, `0.6 s 时物体只动了 ${((z0 - zs[at06]) * 1000).toFixed(2)} mm（应可见 > 1 mm）`);
+  // 速度：重叠段单调加速、不倒退，末步接近满速 0.8；进 loop 第一步不跳速
+  const v = zs.slice(1).map((z, i) => (zs[i] - z) / DT);
+  for (let i = 1; i < v.length; i++) assert.ok(v[i] >= v[i - 1] - 1e-9, `push-start 段速度第 ${i} 步变慢`);
+  const vLastStart = v.at(-1);
+  const zl = crate.position.z;
+  env.step(1);
+  const vLoop = (zl - crate.position.z) / DT;
+  assert.ok(Math.abs(vLoop - 0.8) < 1e-6, `push-loop 速度 ${vLoop}`);
+  assert.ok(vLoop - vLastStart <= 0.8 * 0.05, `push-start → loop 跳速 ${vLastStart.toFixed(3)} → ${vLoop.toFixed(3)} m/s`);
+  for (let i = 1; i < v.length; i++) assert.ok(v[i] - v[i - 1] <= 0.8 * 0.05, `第 ${i} 步加速度过大 ${v[i - 1].toFixed(3)} → ${v[i].toFixed(3)}`);
   assert.ok(anim.poses.some(([c]) => c === 'xi-push-start') && anim.poses.filter(([c]) => c === 'xi-push-start').at(-1)[1] >= 1.2 - 1e-9, 'push-start 播到末帧');
   assert.ok(anim.cleared >= 1, 'start 播完淡出姿势');
   assert.deepEqual(anim.loops.at(-1), ['xi-push-loop', pushRate(0.8)], '进循环');
@@ -763,7 +786,7 @@ test('017 推：xi-push-start 原地播完（1.2 s，物体不动）→ push-loo
   stepUntil(env, () => env.fired.some(([e, q]) => e === 'interact:pushEnd' && q.id === 'crate3'));
   assert.ok(it.locked);
   assert.equal(env.ix.animState?.clip, 'xi-push-end', '到端点也播 push-end');
-  // push-start 中途松手：不播 end，直接淡回
+  // push-start 前段（物体还没动）松手：不播 end，直接淡回
   const env2 = setup();
   const a2 = fakeAnim(env2, ['xi-push-start', 'xi-push-loop', 'xi-push-end']);
   const c2 = env2.box('crate4', [0, 0.3, -1.2]);
@@ -772,8 +795,38 @@ test('017 推：xi-push-start 原地播完（1.2 s，物体不动）→ push-loo
   stepUntil(env2, () => env2.ix.pushPhase === 'start');
   env2.step(10);
   env2.step(1, { release: ['KeyE'] });
-  assert.equal(env2.ix.animState, null, 'start 中途松手不播 end');
+  assert.equal(env2.ix.animState, null, '还没动就松手不播 end');
   assert.ok(!env2.actor.locked && a2.cleared >= 1 && a2.loops.length === 1 && a2.loops[0][0] === null, '解锁、淡回、没进循环');
+  // 重叠段（已经在动、还没进 loop）松手：物体停、播 push-end 收手
+  const env3 = setup();
+  fakeAnim(env3, ['xi-push-start', 'xi-push-loop', 'xi-push-end']);
+  const c3 = env3.box('crate5', [0, 0.3, -1.2]);
+  env3.ix.add(new Interactable({ id: 'crate5', kind: 'push', object: c3, track: { from: new THREE.Vector3(0, 0.3, -1.2), to: new THREE.Vector3(0, 0.3, -2.4) } }));
+  env3.step(1, { press: ['KeyE'] });
+  stepUntil(env3, () => env3.ix.pushPhase === 'start');
+  stepUntil(env3, () => c3.position.z < -1.2 - 1e-4);
+  assert.equal(env3.ix.pushPhase, 'start');
+  env3.step(1, { release: ['KeyE'] });
+  const zr3 = c3.position.z;
+  assert.equal(env3.ix.animState?.clip, 'xi-push-end', '重叠段松手播 push-end');
+  env3.step(30);
+  assert.equal(c3.position.z, zr3, '松手后物体不动');
+});
+
+test('017 推：pushStartRamp 起止 0 / 1、单调、moveAt = 0.5 ≤ 0.6（gameplay.interaction.pushStartMoveAt）', () => {
+  assert.ok(gameplay.interaction.pushStartMoveAt <= 0.6);
+  assert.equal(pushStartRamp(0, 0.5, 1.2), 0);
+  assert.equal(pushStartRamp(0.5, 0.5, 1.2), 0);
+  assert.equal(pushStartRamp(1.2, 0.5, 1.2), 1);
+  assert.equal(pushStartRamp(2, 0.5, 1.2), 1);
+  let prev = 0;
+  for (let t = 0.5; t <= 1.2; t += 0.01) {
+    const k = pushStartRamp(t, 0.5, 1.2);
+    assert.ok(k >= prev - 1e-12 && k <= 1);
+    prev = k;
+  }
+  assert.equal(pushStartRamp(0.3, 1.2, 1.2), 0, 'start ≤ moveAt：不加速段');
+  assert.equal(pushStartRamp(1.3, 1.2, 1.2), 1);
 });
 
 // ---------------------------------------------------------------- 汇总

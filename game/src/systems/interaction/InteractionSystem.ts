@@ -80,11 +80,22 @@ type Action =
   | { kind: 'hold'; target: Interactable; t: number; clip: XiClipName | null; pre: number }
   /** v0.1-017 交互动作：按游戏时间播 clip，在事件帧 at 生效（effect），播完解锁 */
   | { kind: 'anim'; target: Interactable; clip: XiClipName; t: number; dur: number; at: number; fired: boolean; effect: AnimEffect }
-  /** push：有 xi-push-start 时先原地播完它（start 秒，物体不动），再进 push-loop 一起移动；停下（松手 / 到端点）播 xi-push-end */
-  | { kind: 'push'; target: Interactable; t: number; start: number }
+  /**
+   * push：有 xi-push-start 时先播它（start 秒）；前 moveAt 秒物体不动，之后与 push-start 后半段重叠、速度 smoothstep 加到满速，
+   * 播完进 push-loop；停下（松手 / 到端点）播 xi-push-end
+   */
+  | { kind: 'push'; target: Interactable; t: number; start: number; moveAt: number }
   | { kind: 'puzzle'; target: Interactable };
 
 const cfg = gameplay.interaction;
+
+/** push-start 与移动重叠段的速度系数：t ≤ moveAt 为 0，t ≥ start 为 1，中间 smoothstep（起步、接 push-loop 都不跳速） */
+export function pushStartRamp(t: number, moveAt: number, start: number): number {
+  if (t <= moveAt) return 0;
+  if (t >= start || start <= moveAt) return 1;
+  const u = (t - moveAt) / (start - moveAt);
+  return u * u * (3 - 2 * u);
+}
 const tmpA = new THREE.Vector3();
 const tmpB = new THREE.Vector3();
 const tmpC = new THREE.Vector3();
@@ -480,7 +491,7 @@ export class InteractionSystem {
     } else {
       const anim = this.o.actor.anim;
       const start = anim?.has('xi-push-start') ? xiClipDuration('xi-push-start') : 0;
-      this.action = { kind: 'push', target: it, t: 0, start };
+      this.action = { kind: 'push', target: it, t: 0, start, moveAt: Math.min(start, cfg.pushStartMoveAt) };
       if (start > 0) anim?.setPose('xi-push-start', 0);
       else this.startPushLoop(it);
     }
@@ -517,9 +528,9 @@ export class InteractionSystem {
     if (anim?.has('xi-push-loop')) anim.setLoop('xi-push-loop', pushRate(it.track?.speed ?? cfg.pushSpeed));
   }
 
-  /** 停止推：已经在推（过了 push-start）且有 xi-push-end → 原地播完收手（期间仍锁定）；push-start 中途松手直接淡回 */
+  /** 停止推：物体已经开始动（过了 moveAt）且有 xi-push-end → 原地播完收手（期间仍锁定）；还没动就松手直接淡回 */
   private stopPush(a: Extract<Action, { kind: 'push' }>): void {
-    const pushing = a.t >= a.start;
+    const pushing = a.t > a.moveAt;
     this.endAction();
     if (pushing && this.o.actor.anim?.has('xi-push-end')) this.startAnim(a.target, 'xi-push-end', 'none');
   }
@@ -538,22 +549,28 @@ export class InteractionSystem {
       this.stopPush(a);
       return;
     }
+    let k = 1;
     if (a.t < a.start) {
-      // 弯腰上手（原地），最后一帧 = push-loop 第 0 帧
+      // 弯腰上手；最后一帧 = push-loop 第 0 帧
+      const t0 = a.t;
       a.t = Math.min(a.start, a.t + dt);
       this.o.actor.anim?.setPose('xi-push-start', a.t);
-      const b = this.o.actor.body;
-      b.velocity.x = b.velocity.z = 0;
       if (a.t >= a.start) {
         this.o.actor.anim?.clearPose();
         this.startPushLoop(it);
       }
-      return;
+      // 后半段与移动重叠：本步速度系数 = 步中点的 pushStartRamp（moveAt 前为 0，start 时为 1）
+      k = pushStartRamp((t0 + a.t) / 2, a.moveAt, a.start);
+      if (k <= 0) {
+        const b = this.o.actor.body;
+        b.velocity.x = b.velocity.z = 0;
+        return;
+      }
     }
     const len = track.from.distanceTo(track.to);
     const speed = track.speed ?? cfg.pushSpeed;
     const prevT = it.pushT;
-    it.pushT = len <= 0 ? 1 : Math.min(1, it.pushT + (speed * dt) / len);
+    it.pushT = len <= 0 ? 1 : Math.min(1, it.pushT + (speed * k * dt) / len);
     tmpA.lerpVectors(track.from, track.to, prevT);
     tmpB.lerpVectors(track.from, track.to, it.pushT);
     tmpC.subVectors(tmpB, tmpA);
