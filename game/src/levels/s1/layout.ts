@@ -1,8 +1,9 @@
 import * as THREE from 'three';
 
 /**
- * S1 落潮滩白盒布局（v0.1-013）——**白盒为准**：美术 018 的 s1-layout.json 是按 013 文字描述推定的占位，
- * 这里把它的关键点收成权威数值；之后美术按这里对位，冲突以这里为准。
+ * S1 落潮滩白盒布局（v0.1-013）。018 返工 1029 后美术 `art/source/env/s1-layout.json` 已按这里对位；
+ * **对位之后两边再不一致时以 s1-layout.json 为准**（制作人 1029 裁定），这里的美术摆放 / 关键点都是它的拷贝，
+ * `scripts/verify-render.mjs`「S1 布局 = s1-layout.json」逐项比对（含 GLB 里的系船 / 船头环节点），改了任一边没跟上就会失败。
  *
  * 坐标：+Y 上、+Z 北、右手系 ⇒ 东 = −X、西 = +X（海在西 / 南，远景主岛在西南偏南）。单位 m，y = 世界高度。
  * 潮位：low 0、high 1.6（开场涨潮）。
@@ -77,15 +78,22 @@ export const S1 = {
     [16.25, 0, -2.25],
     [17.31, 0, 8.13],
   ] as readonly V3[],
-  /** 小船（码头尽头左舷）：y = 水位 − 0.24，退潮搁在泥上 */
-  boat: { position: [0.182, 1.36, -13.531] as V3, rotationY: -1.11594, belowWater: 0.24, groundY: -0.14 },
+  /**
+   * 小船（返工 1029：系在码头尽头 +X 系船桩上，船头朝桩；s1-layout.json nodes['prop-boat-rowboat']）。
+   * y = 水位 − 0.24；此处海床 −0.44，退潮 0 时仍浮在 −0.24（groundY 只是下限）。
+   * bowRing = 涨潮时船头环世界位置 = 码头节点 env-pier-wood-ch1-rope-bow-end（船绳端点）；mooring = 码头节点 -boat-mooring 世界位置。
+   * 座位 / 桨架（-seat / -oarlock-l/r）归 017 动画接入，这里不用。
+   */
+  boat: { position: [5.508, 1.36, -10.757] as V3, rotationY: -1.70407, belowWater: 0.24, groundY: -0.24, seabedY: -0.44, bowRing: [4.071, 1.98, -10.95] as V3, mooring: [3.26, 2.2, -11.39] as V3,
+    /** 船体（GLB extras beamM / lengthM、包围盒顶 0.80、船长中心局部 z +0.028）：白盒在退潮船位放一块挡板，退潮走过去不穿船 */
+    hull: { beam: 1.2, length: 3.06, centerZ: 0.028, topY: 0.8 } },
   sunkenBoat: { position: [10.2, -1.15, -17] as V3, rotationY: 0.6, rotationXDeg: 9, rotationZDeg: -21 },
   /** 美术节点摆放（GLB 根的平移 / 绕 Y 旋转；与 s1-layout.json nodes 一致） */
   artNodes: {
     'env-tidal-flat-s1': { translation: [4, 0, -3], rotationY: 0 },
     'env-pier-wood-ch1': { translation: [-3.39, 0, -9.8], rotationY: -1.23594 },
-    'env-shore-ledge-s1': { translation: [-12.85, 0, -6.25], rotationY: 0 },
-    'env-cliff-s1': { translation: [4, 0, 14.4], rotationY: 0 },
+    'env-shore-ledge-s1': { translation: [-12.74, 0, -6.25], rotationY: 0 },
+    'env-cliff-s1': { translation: [4, 0, 17], rotationY: 0 },
     'env-fish-shed-ruin': { translation: [18.73, 0, 1.46], rotationY: 0 },
     'env-net-rack-a': { translation: [16.25, 0, -2.25], rotationY: 0 },
     'env-net-rack-b': { translation: [17.31, 0, 8.13], rotationY: 0 },

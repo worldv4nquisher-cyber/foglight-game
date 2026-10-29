@@ -223,7 +223,7 @@ export function buildS1Puzzles(o: S1PuzzleOptions): S1Puzzles {
   root.add(slotMarker);
   const note = marker('s1-neighbor-note', new THREE.Vector3(15.05, S1.sandY + 0.03, -1.7), [0.22, 0.02, 0.3], paperMat);
   const items: Array<{ id: string; kind: 'inspect' | 'read'; object: THREE.Object3D; textId: TextId; focus?: THREE.Vector3; reach?: number }> = [
-    { id: 's1-boat', kind: 'inspect', object: new THREE.Object3D(), textId: 'ch1.s1.boat.inspect', focus: new THREE.Vector3(S1.boat.position[0], 1.5, S1.boat.position[2]), reach: 1.4 },
+    { id: 's1-boat', kind: 'inspect', object: new THREE.Object3D(), textId: 'ch1.s1.boat.inspect', focus: new THREE.Vector3(S1.boat.bowRing[0], 1.5, S1.boat.bowRing[2]), reach: 1.4 }, // 焦点在船头（离码头最近），码头尽头就能看
     { id: 's1-tide-pillar', kind: 'inspect', object: pillar, textId: 'ch1.s1.tide_pillar.inspect' },
     { id: S1_IDS.stoneSlot, kind: 'inspect', object: slotMarker, textId: 'ch1.s1.stone_slot.inspect', focus: slotMarker.position.clone(), reach: 0.6 },
     { id: 's1-nets-a', kind: 'inspect', object: new THREE.Object3D(), textId: 'ch1.s1.nets.inspect', focus: new THREE.Vector3(15.9, 1.2, -2.25), reach: 0.6 },

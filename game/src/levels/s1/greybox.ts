@@ -235,6 +235,19 @@ export function buildS1Greybox(mats: GreyboxMaterials = defaultGreyboxMaterials(
   addBox('s1-cliff-n', [Pl.min[0], -2, Pl.max[1]], [F.x[1], cliffTop, 30], mats.cliff, 'collider');
   addBox('s1-cliff-channel-e', [B.minX, -2, ch.z[0]], [-4.6, cliffTop, ch.z[1]], mats.cliff, 'collider');
 
+  // ---- 小船（返工 1029 挪到 +X 系船桩）：退潮时滩地白盒 0.1 可以走到船边，船浮在 −0.24、船舷顶 ≈ 0.56。
+  // 放一块按船体朝向的隐形挡板（永久；涨潮时在水下，没人够得着），走过去不会穿过船身
+  const bt = S1.boat;
+  const hullTop = S1.tide.low - bt.belowWater + bt.hull.topY;
+  const hull = new THREE.Mesh(new THREE.BoxGeometry(bt.hull.beam, hullTop + 2, bt.hull.length), wallMat);
+  hull.name = 's1-boat-hull-wall';
+  hull.rotation.y = bt.rotationY;
+  hull.position.set(bt.position[0], (hullTop - 2) / 2, bt.position[2]);
+  hull.translateZ(bt.hull.centerZ);
+  hull.visible = false;
+  walls.push(hull);
+  root.add(hull);
+
   // ---- 外框空气墙（永久）：东、西（雾里的渔具棚 / 晾网架）、南（外海）
   addBox('s1-bound-e', [B.minX - 0.3, -2, B.minZ - 0.3], [B.minX, 10, 30], wallMat, 'wall');
   addBox('s1-bound-w', [B.maxX, -2, B.minZ - 0.3], [B.maxX + 0.3, 10, 30], wallMat, 'wall');

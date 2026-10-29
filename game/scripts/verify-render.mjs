@@ -214,6 +214,88 @@ if (hasArt) {
     return 'net-rack-a / b ✓';
   });
 
+  await test('S1 布局 = s1-layout.json（1029 起冲突以 json 为准）：美术节点、关键点、小船 / 系船节点（GLB）一致', async () => {
+    const { S1 } = await import('@/levels/s1/layout');
+    const eq = (a, b, msg, eps = 1e-3) => {
+      assert.equal(a.length, b.length, msg);
+      a.forEach((v, i) => near(v, b[i], eps, `${msg}[${i}]`));
+    };
+    for (const [k, n] of Object.entries(S1.artNodes)) {
+      const j = layout.nodes[k];
+      assert.ok(j, `json 没有 ${k}`);
+      eq(n.translation, j.translation, k);
+      near(n.rotationY, j.rotationY ?? 0, 1e-5, k + ' rotY');
+    }
+    const boat = layout.nodes['prop-boat-rowboat'];
+    eq(S1.boat.position, boat.translation, '小船');
+    near(S1.boat.rotationY, boat.rotationY, 1e-5, '小船 rotY');
+    near(S1.boat.seabedY, boat.seabedY, 1e-6, '海床');
+    eq(S1.boat.bowRing, boat.bowRingWorld, '船头环');
+    const sb = layout.nodes['prop-boat-rowboat-sunken'];
+    eq(S1.sunkenBoat.position, sb.translation, '沉船');
+    const P = layout.points;
+    for (const k of ['spawnStart', 'bellAnchor', 'safePoint', 'reefPathEnd', 'linkNear', 'linkFar', 'exitToS2', 'fishShed']) eq(S1[k], P[k], k);
+    eq(S1.raft.home, P.raftHome, 'raftHome');
+    eq(S1.raft.slot, P.stoneSlot, 'stoneSlot');
+    eq(S1.stoneSlot.min, P.stoneSlotBox.min, 'stoneSlotBox.min');
+    eq(S1.stoneSlot.max, P.stoneSlotBox.max, 'stoneSlotBox.max');
+    near(S1.channel.trackMinX, P.stoneSlotBox.min[0], 1e-6, '石槽轨道 x');
+    S1.reefPath.forEach((r, i) => eq(r, P.reefPath[i], `reefPath ${i}`));
+    S1.ridge.forEach((r, i) => eq(r, P.ridge[i], `ridge ${i}`));
+    S1.netRacks.forEach((r, i) => eq(r, P.netRacks[i], `netRacks ${i}`));
+    for (const k of ['x0', 'run', 'rise', 'count']) near(S1.reefStairs[k], P.reefStairs[k], 1e-6, 'reefStairs.' + k);
+    eq(S1.reefStairs.z, P.reefStairs.z, 'reefStairs.z');
+    for (const k of ['z0', 'landing', 'count', 'rise', 'baseY']) near(S1.farSteps[k], P.farSteps[k], 1e-6, 'farSteps.' + k);
+    near(S1.farSteps.run, P.farSteps.run, 1e-4, 'farSteps.run');
+    eq(S1.farSteps.x, P.farSteps.x, 'farSteps.x');
+    near(S1.farSteps.z0 + S1.farSteps.landing + S1.farSteps.count * S1.farSteps.run, P.farSteps.topZ, 1e-3, '台阶顶 z');
+    near(S1.farSteps.baseY + S1.farSteps.count * S1.farSteps.rise, P.farSteps.topY, 1e-3, '台阶顶 y');
+    eq(S1.plateau.min, P.plateau.min, 'plateau.min');
+    eq(S1.plateau.max, P.plateau.max, 'plateau.max');
+    near(S1.plateau.topY, P.plateau.topY, 1e-6, 'plateau.topY');
+    // GLB：码头里的系船点 / 船绳端点、小船船头环，按 layout 摆放后的世界坐标
+    const pier = await loadGlb('models/env/env-pier-wood-ch1.glb');
+    const pn = S1.artNodes['env-pier-wood-ch1'];
+    pier.position.set(...pn.translation);
+    pier.rotation.y = pn.rotationY;
+    pier.updateMatrixWorld(true);
+    const w = (root, name) => {
+      const o = root.getObjectByName(name);
+      assert.ok(o, `GLB 缺节点 ${name}`);
+      const v = o.getWorldPosition(new THREE.Vector3());
+      return [v.x, v.y, v.z];
+    };
+    eq(w(pier, 'env-pier-wood-ch1-boat-mooring'), S1.boat.mooring, '系船点 boat-mooring', 0.01);
+    assert.ok(pier.getObjectByName('env-pier-wood-ch1-bollard'), '旧系船点改名 -bollard');
+    const ropeEnd = w(pier, 'env-pier-wood-ch1-rope-bow-end');
+    const rb = await loadGlb('models/props/prop-boat-rowboat.glb');
+    rb.position.set(...S1.boat.position);
+    rb.rotation.y = S1.boat.rotationY;
+    rb.updateMatrixWorld(true);
+    const ring = w(rb, 'prop-boat-rowboat-bow-ring');
+    eq(ring, S1.boat.bowRing, '船头环（涨潮）', 0.01);
+    eq(ropeEnd, ring, '船绳端点 = 船头环（涨潮 1.6）', 0.01);
+    // 船体尺寸（白盒退潮挡板用）= GLB
+    let ex = null;
+    rb.traverse((o) => {
+      if (!ex && o.userData?.beamM) ex = o.userData;
+    });
+    assert.ok(ex, '小船 GLB extras');
+    near(S1.boat.hull.beam, ex.beamM, 0.01, '船宽');
+    near(S1.boat.belowWater, ex.waterlineY, 1e-6, '吃水');
+    rb.position.set(0, 0, 0);
+    rb.rotation.y = 0;
+    rb.updateMatrixWorld(true);
+    const bb = new THREE.Box3();
+    rb.traverse((o) => {
+      if (o.isMesh && o.visible && !/collider/i.test(o.name)) bb.expandByObject(o);
+    });
+    near(S1.boat.hull.topY, bb.max.y, 0.01, '船舷顶');
+    near(S1.boat.hull.length, bb.max.z - bb.min.z, 0.02, '船长');
+    near(S1.boat.hull.centerZ, (bb.max.z + bb.min.z) / 2, 0.01, '船长中心');
+    return `美术节点 ${Object.keys(S1.artNodes).length} 个、关键点、台阶 / 平台、小船 (${S1.boat.position.join(', ')}) 与系船点 (${S1.boat.mooring.join(', ')}) ✓`;
+  });
+
   await test('外部 KTX2：S1 全部 GLB 的 images.uri 相对 GLB 解析后存在（运行时 assets/art/models/env/../../textures/ 同理）', () => {
     const files = [...new Set(Object.values(layout.nodes).flatMap((n) => [n.file, ...(n.socketInstances ?? []).map((s) => s.file)]).filter(Boolean))];
     let n = 0;
