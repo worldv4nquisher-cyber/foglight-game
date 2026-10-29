@@ -84,7 +84,14 @@ export const manifest: AssetEntry[] = [
   // S2 远景 S3 岛 + 灯塔（与 s1 同一文件，s2 组另登记一份：S1→S2 释放 s1 组后仍可用）
   { key: 'env-lighthouse-island-main-s3tower-s2far', type: 'gltf', url: 'assets/art/models/env/env-lighthouse-island-main-s3tower.glb', group: 's2', optional: true, art: true },
   { key: 'env-lighthouse-ch1-s2far', type: 'gltf', url: 'assets/art/models/env/env-lighthouse-ch1.glb', group: 's2', optional: true, art: true },
-  // ---- s3：白盒阶段（015）没有专属资源，美术 020 交付后登记在这里
+  // ---- s3（015）：美术 020 rework-1029，摆位见 levels/s3/art.ts（塔本体另登记 -s3 key，与 s1 组的远景分开释放）
+  { key: 'env-lighthouse-ch1-s3', type: 'gltf', url: 'assets/art/models/env/env-lighthouse-ch1.glb', group: 's3', optional: true, art: true },
+  { key: 'env-lighthouse-ch1-interior', type: 'gltf', url: 'assets/art/models/env/env-lighthouse-ch1-interior.glb', group: 's3', optional: true, art: true },
+  { key: 'env-lighthouse-ch1-door', type: 'gltf', url: 'assets/art/models/env/env-lighthouse-ch1-door.glb', group: 's3', optional: true, art: true },
+  { key: 'env-lamp-room-ch1', type: 'gltf', url: 'assets/art/models/env/env-lamp-room-ch1.glb', group: 's3', optional: true, art: true },
+  { key: 'prop-fresnel-lens-ch1', type: 'gltf', url: 'assets/art/models/props/prop-fresnel-lens-ch1.glb', group: 's3', optional: true, art: true },
+  { key: 'env-rock-islet-a', type: 'gltf', url: 'assets/art/models/env/env-rock-islet-a.glb', group: 's3', optional: true, art: true },
+  { key: 'env-stone-bridge-s3', type: 'gltf', url: 'assets/art/models/env/env-stone-bridge-s3.glb', group: 's3', optional: true, art: true },
   // ---- 更多示例（取消注释即可登记）----
   // { key: 'ground-diffuse', type: 'ktx2', url: 'assets/textures/ground-diffuse.ktx2', group: 's1', optional: true },
   // { key: 'sfx-footstep', type: 'audio', url: 'assets/audio/sfx-footstep.ogg', group: 'common', optional: true },

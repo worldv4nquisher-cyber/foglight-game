@@ -1909,6 +1909,56 @@ const CHECKS = [
       return out.join('，');
     },
   },
+  {
+    name: 'v0.1-015 S3 白盒：?scene=s3 桥尾入口 / 世界摆位（塔心 39.73, −122.75，转 135°）/ 海面挪到塔心 / 室内触发体、点灯前无暖光、光路正解到点火口；?art=1 美术 020 七件 + 门扇挂合页',
+    async run({ evaluate, cdp, sleep }) {
+      const out = [];
+      const until = async (expr, ms = 8000) => {
+        const end = Date.now() + ms;
+        let v;
+        while (Date.now() < end) {
+          v = await evaluate(expr);
+          if (v) return v;
+          await sleep(100);
+        }
+        return v;
+      };
+      const probe = `(() => { const s = __s3; let warm = 0, glow = 0; s.scene.traverse((o) => {
+          for (let a = o; a; a = a.parent) if (a.userData?.warmLight) return;
+          if ((o.isPointLight || o.isSpotLight || o.isRectAreaLight) && o.visible && o.intensity > 0 && o.color.r > o.color.b + 0.1) warm++;
+          if (o.isMesh && o.visible) for (const m of Array.isArray(o.material) ? o.material : [o.material]) if (m && m.emissive && m.emissive.getHex() !== 0 && m.emissiveIntensity > 0) glow++; });
+        const p = s.rig.body.position;
+        return { name: s.name, entry: s.entryId, pos: p.toArray().map((v) => +v.toFixed(2)), frame: s.frame.position.toArray(), rot: +s.frame.rotation.y.toFixed(4),
+          water: s.water ? [s.water.position.x, s.water.position.y, s.water.position.z] : null, indoor: s.cameraFollow.indoorVolumes.length, warm, glow, on: s.lighthouseOn,
+          art: s.art.loaded, keys: s.art.root.children.map((c) => c.name), door: !!s.art.door && s.art.door.parent === s.greybox.door, gb: s.greybox.colliders[0].visible,
+          ignite: s.puzzles.beam.igniter.state }; })()`;
+      await cdp.goto('debug=1&scene=s3', 's3-lighthouse');
+      if (!(await until(`!!window.__s3?.rig`, 30000))) throw new Error('?scene=s3 没进 S3');
+      let s = await evaluate(probe);
+      // 桥尾 spawn-from-s2 (−22.627, 3, −22.627) → 世界
+      const want = [39.73 + -22.627 * Math.cos(Math.PI * 0.75) + -22.627 * Math.sin(Math.PI * 0.75), 3, -122.75 + 22.627 * Math.sin(Math.PI * 0.75) + -22.627 * Math.cos(Math.PI * 0.75)];
+      if (s.entry !== 'from-s2' || Math.hypot(s.pos[0] - want[0], s.pos[2] - want[2]) > 0.4 || Math.abs(s.pos[1] - 3) > 0.1) throw new Error('S3 入口不对 ' + JSON.stringify({ s, want }));
+      if (Math.abs(s.frame[0] - 39.73) > 1e-6 || Math.abs(s.frame[2] + 122.75) > 1e-6 || Math.abs(s.rot - 2.3562) > 1e-3) throw new Error('S3 世界摆位不对 ' + JSON.stringify(s));
+      if (!s.water || Math.abs(s.water[0] - 39.73) > 1e-6 || Math.abs(s.water[2] + 122.75) > 1e-6 || s.indoor < 1) throw new Error('S3 海面 / 室内触发体不对 ' + JSON.stringify(s));
+      if (s.warm || s.glow || s.on) throw new Error('S3 点灯前不应有环境暖光 / 自发光 ' + JSON.stringify(s));
+      out.push(`白盒：桥尾入口 ${s.pos}、塔心 (39.73, −122.75) 转 135°、海面挪到塔心 y ${s.water[1]}、室内触发体 ×${s.indoor}、无暖光 ✓`);
+      // 光路：三面镜子转到正解 → 主天光依次过三面镜子停在点火口
+      const path = await evaluate(`(() => { const b = __s3.puzzles.beam; b.solve(); b.sky.alwaysOn = true; b.tracer.trace(); const p = b.tracer.paths.find((q) => q.emitter.id === 'sky-s3'); return { mirrors: p.mirrors, rec: p.receiver?.id ?? null }; })()`);
+      if (path.rec !== 'ignition-port-s3' || path.mirrors.length !== 3) throw new Error('S3 光路正解没到点火口 ' + JSON.stringify(path));
+      await evaluate(`(() => { const b = __s3.puzzles.beam; b.reset(); b.sky.alwaysOn = false; return 1; })()`);
+      out.push('光路正解：窗口镜 → 导光镜 1 → 导光镜 2 → 点火口 ✓');
+      await cdp.goto('debug=1&scene=s3&art=1', 's3-lighthouse');
+      if (!(await until(`!!window.__s3?.rig`, 60000))) throw new Error('art=1 没进 S3');
+      s = await evaluate(probe);
+      const keys = ['env-lighthouse-ch1-s3', 'env-lighthouse-ch1-interior', 'env-lamp-room-ch1', 'prop-fresnel-lens-ch1', 'env-rock-islet-a', 'env-stone-bridge-s3'];
+      if (!s.art || keys.some((k) => !s.keys.includes(k)) || !s.door || s.gb) throw new Error('S3 美术件没加载全 / 白盒没隐藏 ' + JSON.stringify(s));
+      if (s.warm || s.glow || s.on) throw new Error('S3 美术接入后点灯前不应有环境暖光 / 自发光 ' + JSON.stringify(s));
+      out.push('art=1：020 六件 + 门扇挂合页、白盒隐藏、无暖光 ✓');
+      await evaluate(`localStorage.removeItem('foglight.save.v1'); 1`);
+      try { await cdp.goto(''); } catch (e) { throw new Error('回 S1 失败：' + e.message, { cause: e }); }
+      return out.join('，');
+    },
+  },
 ];
 const extra = process.env.SMOKE_ONLY ? CHECKS.filter((c) => process.env.SMOKE_ONLY.split('|').some((k) => c.name.includes(k))) : CHECKS;
 
