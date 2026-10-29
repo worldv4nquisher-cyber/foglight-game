@@ -12,7 +12,8 @@ import { Mirror, reflect } from '@/systems/light/Mirror';
 import { BeamReceiver } from '@/systems/light/BeamReceiver';
 import { BeamTracer } from '@/systems/light/BeamTracer';
 import { WhiteboxBeamRenderer } from '@/systems/light/BeamRenderer';
-import { buildBeamTestArea } from '@/world/beamTestArea';
+import { buildBeamTestArea, BEAM_Y } from '@/world/beamTestArea';
+import { S2 } from '@/levels/s2/layout';
 
 const DT = 1 / 60;
 const cfg = gameplay.beam;
@@ -295,6 +296,10 @@ test('测试场地光路：光源 → 镜 A → 镜 B → 接收器（转对后 
   assert.ok(p, '有测试光源');
   assert.equal(p.end, 'receiver', `应命中接收器：${area.tracer.debugLine()}`);
   assert.deepEqual(p.mirrors, ['beam-mirror-a', 'beam-mirror-b']);
+  // v0.1-014 / QA batch5：光路高度与谜题 3 一致（约 0.85 m，提灯灯座出光 0.846 m），整条光路水平
+  assert.ok(Math.abs(BEAM_Y - 0.85) < 1e-9 && Math.abs(BEAM_Y - S2.beamY) < 1e-9, `测试场 BEAM_Y ${BEAM_Y} 应与谜题 3 的 ${S2.beamY} 一致`);
+  assert.ok(Math.abs(BEAM_Y - S2.lampEmitY) <= 0.01, '测试场光高与提灯出光高度差 ≤ 1 cm');
+  for (const sgm of p.segments) assert.ok(Math.abs(sgm.from.y - BEAM_Y) < 1e-6 && Math.abs(sgm.to.y - BEAM_Y) < 1e-6, `光段应在 y=${BEAM_Y}：${sgm.from.y}→${sgm.to.y}`);
   run(area.tracer, 1.6);
   assert.ok(ev.includes(area.lock.id));
   area.mirrorA.part.step(0, 1);

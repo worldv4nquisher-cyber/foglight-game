@@ -13,9 +13,9 @@ import { BeamTracer } from '@/systems/light/BeamTracer';
 import { WhiteboxBeamRenderer } from '@/systems/light/BeamRenderer';
 
 /**
- * 测试场地光路区（v0.1-012，白盒）：起点往西南，x −20…−14、z 4…17。光高 y = 1.2 m。
+ * 测试场地光路区（v0.1-012，白盒）：起点往西南，x −20…−14、z 4…17。光高 y = BEAM_Y = 0.85 m（v0.1-014 / QA batch5：与谜题 3 一致——提灯在灯座上出光 0.846 m）。
  *
- *   风灯灯台（带聚光罩）(−18, 1.2, 4) → +Z ── 镜 A (−18, 1.2, 10) ── +X → 镜 B (−15, 1.2, 10) ── +Z → 光感锁 (−15, 1.2, 16)
+ *   风灯灯台（带聚光罩）(−18, 0.85, 4) → +Z ── 镜 A (−18, 0.85, 10) ── +X → 镜 B (−15, 0.85, 10) ── +Z → 光感锁 (−15, 0.85, 16)
  *   镜 A 初始偏 30°（光打到旁边），机关台 (−16.5, 8) 上 E 进机位：A / D 转镜（15° 档，Shift 精调 7.5°），Q / E 换镜。
  *   云缝天光 (−19, 4, 15) 竖直向下 → 点火口 (−19, 0.8, 15)：40 s 一周期亮 25 s；没开油阀时命中只发红光（receiver:blocked）。
  *   点火口触发后天光转暖（谜题 5「点火瞬间转暖」）。
@@ -43,7 +43,8 @@ export interface BeamTestArea {
   dispose(): void;
 }
 
-export const BEAM_Y = 1.2;
+/** 光路高度（m）：与 S2 谜题 3（S2.beamY）一致，提灯灯座出光 0.846 m（制作人裁定，v0.1-014） */
+export const BEAM_Y = 0.85;
 
 export function buildBeamTestArea(opts: {
   scene: THREE.Scene;
