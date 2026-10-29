@@ -852,6 +852,13 @@ const CHECKS = [
         const overlap = b ? !(a.right <= b.left || b.right <= a.left || a.bottom <= b.top || b.bottom <= a.top) : false;
         return { overlap, toast: [a.left, a.top, a.right, a.bottom].map(Math.round), hint: b && [b.left, b.top, b.right, b.bottom].map(Math.round), covered: __game.ui.reader.isOpen || __game.ui.journal.isOpen || __game.ui.pause.isOpen }; })()`);
       if (tg.overlap || tg.covered) throw new Error('「日志已更新」和操作提示重叠 / 被盖住 ' + JSON.stringify(tg));
+      // BUG-009：提示再变长（折三行）时 toast 跟着上移，仍不重叠；之后还原
+      const hint0 = await evaluate(`document.querySelector('.hud-hint').innerHTML`);
+      await evaluate(`__game.ui.hud.setHint(document.querySelector('.hud-hint').innerHTML + '<br>BUG-009 第三行')`);
+      const OVL = `(() => { const a = document.querySelector('.toast-left').getBoundingClientRect(); const b = document.querySelector('.hud-hint').getBoundingClientRect(); return !(a.right <= b.left || b.right <= a.left || a.bottom <= b.top || b.bottom <= a.top); })()`;
+      const lines3 = await evaluate(`document.querySelector('.hud-hint').offsetHeight`);
+      if (await evaluate(OVL)) throw new Error(`提示变成 ${lines3}px 高后「日志已更新」又和它重叠（BUG-009）`);
+      await evaluate(`__game.ui.hud.setHint(${JSON.stringify(hint0)})`);
       await sleep(1000);
       if (await evaluate(`document.querySelector('.toast-left').hidden`)) throw new Error('「日志已更新」关掉阅读界面后不到 1 s 就消失了');
       const toastGone = await until(`document.querySelector('.toast-left').hidden`, 15000);

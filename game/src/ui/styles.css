@@ -598,9 +598,11 @@ body {
 /* 左下角短提示（日志已更新） */
 .toast-left {
   position: absolute;
-  /* BUG-004：放在左下角操作提示（.hud-hint，bottom 14px、单行约 22px）上方，不重叠 */
+  /* BUG-004：放在左下角操作提示（.hud-hint，bottom 14px）上方，不重叠。
+     BUG-009：提示高度不写死（单行 22px、折两行 43px…），由 Hud 用 ResizeObserver 写进 --hud-hint-h；
+     间距 12px。没有变量时按单行算（= 以前的 48px） */
   left: 16px;
-  bottom: 48px;
+  bottom: calc(14px + var(--hud-hint-h, 22px) + 12px);
   font-size: 13px;
   color: var(--ui-text);
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);

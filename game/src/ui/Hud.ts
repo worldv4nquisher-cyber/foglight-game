@@ -20,6 +20,9 @@ export class Hud implements InteractionHud {
   private ring: HTMLDivElement;
   private ringArc: SVGCircleElement;
   private puzzleBar: HTMLDivElement;
+  private readonly root: HTMLElement;
+  private hintObserver: ResizeObserver | null = null;
+  private hintH = -1;
 
   constructor(parent: HTMLElement) {
     this.el = document.createElement('div');
@@ -57,14 +60,31 @@ export class Hud implements InteractionHud {
       markers.appendChild(m);
       this.markerEls.push(m);
     }
+    // BUG-009：把操作提示的实际高度写进 --hud-hint-h（挂在 UI 根上），左下「日志已更新」
+    // （.toast-left，同在 UI 根下）按它定位在提示上方；提示折行 / 改文案 / 窗口变窄都跟着走
+    this.root = parent;
+    if (typeof ResizeObserver !== 'undefined') {
+      this.hintObserver = new ResizeObserver(() => this.syncHintHeight());
+      this.hintObserver.observe(this.hint);
+    }
+  }
+
+  /** 同步 --hud-hint-h（ResizeObserver 是异步的；setHint / show / hide 时立刻再写一次） */
+  private syncHintHeight(): void {
+    const h = this.el.hidden ? 0 : this.hint.offsetHeight;
+    if (h === this.hintH) return;
+    this.hintH = h;
+    this.root.style.setProperty('--hud-hint-h', `${h}px`);
   }
 
   show(): void {
     this.el.hidden = false;
+    this.syncHintHeight();
   }
 
   hide(): void {
     this.el.hidden = true;
+    this.syncHintHeight();
   }
 
   setLocation(text: string): void {
@@ -77,6 +97,7 @@ export class Hud implements InteractionHud {
 
   setHint(html: string): void {
     this.hint.innerHTML = html;
+    this.syncHintHeight();
   }
 
   /** 交互提示（如「E 点亮灯塔」），传 null 隐藏；disabled = 灰色（暂时不可用，如潮汐钟涨落中，v0.1-011） */
@@ -144,6 +165,8 @@ export class Hud implements InteractionHud {
 
   dispose(): void {
     window.clearTimeout(this.toastTimer);
+    this.hintObserver?.disconnect();
+    this.root.style.removeProperty('--hud-hint-h');
     this.el.remove();
   }
 }
