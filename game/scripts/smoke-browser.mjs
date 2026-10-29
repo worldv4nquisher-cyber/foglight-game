@@ -1092,7 +1092,7 @@ const CHECKS = [
       await until(`__game.ui.pause.view === 'confirm'`, 3000);
       await clickSel('.pause-menu .confirm-dialog [data-act="confirm"]');
       if (!(await until(`__game.scenes.current?.name === 'menu' && __game.ui.mainMenu.isOpen && !__game.ui.pause.isOpen`, 20000))) throw new Error('确认后没回主菜单 ' + JSON.stringify(await evaluate(menuState)));
-      m = await evaluate(`({ ...${menuState}, cont: ${visible('.main-menu [data-act="continue"]')}, paused: __game.isPaused, frozen: __game.isFrozen, cur: __game.scenes.current === __s2, t: __s2.puzzles.actions.cur })`);
+      m = await evaluate(`({ ...${menuState}, cont: ${visible('.main-menu [data-act="continue"]')}, paused: __game.isPaused, frozen: __game.isFrozen })`);
       if (!m.cont || m.ctx !== 'menu' || m.locked || m.paused) throw new Error('回主菜单后应有「继续」、不锁指针 ' + JSON.stringify(m));
       out.push('暂停 → 回到主菜单（取消 / 确认）✓');
 
