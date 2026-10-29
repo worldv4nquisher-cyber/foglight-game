@@ -13,6 +13,42 @@ import { S1_ROCKS, type RockId } from './rocks';
 const TOWER_LOD_BY_TIER = { ultra: 1, high: 2, standard: 2 } as const;
 const COLLIDER_NAME = /-(collider|wall)(\.\d+)?$/i;
 
+/** 按潮位切换可见性的一组节点（船绳涨 / 退潮两版）；找不到任一版 = null（保持现状） */
+export interface TideVariantSwitch {
+  high: THREE.Object3D[];
+  low: THREE.Object3D[];
+  /** 当前显示的一版 */
+  state: 'high' | 'low' | null;
+  update(tideLevel: number): void;
+}
+
+export function makeTideVariantSwitch(root: THREE.Object3D, cfg: { high: readonly string[]; low: readonly string[]; switchLevel: number }): TideVariantSwitch | null {
+  const find = (names: readonly string[]): THREE.Object3D[] => {
+    const out: THREE.Object3D[] = [];
+    for (const n of names) {
+      const o = root.getObjectByName(n);
+      if (o) out.push(o);
+    }
+    return out;
+  };
+  const high = find(cfg.high);
+  const low = find(cfg.low);
+  if (!high.length || !low.length) return null;
+  const sw: TideVariantSwitch = {
+    high,
+    low,
+    state: null,
+    update(level) {
+      const s = level >= cfg.switchLevel ? 'high' : 'low';
+      if (s === sw.state) return;
+      sw.state = s;
+      for (const o of high) o.visible = s === 'high';
+      for (const o of low) o.visible = s === 'low';
+    },
+  };
+  return sw;
+}
+
 export interface S1Art {
   root: THREE.Group;
   /** 有没有加载到美术（没有 = 只有白盒） */
@@ -23,6 +59,8 @@ export interface S1Art {
   tower: THREE.Object3D | null;
   farFog: ObjectFogHandle | null;
   sky: SkyLayerHandle | null;
+  /** 船绳涨 / 退潮两版切换（美术节点未交付 = null） */
+  rope: TideVariantSwitch | null;
   update(camera: THREE.Camera, tideLevel: number): void;
   applyQuality(q: QualityPreset): void;
 }
@@ -165,6 +203,9 @@ export function buildS1Art(assets: AssetLoader): S1Art {
     loaded = true;
   }
 
+  // 船绳两版（等美术拆节点；layout.ts S1.boatRope 配节点名，找不到就保持现状）
+  const rope = makeTideVariantSwitch(root, S1.boatRope);
+
   const towerLods: THREE.LOD[] = [];
   tower?.traverse((o) => {
     if ((o as THREE.LOD).isLOD) towerLods.push(o as THREE.LOD);
@@ -179,8 +220,10 @@ export function buildS1Art(assets: AssetLoader): S1Art {
     tower,
     farFog,
     sky,
+    rope,
     update(camera, tideLevel) {
       for (const r of rocks) r.update(camera);
+      rope?.update(tideLevel);
       if (boat) boat.position.y = Math.max(S1.boat.groundY, tideLevel - S1.boat.belowWater);
     },
     applyQuality(q) {

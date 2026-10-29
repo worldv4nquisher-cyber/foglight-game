@@ -102,6 +102,12 @@ export const S1 = {
     floorY: -0.44,
     maxFootY: 0.3,
   },
+  /**
+   * 船绳涨 / 退潮两版（制作人 1029：美术会把 env-pier-wood-ch1 的船绳拆成两个可切换节点，**节点名待美术交付**）。
+   * 水位 ≥ switchLevel 显示 high 列表、否则显示 low 列表；按名字在 S1 美术根下找（精确名或 `<名>_lodN` 等子节点前缀都可）。
+   * 两个列表任一边找不到节点 = 不切换（保持 GLB 现状：现在只有一根涨潮版绳）。美术给了节点名后只改这里。
+   */
+  boatRope: { high: [] as readonly string[], low: [] as readonly string[], switchLevel: 0.8 },
   sunkenBoat: { position: [10.2, -1.15, -17] as V3, rotationY: 0.6, rotationXDeg: 9, rotationZDeg: -21 },
   /** 美术节点摆放（GLB 根的平移 / 绕 Y 旋转；与 s1-layout.json nodes 一致） */
   artNodes: {

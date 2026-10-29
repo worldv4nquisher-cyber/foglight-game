@@ -350,6 +350,30 @@ if (hasArt) {
     return `区内 ${nIn} 点 ${((deepIn / nIn) * 100).toFixed(1)}% < −0.3、最高 ${worst.toFixed(2)}；区外北段 ${nOut} 点深水 ${((deepOut / nOut) * 100).toFixed(1)}%`;
   });
 
+  await test('船绳涨 / 退潮两版切换（等美术节点）：两版都找到才切换、按 switchLevel 切可见性；找不到 = null 保持现状；当前配置为空', async () => {
+    const { makeTideVariantSwitch } = await import('@/levels/s1/art');
+    const { S1 } = await import('@/levels/s1/layout');
+    const root = new THREE.Group();
+    const hi = new THREE.Object3D();
+    hi.name = 'rope-high';
+    const lo = new THREE.Object3D();
+    lo.name = 'rope-low';
+    root.add(hi, lo);
+    const sw = makeTideVariantSwitch(root, { high: ['rope-high'], low: ['rope-low'], switchLevel: 0.8 });
+    assert.ok(sw);
+    sw.update(1.6);
+    assert.ok(hi.visible && !lo.visible, '涨潮显示涨潮版');
+    sw.update(0);
+    assert.ok(!hi.visible && lo.visible, '退潮显示退潮版');
+    sw.update(0.79);
+    assert.equal(sw.state, 'low');
+    sw.update(0.8);
+    assert.equal(sw.state, 'high');
+    assert.equal(makeTideVariantSwitch(root, { high: ['rope-high'], low: ['nope'], switchLevel: 0.8 }), null, '缺一版 = 不切换');
+    assert.equal(makeTideVariantSwitch(root, S1.boatRope), null, '当前未配节点名 = 保持现状');
+    return `节点名待美术（S1.boatRope high ${S1.boatRope.high.length} / low ${S1.boatRope.low.length}）`;
+  });
+
   await test('外部 KTX2：S1 全部 GLB 的 images.uri 相对 GLB 解析后存在（运行时 assets/art/models/env/../../textures/ 同理）', () => {
     const files = [...new Set(Object.values(layout.nodes).flatMap((n) => [n.file, ...(n.socketInstances ?? []).map((s) => s.file)]).filter(Boolean))];
     let n = 0;
