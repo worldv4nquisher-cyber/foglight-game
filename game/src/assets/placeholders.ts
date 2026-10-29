@@ -27,6 +27,13 @@ export function createPlaceholderModel(shape: PlaceholderShape = 'box', color = 
   return mesh;
 }
 
+/** 贴图重试后仍失败时的占位（BUG-012）：每次新建一份（GLTFLoader 会改 flipY / colorSpace / 名字），图案同 createPlaceholderTexture */
+export function createMissingTexture(): THREE.Texture {
+  const tex = createPlaceholderTexture().clone();
+  tex.needsUpdate = true;
+  return tex;
+}
+
 /** 洋红/黑棋盘格纹理（一眼能看出“缺贴图”），全局共享一份 */
 export function createPlaceholderTexture(): THREE.Texture {
   if (checkerTexture) return checkerTexture;

@@ -1765,8 +1765,11 @@ const CHECKS = [
       if (!(await until(`!!window.__s1?.art`, 30000))) throw new Error('art=1 没进 S1');
       const art = await evaluate(`(() => { const a = __s1.art; let lit = 0; a.tower?.traverse((o) => { const m = o.material; for (const x of Array.isArray(m) ? m : m ? [m] : []) if (x.emissive && x.emissive.getHex() !== 0 && x.emissiveIntensity > 0) lit++; }); let warm = 0; __s1.scene.traverse((o) => { if ((o.isPointLight || o.isSpotLight) && o.visible && o.intensity > 0 && o.color.r > o.color.b + 0.1) warm++; }); return { loaded: a.loaded, rocks: a.rocks.reduce((n, r) => n + r.placements.length, 0), tower: !!a.tower, island: !!a.island, lit, warm, greybox: __s1.greybox.root.visible }; })()`);
       if (!art.loaded || !art.tower || !art.island || art.rocks < 100) throw new Error('S1 美术件没加载全 ' + JSON.stringify(art));
+      // BUG-012：GLB / 外部 KTX2 全部加载成功（被浏览器取消的已重试），没有占位降级
+      const ls = await evaluate(`(() => { const s = __game.assets.loadStats; return { n: s.length, ktx2: s.filter((x) => x.kind === 'ktx2').length, pending: s.filter((x) => !x.done).length, bad: s.filter((x) => (x.done && !x.ok) || x.fallback), retried: s.filter((x) => x.attempts > 1).map((x) => x.url.split('/').pop() + '×' + x.attempts), degraded: document.documentElement.classList.contains('assets-fallback') }; })()`);
+      if (ls.bad.length || ls.degraded || ls.ktx2 < 1) throw new Error('S1 art=1 有加载失败 / 占位 ' + JSON.stringify(ls));
       if (art.lit || art.warm) throw new Error('点灯前远景灯塔应熄灭、无环境暖光 ' + JSON.stringify(art));
-      out.push(`art=1 美术件（岩石 ${art.rocks} 实例、主岛 + 灯塔熄灭）✓`);
+      out.push(`art=1 美术件（岩石 ${art.rocks} 实例、主岛 + 灯塔熄灭）✓；GLB / KTX2 ${ls.n} 个（已完成 ${ls.n - ls.pending}，预加载中 ${ls.pending}）无失败、无占位（重试过：${ls.retried.join(", ") || "无"}）✓`);
       await cdp.goto('');
       return out.join('，');
     },

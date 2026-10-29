@@ -13,7 +13,8 @@ import { buildLods } from '@/render/lod';
 import { prepareOutlineNormals } from './vertexColors';
 import { fontStats, forgetFont, loadFontOnce } from './fontLoader';
 import { entriesForGroup, type AssetEntry, type AssetGroup } from './manifest';
-import { createPlaceholderModel, createPlaceholderTexture } from './placeholders';
+import { createPlaceholderModel, createPlaceholderTexture, createMissingTexture } from './placeholders';
+import { assetStats, createSharedKtx2, loadWithRetry, shareInflight, stripFallbackTextures } from './loadRetry';
 
 const BASE = import.meta.env.BASE_URL;
 
@@ -58,6 +59,12 @@ export class AssetLoader {
   get fontStats(): { url: string; family: string; attempts: number; ok: boolean; error?: string }[] {
     return [...fontStats.values()].map((s) => ({ ...s }));
   }
+  /** GLB / 外部 KTX2 的加载记录（次数 / 是否成功 / 是否用了占位），BUG-012：__game.assets.loadStats */
+  get loadStats(): { url: string; kind: string; attempts: number; ok: boolean; done: boolean; fallback?: boolean; error?: string }[] {
+    return [...assetStats.values()].map((s) => ({ ...s }));
+  }
+  /** 同一 GLB URL 只有一条在飞的下载 */
+  private gltfInflight = new Map<string, Promise<GLTF>>();
   private missing = new Set<string>();
   private groups = new Map<string, GroupState>();
   /** 模拟慢网速（?slowLoad=ms），见 parseSlowLoad */
@@ -77,20 +84,16 @@ export class AssetLoader {
     this.ktx2 = new KTX2Loader().detectSupport(renderer);
     // 外部 KTX2（v0.1-013）：美术 GLB 的 images.uri = ../../textures/tex-*.ktx2，GLTFLoader 相对 GLB URL 解析后交给这里。
     // 同一张贴图被多个 GLB 引用（岩石 a–f + 主岛共用 tex-rock-shore-*）：按解析后的 URL 只下载 / 转码 / 上传一次。
+    // BUG-012：网络失败 / 被浏览器取消时重试（loadRetry.ts），最终失败用棋盘格占位并记日志
     const ktx2 = this.ktx2;
-    const cache = this.ktx2Cache;
-    const shared = {
-      load: (url: string, onLoad: (t: THREE.Texture) => void, onProgress?: (e: ProgressEvent) => void, onError?: (e: unknown) => void): void => {
-        const key = new URL(url, typeof location === 'undefined' ? 'http://x/' : location.href).href;
-        let p = cache.get(key);
-        if (!p) {
-          p = ktx2.loadAsync(url, onProgress);
-          cache.set(key, p);
-          p.catch(() => cache.delete(key));
-        }
-        void p.then(onLoad, (e: unknown) => onError?.(e));
+    const shared = createSharedKtx2(this.ktx2Cache, {
+      load: (url, onProgress) => ktx2.loadAsync(url, onProgress),
+      resolve: (url) => new URL(url, typeof location === 'undefined' ? 'http://x/' : location.href).href,
+      fallback: (url, err) => {
+        this.degraded(url, 'ktx2', err);
+        return createMissingTexture();
       },
-    } as unknown as KTX2Loader;
+    }) as unknown as KTX2Loader;
     this.gltf = new GLTFLoader().setDRACOLoader(this.draco).setKTX2Loader(shared).setMeshoptDecoder(MeshoptDecoder);
     this.textureLoader = new THREE.TextureLoader();
     this.audioLoader = new THREE.AudioLoader();
@@ -213,8 +216,13 @@ export class AssetLoader {
           });
         } catch (err) {
           this.missing.add(entry.key);
+          if (entry.type === 'gltf' && !entry.optional) {
+            if (typeof document !== 'undefined') document.documentElement.classList.add('assets-fallback');
+            this.events.emit('assets:fallback', { url: entry.url, kind: 'glb' });
+          }
+          const attempts = assetStats.get(entry.url.startsWith('http') ? entry.url : `${BASE}${entry.url}`)?.attempts;
           // text-ok: 只进控制台日志
-          const msg = `[assets] ${entry.optional ? '可选资源缺失，使用占位' : '加载失败'}: ${entry.key} (${entry.url})`;
+          const msg = `[assets] ${entry.optional ? '可选资源缺失，使用占位' : '加载失败'}: ${entry.key} (${entry.url})${attempts && attempts > 1 ? `，已重试 ${attempts - 1} 次` : ''}`;
           if (entry.optional) console.info(msg);
           else console.error(msg, err);
         } finally {
@@ -233,7 +241,14 @@ export class AssetLoader {
     };
     switch (entry.type) {
       case 'gltf': {
-        const gltf = await this.gltf.loadAsync(url, prog);
+        let gltf: GLTF;
+        try {
+          gltf = await shareInflight(this.gltfInflight, url, () => loadWithRetry(url, 'glb', () => this.gltf.loadAsync(url, prog)));
+        } finally {
+          this.gltfInflight.delete(url);
+        }
+        // 贴图最终失败的占位只留在颜色槽（法线 / 粗糙度槽清掉）
+        stripFallbackTextures(gltf.scene);
         // 按 `_lodN` 命名组装 THREE.LOD；extras.puzzleCritical（→ userData）的物体只保留 LOD0 并释放低级 LOD
         const lodStats = buildLods(gltf.scene, (o) => disposeObject3D(o));
         if (import.meta.env.DEV && (lodStats.lodGroups || lodStats.criticalGroups || lodStats.forcedGroups)) {
@@ -269,7 +284,7 @@ export class AssetLoader {
         break;
       }
       case 'ktx2': {
-        const tex = await this.ktx2.loadAsync(url, prog);
+        const tex = await loadWithRetry(url, 'ktx2', () => this.ktx2.loadAsync(url, prog));
         if (entry.srgb !== false) tex.colorSpace = THREE.SRGBColorSpace;
         this.textures.set(entry.key, tex);
         break;
@@ -308,6 +323,15 @@ export class AssetLoader {
         break;
       }
     }
+  }
+
+  /** 重试后仍失败：日志 + 可见降级标记（GLB 由 loadEntries 换占位模型） */
+  private degraded(url: string, kind: 'glb' | 'ktx2', err: unknown): void {
+    const st = assetStats.get(url);
+    // text-ok: 只进控制台日志
+    console.error(`[assets] ${kind === 'ktx2' ? '贴图' : '模型'}加载失败（${st?.attempts ?? '?'} 次），使用占位：${url}`, err);
+    if (typeof document !== 'undefined') document.documentElement.classList.add('assets-fallback');
+    this.events.emit('assets:fallback', { url, kind });
   }
 
   has(key: string): boolean {

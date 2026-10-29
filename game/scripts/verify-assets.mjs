@@ -347,4 +347,127 @@ try {
   ok('CSS 回退栈含系统中文字体；字体只有 AssetLoader 一条下载路径（无 preload / @font-face 重复）');
 }
 
+// ---- BUG-012：GLB / 外部 KTX2 网络重试（loadRetry.ts）：模拟浏览器取消（TypeError / AbortError）
+{
+  const { loadWithRetry, createSharedKtx2, shareInflight, stripFallbackTextures, isRetryableLoadError, assetStats, ASSET_RETRIES } = await import('../src/assets/loadRetry.ts');
+  const abort = () => new TypeError('Failed to fetch (net::ERR_ABORTED)');
+  const httpErr = (status) => Object.assign(new Error(`fetch for "x" responded with ${status}`), { response: { status } });
+  assert.ok(isRetryableLoadError(abort()));
+  assert.ok(isRetryableLoadError(Object.assign(new Error('aborted'), { name: 'AbortError' })));
+  assert.ok(isRetryableLoadError(httpErr(503)) && !isRetryableLoadError(httpErr(404)));
+  assert.ok(!isRetryableLoadError(new Error('THREE.GLTFLoader: Unsupported asset')), '解析错误不重试');
+  const sleeps = [];
+  const deps = { sleep: async (ms) => void sleeps.push(ms) };
+  // 第一次被取消 → 重试成功
+  let n = 0;
+  assert.equal(await loadWithRetry('/m/a.glb', 'glb', async () => (++n === 1 ? Promise.reject(abort()) : 'gltf'), deps), 'gltf');
+  assert.equal(n, 2);
+  assert.deepEqual({ a: assetStats.get('/m/a.glb').attempts, ok: assetStats.get('/m/a.glb').ok }, { a: 2, ok: true });
+  // 一直被取消 → 1 + ASSET_RETRIES 次后抛出
+  n = 0;
+  await assert.rejects(loadWithRetry('/m/b.glb', 'glb', async () => (++n, Promise.reject(abort())), deps), TypeError);
+  assert.equal(n, 1 + ASSET_RETRIES);
+  assert.equal(ASSET_RETRIES, 2);
+  assert.equal(assetStats.get('/m/b.glb').ok, false);
+  assert.equal(assetStats.get('/m/b.glb').done, true);
+  // 404 / 解析错误不重试
+  n = 0;
+  await assert.rejects(loadWithRetry('/m/c.glb', 'glb', async () => (++n, Promise.reject(httpErr(404))), deps));
+  assert.equal(n, 1);
+  ok('GLB / KTX2：被取消（TypeError / AbortError）、5xx 重试，最多 1+2 次；404 / 解析错误不重试；assetStats 记次数');
+  // 并发共享：同 key 只一条在飞
+  const inflight = new Map();
+  n = 0;
+  const slow = () => new Promise((r) => setTimeout(() => r(++n), 5));
+  const [x, y] = await Promise.all([shareInflight(inflight, 'k', slow), shareInflight(inflight, 'k', slow)]);
+  assert.equal(n, 1);
+  assert.equal(x, y);
+  ok('同一 URL 并发请求共用一次下载');
+
+  // 共享 KTX2 加载器：两个 GLB 同时引用同一张贴图、第一次请求被取消 → 只发起 2 次请求（1 + 重试 1），两个都拿到同一张贴图
+  const tex = new THREE.Texture();
+  const mkShared = (plan, fallbacks) => {
+    const calls = [];
+    const cache = new Map();
+    const shared = createSharedKtx2(cache, {
+      ...deps,
+      load: async (url) => {
+        calls.push(url);
+        await new Promise((r) => setTimeout(r, 5));
+        const r = plan[calls.length - 1] ?? 'ok';
+        if (r === 'abort') throw abort();
+        return tex;
+      },
+      resolve: (url) => new URL(url, 'http://x/assets/art/models/env/').href,
+      fallback: (url) => {
+        fallbacks.push(url);
+        return new THREE.Texture();
+      },
+    });
+    const get = (url) => new Promise((res, rej) => shared.load(url, res, undefined, rej));
+    return { calls, cache, get };
+  };
+  let fb = [];
+  let s1 = mkShared(['abort'], fb);
+  const [t1, t2] = await Promise.all([s1.get('../../textures/tex-wood.ktx2'), s1.get('../../textures/tex-wood.ktx2')]);
+  assert.equal(s1.calls.length, 2, '取消一次 + 重试一次，第二个 GLB 不另发请求');
+  assert.ok(t1 === tex && t2 === tex && fb.length === 0);
+  assert.equal(assetStats.get('http://x/assets/art/textures/tex-wood.ktx2').attempts, 2);
+  ok('外部 KTX2：两个 GLB 同时引用、第一次请求被取消 → 重试成功，总共 2 次请求、拿到同一张贴图，无占位');
+  // 一直被取消 → 3 次后占位（标 assetFallback）、日志回调；占位不缓存，之后再请求会重新下载
+  fb = [];
+  s1 = mkShared(['abort', 'abort', 'abort'], fb);
+  const t3 = await s1.get('../../textures/tex-rock.ktx2');
+  assert.equal(s1.calls.length, 3);
+  assert.deepEqual(fb, ['http://x/assets/art/textures/tex-rock.ktx2']);
+  assert.ok(t3 !== tex && t3.userData.assetFallback);
+  assert.equal(assetStats.get('http://x/assets/art/textures/tex-rock.ktx2').fallback, true);
+  await new Promise((r) => setTimeout(r, 0));
+  assert.equal(s1.cache.size, 0, '失败的不留缓存');
+  assert.equal(await s1.get('../../textures/tex-rock.ktx2'), tex);
+  assert.equal(s1.calls.length, 4);
+  ok('外部 KTX2：重试全部失败 → 棋盘格占位 + 失败回调（日志 / assets-fallback），失败不缓存，下次可再试');
+
+  // 真 GLTFLoader（KHR_texture_basisu 外部 .ktx2，颜色 + 法线贴图同一张）：第一次被取消 → 材质最终有贴图；全部失败 → 只有 map 槽留占位
+  const gltfJson = (img) => ({
+    asset: { version: '2.0' },
+    extensionsUsed: ['KHR_texture_basisu'],
+    extensionsRequired: ['KHR_texture_basisu'],
+    images: [{ uri: img }],
+    textures: [{ extensions: { KHR_texture_basisu: { source: 0 } } }],
+    materials: [{ name: 'mat-env-wood', pbrMetallicRoughness: { baseColorTexture: { index: 0 } }, normalTexture: { index: 0 } }],
+    meshes: [],
+    nodes: [],
+    scenes: [{ nodes: [] }],
+    scene: 0,
+  });
+  const loadMat = async (shared) => {
+    const loader = new GLTFLoader().setKTX2Loader(shared);
+    const g = await loader.parseAsync(JSON.stringify(gltfJson('../../textures/tex-pier.ktx2')), 'http://x/assets/art/models/env/');
+    const mat = await g.parser.getDependency('material', 0);
+    const root = new THREE.Mesh(new THREE.BufferGeometry(), mat);
+    stripFallbackTextures(root);
+    return mat;
+  };
+  {
+    const calls = [];
+    const shared = createSharedKtx2(new Map(), {
+      ...deps,
+      load: async (url) => (calls.push(url), calls.length === 1 ? Promise.reject(abort()) : new THREE.Texture()),
+      resolve: (url) => url,
+      fallback: () => new THREE.Texture(),
+    });
+    const mat = await loadMat(shared);
+    assert.equal(calls.length, 2);
+    assert.ok(mat.map && !mat.map.userData.assetFallback && mat.normalMap && !mat.normalMap.userData.assetFallback, '取消后重试：材质有贴图');
+  }
+  {
+    const shared = createSharedKtx2(new Map(), { ...deps, load: async () => Promise.reject(abort()), resolve: (url) => url, fallback: () => new THREE.Texture() });
+    const mat = await loadMat(shared);
+    assert.ok(mat.map?.userData.assetFallback, '颜色槽是占位（可见降级）');
+    assert.equal(mat.normalMap, null, '法线槽不放棋盘格');
+  }
+  ok('GLTFLoader 外部 KTX2：取消后重试 → 材质颜色 / 法线贴图都在；全部失败 → 颜色槽棋盘格占位、法线槽清空');
+}
+
 console.log(`\n资源加载后处理 / 交付自检校验通过（${passed} 项）`);

@@ -10,6 +10,8 @@ export interface GameEvents {
   'scene:change': { from: string | null; to: string };
   'assets:progress': { loaded: number; total: number; ratio: number; url?: string };
   'assets:complete': { missing: string[] };
+  /** GLB / 贴图重试后仍失败、换成了占位（BUG-012） */
+  'assets:fallback': { url: string; kind: 'glb' | 'ktx2' };
   /** 画质档位运行时切换（v0.1-009）：收到后重建阴影贴图 / 渲染目标等，不重载场景 */
   'quality:changed': { tier: QualityTier; previous: QualityTier; source: QualityChangeSource };
   /** 首次启动的 3 秒画质自动检测完成 */
