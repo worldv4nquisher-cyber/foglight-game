@@ -28,6 +28,8 @@ import { manifest } from '@/assets/manifest';
 import { ATMOSPHERE_PRESETS, RAIN_NIGHT_LIGHT_MUL } from '@/config/atmosphere';
 import { ATMO028 } from '@/config/atmosphere028';
 import { S3_TOWER_CLOSED_LM, S2_CELLAR_CLOSED_LM } from '@/levels/lightmaps';
+import { S1 } from '@/levels/s1/layout';
+import { makeTideVariantSwitch } from '@/levels/s1/art';
 import { S2 } from '@/levels/s2/layout';
 import { CellarKeyLight, CELLAR_KEY_LIGHT, inCellar } from '@/levels/s2/cellarKeyLight';
 
@@ -342,6 +344,48 @@ await test('18 个 GLB：根 extras.lightmap 与需求单一致，uv1 落在 rec
 
 });
 
+
+await test('码头船绳两版（-rope-high / -rope-low 全部子网格，含 rope-low 的木件与 mat-env-rope-wet-ch1）都挂 tex-s1-shore-lightmap、不设 offset，涨退潮切换前后不变', async () => {
+  if (!hasArt) return '跳过（没有 ../art）';
+  const scene = await loadGlb('env/env-pier-wood-ch1');
+  assert.ok(scene, '缺 env-pier-wood-ch1.glb');
+  const tex = new THREE.Texture();
+  const hs = applySceneLightmaps(scene, (k) => (k === 'tex-s1-shore-lightmap' ? tex : null));
+  assert.equal(hs.length, 1);
+  const sw = makeTideVariantSwitch(scene, S1.boatRope);
+  assert.ok(sw, '找不到船绳两版节点');
+  const collect = () => {
+    const rows = [];
+    for (const [side, nodes] of [['high', sw.high], ['low', sw.low]]) for (const n of nodes) n.traverse((o) => {
+      if (!o.isMesh) return;
+      const a = o.geometry.getAttribute('uv1');
+      for (const m of [].concat(o.material)) rows.push({ side, mesh: o.name, mat: m.name, m, lm: m.lightMap, uv1: !!a, lod: /_lod\d/.test(o.name) || /_lod\d/.test(o.parent?.name ?? '') });
+    });
+    return rows;
+  };
+  const before = collect();
+  assert.ok(before.some((r) => r.side === 'high') && before.some((r) => r.side === 'low'), '两版都要有网格');
+  const bad = before.filter((r) => !r.uv1 || r.lm !== tex || !r.m.isMeshStandardMaterial);
+  assert.ok(!bad.length, `没挂上：${bad.map((r) => `${r.side}/${r.mesh}/${r.mat}`).join('，')}`);
+  const mats = new Set(before.map((r) => r.mat));
+  assert.ok(mats.has('mat-env-rope-wet-ch1'), `缺 mat-env-rope-wet-ch1：${[...mats].join(' ')}`);
+  assert.ok(before.filter((r) => r.side === 'low').some((r) => r.mat !== 'mat-env-rope-wet-ch1'), 'rope-low 应有木件材质');
+  // uv1 已是图集坐标、没有 extras.lightmap rect：程序不设 offset / repeat
+  assert.ok(tex.offset.x === 0 && tex.offset.y === 0 && tex.repeat.x === 1 && tex.repeat.y === 1, '光照贴图被设了 offset / repeat');
+  for (const [side, nodes] of [['high', sw.high], ['low', sw.low]]) for (const n of nodes) assert.equal(n.userData.lightmap, undefined, `${side} ${n.name} 不该有 extras.lightmap`);
+  // 涨 / 退潮来回切：只改可见性，材质（与贴图）原样
+  const seq = [];
+  for (const lvl of [1.6, 0, 1.6, 0]) {
+    sw.update(lvl);
+    seq.push(sw.state);
+    const now = collect();
+    assert.equal(now.length, before.length);
+    now.forEach((r, i) => assert.ok(r.m === before[i].m && r.lm === tex, `${lvl} 潮位后 ${r.side}/${r.mesh} 材质 / 贴图变了`));
+  }
+  assert.deepEqual(seq, ['high', 'low', 'high', 'low']);
+  const lodN = before.filter((r) => r.lod).length;
+  return `${before.length} 个子网格 × 材质（high ${before.filter((r) => r.side === 'high').length} / low ${before.filter((r) => r.side === 'low').length}，其中 _lodN ${lodN}）全挂 tex-s1-shore-lightmap；材质 ${[...mats].join(' / ')}；切潮 4 次不变`;
+});
 
 await test('院墙修复：5 个 socket 与修复前一致，灯台 socket 世界坐标 = layout 灯台', async () => {
   if (!hasArt) return '跳过（没有 ../art）';
