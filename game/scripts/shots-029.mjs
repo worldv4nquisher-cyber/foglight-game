@@ -206,3 +206,4 @@ chrome.kill('SIGKILL');
 await new Promise((r) => server.httpServer.close(r));
 try { rmSync(profile, { recursive: true, force: true }); } catch { /* */ }
 console.log('完成 →', OUT);
+process.exit(0); // vite preview 留着句柄，不显式退出会一直挂着
