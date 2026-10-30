@@ -84,6 +84,8 @@ export class S2Scene extends LevelScene {
     this.artSlots = mountArtSlots(this.game.assets, this.scene, S2_ART_SLOTS, { showGreybox: greyboxVisible });
     // 1030b：拨盘铁门站位改读美术 -interact（门南 0.485 m，+Z 朝门）；白盒是门南 0.9 m
     snapToArt(this.artSlots, 'prop-dial-gate-s2', 'prop-dial-gate-s2-interact', this.puzzles.gateInteractable.interactPoint);
+    // 制作人裁定 15：美术白石在 → 关七段「317」贴片、对准度改白石加亮 / 描边；不在 → 保留贴片（同屏只一个 317）
+    this.puzzles.setWhiteStonesArt(this.artSlots.mounted.find((m) => m.id === 'prop-white-stones-s2')?.model ?? null);
     this.artSlotGreyboxMissing = missingGreyboxNodes(this.scene, S2_ART_SLOTS);
     if (this.artSlotGreyboxMissing.length) console.warn('[art-slot] 白盒节点名对不上：' + this.artSlotGreyboxMissing.join('、'));
   }

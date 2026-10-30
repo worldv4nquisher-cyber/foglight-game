@@ -1877,6 +1877,58 @@ const CHECKS = [
       if (!gt) throw new Error('art=1 拨盘铁门 prop-dial-gate-s2 没挂上');
       if (gt.parent !== 'env-clifftop-s2-gate-socket' || gt.missing.length || gt.stand > 0.01 || gt.dz.some((x) => x > 0.05) || Math.abs(gt.yaw - 78) > 0.05 || gt.gbOpen) throw new Error('art=1 拨盘铁门不对 ' + JSON.stringify(gt));
       out.push(`art=1 拨盘铁门挂 gate-socket、站位读 -interact（差 ${(gt.stand * 1000).toFixed(1)} mm）、317 拨盘 rotation.z = −36k°、门扇开 ${gt.yaw.toFixed(1)}° ✓`);
+      // 无头浏览器负载高时只有 1~2 fps：按游戏时间 / 帧数等（同 part2），真实时间 3 分钟兜底
+      const gsleep = async (ms, frames = 3) => {
+        const clock = () => evaluate(`({ e: __game.time.fixedTick * __game.time.fixedDelta, f: __game.time.frame, z: __game.isFrozen || __game.isPaused })`);
+        const c0 = await clock();
+        const end = Date.now() + 180000;
+        while (Date.now() < end) {
+          await sleep(50);
+          const c = await clock();
+          if (c.f - c0.f >= frames && (c.e - c0.e >= ms / 1000 || c.z)) return;
+        }
+      };
+      // 白石组交付 + 裁定 15 / 16：GLB 挂崖顶 → 七段贴片关；眼位 / FOV 读 viewpoint 节点；对准字组中心（lookAt 下方 3.7°）→ 只有数字石块冷白加亮
+      const wsInfo = await evaluate(`(() => { const s = __s2, m = (s.artSlots?.mounted ?? []).find((x) => x.id === 'prop-white-stones-s2'); const a = s.puzzles.whiteStonesAim();
+        return m ? { parent: m.model.parent?.name, active: s.puzzles.whiteStonesArtActive, eye: a?.eye.toArray(), fov: a?.fov, target: a?.target.toArray() } : null; })()`);
+      if (!wsInfo || wsInfo.parent !== 'env-clifftop-s2' || !wsInfo.active || !wsInfo.eye || Math.hypot(wsInfo.eye[0] - 0.95, wsInfo.eye[1] - 4.35, wsInfo.eye[2] - 1.0) > 0.005 || wsInfo.fov !== 30) throw new Error('art=1 白石组挂载 / 眼位不对 ' + JSON.stringify(wsInfo));
+      // 建立镜头可能还没开始 / 刚结束会把角色放回入口：反复送到观察点，直到站稳在观察点上且是探索相机
+      {
+        const end = Date.now() + 120000;
+        let ok = false;
+        while (!ok && Date.now() < end) {
+          await evaluate(`(() => { const s = __s2; if (s.game.input.context === 'explore' && s.cameraFollow.modeName === 'explore') s.rig.body.teleport(new s.rig.body.body.position.constructor(0.95, 3.05, 1.0)); 1 })()`);
+          await gsleep(500);
+          ok = await evaluate(`(() => { const s = __s2, p = s.rig.body.position; s.puzzles.viewpoint.evaluate(); return s.game.input.context === 'explore' && s.cameraFollow.modeName === 'explore' && !s.cameraFollow.blending && s.puzzles.viewpoint.inRegion && p.y > 2.5; })()`);
+        }
+        if (!ok) throw new Error('art=1 送不到观察点 ' + JSON.stringify(await evaluate(`({ p: __s2.rig.body.position.toArray(), ctx: __s2.game.input.context, mode: __s2.cameraFollow.modeName })`)));
+      }
+      await evaluate(`__game.input.setRaw('smoke', 'Mouse2', true); 1`);
+      await gsleep(700);
+      const wsAim = async (tx, ty, tz) => {
+        for (let i = 0; i < 4; i++) {
+          await evaluate(`(() => { const s = __s2, c = s.camera; const p = c.getWorldPosition(c.position.clone()); const t = p.clone().set(${tx}, ${ty}, ${tz}).sub(p).normalize();
+            s.cameraFollow.yaw = Math.atan2(-t.x, -t.z); s.cameraFollow.pitch = Math.asin(t.y); 1 })()`);
+          await gsleep(250);
+        }
+      };
+      const wsSt = () => evaluate(`(() => { const s = __s2, c = s.camera, m = s.scene.getObjectByName('white-stone-d7-b'), dec = s.scene.getObjectByName('white-stone-decor-00');
+        return { eye: c.getWorldPosition(c.position.clone()).distanceTo(c.position.clone().set(${wsInfo.eye.join(',')})), fov: c.fov, align: s.puzzles.viewpoint.alignment, digits: s.puzzles.digits.visible,
+          glow: m.material.emissiveIntensity, glowHex: m.material.emissive.getHex(), decor: dec.material.emissive.getHex() === 0 ? 0 : dec.material.emissiveIntensity, xi: s.rig.visual.visible,
+          mode: s.cameraFollow.modeName, ctx: s.game.input.context, obs: s.cameraFollow.observing, inRegion: s.puzzles.viewpoint.inRegion,
+          down: s.game.input.isDown('observe'), enabled: s.game.input.enabled, frozen: !!(__game.isFrozen || __game.isPaused), blending: s.cameraFollow.blending, eyeActive: s.cameraFollow.eyeActive, hasEye: !!s.cameraFollow.observeEye, same: s.game === __game }; })()`);
+      let w = await wsSt();
+      if (w.eye > 0.01 || Math.abs(w.fov - 30) > 0.01 || w.align > 0 || w.digits || w.xi) throw new Error('art=1 进入眼位：位置 / FOV / 不直接对准 / 角色隐藏 ' + JSON.stringify(w));
+      // 对准旧 lookAt 点（偏 3.7°）仍在容差内；对准字组中心 → 完全加亮
+      await wsAim(...wsInfo.target);
+      await gsleep(300);
+      w = await wsSt();
+      if (w.align < 0.99 || w.digits || Math.abs(w.glow - 0.35) > 0.01 || w.glowHex !== 0xf2eee4 || w.decor > 0) throw new Error('art=1 对准字组中心：贴片关、数字石块冷白 0.35、装饰石不亮 ' + JSON.stringify(w));
+      await evaluate(`__game.input.setRaw('smoke', 'Mouse2', false); 1`);
+      await gsleep(900);
+      w = await wsSt();
+      if (Math.abs(w.fov - 55) > 3.5 || !w.xi || w.glow > 0) throw new Error('art=1 松开回第三人称、加亮归零 ' + JSON.stringify(w));
+      out.push(`art=1 白石组挂崖顶、七段贴片关、眼位 / FOV 30 读 viewpoint 节点、对准字组中心数字石块加亮 ${w.glow === 0 ? '→ 松开归零' : ''} ✓`);
       // 进 S2 会存档 s2，autostart 会接着存档进 S2：清掉存档再回 S1（后面的检查默认在 S1）
       await evaluate(`localStorage.removeItem('foglight.save.v1'); 1`);
       try { await cdp.goto(''); } catch (e) { throw new Error('回 S1 失败：' + e.message + ' ' + JSON.stringify(await evaluate(`({ scene: __game?.scenes?.current?.name, href: location.href, menu: __game?.ui?.mainMenu?.isOpen, err: window.__lastError ?? null })`).catch((x) => String(x))), { cause: e }); }
@@ -2061,7 +2113,20 @@ const CHECKS = [
       await gsleep(400);
       const prompt = await evaluate(`__s2.extraPrompt()`);
       if (!prompt || !/右键/.test(prompt)) throw new Error('观察点上应显示「按住右键 观察」：' + prompt);
+      // 裁定 16：按住右键 → 固定第一人称眼位 (0.95, 4.35, 1.0)、FOV 30°、角色隐藏、进入时朝西窗偏约 15°（不显影）
+      const eyeSt = () => evaluate(`(() => { const s = __s2, c = s.camera, p = c.getWorldPosition(c.position.clone()), f = c.getWorldDirection(p.clone());
+        const t = p.clone().set(18, 0.2, 1).sub(p).normalize();
+        return { eye: p.distanceTo(p.clone().set(0.95, 4.35, 1.0)), fov: c.fov, eyeActive: s.cameraFollow.eyeActive, xi: s.rig.visual.visible,
+          off: f.angleTo(t) * 180 / Math.PI, fx: f.x, align: s.puzzles.viewpoint.alignment, digits: s.puzzles.digits.visible }; })()`);
       await evaluate(`__game.input.setRaw('smoke', 'Mouse2', true); 1`);
+      await gsleep(700);
+      let es = await eyeSt();
+      if (!es.eyeActive || es.eye > 0.01 || Math.abs(es.fov - 30) > 0.01 || es.xi) throw new Error('按住右键应到固定眼位、FOV 30、角色隐藏 ' + JSON.stringify(es));
+      if (Math.abs(es.off - 15) > 1.5 || es.fx < 0.9 || es.align > 0 || es.digits) throw new Error('进入时应朝西窗偏约 15°、不显影 ' + JSON.stringify(es));
+      await tp(1.2, 3.05, 1.2);
+      await gsleep(200);
+      es = await eyeSt();
+      if (!es.eyeActive || es.eye > 0.01) throw new Error('观察点内挪动站位眼位不变 ' + JSON.stringify(es));
       await aim(0.6);
       s = await st();
       if (s.align > 0 || s.digits) throw new Error('偏开 34° 不应看到数字 ' + JSON.stringify(s));
@@ -2069,7 +2134,19 @@ const CHECKS = [
       await gsleep(300);
       s = await st();
       if (s.align < 0.99 || !s.digits || !s.digitsSeen) throw new Error('对准后数字应完全显影 ' + JSON.stringify(s));
+      es = await eyeSt();
+      if (es.eye > 0.01 || es.off > 0.5) throw new Error('对准时仍在眼位、视线偏差 < 0.5° ' + JSON.stringify(es));
+      // 裁定 15：没挂美术白石（art=0）→ 七段贴片回退（art=1 那条测真 GLB）
+      if (await evaluate(`__s2.puzzles.whiteStonesArtActive`)) throw new Error('art=0 不应挂美术白石');
       await evaluate(`__game.input.setRaw('smoke', 'Mouse2', false); 1`);
+      await gsleep(80);
+      es = await eyeSt();
+      if (es.eyeActive || !es.xi) throw new Error('松开：退出眼位、角色显示 ' + JSON.stringify(es));
+      await gsleep(800);
+      es = await eyeSt();
+      // 观察点在室内贴着西窗，第三人称相机被墙前拉到头部附近（离眼位可能 < 0.5 m），所以只看 FOV / 朝向恢复
+      if (es.eyeActive || Math.abs(es.fov - 55) > 3.5 || es.off < 30) throw new Error('松开后应回第三人称 FOV 55、朝向恢复 ' + JSON.stringify(es));
+      out.push(`裁定 16 观察：眼位 (0.95, 4.35, 1.0) / FOV 30 / 角色隐藏 / 进入偏 15° / 挪站位眼位不变 / 松开平滑回第三人称 ✓；art=0 七段贴片回退 ✓`);
       await tp(-0.6, 3.05, 1.0);
       await gsleep(300);
       await evaluate(`__game.input.setRaw('smoke', 'Mouse2', true); 1`);

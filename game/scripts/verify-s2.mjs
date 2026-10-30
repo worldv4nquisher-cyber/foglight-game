@@ -358,4 +358,162 @@ out.push('动线：二层观察点 / 书桌 / 地窖（门开才进得去）/ �
     out.push(`拨盘铁门真文件：挂 gate-socket、合页对齐；西门柱面 x ${fxMid.toFixed(3)}，门扇穿柱 95° ${(p95 * 100).toFixed(1)} cm / 90° ${(p90 * 100).toFixed(1)} cm / 开角 ${openDeg}° 离柱面 ${(-pOpen * 1000).toFixed(1)} mm（不穿）；-interact (${ip.x.toFixed(2)}, ${ip.z.toFixed(3)}) 门南 0.485 m ✓`);
   }
 }
+// ---- 制作人裁定 16 / 15：固定眼位看「3 1 7」七段贴片（回退）三个字都不被挡（白盒 + 美术环境可见网格各射一遍），对准时整组在 30° 画面内；美术白石挂上 → 加亮 / 描边
+{
+  const { readFileSync, existsSync } = await import('node:fs');
+  const { buildWhiteStonesDigits } = await import('@/levels/s2/digits');
+  const { WhiteStonesGlow } = await import('@/levels/s2/whiteStonesGlow');
+  const { GLTFLoader } = await import('three/examples/jsm/loaders/GLTFLoader.js');
+  const { MeshoptDecoder } = await import('three/examples/jsm/libs/meshopt_decoder.module.js');
+  globalThis.self ??= globalThis;
+  const ktx2Stub = { load: (_u, onLoad) => onLoad(new THREE.CompressedTexture([], 1, 1)) };
+  const load = async (rel) => {
+    const f = new URL(`../../art/models/${rel}.glb`, import.meta.url);
+    if (!existsSync(f)) return null;
+    const buf = readFileSync(f);
+    return (await new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).setKTX2Loader(ktx2Stub).parseAsync(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength), '')).scene;
+  };
+  const vpc = S2.viewpoint;
+  const eye = new THREE.Vector3(...vpc.eye);
+  const at = new THREE.Vector3(...vpc.lookAt);
+  const g2 = buildS2Greybox();
+  const world = new THREE.Scene();
+  world.add(g2.root);
+  const digitsG = buildWhiteStonesDigits(S2.dialGate.code, eye, at, new THREE.MeshBasicMaterial());
+  world.add(digitsG);
+  const art = [];
+  for (const [k, pl] of Object.entries(S2.artNodes)) {
+    const m = await load(`env/${k}`);
+    if (!m) continue;
+    m.name = k;
+    m.position.set(...pl.translation);
+    m.rotation.y = pl.rotationY;
+    world.add(m);
+    art.push(m);
+  }
+  world.updateMatrixWorld(true);
+  const visible = (o) => {
+    for (let x = o; x; x = x.parent) if (!x.visible) return false;
+    return true;
+  };
+  const rc = new THREE.Raycaster();
+  const cam = new THREE.PerspectiveCamera(vpc.fov, 16 / 9, 0.1, 500);
+  cam.position.copy(eye);
+  cam.lookAt(at);
+  cam.updateMatrixWorld(true);
+  const check = (label, occluders) => {
+    const bad = [];
+    let n = 0;
+    for (const g of digitsG.children) {
+      for (const seg of g.children) {
+        seg.geometry.computeBoundingBox();
+        const b = seg.geometry.boundingBox;
+        for (const fx of [0.1, 0.5, 0.9]) {
+          for (const fy of [0.1, 0.5, 0.9]) {
+            const p = new THREE.Vector3(b.min.x + (b.max.x - b.min.x) * fx, b.min.y + (b.max.y - b.min.y) * fy, 0).applyMatrix4(seg.matrixWorld);
+            const dir = p.clone().sub(eye);
+            const dist = dir.length();
+            rc.set(eye, dir.normalize());
+            rc.far = dist - 0.05;
+            const h = rc.intersectObjects(occluders, false);
+            if (h.length) bad.push(`${g.name} 被 ${h[0].object.name} 挡`);
+            const ndc = p.clone().project(cam);
+            assert.ok(Math.abs(ndc.x) < 0.95 && Math.abs(ndc.y) < 0.95, `${label} ${g.name} 对准时应在 ${vpc.fov}° 画面内，NDC ${ndc.x.toFixed(2)}, ${ndc.y.toFixed(2)}`);
+            n++;
+          }
+        }
+      }
+    }
+    assert.deepEqual(bad, [], `${label}：固定眼位看七段贴片被挡 ${bad.slice(0, 5).join('、')}`);
+    return n;
+  };
+  const gbOcc = [];
+  g2.root.traverse((o) => o.isMesh && !/indoor/i.test(o.name) && visible(o) && gbOcc.push(o));
+  const n = check('白盒', gbOcc);
+  let artNote = '美术环境未交付（只验白盒）';
+  if (art.length) {
+    // art=1：白盒除白石外都隐藏，只算美术可见网格（碰撞体不渲染）
+    g2.root.traverse((o) => o.isMesh && !/white-stones/.test(o.name) && (o.visible = false));
+    const artOcc = [];
+    world.traverse((o) => o.isMesh && !/indoor|collider/i.test(o.name) && !digitsG.getObjectById(o.id) && visible(o) && artOcc.push(o));
+    check('美术环境', artOcc);
+    artNote = `美术环境 ${art.map((m) => m.name).join(' / ')} 可见网格也不挡`;
+  }
+  // 进入朝向：朝西窗（+X）且偏开 enterOffsetDeg（≥ fadeFromDeg，进去不直接显影）
+  const dir = at.clone().sub(eye).normalize();
+  const yaw = Math.atan2(-dir.x, -dir.z) + (vpc.enterOffsetDeg * Math.PI) / 180;
+  const ent = new THREE.Vector3(0, 0, -1).applyEuler(new THREE.Euler(Math.asin(dir.y), yaw, 0, 'YXZ'));
+  const off = (ent.angleTo(dir) * 180) / Math.PI;
+  assert.ok(Math.abs(off - vpc.enterOffsetDeg) < 1 && off > vpc.fadeFromDeg && ent.x > 0.9, `进入朝向偏 ${off.toFixed(1)}°、朝 +X ${ent.x.toFixed(2)}`);
+  const win = S2.openings.winW2;
+  assert.ok(eye.z > win.a && eye.z < win.b && eye.y > win.y0 && eye.y < win.y1, '眼位正对西窗洞');
+  // 裁定 15 + 白石组交付（真文件）：挂 env-clifftop-s2 零变换；眼位 / FOV / 朝向读 viewpoint 节点；对准中心 = 数字石块角包围盒中心；只加亮数字材质
+  const { whiteStonesAim, WHITE_STONES_HIGHLIGHT } = await import('@/levels/s2/whiteStonesGlow');
+  const { mountArtSlots } = await import('@/levels/artSlots');
+  const { S2_ART_SLOTS } = await import('@/levels/s2/artSlots');
+  const wsModel = await load('props/prop-white-stones-s2');
+  let wsNote = '白石组美术未交付（跳过真文件检查）';
+  if (wsModel) {
+    const cliff = art.find((m) => m.name === 'env-clifftop-s2');
+    assert.ok(cliff, '白石组要挂崖顶');
+    const slots = mountArtSlots({ has: (k) => k === 'prop-white-stones-s2', getModel: () => wsModel }, world, S2_ART_SLOTS.filter((x) => x.key === 'prop-white-stones-s2'));
+    assert.equal(slots.mounted.length, 1);
+    const ws = slots.mounted[0].model;
+    assert.equal(ws.parent, cliff, '白石组挂 env-clifftop-s2 根');
+    assert.ok(ws.position.lengthSq() < 1e-12 && ws.quaternion.angleTo(new THREE.Quaternion()) < 1e-9, '零变换');
+    world.updateMatrixWorld(true);
+    const aim = whiteStonesAim(ws);
+    assert.ok(aim, 'viewpoint / digit 节点齐');
+    assert.ok(aim.eye.distanceTo(eye) < 1e-3 && aim.fov === 30, `眼位 ${aim.eye.toArray()} FOV ${aim.fov}`);
+    const D = 180 / Math.PI;
+    const below = aim.forward.angleTo(aim.center) * D;
+    const azHalf = (aim.azDeg[1] - aim.azDeg[0]) / 2;
+    const h = aim.elDeg[1] - aim.elDeg[0];
+    assert.ok(Math.abs(below - 3.7) < 0.1 && aim.center.y < aim.forward.y, `字组中心应在视线下方 3.7°，实际 ${below.toFixed(2)}°`);
+    assert.ok(Math.abs(azHalf - 5.12) < 0.05 && Math.abs(h - 4.5) < 0.1, `字组水平 ±${azHalf.toFixed(2)}°、高 ${h.toFixed(2)}°`);
+    // 进入朝向（节点朝向 + 偏 enterOffsetDeg）离字组中心 > fadeFromDeg
+    const fyaw = Math.atan2(-aim.forward.x, -aim.forward.z) + (vpc.enterOffsetDeg * Math.PI) / 180;
+    const ent2 = new THREE.Vector3(0, 0, -1).applyEuler(new THREE.Euler(Math.asin(aim.forward.y), fyaw, 0, 'YXZ'));
+    const entOff = ent2.angleTo(aim.center) * D;
+    assert.ok(entOff > vpc.fadeFromDeg && ent2.x > 0.9, `进入离字组中心 ${entOff.toFixed(1)}°`);
+    // 对准（看向字组中心）时三个数字的石块都在 30° 画面内、视线不被环境 / 别的白石挡
+    const cam2 = new THREE.PerspectiveCamera(aim.fov, 16 / 9, 0.1, 500);
+    cam2.position.copy(aim.eye);
+    cam2.lookAt(aim.eye.clone().add(aim.center));
+    cam2.updateMatrixWorld(true);
+    const envOcc = [];
+    world.traverse((o) => o.isMesh && !/indoor|collider/i.test(o.name) && !digitsG.getObjectById(o.id) && !ws.getObjectById(o.id) && visible(o) && envOcc.push(o));
+    const blocked = [];
+    let samples = 0;
+    for (const dn of ['white-stones-digit-3', 'white-stones-digit-1', 'white-stones-digit-7']) {
+      ws.getObjectByName(dn).traverse((m) => {
+        if (!m.isMesh || /collider/.test(m.name)) return;
+        const c = new THREE.Box3().setFromObject(m).getCenter(new THREE.Vector3());
+        c.y += 0.04;
+        const ndc = c.clone().project(cam2);
+        assert.ok(Math.abs(ndc.x) < 0.9 && Math.abs(ndc.y) < 0.9, `${m.name} 对准时应在画面内 NDC ${ndc.x.toFixed(2)},${ndc.y.toFixed(2)}`);
+        const dir = c.clone().sub(aim.eye);
+        const dist = dir.length();
+        rc.set(aim.eye, dir.normalize());
+        rc.far = dist - 0.3;
+        const hit = rc.intersectObjects(envOcc, false);
+        if (hit.length) blocked.push(`${m.name} 被 ${hit[0].object.name} 挡`);
+        samples++;
+      });
+    }
+    assert.deepEqual(blocked, [], blocked.join('、'));
+    const glow = new WhiteStonesGlow(ws);
+    assert.equal(glow.materials.length, 1, '只克隆数字材质一份');
+    assert.equal(glow.materials[0].name, WHITE_STONES_HIGHLIGHT.material);
+    const decor = ws.getObjectByName('white-stone-decor-00').material;
+    glow.setGlow(1);
+    assert.ok(Math.abs(glow.materials[0].emissiveIntensity - 0.35) < 1e-9 && glow.materials[0].emissive.getHex() === 0xf2eee4, '数字石块冷白 × 0.35');
+    assert.ok(!(decor.emissiveIntensity > 0 && decor.emissive?.getHex() === 0xf2eee4), '装饰石不加亮');
+    let digitMeshes = 0;
+    ws.traverse((m) => m.isMesh && m.material === glow.materials[0] && digitMeshes++);
+    glow.setGlow(0);
+    wsNote = `白石组真文件：挂崖顶零变换、眼位 (${aim.eye.toArray().map((v) => +v.toFixed(2)).join(', ')}) FOV ${aim.fov}、字组中心在视线下方 ${below.toFixed(2)}°（水平 ±${azHalf.toFixed(2)}°、高 ${h.toFixed(2)}°）、进入离字组中心 ${entOff.toFixed(1)}°、对准时 ${samples} 块数字石都在画面内且不被挡、只加亮数字材质（${digitMeshes} 块）`;
+  }
+  out.push(`裁定 16 固定眼位 (${vpc.eye.join(', ')}) FOV ${vpc.fov}°：七段贴片 3 个字 ${n} 个采样点白盒不挡、${artNote}、对准时全在画面内；进入朝西窗偏 ${off.toFixed(1)}°；${wsNote} ✓`);
+}
 console.log('verify-s2 ✓ ' + out.join('；'));

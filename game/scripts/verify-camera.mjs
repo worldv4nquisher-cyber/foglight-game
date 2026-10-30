@@ -172,6 +172,70 @@ await test('观察模式：按住右键 FOV 0.3 s 到 30°、灵敏度 ×0.5、�
   near(e.camera.fov, 58, 1e-6, '小跑');
 });
 
+await test('固定观察眼位（裁定 16）：按住右键 → 过渡到眼位、FOV 固定、朝 enterYaw，眼位不随角色动；鼠标照转；松开平滑回第三人称、朝向恢复', () => {
+  const e = setup();
+  e.target.position.copy(OPEN);
+  const eyePos = new THREE.Vector3(15.5, 4.35, 1);
+  let allow = true;
+  e.cam.observeEye = () => (allow ? { position: eyePos, fov: 30, enterYaw: -1.2, enterPitch: -0.24 } : null);
+  e.cam.yaw = 0.4;
+  e.cam.pitch = -0.3;
+  e.run(0.2);
+  const third = e.camera.position.clone();
+  e.input.setRaw('kbm', 'Mouse2', true);
+  let maxStep = 0;
+  let prev = e.camera.position.clone();
+  e.run(cfg.observeEyeBlendTime * 0.5, () => {
+    maxStep = Math.max(maxStep, e.camera.position.distanceTo(prev));
+    prev.copy(e.camera.position);
+  });
+  assert.ok(e.cam.eyeActive && e.cam.observing, '过渡中仍算观察');
+  assert.ok(e.camera.position.distanceTo(eyePos) > 0.05 && e.camera.position.distanceTo(third) > 0.05, '过渡中在两者之间');
+  e.run(cfg.observeEyeBlendTime * 0.6, () => {
+    maxStep = Math.max(maxStep, e.camera.position.distanceTo(prev));
+    prev.copy(e.camera.position);
+  });
+  assert.ok(maxStep < third.distanceTo(eyePos) * 0.2, `过渡每帧位移 ${maxStep.toFixed(3)} 应平滑`);
+  near(e.camera.position.distanceTo(eyePos), 0, 1e-6, '到眼位');
+  near(e.camera.fov, 30, 1e-6, '眼位 FOV');
+  near(e.cam.yaw, -1.2, 1e-9, '进入朝向 yaw');
+  near(e.cam.pitch, -0.24, 1e-9, '进入朝向 pitch');
+  e.target.position.x += 0.3;
+  e.run(0.1);
+  near(e.camera.position.distanceTo(eyePos), 0, 1e-6, '角色动了眼位不变');
+  e.cam.yaw = -1.0;
+  e.run(DT);
+  const f = e.camera.getWorldDirection(new THREE.Vector3());
+  near(Math.atan2(-f.x, -f.z), -1.0, 1e-6, '眼位里照常转视线');
+  e.input.setRaw('kbm', 'Mouse2', false);
+  e.run(DT);
+  assert.ok(!e.cam.eyeActive && !e.cam.observing);
+  near(e.cam.yaw, 0.4, 1e-9, '松开 yaw 恢复');
+  near(e.cam.pitch, -0.3, 1e-9, '松开 pitch 恢复');
+  assert.ok(e.camera.position.distanceTo(eyePos) < 0.2, '松开第一帧不跳');
+  e.run(cfg.observeEyeBlendTime + 0.35);
+  assert.ok(e.camera.position.distanceTo(eyePos) > 2, '回到第三人称');
+  near(e.camera.fov, 55, 1e-6, '回 55°');
+  // 不在观察点（返回 null）= 普通第三人称观察
+  allow = false;
+  e.input.setRaw('kbm', 'Mouse2', true);
+  e.run(0.4);
+  assert.ok(e.cam.observing && !e.cam.eyeActive && e.camera.position.distanceTo(eyePos) > 2);
+  near(e.camera.fov, 30, 1e-6);
+  // 眼位中进机关：眼位直接退出
+  allow = true;
+  e.input.setRaw('kbm', 'Mouse2', false);
+  e.run(0.5);
+  e.input.setRaw('kbm', 'Mouse2', true);
+  e.run(0.6);
+  assert.ok(e.cam.eyeActive);
+  const node = new THREE.Object3D();
+  node.position.set(14, 1.5, 3);
+  e.cam.enterPuzzleView(node);
+  assert.ok(!e.cam.eyeActive && !e.cam.observing);
+  e.input.setRaw('kbm', 'Mouse2', false);
+});
+
 await test('自动回正：设置开启时静止 8 s 后以 4°/s 漂向推荐构图；关闭时不动', () => {
   for (const on of [false, true]) {
     const e = setup({ autoRecenter: () => on });

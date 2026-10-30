@@ -41,3 +41,25 @@ export function sevenSegment(digit: number, h: number, mat: THREE.Material, thic
   }
   return g;
 }
+
+/**
+ * 白石「3 1 7」七段贴片（美术白石未交付时的回退；制作人裁定 15 / 16）。
+ * 按固定观察眼位 eye 摆：在 eye → lookAt 视线上、离 lookAt `back` m 处（往眼位拉近，躲开坡地 / 石块遮挡），中心抬高 lift m，
+ * 整组正对 eye；从眼位看左到右 = code 顺序，间距 spacing m、字高 h m。
+ */
+export const WHITE_STONES_DIGITS = { h: 2.2, spacing: 1.9, lift: 1.1, back: 0, thickness: 0.16 };
+
+export function buildWhiteStonesDigits(code: readonly number[], eye: THREE.Vector3, lookAt: THREE.Vector3, mat: THREE.Material, o = WHITE_STONES_DIGITS): THREE.Group {
+  const digits = new THREE.Group();
+  digits.name = 'white-stones-s2-digits';
+  code.forEach((n, i) => {
+    const g = sevenSegment(n, o.h, mat, o.thickness);
+    g.position.set((i - (code.length - 1) / 2) * o.spacing, 0, 0);
+    digits.add(g);
+  });
+  const dir = lookAt.clone().sub(eye).normalize();
+  digits.position.copy(lookAt).addScaledVector(dir, -o.back);
+  digits.position.y += o.lift;
+  digits.lookAt(eye);
+  return digits;
+}

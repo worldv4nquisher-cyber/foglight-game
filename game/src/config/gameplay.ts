@@ -65,6 +65,8 @@ export const gameplay = {
     fovBlendTime: 0.3,
     /** 观察模式下视角灵敏度倍率 */
     observeLookScale: 0.5,
+    /** 固定观察眼位（制作人裁定 16，S2 白石观察点）：进 / 出眼位的过渡时间（s） */
+    observeEyeBlendTime: 0.45,
     /** 跟随点：脚底以上高度（m，头部） */
     pivotHeight: 1.35,
     /** 跟随点：向相机右方偏移（m，肩后偏右） */

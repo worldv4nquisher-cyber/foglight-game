@@ -6,6 +6,7 @@ import { XiActions, type XiActionPlayer } from '@/entities/xiActions';
 import { setForceLod0 } from '@/render/lod';
 import { nodeAnim, readKeyAttach, XI_KEY_BONE, XI_SOCKET_STAND, xiClipDuration, xiInteractEventSec } from '@/entities/xi/clips';
 import { ViewpointTarget } from '@/entities/components/ViewpointTarget';
+import { WhiteStonesGlow, whiteStonesAim } from './whiteStonesGlow';
 import type { CameraFollowSystem } from '@/systems/CameraFollowSystem';
 import { boxZone, type HintSystem, type HintZone } from '@/systems/HintSystem';
 import type { Collider, PhysicsSystem } from '@/systems/PhysicsSystem';
@@ -17,7 +18,7 @@ import { WhiteboxBeamRenderer } from '@/systems/light/BeamRenderer';
 import { S2, v3 } from './layout';
 import { buildS2Beam, type S2Beam } from './beam';
 import type { S2Greybox } from './greybox';
-import { sevenSegment } from './digits';
+import { buildWhiteStonesDigits, sevenSegment } from './digits';
 import { ART_LANTERN_HANG, artLanternFrame, GB_LANTERN_LIGHT_Y } from './lantern';
 import { S2_LAMP_STAND_KEY } from './art';
 import { greyboxVisible } from '@/config/debug';
@@ -103,6 +104,13 @@ export interface S2Puzzles {
   };
   /** 观察点：站在上面时替代 E 提示 */
   viewpointPrompt(): string | null;
+  /** 裁定 15：美术白石挂上时传进来（关七段贴片、对准度改白石加亮）；null = 回退七段贴片 */
+  setWhiteStonesArt(model: THREE.Object3D | null): void;
+  readonly whiteStonesArtActive: boolean;
+  /** 美术白石挂上时的眼位 / FOV / 对准点（测试读）；null = 白盒 layout */
+  whiteStonesAim(): { eye: THREE.Vector3; fov: number; target: THREE.Vector3 } | null;
+  /** 七段贴片材质（测试读透明度） */
+  digitsMaterial: THREE.MeshBasicMaterial;
   /** 白盒小道具（杯子、日志、纸条、抽屉、海图、观察点地板）：美术 019 只给了 socket 没有这些模型，始终显示 */
   props: THREE.Object3D[];
   fixedUpdate(dt: number): void;
@@ -469,21 +477,30 @@ export function buildS2Puzzles(d: S2PuzzleDeps): S2Puzzles {
   root.add(polished);
   /** 站在观察点上：水平在区域内且在二层（一层同一平面位置不算） */
   const onViewpoint = (): boolean => viewpoint.inRegion && Math.abs(rig.body.position.y - floorY) < 0.5;
+  // 制作人裁定 16：观察点上按住右键 → 固定第一人称眼位（vp.eye、FOV vp.fov），进入时朝西窗偏 enterOffsetDeg；角色模型此时隐藏
+  // 眼位 / FOV / 进入朝向 / 对准方向：默认读 layout（白盒）；美术白石挂上后改读 GLB 的 viewpoint 节点与数字石块角中心（setWhiteStonesArt）
+  const eyePos = v3(vp.eye);
+  const eye: { fov: number; yaw: number; pitch: number } = { fov: vp.fov, yaw: 0, pitch: 0 };
+  const setEyeForward = (f: THREE.Vector3): void => {
+    eye.yaw = Math.atan2(-f.x, -f.z);
+    eye.pitch = Math.asin(THREE.MathUtils.clamp(f.y, -1, 1));
+  };
+  setEyeForward(v3(vp.lookAt).sub(eyePos).normalize());
+  /** 对准判定点（ViewpointTarget.target，同一个对象原地改） */
+  const aimPoint = viewpoint.opts.target!;
+  d.cameraFollow.observeEye = () => {
+    viewpoint.evaluate();
+    return onViewpoint() ? { position: eyePos, fov: eye.fov, enterYaw: eye.yaw + THREE.MathUtils.degToRad(vp.enterOffsetDeg), enterPitch: eye.pitch } : null;
+  };
+  let xiHiddenForEye = false;
   // 白石数字贴片（白盒：七段数字，按对准度淡入；021 交付透视拼合模型后去掉）。从观察点看，左到右 = 南到北
   const digitMat = new THREE.MeshBasicMaterial({ name: 'white-stones-digits', color: 0xf2f0ea, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide });
-  const digits = new THREE.Group();
-  digits.name = 'white-stones-s2-digits';
+  const digits = buildWhiteStonesDigits(S2.dialGate.code, v3(vp.eye), v3(vp.lookAt), digitMat);
   digits.userData.puzzleCritical = true;
-  S2.dialGate.code.forEach((n, i) => {
-    const g = sevenSegment(n, 2.2, digitMat, 0.16);
-    g.position.set((i - 1) * 1.9, 0, 0);
-    digits.add(g);
-  });
-  const tgt = v3(vp.lookAt);
-  digits.position.set(tgt.x, tgt.y + 1.1, tgt.z);
-  digits.lookAt(v3(vp.eye));
   digits.visible = false;
   root.add(digits);
+  /** 美术白石（裁定 15）：setWhiteStonesArt 挂上后生效；null = 七段贴片回退 */
+  let whiteStonesArt: WhiteStonesGlow | null = null;
   // 白石查看：任意一块
   greybox.whiteStones.children.forEach((s, i) => inspect(`white-stone-s2-${i}`, s, 'ch1.s2.white_stones.inspect'));
 
@@ -585,6 +602,29 @@ export function buildS2Puzzles(d: S2PuzzleDeps): S2Puzzles {
     state,
     props,
     viewpointPrompt: () => (onViewpoint() ? t('ch1.s2.viewpoint.prompt') : null),
+    setWhiteStonesArt(model: THREE.Object3D | null): void {
+      whiteStonesArt?.setGlow(0);
+      whiteStonesArt = model ? new WhiteStonesGlow(model) : null;
+      const aim = model ? whiteStonesAim(model) : null;
+      if (aim) {
+        // 白石组交付：眼位 / FOV / 朝向读 viewpoint 节点；对准中心 = 数字石块角包围盒中心方向（比 lookAt 低约 3.7°）
+        eyePos.copy(aim.eye);
+        eye.fov = aim.fov;
+        setEyeForward(aim.forward);
+        aimPoint.copy(aim.eye).addScaledVector(aim.center, 20);
+      } else {
+        eyePos.copy(v3(vp.eye));
+        eye.fov = vp.fov;
+        setEyeForward(v3(vp.lookAt).sub(eyePos).normalize());
+        aimPoint.copy(v3(vp.lookAt));
+      }
+      if (whiteStonesArt) digits.visible = false;
+    },
+    whiteStonesAim: () => (whiteStonesArt ? { eye: eyePos.clone(), fov: eye.fov, target: aimPoint.clone() } : null),
+    get whiteStonesArtActive(): boolean {
+      return whiteStonesArt !== null;
+    },
+    digitsMaterial: digitMat,
     fixedUpdate(dt: number): void {
       time += dt;
       for (let i = timers.length - 1; i >= 0; i--) {
@@ -640,8 +680,19 @@ export function buildS2Puzzles(d: S2PuzzleDeps): S2Puzzles {
       const on = onViewpoint();
       westWindowIx.enabled = !on;
       const a = on && d.cameraFollow.observing ? viewpoint.alignment : 0;
-      digitMat.opacity = a;
-      digits.visible = a > 0.01;
+      // 固定眼位期间角色模型隐藏（不挡视线）
+      if (d.cameraFollow.eyeActive !== xiHiddenForEye) {
+        xiHiddenForEye = d.cameraFollow.eyeActive;
+        rig.visual.visible = !xiHiddenForEye;
+      }
+      // 制作人裁定 15：美术白石（透视拼合）挂上 → 七段贴片关掉，对准度改为白石加亮；没美术 → 七段贴片回退
+      if (whiteStonesArt) {
+        digits.visible = false;
+        whiteStonesArt.setGlow(a);
+      } else {
+        digitMat.opacity = a;
+        digits.visible = a > 0.01;
+      }
       if (a >= 1 && !state.digitsSeen) {
         state.digitsSeen = true;
         events.emit('sfx:play', { id: 'sfx-wind-chime' });
@@ -652,6 +703,8 @@ export function buildS2Puzzles(d: S2PuzzleDeps): S2Puzzles {
       for (const f of offs) f();
       actions.cancel();
       renderer.dispose();
+      d.cameraFollow.observeEye = null;
+      rig.visual.visible = true;
     },
   };
   // ViewpointTarget 不挂实体，由 update 驱动求值

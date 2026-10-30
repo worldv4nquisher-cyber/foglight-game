@@ -109,7 +109,11 @@ export const S2 = {
   dialGate: { hinge: [5.0, 0, 11.75] as V3, width: 1.6, height: 1.9, openAngle: (78 * Math.PI) / 180, dialY: 1.15, dialX: [4.65, 4.2, 3.75] as readonly number[], code: [3, 1, 7] as readonly number[] },
 
   /** 谜题 4 观察点：二层西窗内（站位地面 = 眼睛 − 1.35），朝白石组，观察 FOV 30° */
-  viewpoint: { eye: [0.95, 4.35, 1.0] as V3, lookAt: [18, 0.2, 1] as V3, fov: 30, toleranceDeg: 6, fadeFromDeg: 12 },
+  /**
+   * 白石观察点（制作人裁定 16）：按住右键 = 固定第一人称眼位 eye、FOV fov（不随站位）；对准度 = 视线与 eye → lookAt 的夹角（fadeFromDeg 起渐显、≤ toleranceDeg 完成）；
+   * 进入时视线朝西窗、水平偏开 enterOffsetDeg（不直接对准）
+   */
+  viewpoint: { eye: [0.95, 4.35, 1.0] as V3, lookAt: [18, 0.2, 1] as V3, fov: 30, toleranceDeg: 6, fadeFromDeg: 12, enterOffsetDeg: 15 },
   /** 白石组（白盒：分散白色方块；021 按观察点做透视拼合）。y = 坡面高度 */
   whiteStones: [
     [15.2, -0.563, -1.6],

@@ -68,6 +68,17 @@ export interface PuzzleViewOptions {
   fov?: number;
 }
 
+/**
+ * 固定观察眼位（制作人裁定 16）：观察点上按住右键时相机切到这个第一人称眼位（不随站位变），FOV 固定；
+ * 鼠标仍转视线；进入时朝 enterYaw / enterPitch（弧度，同 yaw / pitch 约定），松开回到进入前的第三人称朝向。
+ */
+export interface ObserveEye {
+  position: THREE.Vector3;
+  fov: number;
+  enterYaw: number;
+  enterPitch: number;
+}
+
 type Mode =
   | { kind: 'explore' }
   | { kind: 'puzzle'; node: THREE.Object3D; freeLook: boolean; fov: number; offYaw: number; offPitch: number }
@@ -104,12 +115,17 @@ export class CameraFollowSystem {
   observing = false;
   /** 观察模式焦点距离（屏幕中心射线命中，m） */
   focusDistance = 0;
+  /** 观察时的固定眼位提供者（场景设置；返回 null = 普通第三人称观察） */
+  observeEye: (() => ObserveEye | null) | null = null;
+  /** 正在用固定眼位（角色模型此时应隐藏） */
+  eyeActive = false;
+  private eyeSaved: { yaw: number; pitch: number } | null = null;
 
   private readonly camera: THREE.PerspectiveCamera;
   private readonly input: InputManager;
   private readonly opts: CameraFollowOptions;
   private mode: Mode = { kind: 'explore' };
-  private blend: { from: CameraPose; t: number; duration: number; onDone?: () => void } | null = null;
+  private blend: { from: CameraPose; t: number; duration: number; onDone?: () => void; observe?: boolean } | null = null;
   private readonly fov = new Tween(cfg.fov, cfg.fovBlendTime);
   private readonly live = makePose();
   private readonly out = makePose();
@@ -164,6 +180,7 @@ export class CameraFollowSystem {
     this.startBlend(cfg.puzzleBlendTime);
     this.mode = { kind: 'puzzle', node, freeLook: opts.freeLook ?? true, fov, offYaw: 0, offPitch: 0 };
     this.setObserving(false);
+    this.dropEye();
   }
 
   /** 退出机关：0.6 s 回到探索相机（yaw / pitch 保持进入前的值） */
@@ -181,6 +198,7 @@ export class CameraFollowSystem {
     if (this.mode.kind === 'cutscene') this.finishCutscene(true);
     if (this.mode.kind === 'puzzle') this.mode = { kind: 'explore' };
     this.setObserving(false);
+    this.dropEye();
     this.blend = null;
     return new Promise((resolve) => {
       this.mode = { kind: 'cutscene', track, t: 0, resolve, popInput: this.input.pushContext('cutscene') };
@@ -230,12 +248,12 @@ export class CameraFollowSystem {
     this.camera.updateMatrixWorld();
   }
 
-  private startBlend(duration: number, onDone?: () => void): void {
+  private startBlend(duration: number, onDone?: () => void, observe = false): void {
     const from = makePose();
     from.position.copy(this.camera.position);
     from.quaternion.copy(this.camera.quaternion);
     from.fov = this.camera.fov;
-    this.blend = { from, t: 0, duration, ...(onDone ? { onDone } : {}) };
+    this.blend = { from, t: 0, duration, ...(onDone ? { onDone } : {}), ...(observe ? { observe } : {}) };
   }
 
   private updateExplore(dt: number): void {
@@ -257,11 +275,33 @@ export class CameraFollowSystem {
       this.pitch += THREE.MathUtils.clamp(this.recommended.pitch - this.pitch, -step, step);
     }
 
-    // 观察模式（按住右键）
-    this.setObserving(input.isDown('observe') && this.blend === null);
+    // 观察模式（按住右键）；进 / 出固定眼位的过渡里也能继续按住
+    this.setObserving(input.isDown('observe') && (this.blend === null || this.blend.observe === true));
     const running = this.opts.isRunning?.() ?? false;
-    this.fov.set(this.observing ? cfg.observeFov : cfg.fov + (running ? cfg.sprintFovBoost : 0));
+    const eye = this.observing ? (this.observeEye?.() ?? null) : null;
+    if (eye && !this.eyeActive) {
+      this.eyeActive = true;
+      this.eyeSaved = { yaw: this.yaw, pitch: this.pitch };
+      this.yaw = eye.enterYaw;
+      this.pitch = eye.enterPitch;
+      this.startBlend(cfg.observeEyeBlendTime, undefined, true);
+    } else if (!eye && this.eyeActive) {
+      this.eyeActive = false;
+      if (this.eyeSaved) ({ yaw: this.yaw, pitch: this.pitch } = this.eyeSaved);
+      this.eyeSaved = null;
+      this.startBlend(cfg.observeEyeBlendTime, undefined, true);
+    }
+    this.fov.set(eye ? eye.fov : this.observing ? cfg.observeFov : cfg.fov + (running ? cfg.sprintFovBoost : 0));
     this.fov.update(dt);
+    if (eye) {
+      // 固定第一人称眼位：位置不随站位，鼠标转视线
+      euler.set(this.pitch, this.yaw, 0, 'YXZ');
+      this.live.quaternion.setFromEuler(euler);
+      this.live.position.copy(eye.position);
+      this.live.fov = eye.fov;
+      this.updateFocus();
+      return;
+    }
 
     if (!this.target) {
       this.live.fov = this.fov.value;
@@ -321,6 +361,14 @@ export class CameraFollowSystem {
     this.input.lookScale = active ? cfg.observeLookScale : 1;
     if (active) this.updateFocus(true);
     else this.opts.events?.emit('camera:observe', { active: false, focusDistance: this.focusDistance });
+  }
+
+  /** 机关 / 演出打断观察：固定眼位直接退出（朝向回到进入前，由机关 / 演出自己的过渡接手） */
+  private dropEye(): void {
+    if (!this.eyeActive) return;
+    this.eyeActive = false;
+    if (this.eyeSaved) ({ yaw: this.yaw, pitch: this.pitch } = this.eyeSaved);
+    this.eyeSaved = null;
   }
 
   /** 焦点 = 屏幕中心射线命中点；最多 10 次 / 秒发事件，变化 < 5% 不发 */
