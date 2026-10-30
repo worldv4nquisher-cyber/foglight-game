@@ -15,7 +15,9 @@ mkdirSync(OUT, { recursive: true });
 if (!existsSync(join(root, 'dist/index.html'))) throw new Error('先 npm run build');
 const chromePath = process.env.CHROME ?? ['/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser'].find((p) => existsSync(p));
 
-const W = 1920, H = 1080;
+// SHOTS_SIZE=1280x720 → 换分辨率，文件名 / 报告加 -720 后缀（默认 1920×1080 不加）
+const [W, H] = (process.env.SHOTS_SIZE ?? '1920x1080').split('x').map(Number);
+const SIZE_SUFFIX = H === 1080 ? '' : `-${H}`;
 const only = process.argv[2]?.split(',').filter(Boolean) ?? null;
 const want = (name) => !only || only.some((o) => name.startsWith(o));
 
@@ -76,7 +78,7 @@ const waitFrames = async (n) => {
 };
 
 
-const reportFile = join(OUT, 'shots-030.json');
+const reportFile = join(OUT, `shots-030${only ? '-' + only.join('+') : ''}${SIZE_SUFFIX}.json`); // 只拍部分时另存，不覆盖全量报告
 const report = { shots: [], failed: [], align: {}, errors };
 
 const mouse = (type, x, y) => send('Input.dispatchMouseEvent', { type, x, y, button: 'none' }, sessionId);
@@ -89,7 +91,7 @@ const big = async (name, info = {}, before = null) => {
     if (before) await before();
     await waitFrames(3);
     await sleep(400); // CSS 过渡（220 ms）走完
-    const file = await shot(`${name}.png`);
+    const file = await shot(`${name}${SIZE_SUFFIX}.png`);
     report.shots.push({ name, file, ...info });
     console.log('  ✓', name, Object.keys(info).length ? JSON.stringify(info) : '');
   } catch (e) {
@@ -139,6 +141,35 @@ const ALIGN = `(async () => {
     out.ruleDelta = out.rulesCss.length ? pred.filter((p) => p < 620).map((p) => { const n = out.rulesCss.reduce((a, b) => (Math.abs(b - p) < Math.abs(a - p) ? b : a)); return Math.round((n - p) * 10) / 10; }) : [];
     out.glyphToRule = out.glyphBottoms.map(([k, b]) => Math.round((71.2 + lh * (k + 1) - 1.5 - b) * 10) / 10);
   }
+  // BUG-021 表格纸（值班簿）：每格字框 vs 纸面竖线（2x 原图 1088 宽 → css 544，按纸张实际宽度缩放）。
+  //   左对齐列：字左 − (左线 + 5)；居中列：字中 − 两线中点；越界：字右超过右线；竖直：字中 − 两条格线中点（第 k 行在 rule k−1 与 rule k 之间）
+  const cells = [...document.querySelectorAll('.reader-cell')];
+  if (cells.length) {
+    const EDGES = [29.5, 146, 178, 232, 515];
+    const sc = pr.width / 544;
+    const rule = (k) => (71.2 + lh * (k + 1) - 1.5) * sc;
+    const errs = { start: [], center: [], overflow: [], vertical: [] };
+    const sample = [];
+    for (const c of cells) {
+      const col = +c.dataset.col; const t = c.querySelector('.reader-cell-text') ?? c;
+      const rg = document.createRange(); rg.selectNodeContents(t); const rs = [...rg.getClientRects()].filter((r) => r.width > 1); if (!rs.length) continue;
+      const L = Math.min(...rs.map((r) => r.left)) - pr.left, R = Math.max(...rs.map((r) => r.right)) - pr.left;
+      const T = Math.min(...rs.map((r) => r.top)) - pr.top, B = Math.max(...rs.map((r) => r.bottom)) - pr.top;
+      const row = c.closest('.reader-row'); const k = [...row.parentElement.children].indexOf(row);
+      const l = EDGES[col] * sc, r = EDGES[col + 1] * sc;
+      const center = getComputedStyle(c).justifyContent === 'center' || col === 1 || col === 2;
+      if (center) errs.center.push(Math.round(((L + R) / 2 - (l + r) / 2) * 10) / 10); else errs.start.push(Math.round((L - (l + 5 * sc)) * 10) / 10);
+      if (R > r + 0.5 || L < l - 0.5) errs.overflow.push({ k, col, L: Math.round(L), R: Math.round(R), l: Math.round(l), r: Math.round(r) });
+      const vc = (T + B) / 2 - (rule(k - 1) + rule(k)) / 2; errs.vertical.push(Math.round(vc * 10) / 10);
+      if (sample.length < 8) sample.push({ k, col, text: t.textContent.slice(0, 8), L: Math.round(L * 10) / 10, R: Math.round(R * 10) / 10, fs: getComputedStyle(t).fontSize });
+    }
+    const st = (a) => (a.length ? { n: a.length, maxAbs: Math.max(...a.map(Math.abs)), mean: Math.round((a.reduce((x, y) => x + y, 0) / a.length) * 100) / 100 } : null);
+    out.table = { scale: Math.round(sc * 1000) / 1000, cells: cells.length, start: st(errs.start), center: st(errs.center), vertical: st(errs.vertical), overflow: errs.overflow, sample,
+      titles: [...document.querySelectorAll('.reader-title, .reader-body h1, .reader-body h2')].map((e) => e.textContent.trim()).filter(Boolean) };
+  }
+  // BUG-022：翻页箭头 font 继承
+  const arrow = document.querySelector('.reader-arrow');
+  if (arrow) out.arrowFont = { arrow: getComputedStyle(arrow).fontFamily, body: getComputedStyle(body).fontFamily, ui: getComputedStyle(document.getElementById('ui-root') ?? document.body).fontFamily };
   return out;
 })()`;
 
@@ -172,7 +203,7 @@ if (want('030-menu-illust')) {
 }
 
 // ---------------- S1：阅读 ×6、日志、暂停 ----------------
-const needS1 = ['030-read', '030-journal', '030-pause', '030-end'].some(want);
+const needS1 = ['030-read', '030-journal', '030-pause', '030-end'].some((p) => want(p) || (only ?? []).some((o) => o.startsWith(p)));
 if (needS1) {
   console.log('  … 进 S1');
   await send('Page.navigate', { url: `${base}&autostart=1` }, sessionId);
@@ -200,7 +231,7 @@ if (needS1) {
     await until(`innerWidth === ${W}`, 60000);
     const align = await evaluate(ALIGN).catch((e) => ({ error: String(e) }));
     report.align[paper] = align;
-    console.log('   格线', paper, JSON.stringify({ state: align.state, bodyTop: align.bodyTop, rules: align.rulesCss?.slice(0, 4), ruleDelta: align.ruleDelta?.slice(0, 8), glyphToRule: align.glyphToRule?.slice(0, 6) }));
+    console.log('   格线', paper, JSON.stringify({ state: align.state, bodyTop: align.bodyTop, rules: align.rulesCss?.slice(0, 4), ruleDelta: align.ruleDelta?.slice(0, 8), glyphToRule: align.glyphToRule?.slice(0, 6), table: align.table && { start: align.table.start, center: align.table.center, vertical: align.table.vertical, overflow: align.table.overflow.length }, arrowFont: align.arrowFont }));
     await big(name, { doc, state: align.state });
     await evaluate(`(() => { __game.ui.reader.close(false); return 1; })()`);
   }
