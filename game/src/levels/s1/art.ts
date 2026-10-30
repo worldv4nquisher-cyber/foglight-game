@@ -80,7 +80,7 @@ export interface S1Art {
 /**
  * S1 美术接入（v0.1-013）：按 layout.ts 摆放 018 / 020 交付的 GLB。
  * - 美术 GLB 里的 -collider / -wall 只隐藏、不注册（碰撞以白盒为准）。
- * - 礁石 155 个实例：InstancedLodSet（每个实例矩阵含 _lodN 节点矩阵），距离按画质档 lodDistances。
+ * - 礁石 164 个实例（018 打磨 155→164）：InstancedLodSet（每个实例矩阵含 _lodN 节点矩阵），距离按画质档 lodDistances。
  * - 主岛 + S3 塔座实例：按物体雾 'mid'（0.0036）；塔按档固定 LOD；第一章点灯前不亮（灯罩自发光清零，不加光源）。
  * - 两座远景灯塔剪影：天空层（深度钉远平面、单色 + 自己的雾），三档构图一致（不受 viewDistance 裁掉）。
  * - 渔网材质 alphaHint → alphaHash；材质 extras tideMark = 'uTideLevel' → 挂湿痕线（克隆，不改缓存里的原材质）。

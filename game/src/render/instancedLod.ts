@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import type { LodDistances } from '@/render/lod';
 
 /**
- * 实例化 + LOD（v0.1-013，S1 礁石 155 个实例）。
+ * 实例化 + LOD（v0.1-013，S1 礁石 164 个实例）。
  *
  * 美术的岩石 GLB：根节点下 `_lod0/1/2` 三个网格节点，**每个节点自带 translation / scale**（KHR_mesh_quantization：
  * 顶点是归一化整数，节点 scale ≈ 0.7、translation.y ≈ 0.31 负责还原到米）。只拿 geometry 做 InstancedMesh、忽略节点矩阵，

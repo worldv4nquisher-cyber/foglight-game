@@ -1,6 +1,6 @@
-// 由 art/source/env/s1-layout.json（018 美术占位布局）的 instances 生成（v0.1-013）。
-// 155 个礁石实例：reef-path（谜题 1 礁石小径，退潮可走；碰撞由 layout.ts 的白盒路面负责）/ dressing / dressing-hightide（涨潮线以下，按全湿处理）。
-// 改摆放：改 s1-layout.json 后重新生成本文件；白盒（layout.ts）与这里冲突时以白盒为准。
+// 由 art/source/env/s1-layout.json（018 美术布局）的 instances 生成：node scripts/gen-s1-rocks.mjs（不要手改）。
+// 164 个礁石实例：reef-path（谜题 1 礁石小径，退潮可走；碰撞由 layout.ts 的白盒路面负责）/ dressing / dressing-hightide（涨潮线以下，按全湿处理）。
+// 改摆放：改 s1-layout.json 后重跑脚本；白盒（layout.ts）与这里冲突时以白盒为准。挡人的礁石碰撞在 layout.ts 里单独定（018 打磨：S1_FOREGROUND_ROCK_COLLIDERS）。
 import type { InstancePlacement } from '@/render/instancedLod';
 
 export type RockId = 'a' | 'b' | 'c' | 'd' | 'e' | 'f';
@@ -166,4 +166,13 @@ export const S1_ROCKS: readonly RockInstance[] = [
   { rock: 'd', role: 'dressing-hightide', translation: [41.57, -1.95, -32.98], rotationY: 5.752, scale: [0.802, 3.434, 0.672] },
   { rock: 'd', role: 'dressing-hightide', translation: [39.38, -1.95, -35.01], rotationY: 0.804, scale: [1.269, 3.391, 1.445] },
   { rock: 'd', role: 'dressing-hightide', translation: [37.28, -1.95, -34.22], rotationY: 6.157, scale: [0.948, 3.56, 0.845] },
+  { rock: 'f', role: 'dressing-hightide', translation: [8.6, -0.221, -5.9], rotationY: -0.179, scale: [1.45, 1.854, 1.25] },
+  { rock: 'd', role: 'dressing-hightide', translation: [6.4, -0.135, -4.7], rotationY: -0.616, scale: [1.9, 2.35, 1.7] },
+  { rock: 'f', role: 'dressing-hightide', translation: [11.6, -0.269, -6.6], rotationY: -0.503, scale: [1.25, 1.666, 1.1] },
+  { rock: 'd', role: 'dressing-hightide', translation: [10.6, -0.134, -4.6], rotationY: 0.145, scale: [1.5, 2.167, 1.35] },
+  { rock: 'c', role: 'dressing-hightide', translation: [6.7, -0.265, -6.46], rotationY: 3.854, scale: [1.005, 0.958, 0.886] },
+  { rock: 'c', role: 'dressing-hightide', translation: [11.41, -0.099, -4.11], rotationY: 6.071, scale: [1.009, 1.051, 1.115] },
+  { rock: 'b', role: 'dressing-hightide', translation: [8.82, -0.071, -3.8], rotationY: 4.37, scale: [1.112, 1.302, 1.303] },
+  { rock: 'd', role: 'dressing-hightide', translation: [12.03, -0.12, -4.42], rotationY: 1.785, scale: [0.685, 0.669, 0.665] },
+  { rock: 'b', role: 'dressing-hightide', translation: [7.83, -0.11, -4.33], rotationY: 3.219, scale: [0.841, 0.831, 0.697] },
 ];
