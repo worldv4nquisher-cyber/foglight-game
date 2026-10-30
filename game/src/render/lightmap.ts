@@ -150,8 +150,8 @@ export function applyLightmap(root: THREE.Object3D, tex: THREE.Texture, extras: 
         if (!c) {
           c = s.clone();
           // clone() 不带实例上挂的 onBeforeCompile（湿痕 / 按物体雾），接回去
-          c.onBeforeCompile = s.onBeforeCompile;
-          c.customProgramCacheKey = s.customProgramCacheKey;
+          c.onBeforeCompile = s.onBeforeCompile.bind(s);
+          c.customProgramCacheKey = s.customProgramCacheKey.bind(s);
           withRgbmLightmap(c, tex, extras.lightMapIntensity);
           // ORM 的 AO 已经在光照贴图里算过一遍（README-029 §0：叠得太暗调到约 0.5）
           if (c.aoMap) c.aoMapIntensity = Math.min(c.aoMapIntensity, 0.5);
