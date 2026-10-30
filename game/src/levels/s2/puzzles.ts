@@ -22,6 +22,7 @@ import { buildWhiteStonesDigits, sevenSegment } from './digits';
 import { ART_LANTERN_HANG, artLanternFrame, GB_LANTERN_LIGHT_Y } from './lantern';
 import { S2_LAMP_STAND_KEY } from './art';
 import { greyboxVisible } from '@/config/debug';
+import { BeamHum } from '@/systems/audio/loops';
 
 /** BUG-014：书桌上「看看而已」的物体的瞄准半径（屏幕 NDC），见 Interactable.aimCone */
 export const S2_DESK_AIM = { chart: 0.13, note: 0.3 } as const;
@@ -77,6 +78,8 @@ export interface S2PuzzleDeps {
 
 export interface S2Puzzles {
   beam: S2Beam;
+  /** 032 光束持续嗡鸣：灯台光打到光感锁期间循环 */
+  beamHum: BeamHum;
   renderer: WhiteboxBeamRenderer;
   lantern: THREE.Group;
   lanternLight: THREE.PointLight;
@@ -587,8 +590,11 @@ export function buildS2Puzzles(d: S2PuzzleDeps): S2Puzzles {
   root.updateMatrixWorld(true);
 
   const smooth = (u: number): number => u * u * (3 - 2 * u);
+  // 032：灯台光（亮着）打到光感锁接收器期间循环光束嗡鸣（断光 0.3 s 宽限后淡出）
+  const beamHum = new BeamHum(events, () => tracer.paths.some((q) => q.emitter.lit && q.receiver === beam.lock));
   const api: S2Puzzles = {
     beam,
+    beamHum,
     renderer,
     lantern,
     lanternLight,
@@ -636,6 +642,7 @@ export function buildS2Puzzles(d: S2PuzzleDeps): S2Puzzles {
       }
       actions.fixedUpdate(dt);
       tracer.fixedUpdate(dt);
+      beamHum.update(dt);
       const p = rig.body.position;
       if (!yardSaid && yardZone(p)) {
         yardSaid = true;
@@ -701,6 +708,7 @@ export function buildS2Puzzles(d: S2PuzzleDeps): S2Puzzles {
     },
     dispose(): void {
       for (const f of offs) f();
+      beamHum.stop();
       actions.cancel();
       renderer.dispose();
       d.cameraFollow.observeEye = null;

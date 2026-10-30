@@ -13,6 +13,7 @@ import { Interactable } from '@/systems/interaction/Interactable';
 import { WhiteboxBeamRenderer } from '@/systems/light/BeamRenderer';
 import { TideController } from '@/systems/tide/TideController';
 import { TideBell } from '@/systems/tide/TideBell';
+import { BeamHum, LENS_ROTATE_DELAY_SEC, LENS_ROTATE_ID } from '@/systems/audio/loops';
 import { S3, alongDoor, toLocal, v3 } from './layout';
 import { buildS3Beam, type S3Beam, type S3MirrorKey } from './beam';
 import type { S3Greybox } from './greybox';
@@ -117,6 +118,8 @@ export interface S3Puzzles {
   canIgnite(): boolean;
   /** 可点灯嗡鸣循环（on = 正在播 / 淡入；smoke 读） */
   hum: IgniterHum;
+  /** 032 光束持续嗡鸣：天光经窗口镜打到导光镜 A 起、点燃前 */
+  beamHum: BeamHum;
   /** 按 E 生效：锁输入 → 走到拉杆交互点 → xi-ignite-lever → 第 34 帧点燃。返回是否生效 */
   startIgnite(): boolean;
   /** 立即点燃（ignite 帧；smoke / 测试也可直接调）。全局只生效一次 */
@@ -481,6 +484,8 @@ export function buildS3Puzzles(d: S3PuzzleDeps): S3Puzzles {
   const igniter = beam.igniter;
   const canIgnite = (): boolean => state.valveOpen && igniter.ready && !state.igniting && !state.ignited;
   const hum = new IgniterHum(events, igniter, () => state.igniting);
+  // 032：光束持续嗡鸣——天光经窗口镜打到导光镜 A 起（光路连通），点燃后交给透镜转动循环
+  const beamHum = new BeamHum(events, () => !state.ignited && traceReached() >= 1);
 
   // ---- 点灯演出：锁输入（cutscene 上下文）→ 走到 -interact（017 walk 1.6 m/s）→ xi-ignite-lever（第 34 帧点燃）
   let actions: XiActionPlayer | null = null;
@@ -526,6 +531,8 @@ export function buildS3Puzzles(d: S3PuzzleDeps): S3Puzzles {
     events.emit('beam:setColor', { id: beam.sky.id, color: 'warm' });
     events.emit('beam:setColor', { id: beam.preview.id, color: 'warm' });
     sfx('sfx-ignite');
+    // 032：点燃后约 1.5 s 透镜开始转（sfx-lens-rotate-loop 循环到离开场景）
+    after(LENS_ROTATE_DELAY_SEC, () => events.emit('sfx:loop', { id: LENS_ROTATE_ID }));
     hints.solve('p5');
     lamp.setOn(true);
     events.emit('lighthouse:ignited');
@@ -584,6 +591,7 @@ export function buildS3Puzzles(d: S3PuzzleDeps): S3Puzzles {
     // 可点灯嗡鸣：进入可点灯淡入循环，退出（断光超过 0.3 s 宽限）/ 点燃后淡出（igniterHum.ts）
     hum.bind(),
     () => hum.stop(0),
+    () => beamHum.stop(),
     events.on('ignition:reminder', ({ id }) => {
       if (id !== igniter.id || state.igniting) return;
       state.reminders++;
@@ -652,6 +660,7 @@ export function buildS3Puzzles(d: S3PuzzleDeps): S3Puzzles {
     lensIx,
     canIgnite,
     hum,
+    beamHum,
     startIgnite,
     igniteNow,
     doorIx,
@@ -688,6 +697,7 @@ export function buildS3Puzzles(d: S3PuzzleDeps): S3Puzzles {
       }
       for (let k = 1; k <= reached; k++) hints.completeStep('p5', stepOf[k - 1]!);
       state.reached = reached;
+      beamHum.update(dt);
       skyWasLit = skyLit;
       for (const key of ['window', 'a', 'b'] as const) {
         flashT[key] = Math.max(0, flashT[key] - dt);

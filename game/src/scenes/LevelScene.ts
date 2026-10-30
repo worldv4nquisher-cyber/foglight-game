@@ -24,6 +24,7 @@ import { createSceneHints } from './sceneHints';
 import { TideSet } from '@/systems/tide/TideController';
 import type { TideBell } from '@/systems/tide/TideBell';
 import { bindSfxFallback, recallToSafePoint } from '@/systems/tide/tideScene';
+import { PushLoop } from '@/systems/audio/loops';
 
 /** 建立镜头迟迟不结束时（慢机器上画质检测拖住），进场多久后无论如何开始预加载下一个场景 */
 const PRELOAD_FALLBACK_MS = 8000;
@@ -65,6 +66,8 @@ export abstract class LevelScene extends BaseScene {
   readonly tides = new TideSet();
   /** 潮汐钟（011）：每帧摆动 */
   protected readonly bells: TideBell[] = [];
+  /** 032 推动循环音（木筏 sfx-raft-push-loop） */
+  protected pushLoop: PushLoop | null = null;
 
   /** 入口点（buildLevel 里登记；也可以从模型 collectSceneMarkers 收集） */
   readonly spawns = new Map<string, SpawnPoint>();
@@ -147,6 +150,7 @@ export abstract class LevelScene extends BaseScene {
     if (this.goalId) this.game.narrative.setGoal(this.goalId);
 
     const { events, audio, ui } = this.game;
+    this.pushLoop = new PushLoop(events);
     this.cleanups.push(
       events.on('quality:changed', () => this.applyQuality()),
       events.on('player:land', ({ impactSpeed }) => {
@@ -155,6 +159,7 @@ export abstract class LevelScene extends BaseScene {
       () => this.interaction.dispose(),
       () => this.cameraFollow.dispose(),
       bindSfxFallback(events, audio, (id) => this.game.assets.getAudio(id)),
+      () => this.pushLoop?.dispose(),
       () => {
         for (const b of this.bells) b.dispose();
       },
@@ -337,6 +342,7 @@ export abstract class LevelScene extends BaseScene {
     // 场景切换黑场期间：角色停住（新场景会重新创建角色，不用解锁）
     if (this.game.flow.transitioning) this.rig.controller.locked = true;
     this.interaction.fixedUpdate(dt);
+    this.pushLoop?.update(dt);
     this.entities.fixedUpdate(dt);
     // 潮汐在角色物理之前：浮物（dynamic 碰撞体）先移动，站在上面的角色被带着走
     this.tides.fixedUpdate(dt);

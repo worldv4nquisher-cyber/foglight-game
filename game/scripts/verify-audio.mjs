@@ -10,6 +10,8 @@ import { gameplay } from '@/config/gameplay';
 import { SfxBank, SFX_ALIASES, sfxGain, STEP_SURFACES } from '@/systems/audio/sfxBank';
 import { manifest } from '@/assets/manifest';
 import { existsSync } from 'node:fs';
+import { IgniterHum } from '@/levels/s3/igniterHum';
+import { BeamHum, PushLoop, BEAM_HUM_ID, LENS_ROTATE_ID, LENS_ROTATE_DELAY_SEC } from '@/systems/audio/loops';
 
 class FakeParam {
   constructor(v = 1) {
@@ -333,6 +335,77 @@ test('032 桥接：别名 / 增益走 SfxBank；没文件又没合成占位的�
   ev.emit('sfx:loop', { id: 'amb-rain-light' });
   assert.equal(ctx.sources.length, 2, '新 id 缺文件静默');
   assert.equal(a.isLooping('amb-rain-light'), false);
+  off();
+});
+
+test('032 循环：BeamHum 连通起播 sfx-beam-hum-loop、断开 0.3 s 宽限内不停、超过淡出、不重复起；PushLoop 推动中循环 sfx-raft-push-loop、停手 0.25 s / 推到底淡出、别的推动件不响', () => {
+  const ev = new EventBus();
+  const log = [];
+  ev.on('sfx:loop', ({ id }) => log.push(['loop', id]));
+  ev.on('sfx:loopStop', ({ id }) => log.push(['stop', id]));
+  let c = false;
+  const h = new BeamHum(ev, () => c);
+  h.update(0.1);
+  assert.equal(log.length, 0);
+  c = true;
+  h.update(0.1);
+  h.update(0.1);
+  assert.deepEqual(log, [['loop', BEAM_HUM_ID]]);
+  c = false;
+  for (let k = 0; k < 5; k++) h.update(0.05);
+  assert.equal(log.length, 1, '0.25 s 断光在宽限内');
+  c = true;
+  h.update(0.05);
+  c = false;
+  for (let k = 0; k < 7; k++) h.update(0.05);
+  assert.deepEqual(log.at(-1), ['stop', BEAM_HUM_ID]);
+  assert.equal(h.starts, 1);
+  log.length = 0;
+  const p = new PushLoop(ev);
+  ev.emit('interact:pushMoved', { id: 'raft-s1', t: 0.1 });
+  ev.emit('interact:pushMoved', { id: 'raft-s1', t: 0.2 });
+  ev.emit('interact:pushMoved', { id: 'crate', t: 0.2 });
+  assert.deepEqual(log, [['loop', 'sfx-raft-push-loop']]);
+  p.update(0.2);
+  ev.emit('interact:pushMoved', { id: 'raft-s1', t: 0.3 });
+  p.update(0.2);
+  assert.equal(log.length, 1, '一直在推不停');
+  p.update(0.1);
+  assert.deepEqual(log.at(-1), ['stop', 'sfx-raft-push-loop']);
+  ev.emit('interact:pushMoved', { id: 'raft-s1', t: 0.9 });
+  ev.emit('interact:pushEnd', { id: 'raft-s1' });
+  assert.deepEqual(log.slice(-2), [['loop', 'sfx-raft-push-loop'], ['stop', 'sfx-raft-push-loop']]);
+  p.dispose();
+  assert.equal(LENS_ROTATE_ID, 'sfx-lens-rotate-loop');
+  assert.equal(LENS_ROTATE_DELAY_SEC, 1.5);
+  // 场景接线（源码）：S2 光感锁 / S3 导光镜连通驱动 BeamHum；S3 点燃后 after(1.5 s) 起透镜循环；LevelScene 每步更新 PushLoop
+  const s2 = readFileSync(new URL('../src/levels/s2/puzzles.ts', import.meta.url), 'utf8');
+  const s3 = readFileSync(new URL('../src/levels/s3/puzzles.ts', import.meta.url), 'utf8');
+  const lv = readFileSync(new URL('../src/scenes/LevelScene.ts', import.meta.url), 'utf8');
+  assert.ok(/new BeamHum\(events, \(\) => tracer\.paths\.some\(\(q\) => q\.emitter\.lit && q\.receiver === beam\.lock\)\)/.test(s2));
+  assert.ok(/new BeamHum\(events, \(\) => !state\.ignited && traceReached\(\) >= 1\)/.test(s3));
+  assert.ok(/after\(LENS_ROTATE_DELAY_SEC, \(\) => events\.emit\('sfx:loop', \{ id: LENS_ROTATE_ID \}\)\)/.test(s3));
+  assert.ok(lv.includes('this.pushLoop?.update(dt)'));
+});
+
+test('032 可点灯嗡鸣：有 sfx-ignite-ready-loop 文件 → 整文件 buffer loop=true（不再 110 Hz 占位），淡入 igniterHumFadeInSec、淡出 0.3 s', () => {
+  const ctx = new FakeContext();
+  const a = new AudioSystem(ctx);
+  const ev = new EventBus();
+  const buf = { duration: 8 };
+  const off = bindSfxFallback(ev, a, (k) => (k === 'sfx-ignite-ready-loop' ? buf : undefined));
+  const rx = { id: 'igniter', state: 'ready' };
+  const hum = new IgniterHum(ev, rx, () => false);
+  const unb = hum.bind();
+  ev.emit('receiver:ready', { id: 'igniter', emitter: 'sky' });
+  const src = ctx.sources[0];
+  assert.equal(src.kind, 'buffer');
+  assert.equal(src.buffer, buf);
+  assert.equal(src.loop, true);
+  assert.deepEqual(lastRamp(src.out[0].gain), ['ramp', 1, gameplay.beam.igniterHumFadeInSec]);
+  ev.emit('lighthouse:ignited');
+  assert.equal(src.stopped, gameplay.beam.igniterHumFadeOutSec);
+  unb();
   off();
 });
 
