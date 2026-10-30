@@ -303,7 +303,7 @@ await test('美术回复 1030 塔门 prop-lighthouse-door-s3（合成）：到�
   return '塔门单独文件优先 / door-leaf 对合页 / -collider 隐藏 / 回退 020 / 白盒 ✓（-interact 暂未接：白盒站位不变）';
 });
 
-await test('钟锤补音（1030b 方案 A）：阈值缺省 0.055 rad、美术根 extras.clapperHitRad 优先；按 xi-ring-bell 完整敲一次（touch→ring 推 + 自由摆）缺省阈值下钟锤碰壁会响（1–2 次）、emit sfx:play optional sfx-tide-bell-clapper（缺文件静默、叠在主钟声上）、碰壁期间不连发；manifest 登记 pending', async () => {
+await test('钟锤补音（1030b 方案 A）：阈值缺省 0.055 rad、美术根 extras.clapperHitRad 优先；按 xi-ring-bell 完整敲一次（touch→ring 推 + 自由摆）缺省阈值下钟锤碰壁会响（1–2 次）、美术重建 GLB 根 0.0537 生效也会响、emit sfx:play optional sfx-tide-bell-clapper（缺文件静默、叠在主钟声上）、碰壁期间不连发；manifest 登记 pending', async () => {
   const { TideBell, CLAPPER_SFX, readClapperHitRad, applyArtClapperHitRad } = await import('@/systems/tide/TideBell');
   const { xiEventSec } = await import('@/entities/xi/clips');
   assert.equal(CLAPPER_SFX, 'sfx-tide-bell-clapper');
@@ -378,12 +378,21 @@ await test('钟锤补音（1030b 方案 A）：阈值缺省 0.055 rad、美术�
   root.userData.clapperHitRad = 0.41;
   applyArtClapperHitRad(hi.bell, scene);
   assert.equal(ringOnce(hi).hits, 0, '阈值 0.41（旧值）摆幅 0.2 碰不到 = 不响');
-  // 当前美术 prop-tide-bell.glb 根还没有 clapperHitRad → 用缺省
+  // 美术 1030c 重建 prop-tide-bell.glb：根 extras.clapperHitRad = 0.0537（扁球锤头网格实测）→ 挂上后生效、敲一次会响
   const glbPath = resolve(dirname(fileURLToPath(import.meta.url)), '../../art/models/props/prop-tide-bell.glb');
   let artNow = '未交付';
   if (existsSync(glbPath)) {
-    const v = readClapperHitRad(await loadGlb('models/props/prop-tide-bell.glb'));
-    artNow = v === null ? '根无 clapperHitRad → 缺省 0.055' : `根 clapperHitRad ${v}`;
+    const art = await loadGlb('models/props/prop-tide-bell.glb');
+    const v = readClapperHitRad(art);
+    if (v === null) artNow = '根无 clapperHitRad → 缺省 0.055';
+    else {
+      assert.ok(Math.abs(v - 0.0537) < 1e-9, `美术根 clapperHitRad = 0.0537（实际 ${v}）`);
+      const g = mk();
+      assert.equal(applyArtClapperHitRad(g.bell, art), v, '挂上美术后用根 extras');
+      const r = ringOnce(g);
+      assert.ok(r.hits >= 1 && r.hits <= 2, `美术阈值 ${v} 敲一次应响 1–2 次：${r.hits}`);
+      artNow = `根 clapperHitRad ${v} 生效 → 敲一次碰壁 ${r.hits} 次（首声 ring 后 ${r.firstAt?.toFixed(2)} s）`;
+    }
   }
   return `缺省 0.055：敲一次钟锤最大相对角 ${d.maxRel.toFixed(3)} → 碰壁 ${d.hits} 次（首声 ring 后 ${d.firstAt?.toFixed(2)} s）；0.14 → ${l.hits} 次；extras 0.06 → ${o.hits} 次；0.41 → 0 次；当前美术 GLB：${artNow}`;
 });

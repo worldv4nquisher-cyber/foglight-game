@@ -2624,6 +2624,12 @@ const CHECKS = [
         if (r.miss.length) throw new Error(`${q} 替换表白盒节点名对不上：${r.miss.join('、')}`);
         if (q !== 's2' && !r.mounted.some((id) => id.startsWith('prop-tide-bell'))) throw new Error(`${q} 潮汐钟美术没挂上 ` + JSON.stringify(r));
         if (q === 's1' && !r.mounted.includes('prop-raft-s1')) throw new Error('s1 木筏美术没挂上 ' + JSON.stringify(r));
+        // 1030c 重建钟：根 extras.clapperHitRad = 0.0537 生效
+        if (q !== 's2') {
+          const hr = await evaluate(`${v}.puzzles.bell.clapperHitRad`);
+          if (Math.abs(hr - 0.0537) > 1e-9) throw new Error(`${q} 钟锤阈值应读美术根 0.0537，实际 ${hr}`);
+          out.push(`${q} 钟锤阈值 ${hr}（美术根）`);
+        }
         if (r.req.length) throw new Error(`${q} 请求了没挂上的道具（未交付应不请求）：${r.req.join('、')}`);
         out.push(`${q}：节点齐、挂上 ${r.mounted.length} 件${r.mounted.length ? '（' + r.mounted.join('/') + '）' : ''}、未交付 0 请求`);
       }
