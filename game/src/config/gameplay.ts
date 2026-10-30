@@ -140,10 +140,11 @@ export const gameplay = {
       freePhaseSin: 0.5,
       /**
        * 钟锤滞后钟体（s）、相对角到这个值碰内壁（rad；钟锤摆角也夹在 ±这个值）。
-       * 美术 1030b 方案 A：摆幅 0.2 不变、碰壁阈值 0.14（原 0.41 在摆幅 0.2 下碰不到）；美术 GLB 根 extras.clapperHitRad 存在时优先（TideBell.clapperHitRad）。
+       * 美术 1030b 方案 A：摆幅 0.2 不变；美术 GLB 根 extras.clapperHitRad 存在时优先（TideBell.clapperHitRad）。
+       * 缺省 0.055：滞后 0.12 s 的钟锤敲一次相对角最大约 0.061（0.14 / 0.41 都碰不到），0.055 敲一次碰壁 2 次（verify-render 实测）。
        */
       clapperLagSec: 0.12,
-      clapperHitRad: 0.14,
+      clapperHitRad: 0.055,
     },
   },
   /** 光线反射（GDD §7 谜题 3、5，§8，§9；v0.1-012） */

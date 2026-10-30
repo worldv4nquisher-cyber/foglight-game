@@ -11,7 +11,7 @@ export const CLAPPER_SFX = 'sfx-tide-bell-clapper';
 
 /**
  * 美术钟模型根 extras.clapperHitRad（1030b 方案 A：存在时优先）。传挂上的模型（gltf.scene 或 GLB 根节点都行：
- * 按遍历顺序取第一个带这个 extras 的节点，根在前）；没有 / 不是正数 = null（用缺省 0.14）。
+ * 按遍历顺序取第一个带这个 extras 的节点，根在前）；没有 / 不是正数 = null（用缺省 0.055）。
  */
 export function readClapperHitRad(model: THREE.Object3D | null | undefined): number | null {
   let out: number | null = null;
@@ -73,7 +73,7 @@ export class TideBell {
   clapperAngle = 0;
   /** 钟锤碰壁次数（测试读）；|相对角| 上升沿到 clapperHitRad 记一次并补 sfx-tide-bell-clapper（文件缺失静默，可叠主钟声） */
   clapperHits = 0;
-  /** 碰壁阈值 / 钟锤摆角上限（rad）：缺省 gameplay.tide.bell.clapperHitRad（0.14）；美术挂上后用根 extras.clapperHitRad（readClapperHitRad） */
+  /** 碰壁阈值 / 钟锤摆角上限（rad）：缺省 gameplay.tide.bell.clapperHitRad（0.055）；美术挂上后用根 extras.clapperHitRad（readClapperHitRad） */
   clapperHitRad: number = gameplay.tide.bell.clapperHitRad;
   private clapperTouching = false;
   private readonly swing: THREE.Object3D | null;

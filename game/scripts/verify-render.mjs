@@ -303,14 +303,14 @@ await test('美术回复 1030 塔门 prop-lighthouse-door-s3（合成）：到�
   return '塔门单独文件优先 / door-leaf 对合页 / -collider 隐藏 / 回退 020 / 白盒 ✓（-interact 暂未接：白盒站位不变）';
 });
 
-await test('钟锤补音（1030b 方案 A）：阈值缺省 0.14 rad、美术根 extras.clapperHitRad 优先；按 xi-ring-bell 完整敲一次（touch→ring 推 + 自由摆）：钟锤相对角到阈值才碰壁、emit sfx:play optional sfx-tide-bell-clapper（缺文件静默、叠在主钟声上）、碰壁期间不连发；manifest 登记 pending', async () => {
+await test('钟锤补音（1030b 方案 A）：阈值缺省 0.055 rad、美术根 extras.clapperHitRad 优先；按 xi-ring-bell 完整敲一次（touch→ring 推 + 自由摆）缺省阈值下钟锤碰壁会响（1–2 次）、emit sfx:play optional sfx-tide-bell-clapper（缺文件静默、叠在主钟声上）、碰壁期间不连发；manifest 登记 pending', async () => {
   const { TideBell, CLAPPER_SFX, readClapperHitRad, applyArtClapperHitRad } = await import('@/systems/tide/TideBell');
   const { xiEventSec } = await import('@/entities/xi/clips');
   assert.equal(CLAPPER_SFX, 'sfx-tide-bell-clapper');
   const e = manifest.find((x) => x.key === CLAPPER_SFX);
   assert.ok(e && e.type === 'audio' && e.optional && e.pending && e.url.endsWith('audio/sfx/sfx-tide-bell-clapper.ogg'), 'manifest 登记钟锤补音（pending）');
   const b = gameplay.tide.bell;
-  assert.equal(b.clapperHitRad, 0.14, '缺省阈值 0.14');
+  assert.equal(b.clapperHitRad, 0.055, '缺省阈值 0.055');
   assert.equal(b.freeAmp, 0.2, '摆幅 0.2 不变');
   const mk = () => {
     const emits = [];
@@ -349,15 +349,16 @@ await test('钟锤补音（1030b 方案 A）：阈值缺省 0.14 rad、美术根
     assert.ok(emits.some(([n, p]) => n === 'sfx:play' && p.id === 'sfx-tide-bell'), '主钟声照常（补音叠在上面）');
     return { hits: bell.clapperHits, maxRel, frames, firstAt };
   };
-  // 缺省 0.14：现行钟锤模型（滞后 0.12 s，相对角 = θ(t − 0.12) − θ(t)）敲一次最大相对角只有 ≈ 0.061 → 不碰壁（见汇报：方案 A 的 0.14 对应的是钟体角 |θ| 最大 0.161）
+  // 缺省 0.055：敲一次就会响（滞后 0.12 s 的钟锤相对角最大 ≈ 0.061），1–2 声，贴壁多帧只响一次
   const d = ringOnce(mk());
-  assert.ok(d.maxRel < 0.14, `现行模型相对角 < 0.14：${d.maxRel}`);
-  // 阈值低到碰得到时：敲一次至少一声、贴壁多帧只响一次
-  const lo = mk();
-  lo.bell.clapperHitRad = 0.06;
-  const l = ringOnce(lo);
-  assert.ok(l.hits >= 1 && l.hits <= 3, `阈值 0.06 敲一次碰壁 ${l.hits} 次`);
-  assert.ok(l.hits < l.frames || l.frames <= 1, '碰壁期间（多帧贴壁）只响一次，不逐帧连发');
+  assert.ok(d.hits >= 1, `缺省阈值敲一次应响：${d.hits}`);
+  assert.ok(d.hits <= 2, `缺省阈值敲一次最多 2 声：${d.hits}`);
+  assert.ok(d.hits < d.frames || d.frames <= 1, '碰壁期间（多帧贴壁）只响一次，不逐帧连发');
+  // 方案 A 原定 0.14：现行钟锤模型碰不到（留作对照）
+  const a14 = mk();
+  a14.bell.clapperHitRad = 0.14;
+  const l = ringOnce(a14);
+  assert.equal(l.hits, 0, '0.14 碰不到');
   // 美术根 extras.clapperHitRad 优先（gltf.scene 下的根节点也读得到）；无效值不用
   const scene = new THREE.Group();
   const root = new THREE.Group();
@@ -366,13 +367,13 @@ await test('钟锤补音（1030b 方案 A）：阈值缺省 0.14 rad、美术根
   assert.equal(readClapperHitRad(scene), null, '没写 extras = null');
   root.userData.clapperHitRad = 'x';
   assert.equal(readClapperHitRad(scene), null, '非数字不用');
-  root.userData.clapperHitRad = 0.05;
-  assert.equal(readClapperHitRad(scene), 0.05, '读 GLB 根 extras');
+  root.userData.clapperHitRad = 0.06;
+  assert.equal(readClapperHitRad(scene), 0.06, '读 GLB 根 extras');
   const m = mk();
-  assert.equal(applyArtClapperHitRad(m.bell, null), 0.14, '没挂美术 = 缺省');
-  assert.equal(applyArtClapperHitRad(m.bell, scene), 0.05, 'extras 优先');
+  assert.equal(applyArtClapperHitRad(m.bell, null), 0.055, '没挂美术 = 缺省');
+  assert.equal(applyArtClapperHitRad(m.bell, scene), 0.06, 'extras 优先');
   const o = ringOnce(m);
-  assert.ok(o.hits >= 1 && o.maxRel <= 0.05 + 1e-9, 'extras 阈值生效（钟锤也夹在它以内）');
+  assert.ok(o.hits >= 1 && o.maxRel <= 0.06 + 1e-9, 'extras 阈值生效（钟锤也夹在它以内）');
   const hi = mk();
   root.userData.clapperHitRad = 0.41;
   applyArtClapperHitRad(hi.bell, scene);
@@ -382,9 +383,9 @@ await test('钟锤补音（1030b 方案 A）：阈值缺省 0.14 rad、美术根
   let artNow = '未交付';
   if (existsSync(glbPath)) {
     const v = readClapperHitRad(await loadGlb('models/props/prop-tide-bell.glb'));
-    artNow = v === null ? '根无 clapperHitRad → 缺省 0.14' : `根 clapperHitRad ${v}`;
+    artNow = v === null ? '根无 clapperHitRad → 缺省 0.055' : `根 clapperHitRad ${v}`;
   }
-  return `缺省 0.14：敲一次钟锤最大相对角 ${d.maxRel.toFixed(3)} → 碰壁 ${d.hits} 次（不响）；阈值 0.06 → ${l.hits} 次（ring 后 ${l.firstAt?.toFixed(2)} s）；extras 0.05 → ${o.hits} 次；0.41 → 0 次；当前美术 GLB：${artNow}`;
+  return `缺省 0.055：敲一次钟锤最大相对角 ${d.maxRel.toFixed(3)} → 碰壁 ${d.hits} 次（首声 ring 后 ${d.firstAt?.toFixed(2)} s）；0.14 → ${l.hits} 次；extras 0.06 → ${o.hits} 次；0.41 → 0 次；当前美术 GLB：${artNow}`;
 });
 
 await test('岩石实例化（合成）：实例矩阵乘上 _lodN 节点矩阵，顶面 = 摆放 y + 节点平移 + 半高', () => {
