@@ -8,12 +8,14 @@ import * as THREE from 'three';
  * 两种样式：
  * - part：机关当前部件，冷色、半透明、细（「微弱描边」）
  * - hint：提示系统二级提示 highlight()，琥珀色、更粗，到时自动消失
+ * - key：029 小件拾取物（地窖钥匙）走近时的交互高亮：冷白、细（钥匙本身 9.5 cm，不能糊成一团），不发光不提亮
  */
-export type OutlineStyle = 'part' | 'hint';
+export type OutlineStyle = 'part' | 'hint' | 'key';
 
 const STYLE: Record<OutlineStyle, { color: number; opacity: number; width: number }> = {
   part: { color: 0xa9bcc4, opacity: 0.45, width: 0.012 },
   hint: { color: 0xffd38a, opacity: 0.9, width: 0.022 },
+  key: { color: 0xc9d6de, opacity: 0.7, width: 0.005 },
 };
 
 const OUTLINE_TAG = '__outline';

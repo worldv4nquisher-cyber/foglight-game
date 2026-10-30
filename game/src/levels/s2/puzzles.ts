@@ -24,6 +24,8 @@ import { S2_LAMP_STAND_KEY } from './art';
 import { greyboxVisible } from '@/config/debug';
 import { BeamHum } from '@/systems/audio/loops';
 import { findNode } from '../artSlots';
+import { CellarKeyLight, inCellar } from './cellarKeyLight';
+import { gameplay } from '@/config/gameplay';
 
 /** BUG-014：书桌上「看看而已」的物体的瞄准半径（屏幕 NDC），见 Interactable.aimCone */
 export const S2_DESK_AIM = { chart: 0.13, note: 0.3 } as const;
@@ -123,6 +125,10 @@ export interface S2Puzzles {
   digitsMaterial: THREE.MeshBasicMaterial;
   /** 白盒小道具（杯子、日志、纸条、抽屉、海图、观察点地板）：美术 019 只给了 socket 没有这些模型，始终显示 */
   props: THREE.Object3D[];
+  /** 029 地窖钥匙点光（美术钥匙挂在 socket 上时才有） */
+  keyLight: CellarKeyLight | null;
+  /** 029 钥匙交互高亮当前是否亮着（测试读） */
+  readonly keyHighlighted: boolean;
   fixedUpdate(dt: number): void;
   update(dt: number): void;
   dispose(): void;
@@ -427,6 +433,26 @@ export function buildS2Puzzles(d: S2PuzzleDeps): S2Puzzles {
     anim: nodeAnim(d.artRoot, 'env-cellar-s2-shelf-interact', 'xi-pickup-shelf'),
   });
   interaction.add(keyIx);
+  // 029：地窖钥匙点光（挂在架上 socket 下；位置按 env-cellar-s2 局部坐标算）。替代旧的地窖补光（之前没有单独的）
+  let cellarArt: THREE.Object3D | null = artKey?.parent ?? null;
+  while (cellarArt && cellarArt.name !== 'env-cellar-s2') cellarArt = cellarArt.parent;
+  const keyLight = artKey?.parent && cellarArt ? new CellarKeyLight(cellarArt, artKey.parent) : null;
+  // 029：钥匙交互高亮（地窖里、走到图标距离内或成为当前候选时亮，拿走就灭）
+  const KEY_HL = 'key:cellar-key-s2';
+  const keyWorld = new THREE.Vector3();
+  let keyHighlighted = false;
+  const updateKeyHighlight = (): void => {
+    const p = rig.body.position;
+    let on = false;
+    if (!state.hasKey && keyIx.enabled && inCellar(p)) {
+      (artKey ?? key).getWorldPosition(keyWorld);
+      on = interaction.current === keyIx || Math.hypot(keyWorld.x - p.x, keyWorld.z - p.z) <= gameplay.interaction.iconDistance;
+    }
+    if (on === keyHighlighted) return;
+    keyHighlighted = on;
+    if (on) interaction.highlighter.add(KEY_HL, artKey ?? key, 'key');
+    else interaction.highlighter.remove(KEY_HL);
+  };
   const [skx, sky, skz] = S2.points.cellarSketch;
   const sketch = box('sketch-s2', 0.21, 0.004, 0.3, paper, [skx, sky + 0.002, skz]);
   read('sketch-s2', sketch, 'ch1.s2.sketch.doc');
@@ -435,6 +461,8 @@ export function buildS2Puzzles(d: S2PuzzleDeps): S2Puzzles {
       if (id !== S2_IDS.key || state.hasKey) return;
       state.hasKey = true;
       keyIx.enabled = false;
+      interaction.highlighter.remove(KEY_HL);
+      keyHighlighted = false;
       // 017：有汐的动画时 grab 帧（22）把钥匙挂到中指末节 middle_03_r，clip 播完收进背包。
       // 美术钥匙：key.matrix = middle_03_r.matrixWorld × attach（根节点 extras.attach），拿在手里强制 LOD0；白盒钥匙：按这一帧的相对偏移挂
       const bone = interaction.animState?.clip === 'xi-pickup-shelf' ? rig.visual.getObjectByName(XI_KEY_BONE) : undefined;
@@ -699,8 +727,14 @@ export function buildS2Puzzles(d: S2PuzzleDeps): S2Puzzles {
         greybox.dialGate.rotation.y = gateOpenAngle * smooth(gateT / GATE_SEC);
       }
     },
+    keyLight,
+    get keyHighlighted() {
+      return keyHighlighted;
+    },
     update(dt: number): void {
       renderer.update(dt, tracer);
+      keyLight?.update(dt, inCellar(rig.body.position), state.hasKey);
+      updateKeyHighlight();
       // 风灯在书桌上：二层东窗透暖光
       state.lanternOnDesk = held.sockets.get(deskSocket.name) === S2_IDS.lantern;
       const glowTarget = state.lanternOnDesk ? 0.8 : 0;
@@ -732,6 +766,8 @@ export function buildS2Puzzles(d: S2PuzzleDeps): S2Puzzles {
     },
     dispose(): void {
       for (const f of offs) f();
+      keyLight?.dispose();
+      interaction.highlighter.remove(KEY_HL);
       beamHum.stop();
       actions.cancel();
       renderer.dispose();

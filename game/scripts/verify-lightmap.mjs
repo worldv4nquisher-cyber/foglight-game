@@ -28,6 +28,8 @@ import { manifest } from '@/assets/manifest';
 import { ATMOSPHERE_PRESETS, RAIN_NIGHT_LIGHT_MUL } from '@/config/atmosphere';
 import { ATMO028 } from '@/config/atmosphere028';
 import { S3_TOWER_CLOSED_LM, S2_CELLAR_CLOSED_LM } from '@/levels/lightmaps';
+import { S2 } from '@/levels/s2/layout';
+import { CellarKeyLight, CELLAR_KEY_LIGHT, inCellar } from '@/levels/s2/cellarKeyLight';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const ART = resolve(ROOT, '../art');
@@ -218,7 +220,7 @@ const { GLTFLoader } = await import('three/examples/jsm/loaders/GLTFLoader.js');
 const { MeshoptDecoder } = await import('three/examples/jsm/libs/meshopt_decoder.module.js');
 const ktx2Stub = { load: (_u, onLoad) => onLoad(new THREE.CompressedTexture([], 1, 1)) };
 async function loadGlb(rel) {
-  const f = resolve(ART, `models/${rel}.glb`);
+  const f = rel.startsWith('/') ? rel : resolve(ART, `models/${rel}.glb`);
   if (!existsSync(f)) return null;
   const buf = readFileSync(f);
   const g = await new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).setKTX2Loader(ktx2Stub).parseAsync(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength), '');
@@ -327,6 +329,83 @@ await test('18 个 GLB：根 extras.lightmap 与需求单一致，uv1 落在 rec
   }
   return `${lines.join('，')}\n   ${notes.join('\n   ')}\n   门 / 透镜 / 钥匙 / 草图 / 日记 / 锡杯 不挂；${Object.keys(EXPECT).length} 个 GLB 一致`;
 
+});
+
+
+await test('院墙修复：5 个 socket 与修复前一致，灯台 socket 世界坐标 = layout 灯台', async () => {
+  if (!hasArt) return '跳过（没有 ../art）';
+  const names = ['lamp-east', 'lamp-west', 'gate', 'mirror-a', 'mirror-b'].map((k) => `env-courtyard-wall-s2-${k}-socket`);
+  const read = (scene) => {
+    scene.updateMatrixWorld(true);
+    return names.map((n) => {
+      const o = scene.getObjectByName(n);
+      assert.ok(o, `缺 ${n}`);
+      return { p: o.getWorldPosition(new THREE.Vector3()), q: o.getWorldQuaternion(new THREE.Quaternion()) };
+    });
+  };
+  const now = read(await loadGlb('env/env-courtyard-wall-s2'));
+  const old = '/workspace/bk-029/env-courtyard-wall-s2.glb.badpack';
+  let cmp = '（没有修复前备份，跳过对比）';
+  if (existsSync(old)) {
+    const was = read(await loadGlb(old));
+    let dp = 0, dq = 0;
+    now.forEach((a, i) => {
+      dp = Math.max(dp, a.p.distanceTo(was[i].p));
+      dq = Math.max(dq, (a.q.angleTo(was[i].q) * 180) / Math.PI);
+    });
+    assert.ok(dp < 1e-3 && dq < 0.05, `socket 变了：位置 ${dp} m，角度 ${dq}°`);
+    cmp = `与修复前比：位置差 ≤ ${dp.toExponential(1)} m，角度差 ≤ ${dq.toFixed(3)}°`;
+  }
+  const t = S2.artNodes['env-courtyard-wall-s2'].translation;
+  assert.equal(S2.artNodes['env-courtyard-wall-s2'].rotationY, 0);
+  for (const [i, k] of [[0, 'east'], [1, 'west']]) {
+    const w = now[i].p.clone().add(new THREE.Vector3(...t));
+    assert.ok(w.distanceTo(new THREE.Vector3(...S2.lamps[k])) < 1e-3, `灯台 ${k} ${w.toArray()} vs ${S2.lamps[k]}`);
+  }
+  return `${cmp}；灯台 east/west 世界坐标 = layout`;
+});
+
+await test('地窖钥匙点光：#C4D2DE / 0.15 cd / 0.22 m / decay 2 / 不投影，env-cellar-s2 局部 (−0.35,−1.15,0.35) = socket 上方 0.15 m，挂在 socket 下', async () => {
+  assert.equal(CELLAR_KEY_LIGHT.color, 0xc4d2de);
+  assert.equal(CELLAR_KEY_LIGHT.intensity, 0.15);
+  assert.equal(CELLAR_KEY_LIGHT.distance, 0.22);
+  assert.equal(CELLAR_KEY_LIGHT.decay, 2);
+  // 在地窖判定
+  const C = S2.cellar;
+  assert.ok(inCellar(new THREE.Vector3((C.x[0] + C.x[1]) / 2, C.floorY, (C.z[0] + C.z[1]) / 2)));
+  assert.ok(!inCellar(new THREE.Vector3((C.x[0] + C.x[1]) / 2, 0, (C.z[0] + C.z[1]) / 2)), '一楼地面（地窖正上方）不算');
+  if (!hasArt) return '跳过 GLB 部分（没有 ../art）';
+  const scene = await loadGlb('env/env-cellar-s2');
+  // 按 art.ts 摆放：外层名 = key，位置 / 朝向 = layout artNodes
+  const n = S2.artNodes['env-cellar-s2'];
+  scene.name = 'env-cellar-s2';
+  scene.position.fromArray(n.translation);
+  scene.rotation.y = n.rotationY;
+  const world = new THREE.Group();
+  world.add(scene);
+  world.updateMatrixWorld(true);
+  const socket = scene.getObjectByName('env-cellar-s2-key-socket');
+  const sp = socket.getWorldPosition(new THREE.Vector3());
+  const kl = new CellarKeyLight(scene, socket);
+  assert.equal(kl.light.parent, socket);
+  assert.equal(kl.light.castShadow, false);
+  world.updateMatrixWorld(true);
+  const lp = kl.light.getWorldPosition(new THREE.Vector3());
+  const expect = scene.localToWorld(new THREE.Vector3(-0.35, -1.15, 0.35));
+  assert.ok(lp.distanceTo(expect) < 1e-5, `点光 ${lp.toArray()} vs ${expect.toArray()}`);
+  assert.ok(lp.clone().sub(sp).distanceTo(new THREE.Vector3(0, 0.15, 0)) < 1e-4, `点光不在 socket 正上方 0.15 m：${lp.clone().sub(sp).toArray()}`);
+  // 开关：地窖里淡入到 0.15，出地窖淡出，拿钥匙立刻 0；一直 visible
+  kl.update(1, true, false);
+  assert.equal(kl.light.intensity, 0.15);
+  kl.update(0.2, false, false);
+  assert.ok(kl.light.intensity > 0 && kl.light.intensity < 0.15);
+  kl.update(1, false, false);
+  assert.equal(kl.light.intensity, 0);
+  kl.update(1, true, false);
+  kl.update(0.016, true, true);
+  assert.equal(kl.light.intensity, 0);
+  assert.ok(kl.light.visible);
+  return `世界 (${lp.toArray().map((v) => v.toFixed(3)).join(', ')})，socket + (0, 0.15, 0)`;
 });
 
 // ---------------------------------------------------------------- 汇总
