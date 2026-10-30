@@ -6,7 +6,9 @@ import { interactNode, mountDressing, type MountedDressing } from '../dressing';
 import { s3DressingSpecs } from './dressing';
 import type { Game } from '@/core/Game';
 import { gameplay } from '@/config/gameplay';
-import { beamDebugEnabled, greyboxVisible } from '@/config/debug';
+import { beamDebugEnabled, debugEnabled, greyboxVisible } from '@/config/debug';
+import { FatherActor, FATHER_ANIMS_KEY, FATHER_MODEL_KEY } from '@/entities/father/FatherActor';
+import { parseFatherMode, type FatherMode } from '@/entities/father/clips';
 import { LevelScene, type SpawnPoint } from '@/scenes/LevelScene';
 import { LEVELS } from '@/scenes/levels';
 import { collectIndoorVolumes } from '@/systems/CameraFollowSystem';
@@ -45,6 +47,8 @@ export class S3Scene extends LevelScene {
   private readonly mats = defaultS3GreyboxMaterials();
   private ending = false;
   private ended = false;
+  /** 031 父亲（BUG-023）：有 char-father + anims 才有；默认隐藏，回忆演出（035）/ dev 预览 ?father=gaze|walk|hand 调 playFather */
+  father: FatherActor | null = null;
 
   constructor(game: Game) {
     super(game, LEVELS.s3);
@@ -119,6 +123,7 @@ export class S3Scene extends LevelScene {
     this.dressing = mountDressing(this.game.assets, this.scene, s3DressingSpecs(), { showGreybox: greyboxVisible });
     const logFocus = interactNode(this.dressing.find((m) => m.id === 'prop-logbook-s3'));
     if (logFocus) this.interaction.get('logbook-s3')?.setFocus(logFocus);
+    this.buildFather();
     this.artSlotGreyboxMissing = missingGreyboxNodes(this.scene, S3_ART_SLOTS);
     if (this.artSlotGreyboxMissing.length) console.warn('[art-slot] 白盒节点名对不上：' + this.artSlotGreyboxMissing.join('、'));
   }
@@ -150,6 +155,8 @@ export class S3Scene extends LevelScene {
   }
 
   override update(dt: number, alpha: number): void {
+    // 父亲先于实体更新：hand-on-head 同一帧里先写汐的 xi-stand-gaze 时间，XiAnimator 再取（两人帧号一一对应）
+    if (this.rig) this.father?.update(dt);
     super.update(dt, alpha);
     if (!this.rig) return;
     this.puzzles.update(dt);
@@ -177,7 +184,71 @@ export class S3Scene extends LevelScene {
   }
 
   protected override afterEnter(): void {
-    if (import.meta.env.DEV || new URLSearchParams(location.search).has('smoke')) Object.assign(window, { __s3: this });
+    const q = new URLSearchParams(location.search);
+    if (import.meta.env.DEV || q.has('smoke')) Object.assign(window, { __s3: this });
+    // dev 预览：?father=gaze|walk|hand（dev / ?debug / ?smoke 才认）
+    const preview = parseFatherMode(q.get('father'));
+    if (preview && (debugEnabled || q.has('smoke'))) void this.playFather(preview);
+  }
+
+  /**
+   * 031 父亲接入（BUG-023）：char-father（s3 组）挂 S3 frame 下，隐藏；LOD 距离随 applyQuality → applyLodDistances（buildInteractables 之后才调，
+   * 所以这里加进场景就会被设上，画质切换时再设）。缺模型或缺动画就不建（白盒 / ?art=0 / 美术没到）。
+   */
+  private buildFather(): void {
+    const a = this.game.assets;
+    if (!a.has(FATHER_MODEL_KEY)) return;
+    const clips = a.getAnimations(FATHER_ANIMS_KEY);
+    if (!clips.length) return;
+    this.father = new FatherActor(a.getModel(FATHER_MODEL_KEY), clips);
+    this.frame.add(this.father.root);
+    if (this.father.missing.length) console.warn('[father] char-father-anims 缺 clip：' + this.father.missing.join('、'));
+    this.cleanups.push(() => this.father?.dispose());
+  }
+
+  /** 灯室眺望站位（S3 局部）：美术 lamp-room-stand-gaze 节点（矮墙内面前 0.45 m，+Z 朝外）优先，没有用 layout standGaze */
+  fatherGazePlace(): { position: THREE.Vector3; facing: THREE.Vector3 } {
+    const node = this.art.root.getObjectByName('lamp-room-stand-gaze');
+    if (node) {
+      this.frame.updateMatrixWorld(true);
+      const inv = this.frame.matrixWorld.clone().invert();
+      const m = node.matrixWorld.clone().premultiply(inv);
+      const position = new THREE.Vector3().setFromMatrixPosition(m);
+      const facing = new THREE.Vector3(0, 0, 1).transformDirection(m).setY(0);
+      return { position, facing };
+    }
+    return { position: new THREE.Vector3(...S3.points.standGaze), facing: new THREE.Vector3(...S3.points.standGazeFacing) };
+  }
+
+  /**
+   * 播父亲的一段（035 回忆演出 / dev 预览调用；没有父亲资源返回 false）：
+   * - gaze：灯室眺望站位；
+   * - walk：石桥上从桥头走向桥尾（背对塔，1.3 m/s），到头从桥头重来；
+   * - hand：汐瞬移到灯室眺望站位、锁输入，父亲按 README-031 §4 对位到汐面前，两人同帧起播（父亲 hand-on-head、汐 xi-stand-gaze 第 0 帧）。
+   */
+  async playFather(mode: FatherMode): Promise<boolean> {
+    const f = this.father;
+    if (!f) return false;
+    if (mode === 'gaze') f.playGaze(this.fatherGazePlace());
+    else if (mode === 'walk') f.playWalk(new THREE.Vector3(...S3.points.bridgeHead), new THREE.Vector3(...S3.points.bridgeExit));
+    else {
+      const xi = this.rig?.animator;
+      if (!xi) return false;
+      const g = this.fatherGazePlace();
+      const at = g.position.clone().applyMatrix4(this.frame.matrixWorld);
+      const dir = g.facing.clone().transformDirection(this.frame.matrixWorld);
+      this.rig.controller.locked = true;
+      await this.rig.controller.teleportTo(at, { fade: 0, facing: Math.atan2(dir.x, dir.z) });
+      this.rig.visual.updateMatrixWorld(true);
+      f.playHandOnHead({ model: xi.model, animator: xi });
+    }
+    return true;
+  }
+
+  /** 收起父亲（hand 模式同时解锁汐） */
+  hideFather(): void {
+    if (this.father?.mode === 'hand' && this.rig) this.rig.controller.locked = false;
+    this.father?.hide();
   }
 
   /** 建立镜头（3 s）：桥尾外侧低机位看石桥 → 塔基仰拍塔身 → 角色身后（塔外礁石上的冷光预告在画面右侧） */

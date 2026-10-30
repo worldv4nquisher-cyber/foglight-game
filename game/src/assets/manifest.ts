@@ -197,6 +197,10 @@ export const manifest: AssetEntry[] = [
   { key: 'prop-fresnel-lens-ch1', type: 'gltf', url: 'assets/art/models/props/prop-fresnel-lens-ch1.glb', group: 's3', optional: true, art: true },
   { key: 'env-rock-islet-a', type: 'gltf', url: 'assets/art/models/env/env-rock-islet-a.glb', group: 's3', optional: true, art: true },
   { key: 'env-stone-bridge-s3', type: 'gltf', url: 'assets/art/models/env/env-stone-bridge-s3.glb', group: 's3', optional: true, art: true },
+  // 031 父亲（BUG-023；README-031）：模型 73 骨 3 档 LOD（外链 tex-father-albedo / normal / orm.ktx2，随 GLB 拷进 dist、size 按引用归 s3）+ 3 个 clip（只有骨骼）。
+  // 只在 S3 回忆演出出现（GDD §5.2 / §5.3），默认隐藏；接入见 src/entities/father/FatherActor.ts、S3Scene.father
+  { key: 'char-father', type: 'gltf', url: 'assets/art/models/characters/char-father.glb', group: 's3', optional: true, art: true },
+  { key: 'char-father-anims', type: 'gltf', url: 'assets/art/models/characters/char-father-anims.glb', group: 's3', optional: true, art: true },
   // 029 光照贴图（README-029 §3；塔本体只在 s3 挂，s1 / s2 远景不挂）
   { key: 'tex-s3-tower-lightmap', type: 'ktx2', url: 'assets/art/textures/tex-s3-tower-lightmap.ktx2', group: 's3', optional: true, art: true, srgb: false },
   { key: 'tex-s3-islet-lightmap', type: 'ktx2', url: 'assets/art/textures/tex-s3-islet-lightmap.ktx2', group: 's3', optional: true, art: true, srgb: false },
