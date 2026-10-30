@@ -196,6 +196,13 @@ export class PostFX {
     return this.lensPass?.enabled ? this.lensStrength : 0;
   }
 
+  /** 调试 / 截图：运行时覆盖 LUT（'0' 关、'identity' 单位 LUT、null 回到 URL / 预设） */
+  setLutOverride(o: '0' | 'identity' | null): void {
+    this.lutDebug = o;
+    this.applyGrade();
+  }
+  private lutDebug: '0' | 'identity' | null = null;
+
   /** 当前生效的 LUT key（null = 没用 LUT，走预设 grade） */
   get activeLut(): string | null {
     return this.activeLutKey;
@@ -206,7 +213,7 @@ export class PostFX {
   private applyGrade(): void {
     const a = this.atmosphere;
     if (!a) return;
-    const o = lutOverride();
+    const o = this.lutDebug ?? lutOverride();
     let key: string | null = this.quality.lut && o !== '0' ? (o === 'identity' ? 'lut-identity' : a.lut.replace(/\.png$/, '')) : null;
     let tex = key && this.lutSource ? this.lutSource(key) : null;
     if (!tex) key = null;
