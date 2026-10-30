@@ -521,6 +521,87 @@ out.push('动线：桥尾 → 门外平台（门关进不去）→ 门内 → �
   out.push(`点灯独白 ${ID}：ignited 后 ${first.toFixed(2)}–${(last + 1 / 60).toFixed(2)} s 锁定显示、不可点掉、只一次；0:04 切远景前已消失 ✓`);
 }
 
+// ---- 4c. 第 3 批道具美术（1030c）：真实 GLB 挂到 S3 局部的 interior 环境 socket 上，对白盒
+const art3 = await (async () => {
+  globalThis.self ??= globalThis;
+  const { GLTFLoader } = await import('three/examples/jsm/loaders/GLTFLoader.js');
+  const { MeshoptDecoder } = await import('three/examples/jsm/libs/meshopt_decoder.module.js');
+  const ktx2Stub = { load: (_u, onLoad) => onLoad(new THREE.CompressedTexture([], 1, 1)) };
+  const load = async (rel) => {
+    const f = new URL(`../../art/models/${rel}`, import.meta.url);
+    if (!existsSync(f)) return null;
+    const buf = readFileSync(f);
+    const g = await new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).setKTX2Loader(ktx2Stub).parseAsync(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength), '');
+    return g.scene;
+  };
+  const { mountArtSlots, findNode, snapToArt } = await import('@/levels/artSlots');
+  const { S3_ART_SLOTS } = await import('@/levels/s3/artSlots');
+  return { load, mountArtSlots, findNode, snapToArt, S3_ART_SLOTS, interior: await load('env/env-lighthouse-ch1-interior.glb') };
+})();
+const art3Mount = (key, model, extra) => {
+  const loc = new THREE.Group();
+  loc.add(art3.interior.clone(true));
+  for (const o of extra ?? []) loc.add(o);
+  loc.updateMatrixWorld(true);
+  const spec = art3.S3_ART_SLOTS.find((x) => x.key === key);
+  const slots = art3.mountArtSlots({ has: (x) => x === key, getModel: () => model }, loc, [spec]);
+  loc.updateMatrixWorld(true);
+  return { loc, slots };
+};
+const wp = (o) => o.getWorldPosition(new THREE.Vector3());
+const wz = (o) => new THREE.Vector3(0, 0, 1).transformDirection(o.matrixWorld);
+
+// 4c-1 油阀 prop-oil-valve-s3：根 = 手轮中心 = socket；手轮轴 +Z 朝塔心 = 白盒；开阀 +90° 绕 +Z；-interact = 白盒站位（正前 0.40 m 地面）
+{
+  const model = await art3.load('props/prop-oil-valve-s3.glb');
+  if (!model || !art3.interior) out.push('油阀美术未交付');
+  else {
+    // 白盒油阀（同 puzzles.ts：组朝塔心、手轮 oil-valve-s3-wheel 绕本地 Z 转 wheelSpin·90°）
+    const [vx, vy, vz] = S3.points.oilValve;
+    const valve = new THREE.Group();
+    valve.name = 'oil-valve-s3';
+    valve.position.set(vx, vy, vz);
+    valve.rotation.y = Math.atan2(-vx, -vz);
+    const wheel = new THREE.Mesh(new THREE.TorusGeometry(0.17, 0.025, 8, 24));
+    wheel.name = 'oil-valve-s3-wheel';
+    valve.add(wheel);
+    const { loc, slots } = art3Mount('prop-oil-valve-s3', model, [valve]);
+    assert.equal(slots.mounted.length, 1, '油阀挂上');
+    assert.deepEqual(slots.mounted[0].missingNodes, []);
+    assert.equal(model.parent.name, 'oil-valve-s3-socket', '油阀挂 interior oil-valve-s3-socket');
+    const aw = art3.findNode(model, 'valve-wheel');
+    near3(wp(aw).toArray(), S3.points.oilValve, 1e-3, '美术手轮中心 = S3.points.oilValve');
+    const toC = new THREE.Vector3(-vx, 0, -vz).normalize();
+    const axDeg = (wz(aw).angleTo(toC) * 180) / Math.PI;
+    assert.ok(axDeg < 0.5, `美术手轮轴朝塔心（差 ${axDeg.toFixed(3)}°）`);
+    assert.ok((wz(wheel).angleTo(wz(aw)) * 180) / Math.PI < 0.5, '白盒手轮轴 = 美术手轮轴');
+    // 开阀：白盒 wheelSpin 0 → 1 = rotation.z 0 → +π/2；美术 valve-wheel 跟着绕自身 +Z 转 +90°
+    const spoke0 = new THREE.Vector3(1, 0, 0).transformDirection(aw.matrixWorld);
+    wheel.rotation.z = Math.PI / 2;
+    loc.updateMatrixWorld(true);
+    slots.update();
+    loc.updateMatrixWorld(true);
+    const spoke1 = new THREE.Vector3(1, 0, 0).transformDirection(aw.matrixWorld);
+    const ax = wz(aw);
+    const turn = (Math.atan2(new THREE.Vector3().crossVectors(spoke0, spoke1).dot(ax), spoke0.dot(spoke1)) * 180) / Math.PI;
+    assert.ok(Math.abs(turn - 90) < 0.1, `开阀美术手轮绕 +Z 转 ${turn.toFixed(2)}°（应 +90°）`);
+    const rootX = model.children.find((o) => o.userData.puzzle || o.userData.originAt)?.userData ?? model.userData;
+    const openDeg = art3.findNode(model, 'valve-wheel').userData.openDeg ?? rootX.openDeg;
+    assert.equal(Number(openDeg), 90, '美术 openDeg 90');
+    // 站位：美术 -interact = 白盒 vStand（S3 局部；正前 0.40 m、地面）
+    const ix = wp(art3.findNode(model, 'prop-oil-valve-s3-interact'));
+    const r0 = Math.hypot(vx, vz);
+    const vStand = new THREE.Vector3(vx * (1 - 0.4 / r0), S3.groundFloorY, vz * (1 - 0.4 / r0));
+    const dStand = ix.distanceTo(vStand);
+    assert.ok(dStand < 0.02, `油阀美术 -interact 离白盒站位 ${dStand.toFixed(3)} m`);
+    const stand = new THREE.Object3D();
+    loc.add(stand);
+    assert.ok(art3.snapToArt(slots, 'prop-oil-valve-s3', 'prop-oil-valve-s3-interact', stand), 'valveStand 对到美术 -interact');
+    near3(wp(stand).toArray(), ix.toArray(), 1e-6, 'valveStand = 美术 -interact');
+    out.push(`油阀：挂 oil-valve-s3-socket、手轮轴朝塔心（差 ${axDeg.toFixed(2)}°）、开阀美术手轮 +${turn.toFixed(1)}° 绕 +Z（白盒改为同向 +90°）、-interact 离白盒站位 ${(dStand * 100).toFixed(1)} cm（站位读美术） ✓`);
+  }
+}
+
 // 017 收尾：塔内不淋湿（s3-tower-indoor，y 0–24.5）
 {
   const vols = collectIndoorVolumes(gb.root);

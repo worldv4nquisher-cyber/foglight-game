@@ -701,7 +701,8 @@ export function buildS3Puzzles(d: S3PuzzleDeps): S3Puzzles {
         d.greybox.door.rotation.y = D.hingeRotY + D.openDeg * (Math.PI / 180) * state.doorOpen;
       }
       // 阀轮
-      wheel.rotation.z = -wheelSpin * Math.PI * 1.5;
+      // 1030c：开阀绕手轮本地 +Z（朝塔心）转 +90°，与美术 valve-wheel openDeg 90 同向同角（美术 delta 驱动跟着转）
+      wheel.rotation.z = wheelSpin * (Math.PI / 2);
       if (!rig) return;
       player.copy(rig.body.position);
       toLocal(player, local);
