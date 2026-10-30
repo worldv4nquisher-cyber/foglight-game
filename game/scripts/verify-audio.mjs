@@ -364,6 +364,26 @@ test('032 循环：BeamHum 连通起播 sfx-beam-hum-loop、断开 0.3 s 宽限�
   for (let k = 0; k < 7; k++) h.update(0.05);
   assert.deepEqual(log.at(-1), ['stop', BEAM_HUM_ID]);
   assert.equal(h.starts, 1);
+  // connectSfx：每次接通补一声单发（S2 光感锁 sfx-beam-connect），宽限内重连不重复
+  const plays = [];
+  const offPlay = ev.on('sfx:play', ({ id }) => plays.push(id));
+  let c2 = false;
+  const h2 = new BeamHum(ev, () => c2, 0.3, 'sfx-beam-connect');
+  c2 = true;
+  h2.update(0.1);
+  c2 = false;
+  h2.update(0.1);
+  c2 = true;
+  h2.update(0.1);
+  assert.deepEqual(plays, ['sfx-beam-connect'], '宽限内重连不重复单发');
+  c2 = false;
+  for (let k = 0; k < 8; k++) h2.update(0.05);
+  c2 = true;
+  h2.update(0.1);
+  assert.deepEqual(plays, ['sfx-beam-connect', 'sfx-beam-connect'], '断开超过宽限后再接通再响一声');
+  assert.equal(plays.length, 2);
+  h2.stop();
+  offPlay();
   log.length = 0;
   const p = new PushLoop(ev);
   ev.emit('interact:pushMoved', { id: 'raft-s1', t: 0.1 });
@@ -386,7 +406,7 @@ test('032 循环：BeamHum 连通起播 sfx-beam-hum-loop、断开 0.3 s 宽限�
   const s2 = readFileSync(new URL('../src/levels/s2/puzzles.ts', import.meta.url), 'utf8');
   const s3 = readFileSync(new URL('../src/levels/s3/puzzles.ts', import.meta.url), 'utf8');
   const lv = readFileSync(new URL('../src/scenes/LevelScene.ts', import.meta.url), 'utf8');
-  assert.ok(/new BeamHum\(events, \(\) => tracer\.paths\.some\(\(q\) => q\.emitter\.lit && q\.receiver === beam\.lock\)\)/.test(s2));
+  assert.ok(/new BeamHum\(events, \(\) => tracer\.paths\.some\(\(q\) => q\.emitter\.lit && q\.receiver === beam\.lock\), 0\.3, 'sfx-beam-connect'\)/.test(s2));
   assert.ok(/new BeamHum\(events, \(\) => !state\.ignited && traceReached\(\) >= 1\)/.test(s3));
   assert.ok(/after\(LENS_ROTATE_DELAY_SEC, \(\) => events\.emit\('sfx:loop', \{ id: LENS_ROTATE_ID \}\)\)/.test(s3));
   assert.ok(lv.includes('this.pushLoop?.update(dt)'));

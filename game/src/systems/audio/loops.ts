@@ -12,6 +12,8 @@ export const PUSH_LOOPS: Readonly<Record<string, string>> = { 'raft-s1': 'sfx-ra
  * 光束保持连通期间循环嗡鸣（README：beam:connected 起、beam:broken 停）。
  * connected() 由场景给（S2：灯台光打到光感锁；S3：天光经窗口镜打到第一面导光镜起、点燃前）。
  * 断开有 graceSec 宽限（同接收器 0.3 s，天光边缘 / 拖镜子时不抖），之后淡出。
+ * connectSfx（可选）：每次从断开到连通（起播嗡鸣那一帧）补一声单发（README：beam:connected → sfx-beam-connect）。
+ * S3 的导光镜连通单发由场景 flash() 发，不传；S2 灯台光打到光感锁传 sfx-beam-connect。
  */
 export class BeamHum {
   on = false;
@@ -20,11 +22,13 @@ export class BeamHum {
   private readonly events: EventBus;
   private readonly connected: () => boolean;
   private readonly graceSec: number;
+  private readonly connectSfx: string | null;
 
-  constructor(events: EventBus, connected: () => boolean, graceSec = 0.3) {
+  constructor(events: EventBus, connected: () => boolean, graceSec = 0.3, connectSfx: string | null = null) {
     this.events = events;
     this.connected = connected;
     this.graceSec = graceSec;
+    this.connectSfx = connectSfx;
   }
 
   update(dt: number): void {
@@ -34,6 +38,7 @@ export class BeamHum {
         this.on = true;
         this.starts++;
         this.events.emit('sfx:loop', { id: BEAM_HUM_ID });
+        if (this.connectSfx) this.events.emit('sfx:play', { id: this.connectSfx });
       }
       return;
     }

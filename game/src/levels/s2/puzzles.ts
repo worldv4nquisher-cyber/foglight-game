@@ -591,8 +591,8 @@ export function buildS2Puzzles(d: S2PuzzleDeps): S2Puzzles {
   root.updateMatrixWorld(true);
 
   const smooth = (u: number): number => u * u * (3 - 2 * u);
-  // 032：灯台光（亮着）打到光感锁接收器期间循环光束嗡鸣（断光 0.3 s 宽限后淡出）
-  const beamHum = new BeamHum(events, () => tracer.paths.some((q) => q.emitter.lit && q.receiver === beam.lock));
+  // 032：灯台光（亮着）打到光感锁接收器期间循环光束嗡鸣（断光 0.3 s 宽限后淡出）；每次接通补一声 sfx-beam-connect（玻璃共鸣）
+  const beamHum = new BeamHum(events, () => tracer.paths.some((q) => q.emitter.lit && q.receiver === beam.lock), 0.3, 'sfx-beam-connect');
   const api: S2Puzzles = {
     beam,
     beamHum,
