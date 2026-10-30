@@ -1577,8 +1577,21 @@ const CHECKS = [
       };
       if ((await evaluate(`__game.scenes.current?.name`)) !== 's1-ebb-shore' || !(await evaluate(`!!window.__s1`))) await cdp.goto('');
       if (!(await until(`!!(window.__s1 && __s1.puzzles) && __game.input.context === 'explore' && !__game.isPaused`, 40000))) throw new Error('S1 没就绪');
-      // 潮汐 6 s 过渡是游戏时间：高负载下无头软件渲染帧很慢（每帧固定步数封顶），实测 40 s 只走完一半，放宽到 150 s
-      const TIDE_WAIT = 150000;
+      // 潮汐 6 s 过渡是游戏时间：高负载下无头软件渲染帧很慢（每帧固定步数封顶）。按游戏时间判超时：
+      // 条件 TIDE_GAME_SEC（20 s 游戏时间 > 6 s 过渡 + 漂回）内没满足才算失败；墙钟只做 15 min 兜底（batch14 负载 19 时 art=1 150 s 墙钟只走到一半）
+      const TIDE_GAME_SEC = 20;
+      const untilTide = async (expr) => {
+        const clock = () => evaluate(`__game.time.fixedTick * __game.time.fixedDelta`).catch(() => null);
+        const t0 = await clock();
+        const end = Date.now() + 900000;
+        while (Date.now() < end) {
+          if (await evaluate(expr).catch(() => false)) return true;
+          const t = await clock();
+          if (t !== null && t0 !== null && t - t0 >= TIDE_GAME_SEC) return !!(await evaluate(expr).catch(() => false));
+          await sleep(200);
+        }
+        return false;
+      };
       const S = `__s1`;
       const tide = `${S}.puzzles.tide`;
       const tp = (x, y, z, facing) =>
@@ -1618,7 +1631,7 @@ const CHECKS = [
       await tp(-14.45, 2.42, -6.2, -Math.PI / 2);
       if (!(await until(`/E/.test(document.querySelector('.hud-prompt')?.textContent ?? '')`, 6000))) throw new Error('钟前没有交互提示');
       await ring();
-      if (!(await until(`${tide}.state === 'low' && !${tide}.transitioning`, TIDE_WAIT))) throw new Error('敲钟没退潮 ' + JSON.stringify(await st()));
+      if (!(await untilTide(`${tide}.state === 'low' && !${tide}.transitioning`))) throw new Error('敲钟没退潮 ' + JSON.stringify(await st()));
       if (await evaluate(`${gate}.enabled`)) throw new Error('退潮后入口空气墙应关闭');
       if (!(await until(`__game.narrative.goal === 'ch1.s1.goal.reef_path'`, 3000))) throw new Error('第一次退潮后目标应换成礁石小径 ' + JSON.stringify(await st()));
       out.push('敲钟 → 退潮、入口打开、目标换成礁石小径 ✓');
@@ -1675,8 +1688,8 @@ const CHECKS = [
       await tp(-12.5, 2.42, -4.5);
       await tp(-14.45, 2.42, -6.2, -Math.PI / 2);
       await ring();
-      if (!(await until(`${S}.puzzles.raft.state === 'drifting'`, TIDE_WAIT))) throw new Error('不在石槽里涨潮应漂回 ' + JSON.stringify(await st()));
-      if (!(await until(`${tide}.state === 'high' && !${tide}.transitioning && ${S}.puzzles.raft.state !== 'drifting'`, TIDE_WAIT))) throw new Error('漂回没结束 ' + JSON.stringify(await st()));
+      if (!(await untilTide(`${S}.puzzles.raft.state === 'drifting'`))) throw new Error('不在石槽里涨潮应漂回 ' + JSON.stringify(await st()));
+      if (!(await untilTide(`${tide}.state === 'high' && !${tide}.transitioning && ${S}.puzzles.raft.state !== 'drifting'`))) throw new Error('漂回没结束 ' + JSON.stringify(await st()));
       s = await st();
       if (Math.hypot(s.raftPos[0] - 9.1, s.raftPos[2] - 10.5) > 0.05) throw new Error('漂回位置不对 ' + JSON.stringify(s));
       if (!(await until(`__s1subs.includes('ch1.s1.raft.drift_back')`, 8000))) throw new Error('漂回后应说「它漂回去了。」 ' + JSON.stringify(await evaluate('__s1subs')));
@@ -1694,7 +1707,7 @@ const CHECKS = [
       // 退潮 → 推进石槽（直接把轨道走完）→ R 重置 → 再推进 → 涨潮浮到 1.85
       await tp(-14.45, 2.42, -6.2, -Math.PI / 2);
       await ring();
-      if (!(await until(`${tide}.state === 'low' && !${tide}.transitioning`, TIDE_WAIT))) throw new Error('第二次退潮失败');
+      if (!(await untilTide(`${tide}.state === 'low' && !${tide}.transitioning`))) throw new Error('第二次退潮失败');
       const toSlot = `(() => { const p = ${S}.puzzles; p.raft.object.position.set(-0.9, 0.4, 10.5); p.raft.object.updateMatrixWorld(true); p.raftPush.pushT = 1; p.raftPush.locked = true; return 1; })()`;
       await evaluate(toSlot);
       // 013 补充：「R 放回浮台」第二行提示——浮台离开原位 + 汐在 3.5 m 内才显示；和交互提示同时出现时排在下面一行
@@ -1721,7 +1734,7 @@ const CHECKS = [
       await evaluate(toSlot);
       await tp(-14.45, 2.42, -6.2, -Math.PI / 2);
       await ring();
-      if (!(await until(`${tide}.state === 'high' && !${tide}.transitioning`, TIDE_WAIT))) throw new Error('涨潮失败');
+      if (!(await untilTide(`${tide}.state === 'high' && !${tide}.transitioning`))) throw new Error('涨潮失败');
       s = await st();
       if (s.raft !== 'floating' || !s.inAnchor || Math.abs(s.raftPos[1] - 1.85) > 0.05) throw new Error('石槽里涨潮应浮到 1.85 ' + JSON.stringify(s));
       out.push(`石槽里浮到 ${s.raftPos[1]} ✓`);
