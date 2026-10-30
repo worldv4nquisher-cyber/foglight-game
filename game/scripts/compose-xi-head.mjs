@@ -15,7 +15,7 @@ const revs = readdirSync(PREVIEW).map((f) => /^char-xi-head-r(\d+)-/.exec(f)?.[1
 const REV = process.env.XI_HEAD_REV ?? (revs.length ? 'r' + Math.max(...revs) : null);
 if (!REV) throw new Error('preview 里没有 char-xi-head-rN-*.png');
 const FONT = ['/home/box/.local/share/fonts/NotoSansSC.ttf', '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc', '/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc'].find(existsSync);
-const H = 540, W = 1860; // 最宽一行：16:9 游戏图 960 + gamecam 877
+const H = 540, W = 1860; // 行宽上限：超出（r3 美术图更宽）时整行等比缩到 W 再补边
 const when = (f) => new Date(statSync(f).mtimeMs).toLocaleString('sv-SE').slice(5, 16);
 const rows = [
   [['s1-xi-face-front.png', SHOTS, '游戏内 正脸（S1 涨潮 art=1 high）'], [`char-xi-head-${REV}-front-compare.png`, PREVIEW, `美术 ${REV} 正面对比`]],
@@ -34,7 +34,7 @@ rows.forEach((row, r) => {
     filters.push(`[${i}:v]scale=-2:${H},drawtext=fontfile='${FONT}':text='${esc(txt)}':x=10:y=h-th-10:fontsize=22:fontcolor=yellow:box=1:boxcolor=black@0.6[c${r}${k}]`);
     labels.push(`[c${r}${k}]`);
   });
-  filters.push(`${labels.join('')}hstack=inputs=${labels.length},pad=${W}:${H}:0:0:color=0x141414[r${r}]`);
+  filters.push(`${labels.join('')}hstack=inputs=${labels.length},scale=w='min(iw\\,${W})':h=-2,pad=${W}:${H}:0:0:color=0x141414[r${r}]`);
 });
 filters.push(`${rows.map((_, r) => `[r${r}]`).join('')}vstack=inputs=${rows.length}[out]`);
 const out = join(SHOTS, `xi-head-${REV}-compare.png`);

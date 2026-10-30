@@ -118,10 +118,11 @@ async function enterS1() {
     await until('!!__s1.art && !!__s1.dressing', 200000);
     // 加载不是游戏逻辑等待，按墙钟兜底 10 min
     await until('__game.assets.loadStats.length > 0 && __game.assets.loadStats.every((x) => x.done)', 600000);
-    const ls = await evaluate(`(() => { const s = __game.assets.loadStats; return { n: s.length, pending: s.filter((x) => !x.done).length, bad: s.filter((x) => (x.done && !x.ok) || x.fallback).map((x) => x.url.split('/').pop()), retried: s.filter((x) => x.attempts > 1).map((x) => x.url.split('/').pop() + '×' + x.attempts), degraded: document.documentElement.classList.contains('assets-fallback'), xi: s.filter((x) => /tex-xi-|char-xi/.test(x.url)).map((x) => x.url.split('/').pop() + (x.ok ? '' : ' ✗')) }; })()`);
+    const ls = await evaluate(`(() => { const s = __game.assets.loadStats; return { n: s.length, pending: s.filter((x) => !x.done).length, pendingUrls: s.filter((x) => !x.done).map((x) => x.url.split('/').pop()).slice(0, 30), bad: s.filter((x) => (x.done && !x.ok) || x.fallback).map((x) => x.url.split('/').pop()), retried: s.filter((x) => x.attempts > 1).map((x) => x.url.split('/').pop() + '×' + x.attempts), degraded: document.documentElement.classList.contains('assets-fallback'), xi: s.filter((x) => /tex-xi-|char-xi/.test(x.url)).map((x) => x.url.split('/').pop() + (x.ok ? '' : ' ✗')) }; })()`);
     report.loads.push({ attempt, ...ls });
     console.log(`  加载 #${attempt}`, JSON.stringify(ls));
-    if (!ls.pending && !ls.bad.length && !ls.degraded) return;
+    // pending 只剩进场后才开始的 S2 / S3 后台预取（上面 until 已等到 S1 全部 done），不算失败
+    if (!ls.bad.length && !ls.degraded) return;
   }
   throw new Error('3 次进 S1 都有贴图 / 模型加载失败（占位），不截图');
 }
