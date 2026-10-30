@@ -69,10 +69,32 @@ export class MainMenu {
   }
 
   show(): void {
+    this.applyLogo();
     this.busy = false;
     this.refresh();
     this.backToHome();
     this.el.hidden = false;
+  }
+
+  /**
+   * 030 R2：标题字换成 ui-title-logo.webp（menu 包已预加载）。文字留在 .ui-sr-only 里，textContent 仍是「雾灯」；
+   * 图没到（?art=0 / 缺失）就维持文字标题。
+   */
+  private applyLogo(): void {
+    const title = this.el.querySelector<HTMLHeadingElement>('.main-title')!;
+    const url = this.game.assets.imageUrl('ui-title-logo');
+    if (!url || title.classList.contains('has-logo')) return;
+    const img = document.createElement('img');
+    img.className = 'ui-logo';
+    img.src = url;
+    img.alt = '';
+    img.setAttribute('aria-hidden', 'true');
+    img.draggable = false;
+    const text = document.createElement('span');
+    text.className = 'ui-sr-only';
+    text.textContent = t('ui.title');
+    title.replaceChildren(img, text);
+    title.classList.add('has-logo');
   }
 
   hide(): void {

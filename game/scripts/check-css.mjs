@@ -51,7 +51,7 @@ function rules(css) {
         .map((d) => d.split(':')[0].trim().toLowerCase())
         .filter(Boolean),
     );
-    out.push({ selector: head.replace(/\s+/g, ' ').replace(/\s*,\s*/g, ',').replace(/\s*>\s*/g, '>'), props });
+    out.push({ selector: head.replace(/\s+/g, ' ').replace(/\s*,\s*/g, ',').replace(/\s*>\s*/g, '>').replace(/::(before|after)/g, ':$1'), props });
     i = close + 1;
   }
   return out;

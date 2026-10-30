@@ -132,6 +132,17 @@ body {
   color: var(--ui-text);
 }
 
+/* 加载页标题：矢量标题字 ui-title-logo.svg 当遮罩（雾白 #DCE1E4，同主菜单标题）；没到时显示文字 */
+:root.ui-art-title-logo-svg .loading-title {
+  width: 248px;
+  aspect-ratio: 2346 / 956;
+  font-size: 0;
+  color: transparent;
+  background-color: #dce1e4;
+  mask: var(--ui-img-logo-svg) center / contain no-repeat;
+  filter: drop-shadow(0 0 18px rgba(220, 225, 228, 0.25));
+}
+
 .loading-sub {
   font-size: 12px;
   letter-spacing: 0.4em;
@@ -356,15 +367,11 @@ body {
 }
 
 .pause-panel {
-  width: min(380px, 90vw);
-  padding: 26px 26px 18px;
+  width: min(400px, 90vw);
+  padding: 44px 48px 36px;
   display: flex;
   flex-direction: column;
   gap: 12px;
-  background: var(--ui-bg);
-  border: 1px solid var(--ui-border);
-  border-radius: 0;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
 }
 
 .pause-panel h2 {
@@ -865,10 +872,7 @@ body {
   width: min(86vw, 30em);
   max-height: 80vh;
   overflow-y: auto;
-  padding: 1.6em 2em;
-  background: var(--ui-bg);
-  border: 1px solid var(--ui-border);
-  border-radius: 0;
+  padding: 40px 48px;
 }
 
 .journal-title {
@@ -934,27 +938,21 @@ body {
 }
 
 /* ---------- v0.1-008 菜单 ---------- */
-.ui-panel {
-  background: var(--ui-bg);
-  border: 1px solid var(--ui-border);
+/* 面板（030 R2 §2.1）：直角细线；框图 ui-panel-frame.webp 9-slice（四边切 96 px = 48 css px，四角罗盘星），
+   中间透明、底色仍是 --ui-panel；框图没到（?art=0）时退回 1 px 细线。框图与 ui-panel-corner.svg 二选一，用框图。 */
+.ui-panel,
+.journal-panel {
+  background: var(--ui-panel);
+  border: 1px solid var(--ui-stroke-soft);
   border-radius: 0;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
   position: relative;
 }
 
-/* 角上的小灯塔纹样（细线，正式纹样 030） */
-.ui-panel::before {
-  content: '';
-  position: absolute;
-  top: 8px;
-  right: 10px;
-  width: 8px;
-  height: 14px;
-  border: 1px solid var(--ui-border);
-  border-top: none;
-  clip-path: polygon(30% 0, 70% 0, 100% 100%, 0 100%);
-  opacity: 0.8;
-  pointer-events: none;
+:root.ui-art-panel-frame .ui-panel,
+:root.ui-art-panel-frame .journal-panel {
+  border-color: transparent;
+  border-image: var(--ui-img-panel-frame) 96 / 48px / 0 stretch;
 }
 
 .ui-heading {
@@ -966,15 +964,11 @@ body {
   text-align: center;
 }
 
-.pause-panel {
-  border-radius: 0;
-}
-
 .settings-panel {
   width: min(460px, 92vw);
   max-height: 92vh;
   overflow-y: auto;
-  padding: 24px 26px 18px;
+  padding: 40px 48px 36px;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -1035,6 +1029,33 @@ body {
   text-shadow: 0 0 30px rgba(0, 0, 0, 0.6);
 }
 
+/* 标题字（030 R2）：ui-title-logo.webp 2x 图（856×406 → 428×203 css，四周各留 24 px 辉光边，对齐时减掉）。
+   图到了就把文字视觉隐藏（textContent 仍是「雾灯」，读屏 / 测试照旧）；没到（?art=0）显示文字。 */
+.main-title.has-logo {
+  margin: -24px 0 -6px -24px;
+  font-size: 0;
+  letter-spacing: 0;
+  line-height: 0;
+  text-shadow: none;
+}
+
+.ui-logo {
+  display: block;
+  width: 428px;
+  height: 203px;
+  user-select: none;
+  pointer-events: none;
+}
+
+.ui-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 .main-buttons {
   display: flex;
   flex-direction: column;
@@ -1080,8 +1101,8 @@ body {
 }
 
 .confirm-panel {
-  width: min(360px, 90vw);
-  padding: 22px 24px 18px;
+  width: min(400px, 90vw);
+  padding: 40px 44px 36px;
 }
 
 .confirm-title {
@@ -1106,7 +1127,7 @@ body {
 
 .credits-panel {
   width: min(460px, 92vw);
-  padding: 24px 26px 18px;
+  padding: 40px 48px 36px;
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -1188,6 +1209,84 @@ body {
   font-family: var(--ui-serif);
   letter-spacing: 0.4em;
   color: var(--ui-dim);
+}
+
+/* ---- 030 R2 图标：24×24 单色线 SVG 当遮罩，颜色跟 currentColor（常态 --ui-text，可交互 --ui-primary，场景提示 --ui-interact）。
+   5 个都到了（:root.ui-art-icons）才显示，否则维持原来的纯文字 / 内联占位。 */
+.ui-icon,
+:root.ui-art-icons .hud-prompt:not(.hud-prompt2)::before,
+:root.ui-art-icons .journal-title::before,
+:root.ui-art-icons .journal-entry::before,
+:root.ui-art-icons .settings-panel > .ui-heading::before,
+:root.ui-art-icons .hint-lantern::before {
+  content: '';
+  display: inline-block;
+  width: 1.15em;
+  height: 1.15em;
+  vertical-align: -0.2em;
+  background-color: currentColor;
+  mask-repeat: no-repeat;
+  mask-position: center;
+  mask-size: contain;
+}
+
+:root.ui-art-icons .hud-prompt:not(.hud-prompt2)::before {
+  margin-right: 0.55em;
+  color: var(--ui-interact);
+  mask-image: var(--ui-img-icon-interact);
+}
+
+:root.ui-art-icons .hud-prompt.is-disabled::before {
+  color: var(--ui-text-2);
+}
+
+:root.ui-art-icons .journal-title::before {
+  margin-right: 0.5em;
+  width: 0.9em;
+  height: 0.9em;
+  vertical-align: -0.08em;
+  color: var(--ui-text-2);
+  mask-image: var(--ui-img-icon-journal);
+}
+
+:root.ui-art-icons .journal-entry::before {
+  margin-right: 0.6em;
+  width: 1em;
+  height: 1em;
+  vertical-align: -0.15em;
+  color: var(--ui-text-2);
+  mask-image: var(--ui-img-icon-read);
+  transition: color var(--dur) var(--ease);
+}
+
+:root.ui-art-icons .journal-entry:hover::before {
+  color: var(--ui-accent);
+}
+
+:root.ui-art-icons .settings-panel > .ui-heading::before {
+  margin-right: 0.45em;
+  width: 0.7em;
+  height: 0.7em;
+  vertical-align: 0;
+  color: var(--ui-text-2);
+  mask-image: var(--ui-img-icon-settings);
+}
+
+/* 提示风灯：图标到了就替换内联占位 SVG；新提示时琥珀 + 微光（README §2.1「可交互态琥珀」） */
+:root.ui-art-icons .hint-lantern > svg {
+  display: none;
+}
+
+:root.ui-art-icons .hint-lantern::before {
+  display: block;
+  width: 28px;
+  height: 28px;
+  mask-image: var(--ui-img-icon-hint-lantern);
+}
+
+:root.ui-art-icons .hint-lantern.fresh {
+  color: var(--ui-primary);
+  filter: drop-shadow(0 0 4px var(--ui-glow));
 }
 
 /* ---- 三级提示（v0.1-007）：右下角小风灯 + H 弹窗。不挡鼠标（弹窗不冻结游戏，玩家可以边看边走） */
