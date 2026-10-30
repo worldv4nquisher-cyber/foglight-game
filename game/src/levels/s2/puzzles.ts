@@ -250,12 +250,13 @@ export function buildS2Puzzles(d: S2PuzzleDeps): S2Puzzles {
   const journal = prop(box('journal-s2', 0.22, 0.03, 0.3, wood, [jx, jy + 0.015, jz]));
   const journalIx = new Interactable({ id: S2_IDS.journal, kind: 'use', object: journal, prompt: 'ui.prompt.read', interactPoint: deskStand, focus: new THREE.Vector3(jx, jy + 0.05, jz) });
   interaction.add(journalIx);
-  const note = prop(box('xi-note-s2', 0.15, 0.005, 0.1, paper, [-5.15, 3.755, -0.68]));
-  note.rotation.y = 0.3;
+  const [nx, ny, nz] = S2.points.xiNote;
+  const note = prop(box('xi-note-s2', 0.15, 0.005, 0.1, paper, [nx, ny + 0.005, nz]));
+  note.rotation.y = S2.points.xiNoteYaw;
   // BUG-014：书桌站位默认视角（俯仰 −0.16）下各焦点离屏幕中心（NDC）：海图 0.16、纸条 0.35、风灯 0.31–0.37、日志 0.43–0.47、抽屉 0.64。
   // 海图 / 纸条（看看而已，优先级 0）设「瞄准才选」半径：没对准时让给画面里的日志 / 风灯（20）；
   // 抬头看海图（≤0.13，实测 0.02–0.11）、低头看纸条（≤0.30，实测 0.26–0.27）仍能选中。抽屉在默认视角本来就排在日志后面，不设。
-  read('xi-note-s2', note, 'ch1.s2.xi_note.doc', new THREE.Vector3(-5.15, 3.78, -0.68), S2_DESK_AIM.note);
+  read('xi-note-s2', note, 'ch1.s2.xi_note.doc', new THREE.Vector3(nx, ny + 0.03, nz), S2_DESK_AIM.note);
   const drawer = prop(box('desk-drawer-s2', 0.04, 0.12, 0.4, wood, [S2.furniture.desk.x[1] + 0.02, 3.55, -0.5]));
   read('reply-draft-s2', drawer, 'ch1.s2.reply_draft.doc');
   const chart = prop(box('chart-s2', 0.02, 0.5, 0.7, paper, [S2.house.inner.x0 + 0.015, 4.35, -0.3]));

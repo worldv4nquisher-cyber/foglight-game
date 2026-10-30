@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import { applyArtClapperHitRad } from '@/systems/tide/TideBell';
 import { findNode, missingGreyboxNodes, mountArtSlots, snapObjectTo, snapToArt, type ArtSlots } from '../artSlots';
 import { S3_ART_SLOTS } from './artSlots';
+import { interactNode, mountDressing, type MountedDressing } from '../dressing';
+import { s3DressingSpecs } from './dressing';
 import type { Game } from '@/core/Game';
 import { gameplay } from '@/config/gameplay';
 import { beamDebugEnabled, greyboxVisible } from '@/config/debug';
@@ -35,6 +37,8 @@ export class S3Scene extends LevelScene {
   puzzles!: S3Puzzles;
   artSlots: ArtSlots | null = null;
   artSlotGreyboxMissing: string[] = [];
+  /** 027 剧情物件 */
+  dressing: MountedDressing[] = [];
   private readonly colliderOf = new Map<THREE.Mesh, Collider>();
   private readonly mats = defaultS3GreyboxMaterials();
   private ending = false;
@@ -109,6 +113,10 @@ export class S3Scene extends LevelScene {
     if (this.art.door?.name === S3_DOOR_PROP_KEY) snapObjectTo(findNode(this.art.door, 'prop-lighthouse-door-s3-interact'), this.puzzles.doorIx.interactPoint);
     // 钟锤碰壁阈值：美术根 extras.clapperHitRad 优先（1030b 方案 A，缺省 0.055；1030c 重建钟根 0.0537）
     applyArtClapperHitRad(this.puzzles.bell, this.artSlots?.mounted.find((m) => m.id === 'prop-tide-bell-s3')?.model);
+    // 027 剧情物件：值班簿 / 点灯说明挂白盒交互物下，摊开的日志放灯室 socket
+    this.dressing = mountDressing(this.game.assets, this.scene, s3DressingSpecs(), { showGreybox: greyboxVisible });
+    const logFocus = interactNode(this.dressing.find((m) => m.id === 'prop-logbook-s3'));
+    if (logFocus) this.interaction.get('logbook-s3')?.setFocus(logFocus);
     this.artSlotGreyboxMissing = missingGreyboxNodes(this.scene, S3_ART_SLOTS);
     if (this.artSlotGreyboxMissing.length) console.warn('[art-slot] 白盒节点名对不上：' + this.artSlotGreyboxMissing.join('、'));
   }

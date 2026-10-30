@@ -17,6 +17,8 @@ import { buildS1Greybox, defaultGreyboxMaterials, type S1Greybox } from './greyb
 import { buildS1Puzzles, type S1Puzzles } from './puzzles';
 import { buildS1Art, type S1Art } from './art';
 import { buildFogCards028, type FogCards028 } from '@/world/FogCards028';
+import { buildS1Dressing, type S1Dressing } from './dressing';
+import { interactNode } from '../dressing';
 import type { AtmospherePreset } from '@/config/atmosphere';
 
 /** 跳过开场后接的 S1 建立镜头（画质检测第 1 轮没测完时；不可跳过） */
@@ -40,6 +42,8 @@ export class S1Scene extends LevelScene {
   puzzles!: S1Puzzles;
   artSlots: ArtSlots | null = null;
   artSlotGreyboxMissing: string[] = [];
+  /** 027 剧情物件 / 脚印贴花 / 远景海鸟 */
+  dressing: S1Dressing | null = null;
   private tideColliders: Collider[] = [];
   private readonly mats = defaultGreyboxMaterials();
 
@@ -76,7 +80,7 @@ export class S1Scene extends LevelScene {
   /** 白盒外观开关（碰撞不受影响；空气墙始终不可见） */
   setGreyboxVisible(on: boolean): void {
     for (const m of this.greybox.colliders) m.visible = on;
-    for (const d of this.greybox.decor) d.visible = on || /footprint/.test(d.name);
+    for (const d of this.greybox.decor) d.visible = (on || /footprint/.test(d.name)) && !(d.userData.replacedByDecal && !greyboxVisible);
   }
 
   protected override buildInteractables(): void {
@@ -104,6 +108,22 @@ export class S1Scene extends LevelScene {
     snapToArt(this.artSlots, 'prop-raft-s1', 'prop-raft-s1-interact', this.puzzles.raftPush.interactPoint);
     this.artSlotGreyboxMissing = missingGreyboxNodes(this.scene, S1_ART_SLOTS);
     if (this.artSlotGreyboxMissing.length) console.warn('[art-slot] 白盒节点名对不上：' + this.artSlotGreyboxMissing.join('、'));
+    // 027：告示牌 / 纸条挂白盒交互物下（焦点改读美术 -interact），脚印贴花贴物理路面，远景海鸟
+    const down = new THREE.Vector3(0, -1, 0);
+    const from = new THREE.Vector3();
+    this.dressing = buildS1Dressing(
+      this.game.assets,
+      this.scene,
+      (x, z) => {
+        const d = this.physics.raycast(from.set(x, 3, z), down, 6);
+        return d === null ? null : 3 - d;
+      },
+      { showGreybox: greyboxVisible, greyboxFootprints: this.greybox.decor.filter((d) => /footprint/.test(d.name)) },
+    );
+    this.cleanups.push(() => this.dressing?.dispose());
+    const noticeFocus = interactNode(this.dressing.mounted.find((m) => m.id === 'prop-notice-board-s1'));
+    if (noticeFocus) this.interaction.get('s1-notice')?.setFocus(noticeFocus);
+    this.setGreyboxVisible(!this.art.loaded || greyboxVisible);
   }
 
   protected override afterEnter(): void {
@@ -199,6 +219,7 @@ export class S1Scene extends LevelScene {
     if (this.rig) this.fog028?.update(dt, this.camera, this.puzzles.tide.level);
     if (this.rig && this.puzzles) this.refreshResetPrompt();
     this.artSlots?.update();
+    this.dressing?.update(dt);
   }
 
   override exit(): void {

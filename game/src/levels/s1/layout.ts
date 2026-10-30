@@ -137,6 +137,8 @@ export const S1 = {
   ],
   /** 开场 / 建立镜头第一帧构图（主菜单同构图：远景主岛 + S3 灯塔在画面中右） */
   openingCam: { position: [-0.9, 4.2, 9.5] as V3, lookAt: [6.58, 4.2, -29.78] as V3, fov: 40 },
+  /** 027 远景单只海鸟航线：开场机位视线方向约 55 m 处、离海面 12 m 的圆弧；每 45 s 出现一次飞 1.6 rad（约 29 m） */
+  seabird: { center: [9.4, 12, -44.5] as V3, radius: 18, bob: 0.8, speed: 7, period: 45, arc: 1.6, flapSeconds: 2.4, glideSeconds: 3.2 },
   /** 潮汐分区（可走区里 z < 12.6 的部分；崖上不受潮汐影响） */
   tideRegion: { minX: -19.6, maxX: 15.7, minZ: -18.1, maxZ: 12.6 },
   /** 远景按物体雾（GLB extras fogLayer 'mid' 的 fogDensityHint） */

@@ -130,7 +130,7 @@ export class Interactable extends Component {
    */
   blocked: boolean | (() => boolean) = false;
   private readonly point: THREE.Object3D | null;
-  private readonly focusSpec: THREE.Object3D | THREE.Vector3 | null;
+  private focusSpec: THREE.Object3D | THREE.Vector3 | null;
 
   constructor(opts: InteractableOptions) {
     super();
@@ -168,6 +168,11 @@ export class Interactable extends Component {
   /** 当前是否被 blocked（提示变灰、E 无效） */
   get isBlocked(): boolean {
     return typeof this.blocked === 'function' ? this.blocked() : this.blocked;
+  }
+
+  /** 换焦点（美术件挂上后改读它的 `-interact` 节点；null = 回到包围盒中心） */
+  setFocus(f: THREE.Object3D | THREE.Vector3 | null): void {
+    this.focusSpec = f;
   }
 
   /** 焦点世界坐标 */

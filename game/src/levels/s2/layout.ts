@@ -82,6 +82,9 @@ export const S2 = {
   points: {
     lanternSocket: [-5.05, 3.75, -0.35] as V3,
     journalSocket: [-5.0, 3.75, 0.02] as V3,
+    /** 汐的纸条（书桌面上，yaw 0.3）：白盒 xi-note-s2 / 027 prop-letter-c */
+    xiNote: [-5.15, 3.75, -0.68] as V3,
+    xiNoteYaw: 0.3,
     deskInteract: [-4.6, 3.0, -0.25] as V3,
     stove: [-5.135, 0, 1.0] as V3,
     cups: [-2.55, 0.75, 1.6] as V3,

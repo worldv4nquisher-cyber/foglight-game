@@ -105,6 +105,18 @@ export const manifest: AssetEntry[] = [
   { key: 'env-lighthouse-ch1', type: 'gltf', url: 'assets/art/models/env/env-lighthouse-ch1.glb', group: 's1', optional: true, art: true },
   { key: 'prop-boat-rowboat', type: 'gltf', url: 'assets/art/models/props/prop-boat-rowboat.glb', group: 's1', optional: true, art: true },
   { key: 'prop-boat-rowboat-sunken', type: 'gltf', url: 'assets/art/models/props/prop-boat-rowboat-sunken.glb', group: 's1', optional: true, art: true },
+  // 027 剧情物件 / 装饰 / 远景海鸟 / 植被（共用图集 tex-props-dressing-ch1-*，GLB 外链；摆位见 src/levels/s1/dressing.ts；装饰与植被留给 034 散布）
+  { key: 'prop-notice-board-s1', type: 'gltf', url: 'assets/art/models/props/prop-notice-board-s1.glb', group: 's1', optional: true, art: true },
+  { key: 'prop-letter-a', type: 'gltf', url: 'assets/art/models/props/prop-letter-a.glb', group: 's1', optional: true, art: true },
+  { key: 'prop-seabird-far', type: 'gltf', url: 'assets/art/models/props/prop-seabird-far.glb', group: 's1', optional: true, art: true },
+  { key: 'tex-decal-footprints-albedo', type: 'ktx2', url: 'assets/art/textures/tex-decal-footprints-albedo.ktx2', group: 's1', optional: true, art: true },
+  { key: 'prop-rope-coil-a', type: 'gltf', url: 'assets/art/models/props/prop-rope-coil-a.glb', group: 's1', optional: true, art: true },
+  { key: 'prop-net-pile-a', type: 'gltf', url: 'assets/art/models/props/prop-net-pile-a.glb', group: 's1', optional: true, art: true },
+  { key: 'prop-buoy-a', type: 'gltf', url: 'assets/art/models/props/prop-buoy-a.glb', group: 's1', optional: true, art: true },
+  { key: 'prop-barrel-a', type: 'gltf', url: 'assets/art/models/props/prop-barrel-a.glb', group: 's1', optional: true, art: true },
+  { key: 'prop-crate-a', type: 'gltf', url: 'assets/art/models/props/prop-crate-a.glb', group: 's1', optional: true, art: true },
+  { key: 'env-grass-coastal-a', type: 'gltf', url: 'assets/art/models/env/env-grass-coastal-a.glb', group: 's1', optional: true, art: true },
+  { key: 'env-seaweed-a', type: 'gltf', url: 'assets/art/models/env/env-seaweed-a.glb', group: 's1', optional: true, art: true },
   // ---- s2：美术 019 交付（v0.1-014 接入，摆放以 src/levels/s2/layout.ts 为准）
   { key: 'env-clifftop-s2', type: 'gltf', url: 'assets/art/models/env/env-clifftop-s2.glb', group: 's2', optional: true, art: true },
   { key: 'env-keeper-house-ch1', type: 'gltf', url: 'assets/art/models/env/env-keeper-house-ch1.glb', group: 's2', optional: true, art: true },
@@ -129,6 +141,13 @@ export const manifest: AssetEntry[] = [
   // S2 远景 S3 岛 + 灯塔（与 s1 同一文件，s2 组另登记一份：S1→S2 释放 s1 组后仍可用）
   { key: 'env-lighthouse-island-main-s3tower-s2far', type: 'gltf', url: 'assets/art/models/env/env-lighthouse-island-main-s3tower.glb', group: 's2', optional: true, art: true },
   { key: 'env-lighthouse-ch1-s2far', type: 'gltf', url: 'assets/art/models/env/env-lighthouse-ch1.glb', group: 's2', optional: true, art: true },
+  // 027 剧情物件（摆位见 src/levels/s2/dressing.ts：env socket 优先，桌面实测落点）
+  { key: 'prop-journal-father', type: 'gltf', url: 'assets/art/models/props/prop-journal-father.glb', group: 's2', optional: true, art: true },
+  { key: 'prop-letter-c', type: 'gltf', url: 'assets/art/models/props/prop-letter-c.glb', group: 's2', optional: true, art: true },
+  { key: 'prop-desk-set-a', type: 'gltf', url: 'assets/art/models/props/prop-desk-set-a.glb', group: 's2', optional: true, art: true },
+  { key: 'prop-kitchen-set-a', type: 'gltf', url: 'assets/art/models/props/prop-kitchen-set-a.glb', group: 's2', optional: true, art: true },
+  { key: 'prop-cup-tin', type: 'gltf', url: 'assets/art/models/props/prop-cup-tin.glb', group: 's2', optional: true, art: true },
+  { key: 'prop-sketch-window', type: 'gltf', url: 'assets/art/models/props/prop-sketch-window.glb', group: 's2', optional: true, art: true },
   // ---- s3（015）：美术 020 rework-1029，摆位见 levels/s3/art.ts（塔本体另登记 -s3 key，与 s1 组的远景分开释放）
   { key: 'env-lighthouse-ch1-s3', type: 'gltf', url: 'assets/art/models/env/env-lighthouse-ch1.glb', group: 's3', optional: true, art: true },
   { key: 'env-lighthouse-ch1-interior', type: 'gltf', url: 'assets/art/models/env/env-lighthouse-ch1-interior.glb', group: 's3', optional: true, art: true },
@@ -140,6 +159,10 @@ export const manifest: AssetEntry[] = [
   { key: 'env-rock-islet-a', type: 'gltf', url: 'assets/art/models/env/env-rock-islet-a.glb', group: 's3', optional: true, art: true },
   { key: 'env-stone-bridge-s3', type: 'gltf', url: 'assets/art/models/env/env-stone-bridge-s3.glb', group: 's3', optional: true, art: true },
   // 022 解谜道具（未交付的标 pending；挂点 / 节点见 src/levels/s3/artSlots.ts）。潮汐钟（已交付）与 S1 同一文件，s3 组另登记一个 key（同 s2far 做法）
+  // 027 剧情物件（摆位见 src/levels/s3/dressing.ts；日志与 S2 同一文件，s3 组另登记 key）
+  { key: 'prop-logbook-s3', type: 'gltf', url: 'assets/art/models/props/prop-logbook-s3.glb', group: 's3', optional: true, art: true },
+  { key: 'prop-letter-b', type: 'gltf', url: 'assets/art/models/props/prop-letter-b.glb', group: 's3', optional: true, art: true },
+  { key: 'prop-journal-father-s3', type: 'gltf', url: 'assets/art/models/props/prop-journal-father.glb', group: 's3', optional: true, art: true },
   { key: 'prop-tide-bell-s3', type: 'gltf', url: 'assets/art/models/props/prop-tide-bell.glb', group: 's3', optional: true, art: true },
   { key: 'prop-oil-valve-s3', type: 'gltf', url: 'assets/art/models/props/prop-oil-valve-s3.glb', group: 's3', optional: true, art: true, pending: true },
   { key: 'prop-guide-mirror-window-s3', type: 'gltf', url: 'assets/art/models/props/prop-guide-mirror-window-s3.glb', group: 's3', optional: true, art: true, pending: true },

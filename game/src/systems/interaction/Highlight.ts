@@ -17,6 +17,10 @@ const STYLE: Record<OutlineStyle, { color: number; opacity: number; width: numbe
 };
 
 const OUTLINE_TAG = '__outline';
+/** 让这个网格不参与描边（如：美术件已挂上、只留作逻辑载体的白盒网格；植被 outline:false） */
+export function excludeFromOutline(m: THREE.Object3D): void {
+  m.userData[OUTLINE_TAG] = true;
+}
 
 function makeMaterial(style: OutlineStyle, useColorNormals: boolean): THREE.ShaderMaterial {
   const s = STYLE[style];

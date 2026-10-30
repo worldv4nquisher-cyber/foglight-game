@@ -73,7 +73,8 @@ export function findNode(root: THREE.Object3D, want: string): THREE.Object3D | n
   return hit;
 }
 
-function prepareArt(o: THREE.Object3D): void {
+/** 美术件通用处理：碰撞体 / 灯隐藏、自发光清零（暖光只属于风灯）、投 / 收阴影、材质提示 */
+export function prepareArt(o: THREE.Object3D): void {
   const dark = new Map<THREE.Material, THREE.Material>();
   const noGlow = (m: THREE.Material): THREE.Material => {
     const s = m as THREE.MeshStandardMaterial;
