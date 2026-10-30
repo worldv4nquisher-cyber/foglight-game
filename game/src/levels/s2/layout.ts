@@ -190,6 +190,22 @@ export const S2_FAR = {
 export const v3 = (a: V3): THREE.Vector3 => new THREE.Vector3(a[0], a[1], a[2]);
 
 /** 坡地顶面高度（x ≥ 8 起每米降 dropPerM） */
+/**
+ * 制作人裁定 19：西窗外室外第三人称相机限高带。沿固定眼位 → 字组中心的视线（eye / target 由 puzzles 读白石 viewpoint 节点或 layout 兜底），
+ * 从西外墙（house.x1）往外到视线降到 endY 处为止，横向 halfWidth，相机高度 ≤ 视线 − margin；带外 fade 平滑放开。
+ */
+export const S2_WEST_CAM_CAP = { margin: 1.3, halfWidth: 3, fade: 1.5, endY: 1.2 };
+export function s2CameraHeightCaps(eye: { x: number; y: number; z: number }, target: { x: number; y: number; z: number }) {
+  const dx = target.x - eye.x, dy = target.y - eye.y, dz = target.z - eye.z;
+  const L = Math.hypot(dx, dy, dz), hl = Math.hypot(dx, dz);
+  if (L < 1e-6 || hl < 1e-6 || dx <= 0) return [];
+  const dir = { x: dx / L, y: dy / L, z: dz / L };
+  const slope = dy / hl;
+  const from = (S2.house.x1 - eye.x) * (hl / dx);
+  const to = slope < 0 ? (S2_WEST_CAM_CAP.endY - eye.y) / slope : S2.slope.x[1] - eye.x;
+  return [{ origin: { ...eye }, dir, from, to: Math.max(from, to), halfWidth: S2_WEST_CAM_CAP.halfWidth, margin: S2_WEST_CAM_CAP.margin, fade: S2_WEST_CAM_CAP.fade }];
+}
+
 export function slopeY(x: number): number {
   return x <= S2.slope.x[0] ? 0 : -(x - S2.slope.x[0]) * S2.slope.dropPerM;
 }

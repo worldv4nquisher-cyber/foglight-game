@@ -111,6 +111,10 @@ export class CameraFollowSystem {
   currentDistance: number = cfg.distance;
   /** 本帧遮挡 / 室内限制后的目标距离 */
   targetDistance: number = cfg.distance;
+  /** 室外相机限高带（制作人裁定 19：S2 西窗外，室外第三人称相机到不了固定眼位视线），见 cameraHeightCapDistance() */
+  heightCaps: CameraHeightCap[] = [];
+  /** 本帧相机距离被限高压短 */
+  heightCapped = false;
   indoor = false;
   observing = false;
   /** 观察模式焦点距离（屏幕中心射线命中，m） */
@@ -328,6 +332,12 @@ export class CameraFollowSystem {
     const side = physics ? physics.sphereCast(head, right, r, cfg.shoulderOffset) : cfg.shoulderOffset;
     pivot.copy(head).addScaledVector(right, side);
     if (physics) maxD = physics.sphereCast(pivot, back, r, maxD);
+    // 室外限高（裁定 19；室内不管，观察固定眼位在上面已 return）
+    if (!this.indoor && this.heightCaps.length) {
+      const capD = cameraHeightCapDistance(this.heightCaps, pivot, back, maxD);
+      this.heightCapped = capD < maxD - 1e-4;
+      maxD = Math.max(Math.min(maxD, cfg.minCollisionDistance), capD);
+    } else this.heightCapped = false;
     this.targetDistance = maxD;
 
     // 被挡立即前拉；解除后 0.25 s 恢复（缓入缓出）
@@ -448,6 +458,64 @@ export class CameraFollowSystem {
       `FOV ${fovS} · 俯仰 ${(this.pitch / DEG).toFixed(0)}° · yaw ${(this.yaw / DEG).toFixed(0)}°${this.observing ? ` · 观察 焦点 ${this.focusDistance.toFixed(1)} m` : ''}`
     );
   }
+}
+
+/**
+ * 室外相机限高（制作人裁定 19）：沿一条视线（如 S2 固定眼位 → 字组中心）铺一条斜“天花板”——
+ * 相机水平位置落在带内（视线水平投影 s ∈ [from, to]、横向 ≤ halfWidth）时，相机高度 ≤ 视线在该处的高度 − margin；
+ * 带外 fade 米内 smoothstep 平滑放开（+HEIGHT_CAP_RELEASE），最低不压到支点 + floorAbovePivot 以下。
+ * 不是禁区锥：只沿相机后退射线把距离收短，与相机碰撞同一套“被挡前拉 / 解除 0.25 s 恢复”，不会跳。
+ */
+export interface CameraHeightCap {
+  origin: { x: number; y: number; z: number };
+  /** 视线方向（单位向量，需有水平分量） */
+  dir: { x: number; y: number; z: number };
+  from: number;
+  to: number;
+  halfWidth: number;
+  margin: number;
+  fade: number;
+}
+const HEIGHT_CAP_RELEASE = 30;
+const CAP_FLOOR_ABOVE_PIVOT = 0.5;
+const CAP_STEP = 0.05;
+
+/** 相机在水平 (x, z) 处的限高（m）；不在任何带（含 fade）= Infinity */
+export function cameraHeightCeiling(caps: readonly CameraHeightCap[], x: number, z: number): number {
+  let out = Infinity;
+  for (const c of caps) {
+    const hl = Math.hypot(c.dir.x, c.dir.z);
+    if (hl < 1e-6) continue;
+    const hx = c.dir.x / hl, hz = c.dir.z / hl;
+    const px = x - c.origin.x, pz = z - c.origin.z;
+    const s = px * hx + pz * hz;
+    const lat = Math.abs(px * hz - pz * hx);
+    const ds = Math.max(c.from - s, 0, s - c.to);
+    const dl = Math.max(lat - c.halfWidth, 0);
+    const d = Math.hypot(ds, dl);
+    if (d >= c.fade) continue;
+    const w = c.fade > 0 ? smoothstep01(1 - d / c.fade) : 1;
+    const lineY = c.origin.y + (c.dir.y / hl) * s;
+    out = Math.min(out, lineY - c.margin + (1 - w) * HEIGHT_CAP_RELEASE);
+  }
+  return out;
+}
+
+/** 从支点沿后退方向走，返回不超过限高的最大距离（≤ maxD；限高不低于支点 + 0.5 m） */
+export function cameraHeightCapDistance(caps: readonly CameraHeightCap[], pivot: THREE.Vector3, back: THREE.Vector3, maxD: number): number {
+  if (!caps.length || back.y <= 1e-3) return maxD;
+  const floorY = pivot.y + CAP_FLOOR_ABOVE_PIVOT;
+  for (let d = CAP_STEP; d <= maxD + 1e-6; d += CAP_STEP) {
+    const y = pivot.y + back.y * d;
+    const ceil = Math.max(floorY, cameraHeightCeiling(caps, pivot.x + back.x * d, pivot.z + back.z * d));
+    if (y > ceil) {
+      // 本步内线性插到正好碰限高
+      const yPrev = pivot.y + back.y * (d - CAP_STEP);
+      const k = yPrev >= ceil ? 0 : (ceil - yPrev) / (y - yPrev);
+      return Math.max(0, d - CAP_STEP + k * CAP_STEP);
+    }
+  }
+  return maxD;
 }
 
 const INDOOR_NAME = /-indoor(\.\d+)?$/i;

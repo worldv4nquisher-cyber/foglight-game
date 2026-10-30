@@ -13,7 +13,7 @@ import { collectIndoorVolumes } from '@/systems/CameraFollowSystem';
 import type { CameraKey } from '@/systems/camera/CameraTrack';
 import { makeSkyLayer } from '@/render/skyLayer';
 import type { TextId } from '@/content/text';
-import { S2, S2_FAR, v3 } from './layout';
+import { S2, S2_FAR, s2CameraHeightCaps, v3 } from './layout';
 import { buildS2Greybox, defaultS2GreyboxMaterials, type S2Greybox } from './greybox';
 import { buildS2Art, type S2Art } from './art';
 import { buildS2Puzzles, type S2Puzzles } from './puzzles';
@@ -112,6 +112,16 @@ export class S2Scene extends LevelScene {
     return this.puzzles?.viewpointPrompt() ?? null;
   }
 
+  private capKey = '';
+  /** 裁定 19：西窗外室外相机限高带跟着固定眼位视线（白石美术挂上 / 换掉时眼位会变） */
+  private syncCameraHeightCaps(): void {
+    const { eye, target } = this.puzzles.observeSightLine();
+    const key = [...eye.toArray(), ...target.toArray()].map((v) => v.toFixed(4)).join(',');
+    if (key === this.capKey) return;
+    this.capKey = key;
+    this.cameraFollow.heightCaps = s2CameraHeightCaps(eye, target);
+  }
+
   override fixedUpdate(dt: number): void {
     if (!this.rig) return;
     this.puzzles.fixedUpdate(dt);
@@ -122,6 +132,7 @@ export class S2Scene extends LevelScene {
     super.update(dt, alpha);
     if (!this.rig) return;
     this.puzzles.update(dt);
+    this.syncCameraHeightCaps();
     this.artSlots?.update();
     this.lightLockArt?.update(dt);
     if (this.game.ui.debug.visible) {

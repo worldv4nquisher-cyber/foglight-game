@@ -7,7 +7,7 @@ import { gameplay } from '@/config/gameplay';
 import { EventBus } from '@/core/EventBus';
 import { InputManager } from '@/systems/input/InputManager';
 import { PhysicsSystem } from '@/systems/PhysicsSystem';
-import { CameraFollowSystem, CameraTrack, collectIndoorVolumes } from '@/systems/CameraFollowSystem';
+import { CameraFollowSystem, CameraTrack, collectIndoorVolumes, cameraHeightCeiling } from '@/systems/CameraFollowSystem';
 import { ViewpointTarget, viewAlignment } from '@/entities/components/ViewpointTarget';
 import { buildTestCourse } from '@/world/testCourse';
 
@@ -456,6 +456,49 @@ await test('演出轨道也可跟随 GLB 相机动画节点（AnimationMixer 驱
   }
   near(e.camera.position.x, 5, 0.1, '1 s 时在中点');
   near(e.camera.fov, 40, 1e-6, '节点 fov');
+});
+
+await test('裁定 19 室外限高带：带内相机 ≤ 视线 − margin、出带平滑放开（逐帧位移无跳变）', () => {
+  // 视线从 (0, 4, 0) 朝 +X、每米降 0.3
+  const L = Math.hypot(1, 0.3);
+  const cap = (o) => ({ origin: o, dir: { x: 1 / L, y: -0.3 / L, z: 0 }, from: 1, to: 10, halfWidth: 2, margin: 0.5, fade: 1.5 });
+  const caps = [cap({ x: 0, y: 4, z: 0 })];
+  near(cameraHeightCeiling(caps, 5, 0), 4 - 1.5 - 0.5, 1e-9, '带内限高');
+  assert.equal(cameraHeightCeiling(caps, 5, 5), Infinity);
+  const cc = (x, z) => Math.min(cameraHeightCeiling(caps, x, z), 100);
+  let prev = cc(5, 4);
+  for (let z = 3.99; z >= 0; z -= 0.01) {
+    const c = cc(5, z);
+    assert.ok(prev >= 99 || c >= 99 || Math.abs(c - prev) < 0.5, `z ${z.toFixed(2)} 限高跳变 ${prev} → ${c}`);
+    prev = c;
+  }
+  const e = setup();
+  e.target.position.copy(OPEN);
+  e.cam.yaw = -Math.PI / 2; // 看 +X，相机在 −X 侧
+  e.cam.pitch = -0.6;
+  for (let i = 0; i < 30; i++) e.frame();
+  const free = e.camera.position.clone();
+  // 带放在相机所在处、视线高度让限高低于当前相机
+  e.cam.heightCaps = [cap({ x: free.x - 3, y: free.y - 0.2, z: free.z })];
+  const ceil = cameraHeightCeiling(e.cam.heightCaps, free.x, free.z);
+  assert.ok(ceil < free.y, '测试前提：限高低于自由相机');
+  let last = e.camera.position.clone(), maxStep = 0;
+  for (let i = 0; i < 30; i++) {
+    e.frame();
+    maxStep = Math.max(maxStep, e.camera.position.distanceTo(last));
+    last = e.camera.position.clone();
+  }
+  assert.ok(e.cam.heightCapped, '距离被限高压短');
+  assert.ok(e.camera.position.y <= Math.max(OPEN.y + gameplay.camera.pivotHeight + 0.5, cameraHeightCeiling(e.cam.heightCaps, e.camera.position.x, e.camera.position.z)) + 0.02, `相机 y ${e.camera.position.y} 超限高`);
+  e.cam.heightCaps = [];
+  maxStep = 0;
+  for (let i = 0; i < 60; i++) {
+    e.frame();
+    maxStep = Math.max(maxStep, e.camera.position.distanceTo(last));
+    last = e.camera.position.clone();
+  }
+  assert.ok(maxStep < 0.5, `放开时单帧位移 ${maxStep}`);
+  near(e.camera.position.distanceTo(free), 0, 0.05, '放开后回到原机位');
 });
 
 let failed = 0;

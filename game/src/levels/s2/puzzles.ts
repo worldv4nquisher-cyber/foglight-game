@@ -117,6 +117,8 @@ export interface S2Puzzles {
   readonly whiteStonesArtActive: boolean;
   /** 美术白石挂上时的眼位 / FOV / 对准点（测试读）；null = 白盒 layout */
   whiteStonesAim(): { eye: THREE.Vector3; fov: number; target: THREE.Vector3 } | null;
+  /** 固定眼位视线（眼位 → 对准点；有白石美术读 viewpoint 节点，否则 layout 兜底）；裁定 19 室外相机限高用 */
+  observeSightLine(): { eye: THREE.Vector3; target: THREE.Vector3 };
   /** 七段贴片材质（测试读透明度） */
   digitsMaterial: THREE.MeshBasicMaterial;
   /** 白盒小道具（杯子、日志、纸条、抽屉、海图、观察点地板）：美术 019 只给了 socket 没有这些模型，始终显示 */
@@ -647,6 +649,7 @@ export function buildS2Puzzles(d: S2PuzzleDeps): S2Puzzles {
       }
       if (whiteStonesArt) digits.visible = false;
     },
+    observeSightLine: () => ({ eye: eyePos, target: aimPoint }),
     whiteStonesAim: () => (whiteStonesArt ? { eye: eyePos.clone(), fov: eye.fov, target: aimPoint.clone() } : null),
     get whiteStonesArtActive(): boolean {
       return whiteStonesArt !== null;
