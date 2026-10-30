@@ -10,6 +10,9 @@ import { PhysicsSystem, CharacterBody } from '@/systems/PhysicsSystem';
 import { CameraFollowSystem, CameraTrack, collectIndoorVolumes, cameraHeightCeiling, expandHeightCaps } from '@/systems/CameraFollowSystem';
 import { s2CameraHeightCaps, slopeY } from '@/levels/s2/layout';
 import { buildS2Greybox } from '@/levels/s2/greybox';
+import { buildS1Greybox } from '@/levels/s1/greybox';
+import { S1, pierPoint } from '@/levels/s1/layout';
+import { S1_ROCKS } from '@/levels/s1/rocks';
 import { ViewpointTarget, viewAlignment } from '@/entities/components/ViewpointTarget';
 import { buildTestCourse } from '@/world/testCourse';
 
@@ -681,6 +684,94 @@ await test('BUG-019 batch13 真实路径：S2 白盒碰撞 + 角色胶囊 + 相�
     lines.push(`${hz} Hz ${groups} 组（碰限高 ${capGroups}）：非物理前拉单帧最大 ${worst.toFixed(3)} m（${worstAt}；上限 ${limit.toFixed(2)}），回弹 ${nBounce}，高过真实限高最多 ${overMax.toFixed(3)} m`);
   }
   return lines.join('\n   ');
+});
+
+await test('018 打磨 S1 新碰撞（码头桩 38 根 + 前景礁石 9 块）的相机碰撞：甲板上走码头主动线与去掉新碰撞时逐帧一致；码头下 / 礁石旁 24 个朝向相机不进碰撞体、视线不穿桩 / 礁石、被挡时前拉', () => {
+  const gb = buildS1Greybox();
+  const isNew = (m) => /^s1-(pier-pile|fg-rock)-/.test(m.name);
+  const mkPh = (withNew) => {
+    const ph = new PhysicsSystem();
+    for (const m of gb.colliders) if (withNew || !isNew(m)) ph.addMesh(m);
+    for (const m of gb.walls) {
+      const c = ph.addMesh(m, { kind: 'wall' });
+      if (m.userData.walkableWhen === 'low') c.enabled = false;
+    }
+    return ph;
+  };
+  const phNew = mkPh(true), phOld = mkPh(false);
+  const mkCam = (ph, yaw, pitch) => {
+    let t = 0;
+    const events = new EventBus();
+    const input = new InputManager(events, () => t);
+    const camera = new THREE.PerspectiveCamera(cfg.fov, 16 / 9, 0.1, 500);
+    const cam = new CameraFollowSystem(camera, input, { physics: ph, events });
+    cam.yaw = yaw;
+    cam.pitch = pitch;
+    const target = new THREE.Object3D();
+    cam.target = target;
+    const frame = () => {
+      t += DT;
+      input.beginFrame();
+      cam.update(DT);
+      input.endFrame();
+    };
+    return { cam, camera, target, frame };
+  };
+  // 1) 甲板：出生点 → 陆端，8 个朝向 × 俯仰 −17° / +10°，新旧两套碰撞逐帧相机位置一致（桩顶截在甲板底，礁石离码头远）
+  let maxDiff = 0;
+  for (let k = 0; k < 8; k++) {
+    for (const pitch of [-0.3, 0.17]) {
+      const A = mkCam(phNew, (k * Math.PI) / 4, pitch), B = mkCam(phOld, (k * Math.PI) / 4, pitch);
+      const p0 = new THREE.Vector3(...S1.spawnStart), p1 = new THREE.Vector3(S1.pier.landEnd[0], S1.pier.deckY, S1.pier.landEnd[1]);
+      const n = Math.round(p0.distanceTo(p1) / 1.6 / DT);
+      for (let i = 0; i <= n; i++) {
+        A.target.position.lerpVectors(p0, p1, i / n);
+        B.target.position.copy(A.target.position);
+        A.frame();
+        B.frame();
+        maxDiff = Math.max(maxDiff, A.camera.position.distanceTo(B.camera.position));
+      }
+    }
+  }
+  assert.ok(maxDiff < 1e-6, `甲板上加了新碰撞后相机变了 ${maxDiff.toFixed(4)} m`);
+  // 2) 码头下（退潮，中线局部 x 0 / z 5.6，头高 1.45 < 甲板底 1.9）和大礁盘 #155 北侧：24 个朝向，俯仰 0
+  const boxes = gb.colliders.filter(isNew).map((m) => {
+    m.updateMatrixWorld(true);
+    return m;
+  });
+  const ray = new THREE.Raycaster();
+  const spots = [
+    ['码头下', pierPoint(5.6, 0, S1.sandY)],
+    ['大礁盘 #155 北', new THREE.Vector3(S1_ROCKS[155].translation[0], S1.sandY, S1_ROCKS[155].translation[2] + 2.6)],
+  ];
+  const notes = [];
+  for (const [name, at] of spots) {
+    let pulled = 0, minD = Infinity;
+    for (let k = 0; k < 24; k++) {
+      const e = mkCam(phNew, (k * Math.PI) / 12, 0);
+      e.target.position.copy(at);
+      for (let i = 0; i < 40; i++) e.frame();
+      // 相机球不和场景重叠
+      const hit0 = phNew.sphereCast(e.camera.position, new THREE.Vector3(0, 1, 0), cfg.collisionRadius * 0.75, 0.01);
+      assert.ok(hit0 !== 0, `${name} yaw ${k * 15}°：相机在碰撞体里 ${e.camera.position.toArray().map((v) => v.toFixed(2))}`);
+      // 跟随点 → 相机这段不穿新碰撞
+      // 支点 = 头部 + 肩后偏右（与 CameraFollowSystem 同算法）
+      const head = at.clone().setY(at.y + cfg.pivotHeight);
+      const right = new THREE.Vector3(Math.cos(e.cam.yaw), 0, -Math.sin(e.cam.yaw));
+      const pivot = head.clone().addScaledVector(right, phNew.sphereCast(head, right, cfg.collisionRadius, cfg.shoulderOffset));
+      const d = e.camera.position.clone().sub(pivot);
+      const len = d.length();
+      ray.set(pivot, d.normalize());
+      ray.far = len;
+      const hits = ray.intersectObjects(boxes, false);
+      assert.ok(!hits.length, `${name} yaw ${k * 15}°：视线穿过 ${hits[0]?.object.name}`);
+      if (e.cam.currentDistance < cfg.distance - 0.05) pulled++;
+      minD = Math.min(minD, e.cam.currentDistance);
+    }
+    assert.ok(pulled > 0, `${name}：24 个朝向没有一个被挡（新碰撞没进相机碰撞？）`);
+    notes.push(`${name} ${pulled}/24 个朝向前拉（最近 ${minD.toFixed(2)} m）`);
+  }
+  return `甲板上新旧碰撞相机差 ${maxDiff.toExponential(1)} m；${notes.join('；')}`;
 });
 
 let failed = 0;

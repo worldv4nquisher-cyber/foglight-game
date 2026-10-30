@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { S1, pierPoint } from './layout';
+import { S1_ROCKS } from './rocks';
 
 /**
  * S1 白盒几何（v0.1-013）：纯 three.js（不碰 DOM），场景和 scripts/export-blockout-s1.mjs（导出
@@ -118,17 +119,18 @@ export function buildS1Greybox(mats: GreyboxMaterials = defaultGreyboxMaterials(
   deck.castShadow = deck.receiveShadow = true;
   colliders.push(deck);
   root.add(deck);
-  for (let i = 0; i <= 4; i++) {
-    for (const side of [-1, 1]) {
-      const p = pierPoint(-P.length / 2 + 0.4 + i * ((P.length - 0.8) / 4), side * (P.width / 2 - 0.25), 0);
-      const pile = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.16, P.deckY - 0.3 + 0.6, 10), mats.wood);
-      pile.name = `s1-pier-pile-${i}${side < 0 ? 'l' : 'r'}-collider`;
-      pile.position.set(p.x, (P.deckY - 0.3 - 0.6) / 2, p.z);
-      pile.castShadow = true;
-      colliders.push(pile);
-      root.add(pile);
-    }
-  }
+  // 桩：018 打磨起按美术 collider 逐根对位（S1.pierPiles，原 16 + 新增 22），圆柱顶截到甲板底
+  const pileTop = P.deckY - 0.3;
+  S1.pierPiles.forEach(([x, z, r], i) => {
+    const p = pierPoint(z, x, 0);
+    const h = pileTop - S1.pileBottomY;
+    const pile = new THREE.Mesh(new THREE.CylinderGeometry(r, r, h, 10), mats.wood);
+    pile.name = `s1-pier-pile-${i}-collider`;
+    pile.position.set(p.x, (pileTop + S1.pileBottomY) / 2, p.z);
+    pile.castShadow = true;
+    colliders.push(pile);
+    root.add(pile);
+  });
   // 码头两侧 + 海端深水墙（只挡甲板上）
   const pierWall = (name: string, along: number, side: number, len: number, rotate: boolean): void => {
     const c = pierPoint(along, side);
@@ -143,6 +145,21 @@ export function buildS1Greybox(mats: GreyboxMaterials = defaultGreyboxMaterials(
   pierWall('s1-pier-deep-n', 0, P.width / 2 + 0.1, P.length, false);
   pierWall('s1-pier-deep-s', 0, -(P.width / 2 + 0.1), P.length, false);
   pierWall('s1-pier-deep-sea', -P.length / 2 - 0.1, 0, P.width + 0.4, true);
+
+  // ---- 右下前景礁石（018 打磨，S1.foregroundRocks）：退潮滩地上，挡人
+  for (const [idx, hx, hz, topY] of S1.foregroundRocks) {
+    const r = S1_ROCKS[idx];
+    if (!r) throw new Error(`S1.foregroundRocks: rocks.ts has no instance ${idx}`);
+    const k = S1.rockColliderShrink;
+    const bottom = -0.6;
+    const box = new THREE.Mesh(new THREE.BoxGeometry(hx * 2 * k, topY - bottom, hz * 2 * k), mats.reef);
+    box.name = `s1-fg-rock-${idx}-collider`;
+    box.position.set(r.translation[0], (topY + bottom) / 2, r.translation[2]);
+    box.rotation.y = r.rotationY;
+    box.castShadow = box.receiveShadow = true;
+    colliders.push(box);
+    root.add(box);
+  }
 
   // ---- 岸台边沿深水墙：西沿留码头口（z −9.1…−5.9）和台阶口（z −3.8…−2.2），北沿留礁脊口（x −12.8…−11.2）
   const st = S1.reefStairs;

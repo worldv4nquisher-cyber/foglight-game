@@ -646,6 +646,92 @@ if (hasArt) {
     return `美术节点 ${Object.keys(S1.artNodes).length} 个、关键点、台阶 / 平台、小船 (${S1.boat.position.join(', ')}) 与系船点 (${S1.boat.mooring.join(', ')}) ✓`;
   });
 
+  await test('018 打磨 码头桩 / 前景礁石碰撞 = 美术：S1.pierPiles = env-pier-wood-ch1-collider 甲板下竖盒（38 根，断桩 3 根在深水区不加），S1.foregroundRocks = rocks.ts 155–163 的 GLB 包围盒', async () => {
+    const { S1 } = await import('@/levels/s1/layout');
+    const { S1_ROCKS } = await import('@/levels/s1/rocks');
+    const pier = await loadGlb('models/env/env-pier-wood-ch1.glb');
+    let col = null;
+    pier.traverse((o) => {
+      if (o.isMesh && /-collider$/.test(o.name)) col = o;
+    });
+    assert.ok(col, '码头 GLB 缺 -collider');
+    col.updateMatrix();
+    // collider 网格按连通分量拆成盒（码头局部）
+    const pos = col.geometry.getAttribute('position');
+    const idx = col.geometry.index;
+    const par = [...Array(pos.count).keys()];
+    const find = (a) => (par[a] === a ? a : (par[a] = find(par[a])));
+    const uni = (a, b) => (par[find(a)] = find(b));
+    const seen = new Map();
+    const v = new THREE.Vector3();
+    const pts = [];
+    for (let i = 0; i < pos.count; i++) {
+      v.fromBufferAttribute(pos, i).applyMatrix4(col.matrix);
+      pts.push(v.clone());
+      const k = v.toArray().map((x) => x.toFixed(4)).join();
+      if (seen.has(k)) uni(i, seen.get(k));
+      else seen.set(k, i);
+    }
+    for (let t = 0; t < idx.count; t += 3) {
+      uni(idx.getX(t), idx.getX(t + 1));
+      uni(idx.getX(t), idx.getX(t + 2));
+    }
+    const comps = new Map();
+    pts.forEach((p, i) => {
+      const r = find(i);
+      if (!comps.has(r)) comps.set(r, new THREE.Box3());
+      comps.get(r).expandByPoint(p);
+    });
+    const boxes = [...comps.values()];
+    const posts = boxes.filter((b) => b.max.y - b.min.y > 3);
+    const under = posts.filter((b) => (b.min.z + b.max.z) / 2 >= -7);
+    const stumps = posts.filter((b) => (b.min.z + b.max.z) / 2 < -7);
+    assert.equal(posts.length, 41, `竖盒 41 根（原 16 + 新 25），实际 ${posts.length}`);
+    assert.equal(under.length, S1.pierPiles.length, `甲板下 ${under.length} 根 vs S1.pierPiles ${S1.pierPiles.length}`);
+    for (const [x, z, r] of S1.pierPiles) {
+      const b = under.find((b) => Math.abs((b.min.x + b.max.x) / 2 - x) < 0.01 && Math.abs((b.min.z + b.max.z) / 2 - z) < 0.01);
+      assert.ok(b, `GLB 没有 (${x}, ${z}) 的桩`);
+      near((b.max.x - b.min.x) / 2, r, 0.002, `桩 (${x}, ${z}) 半宽`);
+    }
+    // 断桩：转到世界坐标后都在退潮深水区里
+    const { polygonRegion } = await import('@/systems/tide/TideController');
+    const deep = polygonRegion(S1.deepWater.polygon);
+    const pn = S1.artNodes['env-pier-wood-ch1'];
+    const m = new THREE.Matrix4().makeRotationY(pn.rotationY).setPosition(...pn.translation);
+    for (const b of stumps) {
+      const c = b.getCenter(new THREE.Vector3()).applyMatrix4(m);
+      assert.ok(deep(c), `断桩 (${c.x.toFixed(2)}, ${c.z.toFixed(2)}) 不在深水区，需要加碰撞`);
+    }
+    // 前景礁石
+    const L = layout.instances;
+    assert.equal(L.length, 164);
+    const geos = {};
+    for (const [i, hx, hz, top] of S1.foregroundRocks) {
+      const inst = L[i];
+      assert.equal(inst.role, 'dressing-hightide', `#${i} role`);
+      assert.deepEqual(S1_ROCKS[i].translation, inst.translation, `#${i} rocks.ts = json`);
+      if (!geos[inst.rock]) {
+        const model = await loadGlb(`models/env/env-rock-shore-${inst.rock}.glb`);
+        model.updateMatrixWorld(true);
+        let lod0 = null;
+        model.traverse((o) => {
+          if (!lod0 && o.isMesh && /_lod0/.test(`${o.name}|${o.parent?.name ?? ''}`)) lod0 = o;
+        });
+        const a = lod0.geometry.getAttribute('position');
+        const arr = [];
+        for (let k = 0; k < a.count; k++) arr.push(new THREE.Vector3().fromBufferAttribute(a, k).applyMatrix4(lod0.matrixWorld));
+        geos[inst.rock] = arr;
+      }
+      const bb = new THREE.Box3();
+      for (const p of geos[inst.rock]) bb.expandByPoint(new THREE.Vector3(p.x * inst.scale[0], p.y * inst.scale[1], p.z * inst.scale[2]));
+      near(bb.max.x, hx, 0.005, `#${i} 半宽 x`);
+      near(bb.max.z, hz, 0.005, `#${i} 半宽 z`);
+      near(inst.translation[1] + bb.max.y, top, 0.005, `#${i} 顶`);
+      assert.ok(!deep(new THREE.Vector3(inst.translation[0], 0, inst.translation[2])), `#${i} 在深水区（到不了就不该挡）`);
+    }
+    return `码头桩 ${S1.pierPiles.length} 根 = GLB（断桩 ${stumps.length} 根在深水区不加）；前景礁石 ${S1.foregroundRocks.length} 块 = GLB 包围盒`;
+  });
+
   await test('S1 深水区 = 美术海床（env-tidal-flat-s1 LOD0）：区内海床 < −0.3（送回水深），区外滩地北段 / 合法路线不在区内', async () => {
     const { S1 } = await import('@/levels/s1/layout');
     const { polygonRegion } = await import('@/systems/tide/TideController');

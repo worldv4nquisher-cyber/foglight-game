@@ -8,7 +8,9 @@ import { StairGait, stepLocomotion } from '@/systems/locomotion';
 import { buildTestCourse } from '@/world/testCourse';
 import { TraversalLink, pickTraversalLink } from '@/entities/components/TraversalLink';
 import { buildS1Greybox } from '@/levels/s1/greybox';
-import { S1, s1StepLinks } from '@/levels/s1/layout';
+import { S1, pierPoint, s1StepLinks } from '@/levels/s1/layout';
+import { S1_ROCKS } from '@/levels/s1/rocks';
+import { readFileSync } from 'node:fs';
 import { buildS2Greybox } from '@/levels/s2/greybox';
 import { S2 } from '@/levels/s2/layout';
 
@@ -557,6 +559,131 @@ test('013 S1 四条跨越（制作人拍板）：落点离所在台面最近边�
     notes.push(`${from.name}→${to.name} ${l.start.toFixed(2)}→${l.end.toFixed(2)}（落点离沿 ${dEnd.toFixed(2)}）`);
   });
   console.log(`  （S1 跨越：${notes.join('；')}）`);
+});
+
+test('018 打磨 S1 新碰撞（码头桩 38 根 + 前景礁石 9 块）：不压谜题 1 踏石 / 小径 / 脚印线 / 浮台线 / 码头主动线，出生点不卡；桩和礁石真的挡人', () => {
+  const gb = buildS1Greybox();
+  const newCols = gb.colliders.filter((m) => /^s1-(pier-pile|fg-rock)-/.test(m.name));
+  assert.equal(newCols.length, S1.pierPiles.length + S1.foregroundRocks.length, `新碰撞 ${newCols.length}`);
+  for (const m of newCols) m.updateMatrixWorld(true);
+  // 1) 几何：新碰撞（世界 AABB 外扩玩家半径 + 0.15）不碰各路线折线
+  const R = gameplay.player.radius + 0.15;
+  const fp = JSON.parse(readFileSync(new URL('../src/levels/s1/footprints-path.json', import.meta.url), 'utf8'));
+  const st = S1.reefStairs;
+  const routes = {
+    '谜题 1 踏石': [[st.x0 + st.run * st.count, (st.z[0] + st.z[1]) / 2], ...S1.reefPath.map((r) => [r[0], r[2]]), [S1.reefPathEnd[0], S1.reefPathEnd[2]]],
+    '小径尽头 → 脚印 → 浮台': [[S1.reefPathEnd[0], S1.reefPathEnd[2]], ...fp.control, [S1.raft.home[0], S1.raft.home[2]]],
+    '浮台推动线': [[S1.raft.home[0], S1.raft.home[2]], [S1.raft.slot[0], S1.raft.slot[2]]],
+    '码头主动线（甲板）': [[S1.spawnStart[0], S1.spawnStart[2]], [S1.pier.landEnd[0], S1.pier.landEnd[1]], [S1.safePoint[0], S1.safePoint[2]]],
+  };
+  const segDist = (px, pz, a, b) => {
+    const dx = b[0] - a[0], dz = b[1] - a[1];
+    const t = Math.max(0, Math.min(1, ((px - a[0]) * dx + (pz - a[1]) * dz) / (dx * dx + dz * dz || 1)));
+    return Math.hypot(px - a[0] - t * dx, pz - a[1] - t * dz);
+  };
+  const notes = [];
+  for (const [name, line] of Object.entries(routes)) {
+    let min = Infinity, who = '';
+    for (const m of newCols) {
+      const b = new THREE.Box3().setFromObject(m);
+      // 码头主动线在甲板上：桩顶截到甲板底，甲板面以上没东西
+      if (name.startsWith('码头') && b.max.y <= S1.pier.deckY - 0.3 + 1e-6) continue;
+      for (let i = 0; i + 1 < line.length; i++) {
+        // 折线采样到盒子的水平距离
+        for (let k = 0; k <= 20; k++) {
+          const t = k / 20;
+          const x = line[i][0] + (line[i + 1][0] - line[i][0]) * t, z = line[i][1] + (line[i + 1][1] - line[i][1]) * t;
+          const d = Math.hypot(Math.max(b.min.x - x, 0, x - b.max.x), Math.max(b.min.z - z, 0, z - b.max.z));
+          if (d < min) [min, who] = [d, m.name];
+        }
+      }
+    }
+    void segDist;
+    assert.ok(min >= R, `${name} 离新碰撞 ${who} 只有 ${min.toFixed(2)} m（< 玩家半径 + 0.15 = ${R.toFixed(2)}）`);
+    notes.push(`${name} ≥ ${min === Infinity ? '—' : min.toFixed(2)} m`);
+  }
+  // 2) 实走：真胶囊按路线走，不卡
+  const mk = (low) => {
+    const ph = new PhysicsSystem();
+    for (const m of gb.colliders) ph.addMesh(m);
+    for (const m of gb.walls) {
+      const c = ph.addMesh(m, { kind: 'wall' });
+      if (low && m.userData.walkableWhen === 'low') c.enabled = false;
+    }
+    return ph;
+  };
+  const go = (ph, start, pts, label, speed = WALK) => {
+    const b = new CharacterBody();
+    ph.addBody(b);
+    b.teleport(new THREE.Vector3(...start));
+    for (let i = 0; i < 20; i++) ph.step(DT);
+    let t = 0;
+    for (const [x, z] of pts) {
+      let best = Infinity, stall = 0;
+      for (;;) {
+        const v = new THREE.Vector3(x - b.position.x, 0, z - b.position.z);
+        const d = v.length();
+        if (d < 0.2) break;
+        v.normalize().multiplyScalar(speed);
+        b.velocity.x = v.x;
+        b.velocity.z = v.z;
+        ph.step(DT);
+        t += DT;
+        if (d < best - 1e-3) [best, stall] = [d, 0];
+        else stall += DT;
+        assert.ok(stall < 0.5 && t < 120, `${label}：往 (${x}, ${z}) 走卡在 ${b.position.toArray().map((q) => q.toFixed(2))}`);
+      }
+    }
+    b.velocity.set(0, 0, 0);
+    ph.removeBody(b);
+    return { b, t };
+  };
+  const hi = mk(false);
+  // 出生点：落地站稳、不被挤开
+  {
+    const b = new CharacterBody();
+    hi.addBody(b);
+    b.teleport(new THREE.Vector3(...S1.spawnStart));
+    for (let i = 0; i < 60; i++) hi.step(DT);
+    hi.removeBody(b);
+    assert.ok(b.onGround && Math.hypot(b.position.x - S1.spawnStart[0], b.position.z - S1.spawnStart[2]) < 0.01 && Math.abs(b.position.y - S1.pier.deckY) < 0.03, `出生点站不稳 ${b.position.toArray()}`);
+  }
+  const a = go(hi, S1.spawnStart, [[S1.pier.landEnd[0], S1.pier.landEnd[1]], [S1.safePoint[0], S1.safePoint[2]]], '涨潮：出生点沿码头到岸台');
+  notes.push(`码头 ${a.t.toFixed(1)} s`);
+  const lo = mk(true);
+  const bottom = [st.x0 + st.run * st.count + 0.3, 0.3, (st.z[0] + st.z[1]) / 2];
+  const r1 = go(lo, bottom, [...S1.reefPath.map((r) => [r[0], r[2]]), [S1.reefPathEnd[0], S1.reefPathEnd[2]]], '退潮：礁石台阶底 → 6 块踏石 → 小径尽头');
+  const r2 = go(lo, [S1.reefPathEnd[0], 0.2, S1.reefPathEnd[2]], [...fp.control, [S1.raft.home[0] - 1.5, S1.raft.home[2]]], '退潮：小径尽头 → 脚印线 → 浮台旁');
+  notes.push(`踏石 ${r1.t.toFixed(1)} s、脚印线 ${r2.t.toFixed(1)} s`);
+  // 3) 真的挡：码头下（退潮可达段）撞桩、滩上撞大礁石
+  // 朝中心直走 4 s：全程离中心的最近水平距离（胶囊会贴着滑开，看最近值）
+  const block = (start, target, label, minReach) => {
+    const b = new CharacterBody();
+    lo.addBody(b);
+    b.teleport(new THREE.Vector3(...start));
+    for (let i = 0; i < 20; i++) lo.step(DT);
+    const dir = new THREE.Vector3(target[0] - start[0], 0, target[2] - start[2]).normalize();
+    let min = Infinity;
+    for (let i = 0; i < 240; i++) {
+      b.velocity.x = dir.x * WALK;
+      b.velocity.z = dir.z * WALK;
+      lo.step(DT);
+      min = Math.min(min, Math.hypot(b.position.x - target[0], b.position.z - target[2]));
+    }
+    lo.removeBody(b);
+    assert.ok(min >= minReach, `${label}：穿进去了，最近离中心 ${min.toFixed(2)} m（< ${minReach.toFixed(2)}）`);
+    return min;
+  };
+  const pile = S1.pierPiles.findIndex(([x, z]) => x === 0 && z === 4.771);
+  const pc = gb.colliders.find((m) => m.name === `s1-pier-pile-${pile}-collider`).position;
+  // 沿码头中线（局部 x = 0，两侧跨中桩在 ±1.05）从陆侧 0.9 m 处走向中桩（这一段在 deepWater 区外，退潮走得到）
+  const sp = pierPoint(4.771 + 0.9, 0, 0.2);
+  const dp = block([sp.x, sp.y, sp.z], [pc.x, 0, pc.z], '码头下中桩', 0.12 + gameplay.player.radius - 0.03);
+  const rk = S1_ROCKS[155];
+  const fr = S1.foregroundRocks.find((r) => r[0] === 155);
+  const dr = block([rk.translation[0], 0.2, rk.translation[2] + 4.5], rk.translation, '前景大礁盘 #155', fr[2] * S1.rockColliderShrink + gameplay.player.radius - 0.1);
+  notes.push(`桩挡在 ${dp.toFixed(2)} m、礁盘挡在 ${dr.toFixed(2)} m`);
+  console.log(`  （018 新碰撞：${notes.join('；')}）`);
 });
 
 for (const [name, err] of results) {
