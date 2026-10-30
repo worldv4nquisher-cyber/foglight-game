@@ -1201,8 +1201,9 @@ body {
 }
 
 .chapter-end-art {
-  /* 030 R4：框宽 840 px（18:31 定），2x 图 1920×1080；进结尾时懒加载 --end-art，没到 / 失败时是渐变占位 */
-  width: min(840px, 70vw);
+  /* 030 R4：框宽 840 px（18:31 定），2x 图 1920×1080；进结尾时懒加载 --end-art，没到 / 失败时是渐变占位。
+     矮窗口也要放得下：标题 + 两行统计 + 未完待续 + 按钮 + 间距约 300 px，图高 ≤ 100vh − 300px（1280×633 视口下 592 px 宽；1080p 仍 840） */
+  width: min(840px, 70vw, calc((100vh - 300px) * 16 / 9));
   aspect-ratio: 16 / 9;
   border: 1px solid var(--ui-stroke-soft);
   background:
