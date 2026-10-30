@@ -20,6 +20,7 @@ import { Subtitles } from './Subtitles';
 import { Toast } from './Toast';
 import { HintPanel } from './HintPanel';
 import { gameplay } from '@/config/gameplay';
+import { bindUiSfx } from '@/ui/uiSfx';
 import { t } from '@/content/text';
 
 /**
@@ -88,6 +89,7 @@ export class UIManager {
     this.pause = new PauseMenu(root, game, this.settings, this.confirm);
 
     this.offs.push(
+      bindUiSfx(root, game.events, game.audio, (k) => game.assets.getAudio(k)),
       game.events.on('game:pause', () => this.pause.show()),
       game.events.on('game:resume', () => this.pause.hide()),
       // 首次阅读 → 左下角「日志已更新」2 s；再次阅读不会发这个事件

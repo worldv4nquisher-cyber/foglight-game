@@ -13,6 +13,7 @@ import { existsSync } from 'node:fs';
 import { IgniterHum } from '@/levels/s3/igniterHum';
 import { Footsteps, surfaceOf, STEP_M, SCENE_SURFACES } from '@/systems/audio/footsteps';
 import { AMBIENCE, Ambience, AMBIENCE_XFADE_SEC } from '@/levels/ambience';
+import { bindUiSfx, uiClickSfx } from '@/ui/uiSfx';
 import { bindPuzzleSfx, DIAL_GROUPS, MIRROR_FINE_MIN_SEC } from '@/systems/audio/puzzleSfx';
 import { BeamHum, PushLoop, BEAM_HUM_ID, LENS_ROTATE_ID, LENS_ROTATE_DELAY_SEC } from '@/systems/audio/loops';
 
@@ -523,6 +524,47 @@ test('032 环境音：进场按区域起循环（默认淡入），进出室内 
   assert.equal(manifest.find((e) => e.key === 'amb-rain-light').group, 'common', 'S1 / S2 都用细雨');
   const lv = readFileSync(new URL('../src/scenes/LevelScene.ts', import.meta.url), 'utf8');
   assert.ok(lv.includes('this.footsteps?.update(') && lv.includes('this.ambience?.update(dt'));
+});
+
+test('032 UI 音：按钮点击委托（确认 / 返回·取消 / 翻页箭头与日志条目不响）、Esc 返回、日志打开、阅读器展纸、翻页 a–c；直接 playBuffer 带增益、没文件不响、解绑移除监听；Reader.flip 发 reader:page', () => {
+  const btn = (act, cls = '') => ({ dataset: act ? { act } : {}, classList: { contains: (c) => cls === c }, disabled: false, closest() { return this; } });
+  assert.equal(uiClickSfx(btn('new')), 'sfx-ui-confirm');
+  assert.equal(uiClickSfx(btn('back')), 'sfx-ui-back');
+  assert.equal(uiClickSfx(btn('cancel')), 'sfx-ui-back');
+  assert.equal(uiClickSfx(btn('next')), null);
+  assert.equal(uiClickSfx(btn(undefined, 'journal-entry')), null);
+  const ctx = new FakeContext();
+  const a = new AudioSystem(ctx);
+  const ev = new EventBus();
+  const listeners = [];
+  const root = { addEventListener: (n, f, c) => listeners.push([n, f, c]), removeEventListener: (n, f) => listeners.splice(listeners.findIndex((l) => l[1] === f), 1) };
+  const bufs = Object.fromEntries(['sfx-ui-confirm', 'sfx-ui-back', 'sfx-ui-journal', 'sfx-paper-open', 'sfx-paper-flip-a', 'sfx-paper-flip-b'].map((k) => [k, { duration: 0.3, k }]));
+  const off = bindUiSfx(root, ev, a, (k) => bufs[k]);
+  assert.equal(listeners.length, 1);
+  assert.equal(listeners[0][2], true, '捕获阶段');
+  const click = (b) => listeners[0][1]({ target: { closest: () => b } });
+  click(btn('settings'));
+  click(btn('back'));
+  click(btn('prev'));
+  click({ ...btn('new'), disabled: true });
+  ev.emit('ui:back');
+  ev.emit('journal:open');
+  ev.emit('reader:open', { docId: 'd', pages: 2 });
+  ev.emit('reader:page', { docId: 'd', page: 1 });
+  ev.emit('reader:page', { docId: 'd', page: 0 });
+  const played = ctx.sources.map((x) => x.buffer?.k);
+  assert.deepEqual(played.slice(0, 5), ['sfx-ui-confirm', 'sfx-ui-back', 'sfx-ui-back', 'sfx-ui-journal', 'sfx-paper-open']);
+  assert.ok(played.slice(5).every((k) => /^sfx-paper-flip-[ab]$/.test(k)) && played[5] !== played[6], '翻页随机不连续重复');
+  const g = ctx.sources[0].out[0].gain;
+  assert.ok(Math.abs(g.value - sfxGain('sfx-ui-confirm')) < 1e-6, `带 manifest 增益 ${g.value}`);
+  off();
+  assert.equal(listeners.length, 0);
+  ev.emit('ui:back');
+  assert.equal(ctx.sources.length, 7, '解绑后不响');
+  const rd = readFileSync(new URL('../src/ui/Reader.ts', import.meta.url), 'utf8');
+  assert.ok(rd.includes("emit('reader:page', { docId: this._docId, page: p })"));
+  assert.ok(readFileSync(new URL('../src/ui/UIManager.ts', import.meta.url), 'utf8').includes('bindUiSfx(root, game.events, game.audio'));
+  for (const k of ['sfx-ui-confirm', 'sfx-ui-back', 'sfx-ui-journal']) assert.equal(manifest.find((e) => e.key === k).group, 'menu', k);
 });
 
 test('Game：scene:change 时调 audio.stopAllLoops；暂停菜单走 audio.suspend（循环音同一 context，一起挂起）', () => {

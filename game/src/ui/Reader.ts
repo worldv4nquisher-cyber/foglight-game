@@ -119,6 +119,7 @@ export class Reader {
     if (p === this._page) return false;
     this._page = p;
     this.render();
+    if (this._docId) this.deps.events.emit('reader:page', { docId: this._docId, page: p });
     return true;
   }
 

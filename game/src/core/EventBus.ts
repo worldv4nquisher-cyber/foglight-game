@@ -62,6 +62,8 @@ export interface GameEvents {
   'subtitle:hide': { id: string; reason: 'timeout' | 'advance' | 'replaced' | 'clear'; shown: number };
   'reader:open': { docId: string; pages: number };
   'reader:close': { docId: string };
+  /** 阅读器翻页（按钮 / 键盘），page 从 0 起 */
+  'reader:page': { docId: string; page: number };
   'journal:open': undefined;
   /** 007：提示层级解锁（右下角风灯淡入）/ H 弹窗开关（level = 弹窗打开时已解锁的层级；puzzleId=null 表示不在任何谜题里） */
   'hint:unlocked': { puzzleId: string; level: 1 | 2 | 3 };
