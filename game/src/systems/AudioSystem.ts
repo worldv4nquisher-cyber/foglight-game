@@ -30,11 +30,22 @@ export interface MusicOptions {
   fadeIn?: number;
   /** 曲目增益（线性，默认 1；033 改：manifest gainDb → 主菜单曲 +0.3 dB 对齐 S1 场景曲），淡入到这个值 */
   gain?: number;
+  /**
+   * 1031 结尾曲：旧曲单独的淡出时长（s）。给了这个就不按 crossfade 对称淡化——旧曲按它淡出、新曲按 fadeIn（默认 0 = 满音量）起播。
+   * 结尾曲文件 0 s = 点燃那一帧，开头本身是静音 / 起音，不能被淡入吃掉；场景曲同时 2 s 淡出。
+   */
+  fadeOutPrev?: number;
+  /**
+   * 1031：从文件的第几秒开始放（默认 0）。结尾曲资源晚到时按「点燃后已经过去的音频时钟秒数」补位，和画面时间轴对齐；
+   * loop 曲按时长取模。不是 seek：起播一次定下，之后不改。
+   */
+  offset?: number;
 }
 
 /** 音乐调试记录（冒烟读取）：每次 playMusic / stopMusic 一条，时间是 AudioContext 时钟（挂起时不走） */
 export interface MusicLogEntry {
-  op: 'play' | 'stop';
+  /** play / stop；1031：end = 不循环的曲子（结尾曲）自然放完 */
+  op: 'play' | 'stop' | 'end';
   key: string | null;
   /** 被替换 / 停掉的曲目 */
   from: string | null;
@@ -44,6 +55,10 @@ export interface MusicLogEntry {
   ctxState: string;
   /** performance.now()（ms）：和 Game.lastFirstFrame.at 对照（033 改：S1 曲在首帧之后才淡入） */
   wall: number;
+  /** 1031：play 时从文件第几秒起播（MusicOptions.offset，默认 0） */
+  offset?: number;
+  /** 1031：fadeOutPrev 时旧曲的淡出时长（fade 是新曲淡入） */
+  fadeOut?: number;
 }
 
 interface MusicVoice {
@@ -52,6 +67,9 @@ interface MusicVoice {
   gain: GainNode;
   /** 曲目增益（线性，满音量时 gain.gain 的目标值） */
   level: number;
+  /** 1031：文件 0 s 对应的 AudioContext 时刻（= 起播时刻 − offset）；播放位置 = (now − startAt) [mod duration] */
+  startAt: number;
+  duration: number;
 }
 
 /** 循环音：按名字启停。source 是 buffer 循环或合成占位振荡器；gain 做淡入淡出 */
@@ -194,6 +212,24 @@ export class AudioSystem {
     return this.music ? this.music.source.loop : null;
   }
 
+  /** AudioContext 时钟（s；没有 context = 0）。结尾曲按它记点燃时刻（挂起时不走，和声音一致） */
+  get audioTime(): number {
+    return this.context?.currentTime ?? 0;
+  }
+
+  /** 1031：当前曲目文件 0 s 对应的 AudioContext 时刻（没在播 = null） */
+  get musicStartAt(): number | null {
+    return this.music?.startAt ?? null;
+  }
+
+  /** 1031：当前曲目播放位置（文件内秒数；loop 曲取模；没在播 = null） */
+  get musicPosition(): number | null {
+    const v = this.music;
+    if (!v || !this.context) return null;
+    const t = this.context.currentTime - v.startAt;
+    return v.source.loop && v.duration > 0 ? ((t % v.duration) + v.duration) % v.duration : t;
+  }
+
   /**
    * 播放背景音乐（走 music 总线，−16 dB 基准，见 MUSIC_BUS_DB）。默认整文件循环。
    * 自动播放限制：context 还没被用户手势解锁（suspended）时照常排程、不报错，第一次交互 resume 后从头开始响。
@@ -207,8 +243,14 @@ export class AudioSystem {
     if (key !== null && this.music?.key === key) return false;
     const loop = opts.loop ?? true;
     const prev = this.music;
-    const fade = Math.max(0, (prev ? opts.crossfade : opts.fadeIn) ?? 0);
+    const split = opts.fadeOutPrev !== undefined;
+    const fade = Math.max(0, (split ? opts.fadeIn : prev ? opts.crossfade : opts.fadeIn) ?? 0);
+    const prevFade = split ? Math.max(0, opts.fadeOutPrev ?? 0) : fade;
     const now = ctx.currentTime;
+    const duration = buffer.duration;
+    let offset = Math.max(0, opts.offset ?? 0);
+    if (loop && duration > 0) offset %= duration;
+    else if (offset >= duration) return false; // 不循环的曲子已经放过头了：不起播
     const src = ctx.createBufferSource();
     src.buffer = buffer;
     src.loop = loop;
@@ -219,10 +261,22 @@ export class AudioSystem {
       gain.gain.linearRampToValueAtTime(level, now + fade);
     } else gain.gain.setValueAtTime(level, now);
     src.connect(gain).connect(this.musicGain);
-    src.start(now);
-    this.music = { key, source: src, gain, level };
-    if (prev) this.releaseMusic(prev, fade);
-    this.logMusic({ op: 'play', key, from: prev?.key ?? null, at: now, fade, loop, ctxState: ctx.state });
+    if (offset > 0) src.start(now, offset);
+    else src.start(now);
+    const voice: MusicVoice = { key, source: src, gain, level, startAt: now - offset, duration };
+    this.music = voice;
+    if (!loop) {
+      // 1031 结尾曲：一次性，放完自己清掉（被替换 / 停掉时 releaseMusic 会换掉 onended）
+      src.onended = () => {
+        src.disconnect();
+        gain.disconnect();
+        if (this.music !== voice) return;
+        this.music = null;
+        this.logMusic({ op: 'end', key: null, from: key, at: ctx.currentTime, fade: 0, loop: false, ctxState: ctx.state });
+      };
+    }
+    if (prev) this.releaseMusic(prev, prevFade);
+    this.logMusic({ op: 'play', key, from: prev?.key ?? null, at: now, fade, loop, ctxState: ctx.state, ...(offset > 0 ? { offset } : {}), ...(split && prev ? { fadeOut: prevFade } : {}) });
     return true;
   }
 

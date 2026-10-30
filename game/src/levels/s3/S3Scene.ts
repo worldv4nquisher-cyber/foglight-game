@@ -20,6 +20,7 @@ import { buildS3Greybox, defaultS3GreyboxMaterials, type S3Greybox } from './gre
 import { buildS3Art, S3_DOOR_PROP_KEY, type S3Art } from './art';
 import { buildS3Puzzles, OUTRO_CUT_SEC, type S3Puzzles } from './puzzles';
 import { doorLightmapScale } from '@/render/lightmap';
+import { EndingMusic } from '@/systems/audio/endingMusic';
 import { S3_TOWER_CLOSED_LM } from '@/levels/lightmaps';
 
 /** 点灯后多久进章节结束页（s）。结尾演出（035）做好后由演出结束触发 */
@@ -49,6 +50,8 @@ export class S3Scene extends LevelScene {
   private ended = false;
   /** 031 父亲（BUG-023）：有 char-father + anims 才有；默认隐藏，回忆演出（035）/ dev 预览 ?father=gaze|walk|hand 调 playFather */
   father: FatherActor | null = null;
+  /** 1031 结尾曲：进场首帧后预取，lighthouse:ignited 那一帧起播（systems/audio/endingMusic.ts） */
+  endingMusic: EndingMusic | null = null;
 
   constructor(game: Game) {
     super(game, LEVELS.s3);
@@ -184,6 +187,16 @@ export class S3Scene extends LevelScene {
   }
 
   protected override afterEnter(): void {
+    // 1031 结尾曲：要在点燃那一帧就有 buffer → 进 S3 首帧渲染后就开始下载解码（和场景曲一样不进首场景包）。
+    // 演出 0:04 就切章节结束页（035 未做），结尾曲要接着放完：补位起播的存活条件是「还在 S3 或已到结束页」
+    const { audio, events, assets, scenes } = this.game;
+    const ending = new EndingMusic(audio, events, (k) => assets.loadAudio(k), () => scenes.current === this || scenes.current?.name === 'chapter-end');
+    this.endingMusic = ending;
+    const offFirst = events.on('scene:firstFrame', () => {
+      offFirst();
+      void ending.prefetch();
+    });
+    this.cleanups.push(offFirst, () => ending.dispose());
     const q = new URLSearchParams(location.search);
     if (import.meta.env.DEV || q.has('smoke')) Object.assign(window, { __s3: this });
     // dev 预览：?father=gaze|walk|hand（dev / ?debug / ?smoke 才认）

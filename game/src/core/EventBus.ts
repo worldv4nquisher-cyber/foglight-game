@@ -96,6 +96,8 @@ export interface GameEvents {
   'ignition:reminder': { id: string };
   /** 015 点灯（xi-ignite-lever 的 ignite 事件帧，全局只发一次） */
   'lighthouse:ignited': undefined;
+  /** 1031：跳过演出（035 按住 Space 1 s 跳过时发；id = 'ch1-ending' 时结尾曲 0.75 s 淡出，见 systems/audio/endingMusic.ts） */
+  'cutscene:skip': { id: string };
   /** 光源开关（lit = 逻辑上亮着，淡入过半算亮）/ 换颜色 / 天光切常亮（谜题 5 开油阀后） */
   'beam:emitter': { id: string; lit: boolean };
   'beam:setColor': { id: string; color: 'warm' | 'coldWhite' };

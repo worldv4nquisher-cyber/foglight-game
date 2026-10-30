@@ -237,6 +237,9 @@ export const manifest: AssetEntry[] = [
   //     整文件循环（README：loop 0 – 6664000 样本 = 整个文件）；404 / 超时 → 上一首淡出、不放音乐。npm run size 记在「s2 进场后懒加载」
   { key: 'mus-s2-keeper-house', type: 'audio', url: 'assets/art/audio/music/mus-s2-keeper-house.ogg', group: 's2', optional: true, art: true, lazy: true },
   // s3：mus-s3-lighthouse + mus-s3-lighthouse-upper 两层要同一时刻起播、按玩家高度淡入上层，同步层逻辑未做，暂不登记
+  // s3：第一章结尾曲（1,839,809 B，107.0 s，−20 LUFS，不循环）。lazy：进 S3 首帧后就预取（EndingMusic.prefetch），
+  //     lighthouse:ignited 那一帧 start(0)（文件 0 s = 点燃）；不计入首场景包，npm run size 记在「s3 进场后懒加载」
+  { key: 'mus-ending-ch1', type: 'audio', url: 'assets/art/audio/music/mus-ending-ch1.ogg', group: 's3', optional: true, art: true, lazy: true },
   // common：通用（日记纸声、脚步 5 地面 × a–d、落水、潮汐钟 S1/S3 共用、涨退潮、户外雾号 / 海鸟 / 轻风、光束接通 / 持续、镜架咔哒 S2/S3 共用）
   { key: 'amb-foghorn-far-a', type: 'audio', url: 'assets/art/audio/ambience/amb-foghorn-far-a.ogg', group: 'common', optional: true, art: true },
   { key: 'amb-foghorn-far-b', type: 'audio', url: 'assets/art/audio/ambience/amb-foghorn-far-b.ogg', group: 'common', optional: true, art: true },

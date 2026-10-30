@@ -4,6 +4,7 @@ import { Rain } from '@/world/Rain';
 import { BaseScene } from './BaseScene';
 import { MENU_MUSIC } from './levels';
 import { switchMusic } from '@/systems/audio/music';
+import { ENDING_MUSIC } from '@/systems/audio/endingMusic';
 
 /** 主菜单背景的雨丝数量（远少于游戏内，主菜单要轻） */
 const MENU_RAIN_DROPS = 4000;
@@ -187,8 +188,12 @@ export class ChapterEndScene extends MenuScene {
 
   protected override onBack(): void {}
 
-  /** 结尾曲（033 / 035）还没交付：进章节结束页时把上一首 2 s 淡出，不放主菜单曲 */
+  /**
+   * 1031：结尾曲 mus-ending-ch1 点燃时起播、单次（107 s，95 s 起淡出），演出 0:04 就切到结束页（035 未做）——
+   * 结尾曲正在放就让它放完（不淡出、不放主菜单曲）；否则（直接进结束页 / 结尾曲缺失 / 已跳过）把上一首 2 s 淡出
+   */
   protected override startMusic(): void {
+    if (this.game.audio.musicKey === ENDING_MUSIC) return;
     switchMusic(this.game.audio, (k) => this.game.assets.getAudio(k), null);
   }
 

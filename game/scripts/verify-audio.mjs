@@ -24,6 +24,7 @@ import { spawnSync } from 'node:child_process';
 import { LazyAudioCache, LazyAudioTimeout, LAZY_AUDIO_TIMEOUT_MS } from '@/assets/lazyAudio';
 import { sizeBucket } from './lib/size-groups.mjs';
 import { LEVELS, MENU_MUSIC } from '@/scenes/levels';
+import { EndingMusic, ENDING_MUSIC, ENDING_CUES, ENDING_SCENE_FADE_SEC, ENDING_SKIP_FADE_SEC, ENDING_CUTSCENE_ID } from '@/systems/audio/endingMusic';
 
 class FakeParam {
   constructor(v = 1) {
@@ -70,8 +71,9 @@ class FakeSource extends FakeNode {
     this.onended = null;
     ctx.sources.push(this);
   }
-  start(t = 0) {
+  start(t = 0, offset = 0) {
     this.started = t;
+    this.offset = offset;
   }
   stop(t = 0) {
     if (this.stopped !== null) throw new Error('InvalidStateError');
@@ -111,9 +113,13 @@ class FakeContext {
   /** 模拟时间流逝：到点的 stop 触发 onended */
   advance(dt) {
     this.currentTime += dt;
-    for (const s of this.sources) if (s.stopped !== null && s.stopped <= this.currentTime + 1e-9 && s.onended && !s.ended) {
-      s.ended = true;
-      s.onended();
+    for (const s of this.sources) {
+      // 1031：不循环的 buffer 自然放完也触发 onended（结尾曲）
+      const natural = s.started !== null && !s.loop && s.buffer?.duration !== undefined && s.started + s.buffer.duration - (s.offset ?? 0) <= this.currentTime + 1e-9;
+      if ((natural || (s.stopped !== null && s.stopped <= this.currentTime + 1e-9)) && s.onended && !s.ended) {
+        s.ended = true;
+        s.onended();
+      }
     }
   }
 }
@@ -798,6 +804,125 @@ test('1031 S2 场景曲：mus-s2-keeper-house 登记 s2 组 lazy、gainDb 0（�
   assert.equal(await switchMusicLazy(b, async () => null, LEVELS.s2.music), 'missing');
   assert.equal(b.musicKey, null);
   assert.equal(ctx2.sources.length, 1);
+});
+
+// ---- 1031 配乐 2：结尾曲
+test('1031 结尾曲 AudioSystem：loop = false 单次、offset 起播、fadeOutPrev 旧曲单独淡出新曲不淡入；放完自己清掉（log end）；过头的 offset 不起播', () => {
+  const ctx = new FakeContext();
+  const a = new AudioSystem(ctx);
+  a.playMusic({ duration: 150 }, { key: 'mus-s3-lighthouse' });
+  ctx.currentTime = 100;
+  const end = { duration: 107 };
+  assert.equal(a.playMusic(end, { key: ENDING_MUSIC, loop: false, fadeOutPrev: 2, fadeIn: 0 }), true);
+  const [base, e] = ctx.sources;
+  assert.equal(e.loop, false);
+  assert.deepEqual([e.started, e.offset], [100, 0]);
+  assert.deepEqual(e.out[0].gain.events, [['set', 1, 100]], '结尾曲不淡入');
+  assert.deepEqual(lastRamp(base.out[0].gain), ['ramp', 0, 102]);
+  assert.equal(base.stopped, 102);
+  assert.deepEqual(((x) => [x.op, x.key, x.from, x.fade, x.fadeOut, x.loop])(a.musicLog.at(-1)), ['play', ENDING_MUSIC, 'mus-s3-lighthouse', 0, 2, false]);
+  assert.equal(a.musicLoop, false);
+  assert.equal(a.musicStartAt, 100);
+  ctx.currentTime = 150;
+  assert.ok(Math.abs(a.musicPosition - 50) < 1e-9);
+  ctx.advance(57);
+  assert.equal(a.musicKey, null, '放完清掉');
+  assert.deepEqual(((x) => [x.op, x.from])(a.musicLog.at(-1)), ['end', ENDING_MUSIC]);
+  // offset：从第 3 s 起播
+  ctx.currentTime = 300;
+  a.playMusic(end, { key: ENDING_MUSIC, loop: false, offset: 3, fadeIn: 0.5, fadeOutPrev: 2 });
+  assert.deepEqual([ctx.sources.at(-1).started, ctx.sources.at(-1).offset, a.musicStartAt, a.musicLog.at(-1).offset], [300, 3, 297, 3]);
+  a.stopMusic();
+  assert.equal(a.playMusic(end, { key: ENDING_MUSIC, loop: false, offset: 107 }), false, '过头不起播');
+  // loop 曲 offset 取模
+  a.playMusic({ duration: 150 }, { key: 'x', offset: 160 });
+  assert.equal(ctx.sources.at(-1).offset, 10);
+});
+
+test('1031 结尾曲 EndingMusic：manifest s3 lazy；预取后 lighthouse:ignited 同一音频时刻 start(0)、场景曲 2 s 淡出；跳过 0.75 s 淡出；晚到按点燃后秒数补位；缺失 / 过淡出点不放；结束页不掐结尾曲', async () => {
+  const m = manifest.find((x) => x.key === ENDING_MUSIC);
+  assert.deepEqual([m.type, m.group, m.lazy, m.optional, m.art, m.gainDb ?? 0], ['audio', 's3', true, true, true, 0]);
+  assert.deepEqual(sizeBucket(m), { group: 's3', lazyAfterEntry: true });
+  assert.equal(ENDING_SCENE_FADE_SEC, 2, 'README 没写场景曲淡出时长 → 2 s');
+  assert.ok(ENDING_SKIP_FADE_SEC >= 0.5 && ENDING_SKIP_FADE_SEC <= 1);
+  assert.deepEqual([ENDING_CUES.fog_open, ENDING_CUES.motif_resolve, ENDING_CUES.no_answer, ENDING_CUES.journal, ENDING_CUES.close_chord, ENDING_CUES.fade_out, ENDING_CUES.silence, ENDING_CUES.length], [14, 21.78, 50, 66, 88, 95, 106, 107]);
+  const buf = { duration: 107 };
+  const mk = () => {
+    const ctx = new FakeContext();
+    const a = new AudioSystem(ctx);
+    const ev = new EventBus();
+    a.playMusic({ duration: 150 }, { key: 'mus-s3-lighthouse' });
+    return { ctx, a, ev };
+  };
+  // 1) 正常：预取 → 点燃同一帧起播
+  {
+    const { ctx, a, ev } = mk();
+    const loads = [];
+    const em = new EndingMusic(a, ev, async (k) => (loads.push(k), buf));
+    await em.prefetch();
+    assert.deepEqual(loads, [ENDING_MUSIC]);
+    ctx.currentTime = 812.345;
+    let atEmit = null;
+    ev.on('lighthouse:ignited', () => (atEmit = ctx.currentTime));
+    ev.emit('lighthouse:ignited', undefined);
+    assert.equal(em.result, 'play');
+    const e = ctx.sources.at(-1);
+    assert.deepEqual([e.started, e.offset, e.loop], [atEmit, 0, false], '结尾曲起播时刻 = 点燃那一帧的音频时钟，文件 0 s');
+    assert.equal(em.ignitedAt, 812.345);
+    assert.deepEqual(e.out[0].gain.events, [['set', 1, 812.345]]);
+    assert.equal(ctx.sources[0].stopped, 814.345, '场景曲 2 s 淡出');
+    ev.emit('lighthouse:ignited', undefined);
+    assert.equal(ctx.sources.length, 2, '只起一次');
+    // 跳过：0.75 s 淡出
+    ctx.currentTime = 830;
+    ev.emit('cutscene:skip', { id: 'other' });
+    assert.equal(a.musicKey, ENDING_MUSIC, '别的演出跳过不管');
+    ev.emit('cutscene:skip', { id: ENDING_CUTSCENE_ID });
+    assert.equal(a.musicKey, null);
+    assert.deepEqual(lastRamp(e.out[0].gain), ['ramp', 0, 830.75]);
+    assert.equal(e.stopped, 830.75);
+    assert.deepEqual(((x) => [x.op, x.from, x.fade])(a.musicLog.at(-1)), ['stop', ENDING_MUSIC, 0.75]);
+    em.dispose();
+  }
+  // 2) 晚到：点燃时还没解码完 → 场景曲照样 2 s 淡出；到了以后 offset = 点燃后经过的音频时钟秒数
+  {
+    const { ctx, a, ev } = mk();
+    let release;
+    const em = new EndingMusic(a, ev, () => new Promise((r) => (release = r)));
+    void em.prefetch();
+    await Promise.resolve();
+    ctx.currentTime = 50;
+    ev.emit('lighthouse:ignited', undefined);
+    assert.equal(a.musicKey, null);
+    assert.equal(ctx.sources[0].stopped, 52);
+    ctx.currentTime = 53.5;
+    release(buf);
+    for (let i = 0; i < 5; i++) await Promise.resolve();
+    assert.equal(em.result, 'late');
+    const e = ctx.sources.at(-1);
+    assert.deepEqual([e.started, e.offset], [53.5, 3.5]);
+    assert.equal(a.musicStartAt, 50, '补位后文件 0 s 仍对齐点燃时刻');
+  }
+  // 3) 缺失 / 过了淡出点 / 已跳过
+  for (const [load, at, skip, want] of [[async () => null, 0, false, 'missing'], [null, 96, false, 'too-late'], [null, 1, true, 'skipped']]) {
+    const { ctx, a, ev } = mk();
+    let release;
+    const em = new EndingMusic(a, ev, load ?? (() => new Promise((r) => (release = r))));
+    void em.prefetch();
+    await Promise.resolve();
+    ev.emit('lighthouse:ignited', undefined);
+    if (skip) ev.emit('cutscene:skip', { id: ENDING_CUTSCENE_ID });
+    ctx.currentTime = at;
+    release?.(buf);
+    for (let i = 0; i < 5; i++) await Promise.resolve();
+    assert.equal(em.result, want);
+    assert.equal(ctx.sources.length, 1, want + '：不放');
+  }
+  // 4) 接线：S3Scene 首帧后 prefetch；ChapterEndScene 结尾曲在放就不淡出
+  const s3 = readFileSync(new URL('../src/levels/s3/S3Scene.ts', import.meta.url), 'utf8');
+  assert.ok(/events\.on\('scene:firstFrame', \(\) => \{\s*offFirst\(\);\s*void ending\.prefetch\(\);/.test(s3), 'S3 首帧后预取结尾曲');
+  const menu = readFileSync(new URL('../src/scenes/MenuScene.ts', import.meta.url), 'utf8');
+  assert.ok(menu.includes('if (this.game.audio.musicKey === ENDING_MUSIC) return;'), '章节结束页不掐结尾曲');
 });
 
 test('033 改 LazyAudioCache：并发共享一次下载；404 → null 不抛、记缺失、下次重试；超时 → null、迟到的结果丢掉；?art=0 / 没登记不发请求', async () => {
