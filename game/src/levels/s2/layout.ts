@@ -105,8 +105,8 @@ export const S2 = {
   mirrors: { a: [-13.2, 0.85, 3.0] as V3, b: [-7.2, 0.85, 8.6] as V3 },
   /** 北墙（z 11.5…12，高 1.2）+ 拨盘铁门洞 x 3.4…5.0 */
   northWall: { z: [11.5, 12] as V2, h: 1.2, gate: [3.4, 5.0] as V2 },
-  /** 拨盘铁门（谜题 4）：合页在西门柱内侧，门扇关着挡住门洞，开 = 绕 +Y 转 95° 向北；三个 36° 拨盘在门扇南面 y 1.15，从左（西）到右（东） */
-  dialGate: { hinge: [5.0, 0, 11.75] as V3, width: 1.6, height: 1.9, openAngle: (95 * Math.PI) / 180, dialY: 1.15, dialX: [4.65, 4.2, 3.75] as readonly number[], code: [3, 1, 7] as readonly number[] },
+  /** 拨盘铁门（谜题 4）：合页在西门柱内侧，门扇关着挡住门洞，开 = 绕 +Y 转 78° 向北（1030b：美术 95° 门扇擦进西门柱 2.6 cm，90° 仍擦 1.5 cm；78° 门边框离柱面约 2 mm，合页筒本身嵌柱不算）；三个 36° 拨盘在门扇南面 y 1.15，从左（西）到右（东） */
+  dialGate: { hinge: [5.0, 0, 11.75] as V3, width: 1.6, height: 1.9, openAngle: (78 * Math.PI) / 180, dialY: 1.15, dialX: [4.65, 4.2, 3.75] as readonly number[], code: [3, 1, 7] as readonly number[] },
 
   /** 谜题 4 观察点：二层西窗内（站位地面 = 眼睛 − 1.35），朝白石组，观察 FOV 30° */
   viewpoint: { eye: [0.95, 4.35, 1.0] as V3, lookAt: [18, 0.2, 1] as V3, fov: 30, toleranceDeg: 6, fadeFromDeg: 12 },

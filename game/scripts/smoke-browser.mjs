@@ -1855,6 +1855,28 @@ const CHECKS = [
         if (g.missing.length || g.parent !== `env-courtyard-wall-s2-mirror-${k}-socket` || g.st.some((x) => x.deg > 0.05 || x.q > 0.05 || x.d > 0.005)) throw new Error(`art=1 立镜 ${k} 不对 ` + JSON.stringify(g));
       }
       out.push('art=1 立镜 a / b 挂院墙 socket、初始 / 正解镜面与 pivot = 白盒 ✓');
+      // 1030b 拨盘铁门：挂崖顶 gate-socket；站位 = 美术 -interact；拨盘转到 317 美术 dial rotation.z = −36k°；门扇跟白盒开到 openAngle
+      const gt = await evaluate(`(() => {
+        const s = __s2; const V = s.scene.position.constructor; const Q = s.scene.quaternion.constructor; const E = s.scene.rotation.constructor;
+        const m = (s.artSlots?.mounted ?? []).find((x) => x.id === 'prop-dial-gate-s2');
+        if (!m) return null;
+        const find = (root, suf) => { let f = null; root.traverse((o) => { if (!f && (o.name === suf || o.name.endsWith('-' + suf))) f = o; }); return f; };
+        s.scene.updateMatrixWorld(true);
+        const ip = s.puzzles.gateInteractable.interactPoint.getWorldPosition(new V()); const ap = find(m.model, 'interact').getWorldPosition(new V());
+        const code = [3, 1, 7]; const dz = [];
+        s.puzzles.dials.forEach((p, i) => p.setAngle(0, 36 * code[i]));
+        s.artSlots.update();
+        ['dial-0', 'dial-1', 'dial-2'].forEach((n, i) => { const d = find(m.model, n); dz.push((d.quaternion.angleTo(new Q().setFromEuler(new E(0, 0, (-36 * code[i] * Math.PI) / 180))) * 180) / Math.PI); });
+        s.puzzles.dials.forEach((p) => p.setAngle(0, 0));
+        const g = s.greybox.dialGate; const open = 78;
+        g.rotation.y = (open * Math.PI) / 180; s.artSlots.update(); s.scene.updateMatrixWorld(true);
+        const door = find(m.model, 'gate-door'); const yaw = (new E().setFromQuaternion(door.getWorldQuaternion(new Q()), 'YXZ').y * 180) / Math.PI;
+        g.rotation.y = 0; s.artSlots.update();
+        return { parent: m.model.parent?.name, missing: m.missingNodes, stand: ip.distanceTo(ap), standZ: ip.z, dz, yaw, gbOpen: (s.puzzles.state.gateOpen) };
+      })()`);
+      if (!gt) throw new Error('art=1 拨盘铁门 prop-dial-gate-s2 没挂上');
+      if (gt.parent !== 'env-clifftop-s2-gate-socket' || gt.missing.length || gt.stand > 0.01 || gt.dz.some((x) => x > 0.05) || Math.abs(gt.yaw - 78) > 0.05 || gt.gbOpen) throw new Error('art=1 拨盘铁门不对 ' + JSON.stringify(gt));
+      out.push(`art=1 拨盘铁门挂 gate-socket、站位读 -interact（差 ${(gt.stand * 1000).toFixed(1)} mm）、317 拨盘 rotation.z = −36k°、门扇开 ${gt.yaw.toFixed(1)}° ✓`);
       // 进 S2 会存档 s2，autostart 会接着存档进 S2：清掉存档再回 S1（后面的检查默认在 S1）
       await evaluate(`localStorage.removeItem('foglight.save.v1'); 1`);
       try { await cdp.goto(''); } catch (e) { throw new Error('回 S1 失败：' + e.message + ' ' + JSON.stringify(await evaluate(`({ scene: __game?.scenes?.current?.name, href: location.href, menu: __game?.ui?.mainMenu?.isOpen, err: window.__lastError ?? null })`).catch((x) => String(x))), { cause: e }); }

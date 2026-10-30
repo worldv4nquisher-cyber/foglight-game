@@ -231,4 +231,131 @@ out.push('动线：二层观察点 / 书桌 / 地窖（门开才进得去）/ �
     out.push(`立镜真文件 ×2：挂院墙 socket（= 白盒镜心地面）、24 档镜面 / pivot 世界旋转 = 白盒（最大差 ${worst.toFixed(4)}°）、正解时 -interact ${ixs.join(' / ')} ✓`);
   }
 }
+// ---- 1030b 第 3 条 拨盘铁门 prop-dial-gate-s2（真文件）：挂崖顶 gate-socket、门扇对齐白盒合页；开角 S2.dialGate.openAngle 门扇不穿西门柱；-interact 站位
+{
+  const { readFileSync, existsSync } = await import('node:fs');
+  const { mountArtSlots, findNode } = await import('@/levels/artSlots');
+  const { S2_ART_SLOTS } = await import('@/levels/s2/artSlots');
+  const { GLTFLoader } = await import('three/examples/jsm/loaders/GLTFLoader.js');
+  const { MeshoptDecoder } = await import('three/examples/jsm/libs/meshopt_decoder.module.js');
+  globalThis.self ??= globalThis;
+  const ktx2Stub = { load: (_u, onLoad) => onLoad(new THREE.CompressedTexture([], 1, 1)) };
+  const load = async (rel) => {
+    const f = new URL(`../../art/models/${rel}.glb`, import.meta.url);
+    if (!existsSync(f)) return null;
+    const buf = readFileSync(f);
+    return (await new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).setKTX2Loader(ktx2Stub).parseAsync(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength), '')).scene;
+  };
+  const gate = await load('props/prop-dial-gate-s2');
+  const cliff = await load('env/env-clifftop-s2');
+  if (!gate || !cliff) out.push('铁门 / 崖顶美术未交付（跳过真文件检查）');
+  else {
+    const dg = S2.dialGate;
+    const world = new THREE.Scene();
+    cliff.name = 'env-clifftop-s2';
+    world.add(cliff);
+    const hingeParent = gb.dialGate.parent;
+    world.add(gb.dialGate);
+    // 白盒拨盘在 puzzles.ts 里建（门扇局部、绕 Y 转 180° 朝南）；这里只验门扇 / 站位 / 开角，拨盘给同名占位让驱动表齐
+    const fakeDials = [1, 2, 3].map((i) => {
+      const d = new THREE.Group();
+      d.name = `dial-gate-s2-dial-${i}`;
+      d.rotation.y = Math.PI;
+      gb.dialGate.add(d);
+      return d;
+    });
+    world.updateMatrixWorld(true);
+    const spec = S2_ART_SLOTS.find((x) => x.key === 'prop-dial-gate-s2');
+    const slots = mountArtSlots({ has: (x) => x === spec.key, getModel: () => gate }, world, [spec]);
+    assert.equal(slots.mounted.length, 1);
+    assert.deepEqual(slots.mounted[0].missingNodes, [], '铁门约定节点齐');
+    assert.equal(gate.parent?.name, 'env-clifftop-s2-gate-socket', '铁门挂崖顶 gate-socket');
+    const door = findNode(gate, 'gate-door');
+    const hw = door.getWorldPosition(new THREE.Vector3());
+    assert.ok(hw.distanceTo(new THREE.Vector3(...dg.hinge)) < 1e-3, `美术合页 ${hw.toArray()} = 白盒 ${dg.hinge}`);
+    // 西门柱：崖顶 lod0 在合页附近按高度切片，得柱面 x 与南北范围（柱帽一带往东出挑）
+    const lod = cliff.getObjectByName('env-clifftop-s2_lod0');
+    const tris = [];
+    lod.traverse((m) => {
+      if (!m.isMesh) return;
+      const p = m.geometry.attributes.position;
+      const idx = m.geometry.index;
+      const n = idx ? idx.count : p.count;
+      const g = (i) => new THREE.Vector3().fromBufferAttribute(p, idx ? idx.getX(i) : i).applyMatrix4(m.matrixWorld);
+      for (let t = 0; t < n; t += 3) {
+        const tri = [g(t), g(t + 1), g(t + 2)];
+        if (tri.every((v) => v.x < dg.hinge[0] - 0.3 || v.x > dg.hinge[0] + 0.8 || v.z < dg.hinge[2] - 0.6 || v.z > dg.hinge[2] + 0.6)) continue;
+        tris.push(tri);
+      }
+    });
+    const bands = [];
+    for (let y = 0.05; y < 1.75; y += 0.05) {
+      const pts = [];
+      for (const [a, b, c] of tris)
+        for (const [u, w] of [[a, b], [b, c], [c, a]])
+          if ((u.y - y) * (w.y - y) < 0) {
+            const t = (y - u.y) / (w.y - u.y);
+            pts.push([u.x + t * (w.x - u.x), u.z + t * (w.z - u.z)]);
+          }
+      const face = pts.filter(([, z]) => Math.abs(z - dg.hinge[2]) < 0.25);
+      if (!face.length) continue;
+      const fx = Math.min(...face.map(([x]) => x));
+      const side = pts.filter(([x]) => x > fx + 0.1);
+      bands.push({ y0: y - 0.025, y1: y + 0.025, fx, z0: Math.min(...side.map(([, z]) => z)), z1: Math.max(...side.map(([, z]) => z)) });
+    }
+    assert.ok(bands.length > 20, '切出西门柱');
+    const fxMid = bands.find((b) => b.y0 > 0.9).fx;
+    assert.ok(Math.abs(fxMid - dg.hinge[0]) < 0.03, `西门柱面 x ${fxMid.toFixed(3)} ≈ 合页 x ${dg.hinge[0]}`);
+    // 门扇顶点（门扇局部；合页筒 x > −0.06 本来就嵌在柱里，转起来不变，不算）
+    const verts = [];
+    door.updateMatrixWorld(true);
+    door.traverse((o) => {
+      if (!o.isMesh || /collider/.test(o.name)) return;
+      const p = o.geometry.attributes.position;
+      for (let i = 0; i < p.count; i++) {
+        const v = door.worldToLocal(new THREE.Vector3().fromBufferAttribute(p, i).applyMatrix4(o.matrixWorld));
+        if (v.x <= -0.06) verts.push(v);
+      }
+    });
+    const pen = (deg) => {
+      gb.dialGate.rotation.y = THREE.MathUtils.degToRad(deg);
+      slots.update();
+      world.updateMatrixWorld(true);
+      let worst = -1;
+      const w = new THREE.Vector3();
+      for (const v of verts) {
+        w.copy(v).applyMatrix4(door.matrixWorld);
+        const b = bands.find((x) => w.y >= x.y0 && w.y < x.y1);
+        if (!b || w.z < b.z0 || w.z > b.z1) continue;
+        // 正 = 进柱深度（柱面往西），负 = 离柱面的空隙
+        worst = Math.max(worst, w.x - b.fx);
+      }
+      return worst;
+    };
+    const openDeg = THREE.MathUtils.radToDeg(dg.openAngle);
+    const p95 = pen(95);
+    const p90 = pen(90);
+    const pOpen = pen(openDeg);
+    // 美术门扇跟白盒转到开角
+    const yawW = new THREE.Euler().setFromQuaternion(door.getWorldQuaternion(new THREE.Quaternion()), 'YXZ').y;
+    assert.ok(Math.abs(THREE.MathUtils.radToDeg(yawW) - openDeg) < 0.01, `美术门扇开到 ${THREE.MathUtils.radToDeg(yawW).toFixed(2)}° = 白盒 ${openDeg}°`);
+    assert.ok(p95 > 0.01, `美术原开角 95° 应擦进西门柱（${(p95 * 100).toFixed(1)} cm）`);
+    assert.ok(pOpen <= 0, `开角 ${openDeg}° 门扇不穿西门柱（穿 ${(pOpen * 1000).toFixed(1)} mm）`);
+    assert.ok(openDeg >= 75, '开角不能太小（门洞留够宽）');
+    pen(0);
+    // 站位：美术 -interact（门南 0.485 m、+Z 朝门）
+    const ix = findNode(gate, 'interact');
+    const ip = ix.getWorldPosition(new THREE.Vector3());
+    const fz = new THREE.Vector3(0, 0, 1).transformDirection(ix.matrixWorld);
+    assert.ok(Math.abs(dg.hinge[2] - ip.z - 0.485) < 0.005 && Math.abs(ip.x - (dg.hinge[0] - dg.width / 2)) < 0.005 && fz.z > 0.999, `-interact ${ip.toArray()} 门南 0.485 m 朝北`);
+    slots.dispose?.();
+    gate.removeFromParent();
+    for (const d of fakeDials) d.removeFromParent();
+    hingeParent.add(gb.dialGate);
+    gb.dialGate.traverse((o) => {
+      if (o.isMesh) o.visible = true;
+    });
+    out.push(`拨盘铁门真文件：挂 gate-socket、合页对齐；西门柱面 x ${fxMid.toFixed(3)}，门扇穿柱 95° ${(p95 * 100).toFixed(1)} cm / 90° ${(p90 * 100).toFixed(1)} cm / 开角 ${openDeg}° 离柱面 ${(-pOpen * 1000).toFixed(1)} mm（不穿）；-interact (${ip.x.toFixed(2)}, ${ip.z.toFixed(3)}) 门南 0.485 m ✓`);
+  }
+}
 console.log('verify-s2 ✓ ' + out.join('；'));

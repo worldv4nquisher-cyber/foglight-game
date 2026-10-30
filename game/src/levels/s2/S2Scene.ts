@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { missingGreyboxNodes, mountArtSlots, type ArtSlots } from '../artSlots';
+import { missingGreyboxNodes, mountArtSlots, snapToArt, type ArtSlots } from '../artSlots';
 import { S2_ART_SLOTS } from './artSlots';
 import type { Game } from '@/core/Game';
 import { gameplay } from '@/config/gameplay';
@@ -82,6 +82,8 @@ export class S2Scene extends LevelScene {
     this.cleanups.push(() => this.puzzles.dispose());
     // 021 / 022 未交付道具的替换入口（文件到了自动挂上，白盒逻辑不变）
     this.artSlots = mountArtSlots(this.game.assets, this.scene, S2_ART_SLOTS, { showGreybox: greyboxVisible });
+    // 1030b：拨盘铁门站位改读美术 -interact（门南 0.485 m，+Z 朝门）；白盒是门南 0.9 m
+    snapToArt(this.artSlots, 'prop-dial-gate-s2', 'prop-dial-gate-s2-interact', this.puzzles.gateInteractable.interactPoint);
     this.artSlotGreyboxMissing = missingGreyboxNodes(this.scene, S2_ART_SLOTS);
     if (this.artSlotGreyboxMissing.length) console.warn('[art-slot] 白盒节点名对不上：' + this.artSlotGreyboxMissing.join('、'));
   }

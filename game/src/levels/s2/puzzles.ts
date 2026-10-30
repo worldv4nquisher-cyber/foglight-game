@@ -82,6 +82,8 @@ export interface S2Puzzles {
   windowGlow: THREE.Mesh;
   dials: RotatablePart[];
   dialPuzzle: PuzzleGroup;
+  /** 拨盘铁门交互（站位 interactPoint：美术件到了由 S2Scene 改读 prop-dial-gate-s2-interact） */
+  gateInteractable: Interactable;
   viewpoint: ViewpointTarget;
   digits: THREE.Group;
   actions: XiActionPlayer;
@@ -576,6 +578,7 @@ export function buildS2Puzzles(d: S2PuzzleDeps): S2Puzzles {
     windowGlow,
     dials,
     dialPuzzle,
+    gateInteractable: gateIx,
     viewpoint,
     digits,
     actions,
