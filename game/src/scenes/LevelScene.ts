@@ -12,7 +12,8 @@ import { CameraFollowSystem, CameraTrack } from '@/systems/CameraFollowSystem';
 import type { CameraKey } from '@/systems/camera/CameraTrack';
 import { InteractionSystem, actorFromRig } from '@/systems/interaction/InteractionSystem';
 import { SkyDome, SKY_CLOUDS_KEY } from '@/world/SkyDome';
-import { Water } from '@/world/Water';
+import { Water, WATER_NORMAL_KEY, RAIN_RIPPLE_KEY } from '@/world/Water';
+import { ATMO028 } from '@/config/atmosphere028';
 import { Rain } from '@/world/Rain';
 import { applyLodDistances } from '@/render/lod';
 import { applySkyLayerAtmosphere, type SkyLayerHandle } from '@/render/skyLayer';
@@ -280,6 +281,8 @@ export abstract class LevelScene extends BaseScene {
     if (this.outdoor) {
       this.water = new Water(600, 200, a.waterColor);
       this.water.position.y = -0.6;
+      const tex = (k: string): THREE.Texture | null => (this.game.assets.has(k) ? this.game.assets.getTexture(k) : null);
+      this.water.setDetail(tex(WATER_NORMAL_KEY), tex(RAIN_RIPPLE_KEY));
       this.scene.add(this.water);
       this.rain = new Rain();
       this.scene.add(this.rain);
@@ -331,7 +334,7 @@ export abstract class LevelScene extends BaseScene {
     this.sun.color.set(a.sunColor);
     this.sun.intensity = a.sunIntensity;
     this.sun.position.set(...a.sunDirection);
-    this.water?.material.color.set(a.waterColor);
+    this.water?.applyAtmosphere(a);
     this.rain?.applyAtmosphere(a);
     for (const f of this.midFogs) f.density = a.midFogDensity;
     for (const s of this.farSilhouettes) applySkyLayerAtmosphere(s.handle, a, s.fog === 'mid' ? a.midFogDensity : 0);
@@ -343,6 +346,7 @@ export abstract class LevelScene extends BaseScene {
     this.camera.far = q.viewDistance;
     this.camera.updateProjectionMatrix();
     this.rain?.setCount(q.rainParticles.count);
+    this.water?.setRipples(ATMO028.rainTiers[q.tier].ripples);
     // 阴影贴图尺寸 = §8 shadowType.mapSize（CSM 级数 / PCSS / 接触阴影在 023 做）；尺寸变了就丢掉旧贴图，下一帧按新尺寸重建
     const s = this.sun.shadow;
     const size = q.shadowType.mapSize;

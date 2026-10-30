@@ -13,6 +13,7 @@ import { ATMOSPHERE_PRESETS, RAIN_NIGHT_LIGHT_MUL, resolveAtmosphereName } from 
 import { ATMO028 } from '@/config/atmosphere028';
 import { silhouetteColor } from '@/render/skyLayer';
 import { FogCards028 } from '@/world/FogCards028';
+import { Water } from '@/world/Water';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const ART = resolve(ROOT, '../art');
@@ -135,7 +136,39 @@ await test('028 雾片：5 层雾墙跟随相机 xz、两端 + 近相机淡出�
   return `${walls.length} 层雾墙 + ${cards.length} 片地面雾`;
 });
 
-// ---- 雨 / 水面 / LUT（后续条目）
+// ---- 水面
+await test('028 水面：两层法线 + textureGrad 雨圈（mip ≤ 3）、只在下雨且档位开时叠', () => {
+  const w = new Water(10, 4);
+  const plain = compiled(w.material, 'physical');
+  assert.doesNotMatch(plain.fragmentShader, /tWN/, '没贴图时不改片元');
+  const n = new THREE.Texture();
+  const r = new THREE.Texture();
+  r.image = { width: 1024, height: 1024 };
+  w.setDetail(n, r);
+  const sh = compiled(w.material, 'physical');
+  assert.match(sh.fragmentShader, /textureGrad\(tWR/);
+  assert.match(sh.fragmentShader, /uRipMaxGrad/);
+  assert.equal(sh.uniforms.uRipMaxGrad.value, 8 / 1024, 'mip ≤ 3：梯度上限 2^3 / 1024');
+  assert.match(sh.fragmentShader, /uL0\.xy \+ uL0\.zw/);
+  assert.match(sh.fragmentShader, /uL1\.xy \+ uL1\.zw/);
+  w.setRipples(ATMO028.rainTiers.ultra.ripples);
+  w.applyAtmosphere(ATMOSPHERE_PRESETS['overcast-dusk']);
+  near(w.rippleStrength, 0.35, 1e-9, '下雨 ultra 雨圈强度');
+  assert.equal(sh.uniforms.uRipL2.value, 1, 'ultra 两层');
+  w.applyAtmosphere(ATMOSPHERE_PRESETS['overcast-after-rain']);
+  assert.equal(w.rippleStrength, 0, '雨停没有雨圈');
+  w.applyAtmosphere(ATMOSPHERE_PRESETS['rain-night']);
+  w.setRipples(ATMO028.rainTiers.standard.ripples);
+  near(w.rippleStrength, 0.3, 1e-9, 'standard 0.30');
+  assert.equal(sh.uniforms.uRipL2.value, 0);
+  w.update(1 / 24 * 9.5);
+  assert.deepEqual(sh.uniforms.uRipFrame.value.toArray(), [1, 1], '24 fps 第 9 帧 = (1, 1)');
+  near(sh.uniforms.uL0.value.x, 1 / 14, 1e-9);
+  near(sh.uniforms.uL1.value.x, 1 / 5.3, 1e-9);
+  near(sh.uniforms.uNScale.value, ATMO028.presets['rain-night'].water.normalScale, 1e-9);
+});
+
+// ---- 雨 / LUT（后续条目）
 
 
 let failed = 0;

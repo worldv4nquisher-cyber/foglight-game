@@ -1,11 +1,46 @@
 import * as THREE from 'three';
+import { ATMO028 } from '@/config/atmosphere028';
+
+/** 028 水面贴图 key（manifest common） */
+export const WATER_NORMAL_KEY = ATMO028.textures.waterNormal;
+export const RAIN_RIPPLE_KEY = ATMO028.textures.rainRipple;
+
+/** 雨圈 flipbook 参数（按画质档：ATMO028.rainTiers[tier].ripples） */
+export interface RippleOpts {
+  enabled: boolean;
+  tileM: number;
+  fps: number;
+  strength: number;
+  layers: number;
+}
 
 /**
  * 占位水面：MeshStandardMaterial + 顶点着色器里叠加几组 Gerstner 风格正弦波（GPU，零 CPU 开销），
  * 法线由解析导数计算，配合低粗糙度得到暗沉、缓慢起伏的海面。以后可替换为带反射/折射的正式水体。
+ *
+ * v0.1-028（README-028 §5，照搬 atmo028.js waterShader 的法线部分）：setDetail() 给了贴图后，片元里在波浪法线上叠
+ * - 两层 tex-water-normal（2048，裁定 18）：14 m / 5.3 m 平铺，各自 scroll 漂移，强度 = 预设 water.normalScale；
+ * - 下雨时叠雨圈 flipbook tex-rain-ripple-normal（8×8 共 64 帧、24 fps、tile 1.5 m），用 textureGrad 采样，
+ *   梯度长度夹到 mip ≤ 3（maxMipLevel），否则帧格边缘渗色；ultra 第二层旋转 37° ×1.37 错 4 帧打散平铺；12→30 m 淡出。
+ * 菲涅尔 / 反射扭曲（presets.*.water.fresnel / reflectDistort）要平面反射，留给 025；泡沫带同样未接（见 028 报告）。
  */
 export class Water extends THREE.Mesh<THREE.PlaneGeometry, THREE.MeshStandardMaterial> {
-  private uniforms = { uTime: { value: 0 }, uWaveScale: { value: 1 } };
+  private uniforms = {
+    uTime: { value: 0 },
+    uWaveScale: { value: 1 },
+    tWN: { value: null as THREE.Texture | null },
+    tWR: { value: null as THREE.Texture | null },
+    uL0: { value: new THREE.Vector4() },
+    uL1: { value: new THREE.Vector4() },
+    uNScale: { value: 0.35 },
+    uRipK: { value: 0 },
+    uRipTile: { value: 1 / 1.5 },
+    uRipL2: { value: 0 },
+    uRipFrame: { value: new THREE.Vector2() },
+    uRipMaxGrad: { value: 8 / 1024 },
+  };
+  private ripple: RippleOpts | null = null;
+  private raining = false;
 
   /**
    * @param waveScale 波浪振幅倍数（潮汐分区的小片水面用 0.3 左右，免得浪高盖过 0.3 m 的送回判定）
@@ -63,7 +98,99 @@ export class Water extends THREE.Mesh<THREE.PlaneGeometry, THREE.MeshStandardMat
           #endif`,
         )
         .replace('#include <begin_vertex>', 'vec3 transformed = position + wOffset;');
+      if (!this.hasDetail) return;
+      for (const k of ['tWN', 'tWR', 'uL0', 'uL1', 'uNScale', 'uRipK', 'uRipTile', 'uRipL2', 'uRipFrame', 'uRipMaxGrad'] as const) shader.uniforms[k] = this.uniforms[k];
+      shader.vertexShader = shader.vertexShader
+        .replace('#include <common>', '#include <common>\nvarying vec3 vWaterW;')
+        .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\n  vWaterW = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+      shader.fragmentShader = shader.fragmentShader
+        .replace(
+          '#include <common>',
+          /* glsl */ `#include <common>
+          varying vec3 vWaterW;
+          uniform sampler2D tWN, tWR;
+          uniform vec4 uL0, uL1;
+          uniform vec2 uRipFrame;
+          uniform float uNScale, uRipK, uRipTile, uRipL2, uRipMaxGrad;
+          // 梯度长度夹到 uRipMaxGrad（= 2^maxMip / 贴图边长）→ 采样 mip ≤ maxMipLevel，帧格边缘不渗色
+          vec2 capGrad(vec2 g) { float l = length(g); return g * min(1.0, uRipMaxGrad / max(l, 1e-8)); }
+          vec2 rippleN(vec2 ru, vec2 frame) {
+            vec2 gx = capGrad(dFdx(ru) / 8.0), gy = capGrad(dFdy(ru) / 8.0);
+            return textureGrad(tWR, (frame + fract(ru)) / 8.0, gx, gy).xy * 2.0 - 1.0;
+          }`,
+        )
+        .replace(
+          '#include <normal_fragment_maps>',
+          /* glsl */ `#include <normal_fragment_maps>
+          {
+            vec2 wxz = vWaterW.xz;
+            vec2 dn = (texture2D(tWN, wxz * uL0.xy + uL0.zw).xy * 2.0 - 1.0) + (texture2D(tWN, wxz * uL1.xy + uL1.zw).xy * 2.0 - 1.0);
+            dn *= uNScale;
+            if (uRipK > 0.0) {
+              float dist = length(cameraPosition - vWaterW);
+              vec2 rn = rippleN(wxz * uRipTile, uRipFrame);
+              if (uRipL2 > 0.5) {
+                vec2 r2 = mat2(0.8, -0.6, 0.6, 0.8) * wxz * uRipTile * 1.37 + 0.31;
+                rn += rippleN(r2, mod(uRipFrame + vec2(4.0), 8.0));
+                rn *= 0.7;
+              }
+              dn += rn * uRipK * (1.0 - smoothstep(12.0, 30.0, dist));
+            }
+            vec3 nW = inverseTransformDirection(normal, viewMatrix);
+            nW = normalize(nW + vec3(dn.x, 0.0, dn.y));
+            normal = normalize((viewMatrix * vec4(nW, 0.0)).xyz);
+          }`,
+        );
     };
+    material.customProgramCacheKey = () => (this.hasDetail ? 'water028' : 'water');
+  }
+
+  private get hasDetail(): boolean {
+    return !!this.uniforms.tWN.value;
+  }
+
+  /** 028 细节法线 + 雨圈贴图（缺失 → 只有 Gerstner 波）；ripple = 本档雨圈参数（null = 关） */
+  setDetail(normal: THREE.Texture | null, ripple: THREE.Texture | null): void {
+    const had = this.hasDetail;
+    for (const t of [normal, ripple]) {
+      if (!t) continue;
+      t.wrapS = t.wrapT = THREE.RepeatWrapping;
+      t.anisotropy = 8;
+      t.needsUpdate = true;
+    }
+    this.uniforms.tWN.value = normal;
+    this.uniforms.tWR.value = ripple;
+    const img = ripple?.image as { width?: number } | undefined;
+    const maxMip = ATMO028.water.ripple.maxMipLevel;
+    this.uniforms.uRipMaxGrad.value = 2 ** maxMip / (img?.width ?? 1024);
+    if (had !== this.hasDetail) this.material.needsUpdate = true;
+    this.updateRipK();
+  }
+
+  /** 预设：颜色 + 细节法线强度 */
+  applyAtmosphere(a: { waterColor: number; water: { normalScale: number }; rain: { enabled: boolean } }): void {
+    this.material.color.set(a.waterColor);
+    this.uniforms.uNScale.value = a.water.normalScale;
+    this.raining = a.rain.enabled;
+    this.updateRipK();
+  }
+
+  /** 画质档的雨圈设置（ATMO028.rainTiers[tier].ripples） */
+  setRipples(r: RippleOpts | null): void {
+    this.ripple = r;
+    this.uniforms.uRipTile.value = 1 / (r?.tileM ?? 1.5);
+    this.uniforms.uRipL2.value = r && r.layers > 1 ? 1 : 0;
+    this.updateRipK();
+  }
+
+  private updateRipK(): void {
+    const r = this.ripple;
+    this.uniforms.uRipK.value = this.raining && r?.enabled && this.uniforms.tWR.value ? ATMO028.water.normal.rippleMix * r.strength : 0;
+  }
+
+  /** 当前雨圈强度（测试用） */
+  get rippleStrength(): number {
+    return this.uniforms.uRipK.value;
   }
 
   /** 水面高度（世界 y = 网格 position.y；潮汐 v0.1-011 每帧写） */
@@ -78,6 +205,15 @@ export class Water extends THREE.Mesh<THREE.PlaneGeometry, THREE.MeshStandardMat
   }
 
   update(dt: number): void {
-    this.uniforms.uTime.value += dt;
+    const u = this.uniforms;
+    const t = (u.uTime.value += dt);
+    const L = ATMO028.water.normal.layers;
+    const l0 = L[0]!;
+    const l1 = L[1]!;
+    u.uL0.value.set(1 / l0.tileM, 1 / l0.tileM, ((l0.scroll[0] * t) / l0.tileM) % 1, ((l0.scroll[1] * t) / l0.tileM) % 1);
+    u.uL1.value.set(1 / l1.tileM, 1 / l1.tileM, ((l1.scroll[0] * t) / l1.tileM) % 1, ((l1.scroll[1] * t) / l1.tileM) % 1);
+    const R = ATMO028.water.ripple;
+    const f = Math.floor(t * (this.ripple?.fps ?? R.fps)) % R.frames;
+    u.uRipFrame.value.set(f % R.grid, Math.floor(f / R.grid));
   }
 }
