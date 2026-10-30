@@ -2365,45 +2365,66 @@ const CHECKS = [
       const put = (x, y, z) => `(() => { const s = __s3; const w = s.frame.localToWorld(s.rig.body.position.clone().set(${x}, ${y}, ${z})); s.rig.body.position.copy(w); s.rig.body.velocity.set(0, 0, 0); return 1; })()`;
       // 机器负载高时游戏时间远慢于真实时间：计时类步骤直接推进谜题 / 潮汐的物理步（每步 0.05 s）
       const ff = (sec) => evaluate(`(() => { for (let i = 0; i < ${Math.round(sec / 0.05)}; i++) __s3.puzzles.fixedUpdate(0.05); return 1; })()`);
+      // 等「游戏时间」而不是墙钟：高负载下一帧最多 5 个物理步、帧率掉到个位数，墙钟 3 s 可能只有零点几秒游戏时间
+      // （BUG：石桥独白 / 送回黑场没走完就站到拉杆前 → busy + teleport 没有「E 点灯」）。条件满足就返回；
+      // 游戏时间走满 gameSec 仍不满足 = 失败（真实负载下墙钟上限 wallMs 兜底，防止卡死）
+      const untilG = async (expr, gameSec, wallMs = 120000) => {
+        const end = Date.now() + wallMs;
+        let t0 = null;
+        let v;
+        while (Date.now() < end) {
+          const r = await evaluate(`(() => { const v = (${expr}); return { v, tick: __s3.game.time.fixedTick, dt: __s3.game.time.fixedDelta }; })()`);
+          v = r.v;
+          if (v) return v;
+          t0 ??= r.tick;
+          if ((r.tick - t0) * r.dt >= gameSec) return v;
+          await sleep(50);
+        }
+        return v;
+      };
+      const waitG = (gameSec) => untilG('false', gameSec);
       const near = (x, y, z, d) => `(() => { const s = __s3; const w = s.frame.localToWorld(s.rig.body.position.clone().set(${x}, ${y}, ${z})); return s.rig.body.position.distanceTo(w) < ${d}; })()`;
       // 石桥中段独白
       await evaluate(put(...[-14.14, 3.05, -14.14]));
-      if (!(await until(`__s3.puzzles.state.said.has('ch1.s3.bridge.mono_arrive')`, 3000))) throw new Error('石桥独白没触发');
+      if (!(await untilG(`__s3.puzzles.state.said.has('ch1.s3.bridge.mono_arrive')`, 3))) throw new Error('石桥独白没触发');
       out.push('石桥独白 ✓');
       // 初始涨潮：天光 40 s / 25 s 周期；底层（地面 0.2）→ 送回门外平台
       let st = await evaluate(`(() => { const p = __s3.puzzles; return { tide: p.tide.state, level: p.tide.level, period: p.beam.sky.periodSec, always: p.beam.sky.alwaysOn }; })()`);
       if (st.tide !== 'high' || Math.abs(st.level - 1.6) > 1e-6 || st.period !== 40 || st.always) throw new Error('S3 初始状态不对 ' + JSON.stringify(st));
       await evaluate(put(0.8, 0.4, 1.8));
-      if (!(await until(near(-4.526, 2.4, -3.677, 0.6), 40000))) throw new Error('涨潮时底层没送回门外平台 ' + JSON.stringify(await evaluate(`__s3.rig.body.position.toArray()`)));
+      if (!(await untilG(near(-4.526, 2.4, -3.677, 0.6), 10))) throw new Error('涨潮时底层没送回门外平台 ' + JSON.stringify(await evaluate(`__s3.rig.body.position.toArray()`)));
+      // 送回在黑场中间瞬移，之后还有 0.5 s 保持 + 0.2 s 淡出（controller.busy / mode teleport）；ff 只推谜题不推控制器，
+      // 不等它走完，后面 put / stand 到拉杆前时还在 teleport → 交互不出提示（拉杆前没显示「E 点灯」的根因之一）
+      if (!(await untilG(`!__s3.rig.controller.busy && __s3.rig.controller.mode.kind === 'free'`, 3))) throw new Error('送回黑场没结束 ' + JSON.stringify(await evaluate(`__s3.rig.controller.mode.kind`)));
       out.push('涨潮底层 → 送回门外平台 ✓');
       // 敲钟 → 退潮（6 s）
       await evaluate(`__s3.game.events.emit('interact:used', { id: 'tide-bell-s3', kind: 'use' }), 1`);
       if (!(await evaluate(`__s3.puzzles.bell.rings === 1 && __s3.puzzles.tide.state === 'low'`))) throw new Error('敲钟没生效 ' + JSON.stringify(await evaluate(`({ rings: __s3.puzzles.bell.rings, st: __s3.puzzles.tide.state })`)));
       await evaluate(`__s3.tides.fixedUpdate(7), 1`);
-      if (!(await until(`__s3.puzzles.tide.state === 'low' && !__s3.puzzles.tide.transitioning`, 3000))) throw new Error('敲钟没退潮 ' + JSON.stringify(await evaluate(`({ st: __s3.puzzles.tide.state, lv: __s3.puzzles.tide.level, t: __s3.puzzles.tide.t, ctx: __s3.game.input.context, paused: __s3.game.isPaused, frozen: __s3.game.isFrozen })`)));
+      if (!(await untilG(`__s3.puzzles.tide.state === 'low' && !__s3.puzzles.tide.transitioning`, 3))) throw new Error('敲钟没退潮 ' + JSON.stringify(await evaluate(`({ st: __s3.puzzles.tide.state, lv: __s3.puzzles.tide.level, t: __s3.puzzles.tide.t, ctx: __s3.game.input.context, paused: __s3.game.isPaused, frozen: __s3.game.isFrozen })`)));
       // 开门：1.4 s，撤门扇碰撞
       await evaluate(`__s3.game.events.emit('interact:used', { id: 'door-s3', kind: 'use' }), 1`);
       await ff(1.5);
-      if (!(await until(`__s3.puzzles.state.doorOpen >= 1`, 3000))) throw new Error('门没开');
+      if (!(await untilG(`__s3.puzzles.state.doorOpen >= 1`, 3))) throw new Error('门没开');
       const doorCol = await evaluate(`(() => { const s = __s3; const c = s.colliderOf.get(s.greybox.doorLeaf); return c ? c.enabled : null; })()`);
       if (doorCol !== false) throw new Error('开门后门扇碰撞没撤 ' + doorCol);
       out.push('敲钟退潮、开门撤碰撞 ✓');
       // 底层仰视独白
       await evaluate(put(0.6, 0.25, 1.2));
-      await sleep(400);
+      await waitG(0.4);
       await evaluate(`__s3.cameraFollow.pitch = 0.9, 1`);
-      if (!(await until(`__s3.puzzles.state.said.has('ch1.s3.stairwell.mono_look_up')`, 3000))) throw new Error('仰视独白没触发');
+      if (!(await untilG(`__s3.puzzles.state.said.has('ch1.s3.stairwell.mono_look_up')`, 3))) throw new Error('仰视独白没触发');
       // 先调镜子、后开阀：天光亮着时转到正解 → 上升沿 3 次（A 亮、B 亮、点火口）+ 点火口红光 + 没有油
       await evaluate(`(() => { const b = __s3.puzzles.beam; b.sky.alwaysOn = true; return 1; })()`);
       await ff(0.2);
       const f0 = await evaluate(`__s3.puzzles.state.flashes`);
       await evaluate(`__s3.puzzles.beam.solve(), 1`);
       await ff(0.1);
-      if (!(await until(`__s3.puzzles.state.reached === 3`, 3000))) throw new Error('正解后光路没到点火口');
+      if (!(await untilG(`__s3.puzzles.state.reached === 3`, 3))) throw new Error('正解后光路没到点火口');
       const f1 = await evaluate(`__s3.puzzles.state.flashes`);
       if (f1 - f0 !== 3) throw new Error('光斑上升沿反馈次数不对 ' + (f1 - f0));
       await ff(2.2);
-      if (!(await until(`__s3.puzzles.beam.igniter.state === 'blocked' && __s3.puzzles.state.noOilSaid > 0`, 3000))) throw new Error('未开阀时点火口没进红光 / 没有「没有油。」');
+      if (!(await untilG(`__s3.puzzles.beam.igniter.state === 'blocked' && __s3.puzzles.state.noOilSaid > 0`, 3))) throw new Error('未开阀时点火口没进红光 / 没有「没有油。」');
       if (await evaluate(`__s3.puzzles.leverIx.enabled`)) throw new Error('未开阀时拉杆不应可点');
       out.push('先调镜：光斑亮 ×3 + 共鸣、点火口红光 +「没有油。」、拉杆不可点 ✓');
       // 开阀：天光 / 预告光常亮、点火口重新计时（不是立即触发）
@@ -2412,7 +2433,7 @@ const CHECKS = [
       if (!st.valve || !st.sky || !st.prev || st.ig === 'activated') throw new Error('开阀后状态不对 ' + JSON.stringify(st));
       await ff(2.2);
       // 015 C：开阀那一刻起连续受光 1.0 s → 可点灯（ready，冷白微光），不会自己点燃
-      if (!(await until(`__s3.puzzles.beam.igniter.state === 'ready' && __s3.puzzles.leverIx.enabled && __s3.puzzles.state.readyCount >= 1`, 3000))) throw new Error('开阀后点火口没进可点灯 / 拉杆没开放 ' + JSON.stringify(await evaluate(`__s3.puzzles.beam.igniter.state`)));
+      if (!(await untilG(`__s3.puzzles.beam.igniter.state === 'ready' && __s3.puzzles.leverIx.enabled && __s3.puzzles.state.readyCount >= 1`, 3))) throw new Error('开阀后点火口没进可点灯 / 拉杆没开放 ' + JSON.stringify(await evaluate(`__s3.puzzles.beam.igniter.state`)));
       if (await evaluate(`__s3.puzzles.state.ignited || __s3.puzzles.beam.igniter.activated`)) throw new Error('可点灯不应自动点燃');
       // 可点灯嗡鸣：进入可点灯开始循环（AudioSystem 按名字只一个实例）
       const humSt = `(() => { const h = __s3.puzzles.hum, a = __s3.game.audio; return { on: h.on, starts: h.starts, stops: h.stops, loops: a.loopNames }; })()`;
@@ -2439,14 +2460,14 @@ const CHECKS = [
       const stand = (dx, yawOff) => `(() => { const s = __s3; const sp = s.puzzles.leverIx.standPoint(s.rig.body.position.clone()); s.rig.body.position.set(sp.position.x + ${dx} * Math.sin(sp.facing), sp.position.y + 0.02, sp.position.z + ${dx} * Math.cos(sp.facing)); s.rig.body.velocity.set(0, 0, 0); s.rig.controller.facing = sp.facing + ${yawOff}; return 1; })()`;
       // 灯室半径有限：往室内（面朝方向）退 3.2 m、回头面向拉杆 = 只测距离
       await evaluate(stand(3.2, Math.PI));
-      await sleep(500);
+      await waitG(0.5);
       if (/点灯/.test(await evaluate(prompt))) throw new Error('离拉杆 3.2 m 不应显示「E 点灯」');
       await evaluate(stand(0, Math.PI));
-      await sleep(500);
+      await waitG(0.5);
       if (/点灯/.test(await evaluate(prompt))) throw new Error('背对拉杆不应显示「E 点灯」');
       await evaluate(stand(0, 0));
-      await until(`!__s3.rig.controller.busy`, 5000);
-      if (!(await until(`/E\\s*点灯/.test(${prompt})`, 5000))) throw new Error('拉杆前没显示「E 点灯」：' + (await evaluate(prompt)) + JSON.stringify(await evaluate(`(() => { const s = __s3; const ix = s.puzzles.leverIx; const it = s.interaction ?? s.game.interaction; const f = ix.focus(s.rig.body.position.clone()); return { en: ix.enabled, av: ix.available, ctx: s.game.input.context, pos: s.rig.body.position.toArray(), f: f.toArray(), facing: s.rig.controller.facing, can: it?.canInteract?.(ix), cur: it?.current?.id ?? null, act: it?.actionKind, busy: s.rig.controller.busy, mode: s.rig.controller.mode?.kind, locked: s.rig.controller.locked, paused: s.game.isPaused, frozen: s.game.isFrozen, lp: it?.o?.linkPriority?.() ?? null, ig: s.puzzles.beam.igniter.state }; })()`)));
+      if (!(await untilG(`!__s3.rig.controller.busy`, 3))) throw new Error('拉杆前控制器一直 busy ' + JSON.stringify(await evaluate(`__s3.rig.controller.mode.kind`)));
+      if (!(await untilG(`/E\\s*点灯/.test(${prompt})`, 3))) throw new Error('拉杆前没显示「E 点灯」：' + (await evaluate(prompt)) + JSON.stringify(await evaluate(`(() => { const s = __s3; const ix = s.puzzles.leverIx; const it = s.interaction ?? s.game.interaction; const f = ix.focus(s.rig.body.position.clone()); return { en: ix.enabled, av: ix.available, ctx: s.game.input.context, pos: s.rig.body.position.toArray(), f: f.toArray(), facing: s.rig.controller.facing, can: it?.canInteract?.(ix), cur: it?.current?.id ?? null, act: it?.actionKind, busy: s.rig.controller.busy, mode: s.rig.controller.mode?.kind, locked: s.rig.controller.locked, paused: s.game.isPaused, frozen: s.game.isFrozen, lp: it?.o?.linkPriority?.() ?? null, ig: s.puzzles.beam.igniter.state }; })()`)));
       if (/操作/.test(await evaluate(prompt))) throw new Error('点灯不应用「E 操作」');
       out.push('「E 点灯」只在拉杆 1.8 m / ±60° 内出现 ✓');
       // BUG-015：可点灯时站在拉杆站位，相机 yaw ±0.6 × pitch 0 / −0.25 / −0.5（21 个视角）都选拉杆，不被透镜 inspect 抢走
@@ -2455,7 +2476,7 @@ const CHECKS = [
       for (const pitch of [0, -0.25, -0.5])
         for (let k = -3; k <= 3; k++) {
           await evaluate(`(() => { const s = __s3; const sp = s.puzzles.leverIx.standPoint(s.rig.body.position.clone()); s.rig.body.position.set(sp.position.x, sp.position.y + 0.02, sp.position.z); s.rig.body.velocity.set(0, 0, 0); s.rig.controller.facing = sp.facing; s.cameraFollow.yaw = sp.facing + Math.PI + ${k * 0.2}; s.cameraFollow.pitch = ${pitch}; window.__t15 = s.game.time.fixedTick; return 1; })()`);
-          await until(`__s3.game.time.fixedTick >= window.__t15 + 3`, 5000);
+          await until(`__s3.game.time.fixedTick >= window.__t15 + 3`, 60000);
           views.push(await evaluate(`__s3.interaction.current?.id ?? null`));
         }
       const bad = views.filter((id) => id !== 'ignite-lever-s3');
@@ -2463,19 +2484,24 @@ const CHECKS = [
       if (!/E\s*点灯/.test(await evaluate(prompt))) throw new Error('BUG-015 扫视角后提示不是「E 点灯」');
       out.push('BUG-015：可点灯时拉杆站位 21 个视角全选拉杆「E 点灯」，透镜让位 ✓');
       // 按 E：锁输入（cutscene）→ 走到 -interact → xi-ignite-lever 第 34 帧（1.133 s）点燃；连按只一次
-      await evaluate(`(() => { window.__lit = 0; __s3.game.events.on('lighthouse:ignited', () => window.__lit++); return 1; })()`);
+      // 「1.0 s 内不该点燃」：按 E 由真实游戏循环处理，从按下到下面 ff 之间真实循环还会推进走位 / 动作（高负载下一帧 5 步 = 0.083 s，
+      // 几次 evaluate 往返就能吃掉 0.133 s 余量）→ 记下按 E 生效后谜题实际走过的游戏时间（__igT），冻结真实循环，再只用 ff 推到 1.0 s
+      await evaluate(`(() => { window.__lit = 0; __s3.game.events.on('lighthouse:ignited', () => window.__lit++); const p = __s3.puzzles; window.__igT = 0; const f = p.fixedUpdate; p.fixedUpdate = (dt) => { if (p.state.igniting && !p.state.ignited) window.__igT += dt; f.call(p, dt); }; return 1; })()`);
       await evaluate(`__s3.game.input.setRaw('smoke', 'KeyE', true); 1`);
-      if (!(await until(`__s3.puzzles.state.igniting`, 3000))) throw new Error('按 E 没生效');
+      if (!(await untilG(`__s3.puzzles.state.igniting && (window.__unfreeze15 ??= __s3.game.freeze(), true)`, 3))) throw new Error('按 E 没生效');
       await evaluate(`__s3.game.input.setRaw('smoke', 'KeyE', false); 1`);
+      const igT0 = await evaluate(`window.__igT`);
       st = await evaluate(`({ ctx: __s3.game.input.context, en: __s3.puzzles.leverIx.enabled, lit: __s3.puzzles.state.ignited })`);
       if (st.ctx !== 'cutscene' || st.en || st.lit) throw new Error('按 E 后应锁输入、禁用拉杆、还没点燃 ' + JSON.stringify(st));
       await evaluate(`__s3.game.events.emit('interact:used', { id: 'ignite-lever-s3', kind: 'use' }), 1`);
-      await ff(1.0);
-      if (await evaluate(`__s3.puzzles.state.ignited`)) throw new Error('走位 + 1.0 s 内不该点燃（第 34 帧 = 1.133 s）');
+      if (igT0 > 0.9) throw new Error('按 E 到冻结之间真实循环已走 ' + igT0.toFixed(3) + ' s，测不了 1.0 s 内');
+      await ff(1.0 - igT0);
+      if (await evaluate(`__s3.puzzles.state.ignited`)) throw new Error('走位 + 1.0 s 内不该点燃（第 34 帧 = 1.133 s）：已走 ' + (await evaluate(`window.__igT`)).toFixed(3) + ' s');
       hum = await evaluate(humSt);
       if (!hum.on || hum.loops.join() !== 'sfx-ignite-ready-loop') throw new Error('点灯演出中（点燃前）嗡鸣不该停 ' + JSON.stringify(hum));
       await ff(1.2);
-      if (!(await until(`__s3.lighthouseOn && __s3.puzzles.state.ignited && !__s3.puzzles.leverIx.enabled && __s3.puzzles.beam.igniter.activated`, 5000))) throw new Error('点灯没生效');
+      await evaluate(`(window.__unfreeze15?.(), window.__unfreeze15 = undefined, 1)`);
+      if (!(await untilG(`__s3.lighthouseOn && __s3.puzzles.state.ignited && !__s3.puzzles.leverIx.enabled && __s3.puzzles.beam.igniter.activated`, 3))) throw new Error('点灯没生效');
       const leverRot = await evaluate(`__s3.puzzles.leverSwing.rotation.x * 180 / Math.PI`);
       if (Math.abs(leverRot + 60) > 0.5) throw new Error('拉杆没转到 −60° ' + leverRot);
       hum = await evaluate(humSt);
@@ -2500,7 +2526,7 @@ const CHECKS = [
       if (await evaluate(`__s3.game.scenes.current !== __s3`)) throw new Error('0:04 前不应离开 S3');
       if (!(await evaluate(`__s3.game.narrative.hasSeen('ch1.s3.ignite.mono')`))) throw new Error('点灯独白应记为已看过');
       await ffTo(4.1);
-      if (!(await until(`__s3.game.scenes.current !== __s3`, 8000))) throw new Error('0:04 后应进章节结束页');
+      if (!(await untilG(`__s3.game.scenes.current !== __s3`, 8))) throw new Error('0:04 后应进章节结束页');
       out.push('点灯独白 0.5–3.5 s 锁定不可点掉、只一次，0:04 前消失 → 章节结束 ✓');
       await evaluate(`localStorage.removeItem('foglight.save.v1'); 1`);
       try { await cdp.goto(''); } catch (e) { throw new Error('回 S1 失败：' + e.message, { cause: e }); }
