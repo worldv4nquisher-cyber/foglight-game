@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { missingGreyboxNodes, mountArtSlots, type ArtSlots } from '../artSlots';
+import { missingGreyboxNodes, mountArtSlots, snapToArt, type ArtSlots } from '../artSlots';
 import { S3_ART_SLOTS } from './artSlots';
 import type { Game } from '@/core/Game';
 import { gameplay } from '@/config/gameplay';
@@ -96,6 +96,8 @@ export class S3Scene extends LevelScene {
     this.cleanups.push(() => this.puzzles.dispose());
     // 021 / 022 未交付道具的替换入口（文件到了自动挂上，白盒逻辑不变）
     this.artSlots = mountArtSlots(this.game.assets, this.scene, S3_ART_SLOTS, { showGreybox: greyboxVisible });
+    // 021 潮汐钟：汐的站位直接读美术 prop-tide-bell-interact（白盒 1.05 m → 模型 0.98 m）
+    snapToArt(this.artSlots, 'prop-tide-bell-s3', 'prop-tide-bell-interact', this.puzzles.bell.interactable.interactPoint);
     this.artSlotGreyboxMissing = missingGreyboxNodes(this.scene, S3_ART_SLOTS);
     if (this.artSlotGreyboxMissing.length) console.warn('[art-slot] 白盒节点名对不上：' + this.artSlotGreyboxMissing.join('、'));
   }

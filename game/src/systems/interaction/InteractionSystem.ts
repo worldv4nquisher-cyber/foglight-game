@@ -301,10 +301,10 @@ export class InteractionSystem {
   }
 
   /** 正在播的交互动作（测试 / dev 读） */
-  get animState(): { clip: XiClipName; t: number; fired: boolean } | null {
+  get animState(): { id: string; clip: XiClipName; t: number; fired: boolean } | null {
     const a = this.action;
-    if (a.kind === 'anim') return { clip: a.clip, t: a.t, fired: a.fired };
-    if (a.kind === 'hold' && a.clip) return { clip: a.clip, t: a.t, fired: false };
+    if (a.kind === 'anim') return { id: a.target.id, clip: a.clip, t: a.t, fired: a.fired };
+    if (a.kind === 'hold' && a.clip) return { id: a.target.id, clip: a.clip, t: a.t, fired: false };
     return null;
   }
 

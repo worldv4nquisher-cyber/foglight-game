@@ -281,6 +281,10 @@ export function buildS3Puzzles(d: S3PuzzleDeps): S3Puzzles {
   bellBody.position.y = -0.32;
   bellBody.castShadow = true;
   swing.add(bellBody);
+  const clapper = new THREE.Object3D();
+  clapper.name = `${S3_IDS.bell}-clapper`;
+  clapper.position.y = -0.28;
+  swing.add(clapper);
   bellRoot.add(bellFrame, swing);
   const bellCollider = new THREE.Mesh(new THREE.BoxGeometry(0.3, 2.2, 1.3));
   bellCollider.name = `${S3_IDS.bell}-frame-collider`;
@@ -292,7 +296,7 @@ export function buildS3Puzzles(d: S3PuzzleDeps): S3Puzzles {
   d.physics.addMesh(bellCollider);
   const bellPoint = standAt(S3_IDS.bell, S3.points.bellInteract, bx, bz);
   root.updateMatrixWorld(true);
-  const bell = new TideBell({ id: S3_IDS.bell, tide, object: bellRoot, swing, interactPoint: bellPoint, focus: W([bx, by + 1.6, bz]), events, anim: nodeAnim(d.artRoot, 'tide-bell-s3-interact', 'xi-ring-bell') });
+  const bell = new TideBell({ id: S3_IDS.bell, tide, object: bellRoot, swing, clapper, animSource: interaction, interactPoint: bellPoint, focus: W([bx, by + 1.6, bz]), events, anim: nodeAnim(d.artRoot, 'tide-bell-s3-interact', 'xi-ring-bell') });
   interaction.add(bell.interactable);
 
   // ======================================================== 塔门（use：1.4 s 向内开 −100°，开始转动就撤碰撞）

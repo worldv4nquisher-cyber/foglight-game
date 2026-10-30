@@ -174,6 +174,29 @@ export function mountArtSlots(assets: ArtSlotModelSource, scene: THREE.Object3D,
   };
 }
 
+/**
+ * 把白盒逻辑节点（如交互站位）对到已挂上美术里的约定节点上（世界位置 + 朝向；只在挂上时做一次）。
+ * 用于美术给的点比白盒更准、逻辑按美术来的情况（021 潮汐钟 `prop-tide-bell-interact`：站位 0.98 m）。
+ * 美术没挂上 / 没这个节点 → 白盒不动，返回 false。
+ */
+export function snapToArt(slots: ArtSlots | null | undefined, slotId: string, artNode: string, target: THREE.Object3D | null | undefined): boolean {
+  const m = slots?.mounted.find((x) => x.id === slotId);
+  const a = m ? findNode(m.model, artNode) : null;
+  if (!a || !target) return false;
+  a.updateWorldMatrix(true, false);
+  const pos = a.getWorldPosition(new THREE.Vector3());
+  const q = a.getWorldQuaternion(new THREE.Quaternion());
+  if (target.parent) {
+    target.parent.updateWorldMatrix(true, false);
+    target.parent.worldToLocal(pos);
+    q.premultiply(target.parent.getWorldQuaternion(new THREE.Quaternion()).invert());
+  }
+  target.position.copy(pos);
+  target.quaternion.copy(q);
+  target.updateMatrixWorld(true);
+  return true;
+}
+
 /** 表里白盒侧的节点名（logic / hide / align.logic）在场景里找不到的：改了白盒命名忘了改表时，冒烟测试会报出来 */
 export function missingGreyboxNodes(scene: THREE.Object3D, specs: readonly ArtSlotSpec[]): string[] {
   const names = new Set<string>();

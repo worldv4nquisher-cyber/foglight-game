@@ -123,8 +123,25 @@ export const gameplay = {
     floatBobPeriod: 3,
     /** 浮物不在锚位里浮起时漂回原位的演出时长（s） */
     floatDriftSec: 2,
-    /** 潮汐钟敲响后的摆动时长（s，白盒动画） */
-    bellSwingSec: 1.6,
+    /** 潮汐钟敲响后的自由摆时长（s）：e^(−t/1.2) 衰减，6 s 后残余 < 0.002 rad，之后只剩闲置轻摆 */
+    bellSwingSec: 6,
+    /** 潮汐钟摆动参数（021 美术 art/models/props/README.md「潮汐钟 · 动画参数」；只影响外观） */
+    bell: {
+      /** 闲置风摆幅（rad）/ 周期（s） */
+      idleAmp: 0.01,
+      idlePeriodSec: 2.4,
+      /** touch → ring 掌心前推量（m）/ 吊点到触点的力臂（m）：θ = asin(推量 / 力臂) */
+      pushM: 0.07,
+      armM: 0.7,
+      /** 自由摆 θ(t) = freeAmp · e^(−t/freeDecaySec) · sin(2πt/freePeriodSec + asin freePhaseSin) */
+      freeAmp: 0.2,
+      freeDecaySec: 1.2,
+      freePeriodSec: 1.5,
+      freePhaseSin: 0.5,
+      /** 钟锤滞后钟体（s）、相对角到这个值碰内壁（rad） */
+      clapperLagSec: 0.12,
+      clapperHitRad: 0.41,
+    },
   },
   /** 光线反射（GDD §7 谜题 3、5，§8，§9；v0.1-012） */
   beam: {

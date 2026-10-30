@@ -2118,7 +2118,7 @@ const CHECKS = [
     },
   },
   {
-    name: 'v0.1-017 交互动作 art=1（S1 / S3）：S1 推浮台 xi-push-start（按住 E ≤ 0.6 s 浮台开始动）→ push-loop → xi-push-end；S3 敲钟 xi-ring-bell、开阀 xi-valve-hold、拉杆 xi-ignite-lever',
+    name: 'v0.1-017 交互动作 art=1（S1 / S3）：S1 推浮台 xi-push-start（按住 E ≤ 0.6 s 浮台开始动）→ push-loop → xi-push-end；S3 敲钟 xi-ring-bell、开阀 xi-valve-hold、拉杆 xi-ignite-lever；021 美术潮汐钟 S1 / S3 敲钟断言',
     async run({ evaluate, cdp, sleep }) {
       const clock = () => evaluate(`({ e: __game.time.fixedTick * __game.time.fixedDelta, f: __game.time.frame })`);
       // 等待按游戏时间（负载高时真实时间不可靠），真实时间封顶 180 s
@@ -2140,14 +2140,45 @@ const CHECKS = [
       // 站到交互物站位上，然后按住 E + trigger（approach 走完时 E 仍按着 → hold / push 生效）
       const standAt = (S, ix) => `(() => { const s = ${S}; const sp = ${ix}.standPoint(s.rig.body.position.clone()); s.rig.body.teleport(sp.position.clone().setY(sp.position.y + 0.05)); s.rig.controller.facing = sp.facing; return 1; })()`;
 
+      // 021 美术潮汐钟（S1 / S3）：挂上、白盒隐藏、vertexColors 关、站位 = prop-tide-bell-interact、钟响在 xi-ring-bell 第 30 帧、钟口被推开
+      const ringArtBell = async (S, slot, expectStand) => {
+        const pre = await evaluate(`(() => { const s = ${S}; const m = s.artSlots.mounted.find((x) => x.id === '${slot}'); if (!m) return { err: 'not-mounted' };
+          const ip = m.model.getObjectByName('prop-tide-bell-interact'); ip.updateWorldMatrix(true, false); const a = ip.getWorldPosition(ip.position.clone());
+          const sp = s.puzzles.bell.interactable.standPoint(a.clone()).position;
+          let vc = 0, meshes = 0; m.model.traverse((o) => { if (o.isMesh) { meshes++; for (const mt of [o.material].flat()) if (mt.vertexColors) vc++; } });
+          let gbVis = 0; s.scene.getObjectByName(s.puzzles.bell.id).traverse((o) => { if (o.isMesh && o.visible && !o.userData.artSlot) { let p = o, art = false; while (p) { if (p.userData.artSlot) art = true; p = p.parent; } if (!art) gbVis++; } });
+          return { stand: sp.toArray(), artStand: a.toArray(), vc, meshes, gbVis }; })()`);
+        if (pre.err) throw new Error(`${S} 美术潮汐钟没挂上`);
+        const d = Math.hypot(...pre.stand.map((v, i) => v - pre.artStand[i]));
+        if (d > 0.01) throw new Error(`${S} 站位没读 prop-tide-bell-interact ` + JSON.stringify(pre));
+        if (expectStand && Math.hypot(...pre.stand.map((v, i) => v - expectStand[i])) > 0.02) throw new Error(`${S} 站位不在 ${expectStand} ` + JSON.stringify(pre));
+        if (pre.vc) throw new Error(`${S} 潮汐钟 ${pre.vc} 个材质还开着 vertexColors（COLOR_0 是描边法线）`);
+        if (pre.gbVis) throw new Error(`${S} 美术挂上后白盒钟还有 ${pre.gbVis} 个网格可见`);
+        await evaluate(`(() => { const s = ${S}; window.__bellRing = null; const off = s.game.events.on('tide:bell', () => { const st = s.interaction.animState; const m = s.artSlots.mounted.find((x) => x.id === '${slot}'); const sw = m.model.getObjectByName('bell-swing'); sw.updateWorldMatrix(true, false);
+          const lip = sw.localToWorld(new sw.position.constructor(0, -1, 0)).sub(sw.getWorldPosition(new sw.position.constructor()));
+          const b = s.puzzles.bell.interactable.standPoint().position; const c = m.model.getWorldPosition(b.clone()); const away = c.sub(b).setY(0).normalize();
+          window.__bellRing = { t: st?.clip === 'xi-ring-bell' ? st.t : null, angle: s.puzzles.bell.angle, lipAway: Math.asin(lip.dot(away)) }; off(); }); return 1; })()`);
+        await evaluate(standAt(S, `${S}.puzzles.bell.interactable`));
+        await sleep(200);
+        await evaluate(`(${S}.interaction.trigger(${S}.puzzles.bell.interactable), 1)`);
+        if (!(await until(`!!window.__bellRing`, 4000))) throw new Error(`${S} 敲钟没响 ` + JSON.stringify(await evaluate(`${S}.interaction.animState`)));
+        const r = await evaluate(`window.__bellRing`);
+        if (r.t === null || Math.abs(r.t * 30 - 30) > 1.01) throw new Error(`${S} 钟响不在 xi-ring-bell 第 30 帧 ` + JSON.stringify(r));
+        // tide:bell 在固定步里发，读到的是上一渲染帧的钟角（推到 ring 前 1–2 帧，± 闲置风摆 0.01）
+        if (!(r.angle > 0.05 && r.angle < 0.12) || !(r.lipAway > 0.05)) throw new Error(`${S} ring 帧钟没被推开（应接近 0.100 rad，钟口远离站位） ` + JSON.stringify(r));
+        if (!(await until(`!${S}.interaction.animState && !${S}.rig.controller.locked`, 4000))) throw new Error(`${S} xi-ring-bell 播完没解锁`);
+        return `${S} 美术钟：站位 (${pre.stand.map((v) => v.toFixed(2)).join(', ')}) = prop-tide-bell-interact、vertexColors 关（${pre.meshes} 网格）、白盒隐藏、第 ${(r.t * 30).toFixed(1)} 帧钟响、钟体 ${r.angle.toFixed(3)} rad / 美术钟口推开 ${r.lipAway.toFixed(3)} rad ✓`;
+      };
+
       // ---------------- S1：推浮台
       await evaluate(`localStorage.removeItem('foglight.save.v1'); 1`);
       await cdp.goto('art=1');
       if (!(await until(`!!window.__s1?.art?.loaded && !!__s1.rig.animator`, 60000))) throw new Error('art=1 没进 S1 / 没有 XiAnimator');
       if (!(await until(`__game.input.context === 'explore' && !__s1.rig.controller.busy`, 40000))) throw new Error('S1 建立镜头后没回到 explore');
+      out.push(await ringArtBell('__s1', 'prop-tide-bell', [-14.52, 2.4, -6.2]));
+      await evaluate(`__s1.tides.fixedUpdate(7), 1`);
       for (const c of ['xi-push-start', 'xi-push-loop', 'xi-push-end']) if (!(await evaluate(`__s1.rig.animator.has('${c}')`))) throw new Error('缺 clip ' + c);
-      // 退潮：直接发敲钟 + 快进潮汐（这里只测动作，潮汐流程在 013 项）
-      await evaluate(`(() => { __game.events.emit('interact:used', { id: 'tide-bell-s1', kind: 'use' }); __s1.tides.fixedUpdate(7); return 1; })()`);
+      // 退潮：上面已真敲（xi-ring-bell）+ 快进潮汐（潮汐流程在 013 项）
       if (!(await until(`__s1.puzzles.raft.state === 'grounded' && __s1.puzzles.raftPush.enabled`, 6000))) throw new Error('退潮后浮台没搁浅 / 不能推 ' + (await evaluate(`__s1.puzzles.raft.state`)));
       await evaluate(standAt('__s1', '__s1.puzzles.raftPush'));
       await sleep(200);
@@ -2202,14 +2233,9 @@ const CHECKS = [
       if (!(await until(`__game.input.context === 'explore' && !__s3.rig.controller.busy`, 40000))) throw new Error('S3 建立镜头后没回到 explore');
       const nodeAnims = await evaluate(`({ bell: __s3.puzzles.bell.interactable.resolveAnim(), lever: __s3.puzzles.leverIx.resolveAnim() })`);
       if (nodeAnims.bell !== 'xi-ring-bell' || nodeAnims.lever !== 'xi-ignite-lever') throw new Error('S3 交互 clip 不对 ' + JSON.stringify(nodeAnims));
-      // 敲钟（use + clip）
-      await evaluate(standAt('__s3', '__s3.puzzles.bell.interactable'));
-      await sleep(200);
-      await evaluate(`(__s3.interaction.trigger(__s3.puzzles.bell.interactable), 1)`);
-      if ((await until(`__s3.interaction.animState?.clip`, 3000)) !== 'xi-ring-bell') throw new Error('敲钟没播 xi-ring-bell ' + JSON.stringify(await evaluate(`__s3.interaction.animState`)));
-      if (!(await until(`__s3.rig.animator.posing === 'xi-ring-bell'`, 1000))) throw new Error('敲钟时 animator 没在 xi-ring-bell');
-      if (!(await until(`__s3.puzzles.bell.rings === 1`, 4000))) throw new Error('xi-ring-bell 播到触发帧没敲响');
-      if (!(await until(`!__s3.interaction.animState && !__s3.rig.controller.locked`, 4000))) throw new Error('xi-ring-bell 播完没解锁');
+      // 敲钟（use + clip，节点 anim）+ 021 美术钟断言
+      out.push(await ringArtBell('__s3', 'prop-tide-bell-s3', null));
+      if (!(await evaluate(`__s3.puzzles.bell.rings === 1`))) throw new Error('xi-ring-bell 播到触发帧没敲响');
       await evaluate(`__s3.tides.fixedUpdate(7), 1`);
       if (!(await until(`__s3.puzzles.tide.state === 'low' && !__s3.puzzles.tide.transitioning`, 3000))) throw new Error('敲钟没退潮');
       out.push('S3 敲钟 xi-ring-bell（节点 anim）→ 敲响、解锁 ✓');

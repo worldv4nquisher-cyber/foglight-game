@@ -19,7 +19,7 @@ const wall = (k: 'a' | 'b'): ArtSlotSpec => ({
 });
 
 export const S3_ART_SLOTS: readonly ArtSlotSpec[] = [
-  { key: 'prop-tide-bell-s3', at: ['tide-bell-s3-socket', 'tide-bell-s3'], drive: [{ art: 'bell-swing', logic: 'tide-bell-s3-swing' }], hide: ['tide-bell-s3'] },
+  { key: 'prop-tide-bell-s3', at: ['tide-bell-s3-socket', 'tide-bell-s3'], drive: [{ art: 'bell-swing', logic: 'tide-bell-s3-swing' }, { art: 'bell-clapper', logic: 'tide-bell-s3-clapper' }], hide: ['tide-bell-s3'] },
   { key: 'prop-oil-valve-s3', at: ['oil-valve-s3-socket', 'oil-valve-s3'], drive: [{ art: 'valve-wheel', logic: 'oil-valve-s3-wheel' }], hide: ['oil-valve-s3'] },
   {
     key: 'prop-guide-mirror-window-s3',

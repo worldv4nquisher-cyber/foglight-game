@@ -117,6 +117,11 @@ export function buildS1Puzzles(o: S1PuzzleOptions): S1Puzzles {
   bellBody.position.y = -0.32;
   bellBody.castShadow = true;
   swing.add(bellBody);
+  // 钟锤（空节点，021 美术 bell-clapper 跟它转）：吊点在钟轴下 0.28 m
+  const clapper = new THREE.Object3D();
+  clapper.name = 'tide-bell-s1-clapper';
+  clapper.position.y = -0.28;
+  swing.add(clapper);
   bellRoot.add(frame, swing);
   root.add(bellRoot);
   bellRoot.updateMatrixWorld(true);
@@ -128,10 +133,11 @@ export function buildS1Puzzles(o: S1PuzzleOptions): S1Puzzles {
   physics.addMesh(frameCollider);
   const bellPoint = new THREE.Object3D();
   bellPoint.name = 'tide-bell-s1-interact';
-  bellPoint.position.set(bx + 1.05, by, bz);
+  // 站位离钟轴 0.98 m（021 prop-tide-bell-interact）；美术挂上后 artSlots snap 直接用该节点的世界位置 / 朝向
+  bellPoint.position.set(bx + S1.bellStandDist, by, bz);
   bellPoint.lookAt(bx, by, bz);
   root.add(bellPoint);
-  const bell = new TideBell({ id: S1_IDS.bell, tide, object: bellRoot, swing, interactPoint: bellPoint, focus: new THREE.Vector3(bx, by + 1.6, bz), events, anim: 'xi-ring-bell' });
+  const bell = new TideBell({ id: S1_IDS.bell, tide, object: bellRoot, swing, clapper, animSource: interaction, interactPoint: bellPoint, focus: new THREE.Vector3(bx, by + 1.6, bz), events, anim: 'xi-ring-bell' });
   interaction.add(bell.interactable);
 
   // ---- 浮台（2.0 × 3.0 × 0.3；根节点 = 甲板顶面）

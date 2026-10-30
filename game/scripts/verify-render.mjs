@@ -488,7 +488,7 @@ if (hasArt) {
     return out.join('；');
   });
 
-  await test('021 潮汐钟 prop-tide-bell：S1 bell-anchor / S3 tide-bell-s3-socket = 白盒钟位、正面朝白盒站位、触点高 1.10、bell-swing 跟白盒钟摆（世界增量，摆动平面朝站位）', async () => {
+  await test('021 潮汐钟 prop-tide-bell：S1 bell-anchor / S3 tide-bell-s3-socket = 白盒钟位、正面朝白盒站位、触点高 1.10、bell-swing / bell-clapper 跟白盒（世界增量）、站位读 prop-tide-bell-interact、README 摆动公式（ring 帧 0.100 rad）', async () => {
     const { S1 } = await import('@/levels/s1/layout');
     const { S3 } = await import('@/levels/s3/layout');
     const out = [];
@@ -512,7 +512,15 @@ if (hasArt) {
       sw.name = `${gb.name}-swing`;
       sw.position.set(0, 2.05, 0);
       sw.add(new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.5, 0.3)));
+      const cl = new THREE.Object3D();
+      cl.name = `${gb.name}-clapper`;
+      cl.position.y = -0.28;
+      sw.add(cl);
       gb.add(sw);
+      const gbStand = new THREE.Object3D();
+      gbStand.position.set(bx + 1.05 * Math.cos(gb.rotation.y), by, bz - 1.05 * Math.sin(gb.rotation.y));
+      gbStand.lookAt(bx, by, bz);
+      scene.add(gbStand);
       scene.add(gb);
       scene.updateMatrixWorld(true);
       const bellGlb = await loadGlb('models/props/prop-tide-bell.glb');
@@ -541,7 +549,43 @@ if (hasArt) {
       const gbLip = new THREE.Vector3(0, -1, 0).applyQuaternion(sw.getWorldQuaternion(new THREE.Quaternion()));
       near(lip1.angleTo(gbLip), 0, 1e-4, `${sc} 摆动方向与白盒一致`);
       near(lip0.angleTo(lip1), 0.3, 1e-4, `${sc} 摆幅`);
-      out.push(`${sc} 钟位 (${p.x.toFixed(2)}, ${p.y.toFixed(2)}, ${p.z.toFixed(2)})、白盒站位离钟轴 ${dist.toFixed(2)} m（美术 -interact 0.98）`);
+      sw.rotation.z = 0;
+      // 站位：snapToArt 读 prop-tide-bell-interact（S1 世界 ≈ (−14.52, 2.4, −6.2)），+Z 朝钟
+      const { snapToArt } = await import('@/levels/artSlots');
+      assert.ok(snapToArt(slots, key, 'prop-tide-bell-interact', gbStand));
+      const sp = gbStand.getWorldPosition(new THREE.Vector3());
+      near(Math.hypot(sp.x - bx, sp.z - bz), 0.98, 0.005, `${sc} 站位离钟轴`);
+      if (sc === 'S1') near(sp.distanceTo(new THREE.Vector3(-14.52, 2.4, -6.2)), 0, 0.01, 'S1 站位世界坐标');
+      else near(sp.distanceTo(new THREE.Vector3(...stand)), 0, 0.01, 'S3 站位 = tide-bell-s3-interact');
+      const sf = new THREE.Vector3(0, 0, 1).transformDirection(gbStand.matrixWorld);
+      near(sf.dot(new THREE.Vector3(bx - sp.x, 0, bz - sp.z).normalize()), 1, 0.01, `${sc} 站位朝钟`);
+      // TideBell 按 README 公式驱动：ring 帧（30）θ ≈ +0.100（钟口远离站位）、自由摆、钟锤滞后
+      const { TideBell } = await import('@/systems/tide/TideBell');
+      const { xiEventSec } = await import('@/entities/xi/clips');
+      const anim = { animState: null };
+      const tide = { id: 'z', state: 'low', transitioning: false, toggle: () => true };
+      const bell = new TideBell({ id: 'b', tide, object: gb, swing: sw, clapper: cl, animSource: anim, events: { on: () => () => {}, emit: () => {} } });
+      const ring = xiEventSec('xi-ring-bell', 'ring');
+      const dt = 1 / 60;
+      const lipAway = () => {
+        slots.update();
+        scene.updateMatrixWorld(true);
+        const l = new THREE.Vector3(0, -1, 0).applyQuaternion(lip.getWorldQuaternion(new THREE.Quaternion()));
+        const away = new THREE.Vector3(bx - sp.x, 0, bz - sp.z).normalize();
+        return Math.asin(l.dot(away));
+      };
+      for (let t = 0; t <= ring + 1e-9; t += dt) { anim.animState = { id: 'b', clip: 'xi-ring-bell', t, fired: false }; bell.update(dt); }
+      near(lipAway(), Math.asin(0.07 / 0.7), 0.011, `${sc} ring 帧钟口推开 0.100 rad（± 闲置风摆 0.01）`);
+      anim.animState = null;
+      assert.ok(bell.ring());
+      let maxA = 0, minA = 0, maxC = 0;
+      for (let t = 0; t < 3; t += dt) { bell.update(dt); const a = lipAway(); maxA = Math.max(maxA, a); minA = Math.min(minA, a); maxC = Math.max(maxC, Math.abs(bell.clapperAngle)); }
+      assert.ok(maxA < 0.35 && minA > -0.35, `${sc} 摆幅在 ±0.35 余量内：${minA} .. ${maxA}`);
+      assert.ok(maxC > 0.01 && maxC <= 0.41 + 1e-9, `${sc} 钟锤滞后：${maxC}`);
+      const artClap = art.getObjectByName('bell-clapper');
+      const rel = new THREE.Quaternion().copy(lip.getWorldQuaternion(new THREE.Quaternion())).invert().multiply(artClap.getWorldQuaternion(new THREE.Quaternion()));
+      near(2 * Math.acos(Math.min(1, Math.abs(rel.w))), Math.abs(bell.clapperAngle), 1e-3, `${sc} 美术钟锤相对钟体角 = 白盒`);
+      out.push(`${sc} 钟位 (${p.x.toFixed(2)}, ${p.y.toFixed(2)}, ${p.z.toFixed(2)})、站位 (${sp.x.toFixed(2)}, ${sp.y.toFixed(2)}, ${sp.z.toFixed(2)}) 离钟轴 0.98（白盒原 ${dist.toFixed(2)}）、自由摆 ${minA.toFixed(3)}..${maxA.toFixed(3)} rad、钟锤最大相对 ${maxC.toFixed(3)}`);
     }
     return out.join('；');
   });

@@ -25,6 +25,8 @@ export const S1 = {
   spawnStart: [2.277, 2.2, -11.772] as V3,
   /** 岸台（潮汐钟平台）顶面 2.4 */
   ledge: { min: [-19, -10.5] as V2, max: [-10, -2] as V2, topY: 2.4 },
+  /** 汐敲钟站位离钟轴（m）= 021 prop-tide-bell-interact 的 z 0.98（美术挂上后直接读该节点） */
+  bellStandDist: 0.98,
   bellAnchor: [-15.5, 2.4, -6.2] as V3,
   /** 潮汐安全点（送回点）：岸台北侧，面朝礁石小径（+X 西） */
   safePoint: [-12.5, 2.4, -4] as V3,
