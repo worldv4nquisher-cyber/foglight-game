@@ -58,6 +58,7 @@ export class S2Scene extends LevelScene {
     this.art = buildS2Art(this.game.assets);
     this.scene.add(this.art.root);
     if (this.art.cellarDoor) this.greybox.cellarDoor.add(this.art.cellarDoor);
+    if (this.art.farLayer) this.farSilhouettes.push({ handle: this.art.farLayer, fog: 'mid' });
     if (!this.art.far) this.addFarPlaceholder();
     this.setGreyboxVisible(!this.art.loaded || greyboxVisible);
 
@@ -133,7 +134,7 @@ export class S2Scene extends LevelScene {
     const isl = new THREE.Mesh(new THREE.CylinderGeometry(22, 30, p.y - S2.seaY + 2, 12));
     isl.position.set(p.x, (p.y + S2.seaY - 2) / 2, p.z);
     g.add(col, isl);
-    makeSkyLayer(g, { ...S2.farLayer, pinDepth: false });
+    this.farSilhouettes.push({ handle: makeSkyLayer(g, { ...S2.farLayer, pinDepth: false }), fog: 'mid' });
     this.scene.add(g);
   }
 

@@ -24,6 +24,20 @@ export interface SkyLayerOptions {
   pinDepth?: boolean;
 }
 
+/** 028 远景剪影基色（README-028 §3：固定色 #56616B 向预设 farWallTint 混合，黄昏 0.38 / 雨夜 0.5，不吃场景雾） */
+export const SILHOUETTE_BASE = 0x56616b;
+
+/** 预设下的远景剪影颜色 */
+export function silhouetteColor(a: { farWallTint: number; silhouetteMix: number }, out = new THREE.Color()): THREE.Color {
+  return out.set(SILHOUETTE_BASE).lerp(new THREE.Color(a.farWallTint), a.silhouetteMix);
+}
+
+/** 按预设设置天空层：剪影颜色 + 雾密度（S1 天空层剪影 0 = 不吃雾；S2 远景 S3 灯塔用主岛 hint） */
+export function applySkyLayerAtmosphere(h: SkyLayerHandle, a: { farWallTint: number; silhouetteMix: number }, fogDensity: number): void {
+  silhouetteColor(a, h.material.color);
+  h.fog.value = fogDensity;
+}
+
 export interface SkyLayerHandle {
   readonly material: THREE.MeshBasicMaterial;
   readonly fog: { value: number };

@@ -58,6 +58,8 @@ export class S1Scene extends LevelScene {
 
     // 美术
     this.art = buildS1Art(this.game.assets);
+    if (this.art.farFog) this.midFogs.push(this.art.farFog);
+    if (this.art.sky) this.farSilhouettes.push({ handle: this.art.sky, fog: 'none' });
     this.scene.add(this.art.root);
     this.setGreyboxVisible(!this.art.loaded || greyboxVisible);
 

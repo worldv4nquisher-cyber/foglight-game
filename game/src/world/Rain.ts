@@ -83,7 +83,7 @@ export class Rain extends THREE.LineSegments<THREE.BufferGeometry, THREE.ShaderM
     this.visible = a.rain.enabled;
     const u = this.material.uniforms;
     u.uSpeed!.value = a.rain.speed;
-    u.uOpacity!.value = a.rain.opacity;
+    u.uOpacity!.value = 0.2;
     (u.uColor!.value as THREE.Color).set(a.rain.color);
   }
 

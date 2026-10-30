@@ -64,6 +64,22 @@ export const manifest: AssetEntry[] = [
   // GLB 没引用、材质 extras 点名的两张：色阶 ramp、SDF 脸部阴影（art/tools/README §5）
   { key: 'tex-xi-ramp', type: 'ktx2', url: 'assets/art/textures/tex-xi-ramp.ktx2', group: 'common', optional: true, art: true },
   { key: 'tex-xi-sdf-face', type: 'ktx2', url: 'assets/art/textures/tex-xi-sdf-face.ktx2', group: 'common', optional: true, art: true },
+  // ---- common：v0.1-028 天空 / 雾 / 雨 / 水面贴图 + 调色 LUT（README-028；室外场景共用 → common，8.4 MB）
+  { key: 'tex-sky-clouds-overcast-albedo', type: 'ktx2', url: 'assets/art/textures/tex-sky-clouds-overcast-albedo.ktx2', group: 'common', optional: true, art: true },
+  { key: 'tex-fog-card-a-albedo', type: 'ktx2', url: 'assets/art/textures/tex-fog-card-a-albedo.ktx2', group: 'common', optional: true, art: true },
+  { key: 'tex-fog-card-b-albedo', type: 'ktx2', url: 'assets/art/textures/tex-fog-card-b-albedo.ktx2', group: 'common', optional: true, art: true },
+  { key: 'tex-fog-card-c-albedo', type: 'ktx2', url: 'assets/art/textures/tex-fog-card-c-albedo.ktx2', group: 'common', optional: true, art: true },
+  { key: 'tex-rain-streak-albedo', type: 'ktx2', url: 'assets/art/textures/tex-rain-streak-albedo.ktx2', group: 'common', optional: true, art: true },
+  { key: 'tex-rain-splash-albedo', type: 'ktx2', url: 'assets/art/textures/tex-rain-splash-albedo.ktx2', group: 'common', optional: true, art: true },
+  { key: 'tex-rain-ripple-normal', type: 'ktx2', url: 'assets/art/textures/tex-rain-ripple-normal.ktx2', group: 'common', optional: true, art: true, srgb: false },
+  { key: 'tex-lens-droplets-normal', type: 'ktx2', url: 'assets/art/textures/tex-lens-droplets-normal.ktx2', group: 'common', optional: true, art: true, srgb: false },
+  { key: 'tex-water-normal', type: 'ktx2', url: 'assets/art/textures/tex-water-normal.ktx2', group: 'common', optional: true, art: true, srgb: false },
+  // LUT：1024×32 PNG（flipY=false、NoColorSpace、线性过滤、无 mip，由 LutEffect 设置）；identity 只给校验用（307 B）
+  { key: 'lut-overcast-dusk', type: 'texture', url: 'assets/art/textures/lut/lut-overcast-dusk.png', group: 'common', optional: true, art: true, srgb: false },
+  { key: 'lut-overcast-after-rain', type: 'texture', url: 'assets/art/textures/lut/lut-overcast-after-rain.png', group: 'common', optional: true, art: true, srgb: false },
+  { key: 'lut-rain-night', type: 'texture', url: 'assets/art/textures/lut/lut-rain-night.png', group: 'common', optional: true, art: true, srgb: false },
+  { key: 'lut-after-lit', type: 'texture', url: 'assets/art/textures/lut/lut-after-lit.png', group: 'common', optional: true, art: true, srgb: false },
+  { key: 'lut-identity', type: 'texture', url: 'assets/art/textures/lut/lut-identity.png', group: 'common', optional: true, art: true, srgb: false },
   // ---- s1：LOD / 解谜关键物体测试用例（scripts/gen-lod-test-asset.mjs 生成）：白石（puzzleCritical，固定 LOD0）+ 普通对照石
   { key: 'test-lod-puzzle', type: 'gltf', url: 'assets/models/test-lod-puzzle-critical.glb', group: 's1', optional: true },
   // ---- s1：美术 018 / 020 交付（../art，外部 KTX2 在 ../art/textures；v0.1-013 接入，摆放以 src/levels/s1/layout.ts 为准）

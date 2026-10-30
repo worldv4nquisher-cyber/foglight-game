@@ -11,10 +11,12 @@ import { PhysicsSystem } from '@/systems/PhysicsSystem';
 import { CameraFollowSystem, CameraTrack } from '@/systems/CameraFollowSystem';
 import type { CameraKey } from '@/systems/camera/CameraTrack';
 import { InteractionSystem, actorFromRig } from '@/systems/interaction/InteractionSystem';
-import { SkyDome } from '@/world/SkyDome';
+import { SkyDome, SKY_CLOUDS_KEY } from '@/world/SkyDome';
 import { Water } from '@/world/Water';
 import { Rain } from '@/world/Rain';
 import { applyLodDistances } from '@/render/lod';
+import { applySkyLayerAtmosphere, type SkyLayerHandle } from '@/render/skyLayer';
+import type { ObjectFogHandle } from '@/render/objectFog';
 import { xiWetTarget } from '@/entities/xi/XiLook';
 import type { LevelDef } from './levels';
 import { t, type TextId } from '@/content/text';
@@ -60,6 +62,13 @@ export abstract class LevelScene extends BaseScene {
   protected sky = new SkyDome(170);
   protected water: Water | null = null;
   protected rain: Rain | null = null;
+  /**
+   * 028 远景（README-028 §3）：天空层剪影按预设换色；fog 'none' = 不吃雾（S1 天空层小灯塔），'mid' = 用预设主岛 hint（S2 远景 S3 灯塔）。
+   * 子类 buildLevel 里登记；applyAtmosphere 统一设置。
+   */
+  protected readonly farSilhouettes: Array<{ handle: SkyLayerHandle; fog: 'none' | 'mid' }> = [];
+  /** 028 主岛 / 灯塔（fogLayer 'mid'）的按物体雾：密度按预设 fogDensityHint 覆盖 GLB extras */
+  protected readonly midFogs: ObjectFogHandle[] = [];
   protected sun = new THREE.DirectionalLight();
   protected hemi = new THREE.HemisphereLight();
   interaction!: InteractionSystem;
@@ -251,6 +260,8 @@ export abstract class LevelScene extends BaseScene {
   private buildEnvironment(a: AtmospherePreset): void {
     this.scene.fog = new THREE.FogExp2(a.fogColor, a.fogDensity);
     this.scene.background = new THREE.Color(a.fogColor);
+    // 028 天空：三段渐变 + 层云（贴图缺失 / ?art=0 时只有渐变）
+    this.sky.setClouds(this.game.assets.has(SKY_CLOUDS_KEY) ? this.game.assets.getTexture(SKY_CLOUDS_KEY) : null);
     this.scene.add(this.sky);
     this.scene.add(this.hemi);
 
@@ -322,6 +333,8 @@ export abstract class LevelScene extends BaseScene {
     this.sun.position.set(...a.sunDirection);
     this.water?.material.color.set(a.waterColor);
     this.rain?.applyAtmosphere(a);
+    for (const f of this.midFogs) f.density = a.midFogDensity;
+    for (const s of this.farSilhouettes) applySkyLayerAtmosphere(s.handle, a, s.fog === 'mid' ? a.midFogDensity : 0);
     this.game.postfx.applyAtmosphere(a);
   }
 
@@ -380,6 +393,7 @@ export abstract class LevelScene extends BaseScene {
       this.game.ui.debug.set('场景', `${this.name} · 入口 ${this.entryId} · 资源组 ${this.game.assets.loadedGroups.join(' ')}`);
     }
     this.sky.follow(this.camera);
+    this.sky.update(dt);
     if (this.water && this.tides.primary) this.water.setLevel(this.tides.primary.level);
     this.water?.update(dt);
     for (const b of this.bells) b.update(dt);
