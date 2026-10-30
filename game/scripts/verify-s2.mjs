@@ -516,4 +516,77 @@ out.push('动线：二层观察点 / 书桌 / 地窖（门开才进得去）/ �
   }
   out.push(`裁定 16 固定眼位 (${vpc.eye.join(', ')}) FOV ${vpc.fov}°：七段贴片 3 个字 ${n} 个采样点白盒不挡、${artNote}、对准时全在画面内；进入朝西窗偏 ${off.toFixed(1)}°；${wsNote} ✓`);
 }
+// ---- 1030c 光感锁 prop-light-lock-s2：挂小屋 socket、-receiver 对齐白盒受光点；透镜 #F4C978 × 进度 × 1.6、指针 (60 − 120p)°、解锁门闩 +X 0.08 / 0.3 s；白盒透镜隐藏
+{
+  const { readFileSync, existsSync } = await import('node:fs');
+  globalThis.self ??= globalThis;
+  const { GLTFLoader } = await import('three/examples/jsm/loaders/GLTFLoader.js');
+  const { MeshoptDecoder } = await import('three/examples/jsm/libs/meshopt_decoder.module.js');
+  const ktx2Stub = { load: (_u, onLoad) => onLoad(new THREE.CompressedTexture([], 1, 1)) };
+  const load = async (rel) => {
+    const f = new URL(`../../art/models/${rel}.glb`, import.meta.url);
+    if (!existsSync(f)) return null;
+    const buf = readFileSync(f);
+    return (await new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).setKTX2Loader(ktx2Stub).parseAsync(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength), '')).scene;
+  };
+  const model = await load('props/prop-light-lock-s2');
+  const house = await load('env/env-keeper-house-ch1');
+  if (!model || !house) out.push('光感锁美术未交付');
+  else {
+    const { mountArtSlots, findNode } = await import('@/levels/artSlots');
+    const { S2_ART_SLOTS } = await import('@/levels/s2/artSlots');
+    const { LightLockArt, LIGHT_LOCK_ART } = await import('@/levels/s2/lightLockArt');
+    const rayPointDistLocal = (o, d, p) => p.clone().sub(o).cross(d).length();
+    const world = new THREE.Scene();
+    const pl = S2.artNodes['env-keeper-house-ch1'];
+    house.position.set(...pl.translation);
+    house.rotation.y = pl.rotationY;
+    world.add(house, beam.root);
+    world.updateMatrixWorld(true);
+    const key = 'prop-light-lock-s2';
+    const slots = mountArtSlots({ has: (k) => k === key, getModel: () => model }, world, S2_ART_SLOTS);
+    world.updateMatrixWorld(true);
+    assert.equal(slots.mounted.length, 1);
+    assert.equal(model.parent.name, 'env-keeper-house-ch1-light-lock-socket', '光感锁挂小屋 socket');
+    const wp = (o) => o.getWorldPosition(new THREE.Vector3());
+    const dRecv = wp(findNode(model, 'receiver')).distanceTo(beam.lock.center(new THREE.Vector3()));
+    assert.ok(dRecv < 1e-4, `光感锁 -receiver 对齐白盒 ${dRecv}`);
+    assert.ok(!beam.lockLens.visible, '白盒透镜隐藏');
+    // 美术透镜还在受光路径上：正解光路终点离美术透镜 ≤ 半径
+    beam.solve();
+    beam.tracer.trace();
+    const eastP = beam.tracer.paths.find((x) => x.emitter.id === 'lamp-east-s2');
+    assert.equal(eastP.receiver?.id, 'light-lock-s2', '白盒透镜隐藏后正解仍命中光感锁');
+    const lensArt = findNode(model, 'light-lock-lens');
+    // 光轴（白盒受光点 = 美术根）离正解光线的横向距离
+    const segL = eastP.segments[eastP.segments.length - 1];
+    const dLens = rayPointDistLocal(segL.from, segL.to.clone().sub(segL.from).normalize(), wp(model));
+    let open = false;
+    const src = { progress: 0, state: 'idle' };
+    const la = new LightLockArt(model, src, () => open);
+    assert.ok(la.material && lensArt.material === la.material && la.material !== model.children[0]?.material, '透镜材质克隆');
+    const needle = findNode(model, 'light-lock-needle');
+    const bolt = findNode(model, 'light-lock-bolt');
+    const x0 = bolt.position.x;
+    for (const p of [0, 0.25, 0.5, 1]) {
+      src.progress = p;
+      src.state = p > 0 ? 'charging' : 'idle';
+      la.update(1 / 60);
+      assert.equal(la.material.emissive.getHex(), 0xf4c978);
+      assert.ok(Math.abs(la.material.emissiveIntensity - p * 1.6) < 1e-9, `进度 ${p} 亮度 ${la.material.emissiveIntensity}`);
+      assert.ok(Math.abs(THREE.MathUtils.radToDeg(needle.rotation.z) - (60 - 120 * p)) < 1e-6, `进度 ${p} 指针`);
+      assert.equal(bolt.position.x, x0, '没解锁门闩不动');
+    }
+    src.progress = 0;
+    src.state = 'activated';
+    open = true;
+    la.update(0.15);
+    assert.ok(Math.abs(bolt.position.x - x0 - 0.04) < 1e-6 && la.material.emissiveIntensity === 1.6, '解锁 0.15 s 门闩走一半、透镜满亮');
+    la.update(0.2);
+    assert.ok(Math.abs(bolt.position.x - x0 - 0.08) < 1e-9 && Math.abs(THREE.MathUtils.radToDeg(needle.rotation.z) + 60) < 1e-6, '0.3 s 门闩到 +0.08、指针 −60°');
+    assert.ok(LIGHT_LOCK_ART.color === 0xf4c978 && LIGHT_LOCK_ART.intensityAtFull === 1.6);
+    beam.reset?.();
+    out.push(`光感锁：挂 light-lock-socket、-receiver 对齐白盒（差 ${(dRecv * 1000).toFixed(2)} mm）、正解光线离美术透镜光轴心 ${(dLens * 1000).toFixed(1)} mm（仍命中）；透镜 #F4C978 × 进度 × 1.6、指针 60° → −60°、解锁门闩 0.3 s 滑 +0.08 m；白盒透镜隐藏 ✓`);
+  }
+}
 console.log('verify-s2 ✓ ' + out.join('；'));

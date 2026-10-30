@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { missingGreyboxNodes, mountArtSlots, snapToArt, type ArtSlots } from '../artSlots';
 import { S2_ART_SLOTS } from './artSlots';
+import { LightLockArt } from './lightLockArt';
 import type { Game } from '@/core/Game';
 import { gameplay } from '@/config/gameplay';
 import { greyboxVisible } from '@/config/debug';
@@ -31,6 +32,8 @@ export class S2Scene extends LevelScene {
   art!: S2Art;
   puzzles!: S2Puzzles;
   artSlots: ArtSlots | null = null;
+  /** 光感锁美术状态件（没交付 = null） */
+  lightLockArt: LightLockArt | null = null;
   artSlotGreyboxMissing: string[] = [];
   private readonly colliderOf = new Map<THREE.Mesh, Collider>();
   private readonly mats = defaultS2GreyboxMaterials();
@@ -86,6 +89,9 @@ export class S2Scene extends LevelScene {
     snapToArt(this.artSlots, 'prop-dial-gate-s2', 'prop-dial-gate-s2-interact', this.puzzles.gateInteractable.interactPoint);
     // 制作人裁定 15：美术白石在 → 关七段「317」贴片、对准度改白石加亮 / 描边；不在 → 保留贴片（同屏只一个 317）
     this.puzzles.setWhiteStonesArt(this.artSlots.mounted.find((m) => m.id === 'prop-white-stones-s2')?.model ?? null);
+    // 1030c 光感锁：透镜按受光进度提亮、指针扫、解锁滑门闩（外观；受光逻辑仍是白盒接收器）
+    const lockArt = this.artSlots.mounted.find((m) => m.id === 'prop-light-lock-s2')?.model;
+    this.lightLockArt = lockArt ? new LightLockArt(lockArt, this.puzzles.beam.lock, () => this.puzzles.state.lockOpen) : null;
     this.artSlotGreyboxMissing = missingGreyboxNodes(this.scene, S2_ART_SLOTS);
     if (this.artSlotGreyboxMissing.length) console.warn('[art-slot] 白盒节点名对不上：' + this.artSlotGreyboxMissing.join('、'));
   }
@@ -106,6 +112,7 @@ export class S2Scene extends LevelScene {
     if (!this.rig) return;
     this.puzzles.update(dt);
     this.artSlots?.update();
+    this.lightLockArt?.update(dt);
     if (this.game.ui.debug.visible) {
       const s = this.puzzles.state;
       const b = this.puzzles.beam;

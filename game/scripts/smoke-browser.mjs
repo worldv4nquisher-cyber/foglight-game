@@ -1929,6 +1929,15 @@ const CHECKS = [
       w = await wsSt();
       if (Math.abs(w.fov - 55) > 3.5 || !w.xi || w.glow > 0) throw new Error('art=1 松开回第三人称、加亮归零 ' + JSON.stringify(w));
       out.push(`art=1 白石组挂崖顶、七段贴片关、眼位 / FOV 30 读 viewpoint 节点、对准字组中心数字石块加亮 ${w.glow === 0 ? '→ 松开归零' : ''} ✓`);
+      // 1030c 光感锁：挂小屋 socket；透镜 #F4C978 × 进度 × 1.6、指针 (60 − 120p)°；解锁后门闩 0.3 s 滑 +0.08；白盒透镜隐藏
+      const ll0 = await evaluate(`(() => { const s = __s2, la = s.lightLockArt, m = (s.artSlots?.mounted ?? []).find((x) => x.id === 'prop-light-lock-s2');
+        return la && m ? { parent: m.model.parent?.name, k: la.material.emissiveIntensity, hex: la.material.emissive.getHex(), needle: la.needle.rotation.z * 180 / Math.PI, lens: s.puzzles.beam.lockLens.visible, open: s.puzzles.state.lockOpen } : null; })()`);
+      if (!ll0 || ll0.parent !== 'env-keeper-house-ch1-light-lock-socket' || ll0.k !== 0 || Math.abs(ll0.needle - 60) > 0.01 || ll0.lens !== false || ll0.open) throw new Error('art=1 光感锁初始不对 ' + JSON.stringify(ll0));
+      await evaluate(`(() => { const s = __s2; s.puzzles.beam.lamps.east.emitter.setOn(true, true); s.puzzles.beam.solve(); for (let i = 0; i < 80; i++) s.puzzles.fixedUpdate(0.05); return 1; })()`);
+      await gsleep(600);
+      const ll1 = await evaluate(`(() => { const s = __s2, la = s.lightLockArt; return { k: la.material.emissiveIntensity, hex: la.material.emissive.getHex(), needle: la.needle.rotation.z * 180 / Math.PI, bolt: la.boltOpen, open: s.puzzles.state.lockOpen }; })()`);
+      if (!ll1.open || Math.abs(ll1.k - 1.6) > 1e-6 || ll1.hex !== 0xf4c978 || Math.abs(ll1.needle + 60) > 0.01 || ll1.bolt !== 1) throw new Error('art=1 光感锁解锁后外观不对 ' + JSON.stringify(ll1));
+      out.push('art=1 光感锁挂 light-lock-socket、透镜 #F4C978 0 → 1.6、指针 60° → −60°、解锁门闩滑开、白盒透镜隐藏 ✓');
       // 进 S2 会存档 s2，autostart 会接着存档进 S2：清掉存档再回 S1（后面的检查默认在 S1）
       await evaluate(`localStorage.removeItem('foglight.save.v1'); 1`);
       try { await cdp.goto(''); } catch (e) { throw new Error('回 S1 失败：' + e.message + ' ' + JSON.stringify(await evaluate(`({ scene: __game?.scenes?.current?.name, href: location.href, menu: __game?.ui?.mainMenu?.isOpen, err: window.__lastError ?? null })`).catch((x) => String(x))), { cause: e }); }
