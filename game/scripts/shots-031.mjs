@@ -102,7 +102,8 @@ const waitFrames = async (n) => {
 };
 
 const report = { atmo: ATMO || '(默认)', shots: [], failed: [], errors, loads: [], occlusion: {} };
-const reportFile = join(OUT, `shots-031${SUFFIX}.json`);
+// 只拍部分（argv[2]）时报告另存，不覆盖全量报告
+const reportFile = join(OUT, `shots-031${SUFFIX}${only ? '-' + only.join('+') : ''}.json`);
 const save = () => writeFileSync(reportFile, JSON.stringify(report, null, 2));
 
 /** 进 S1 并等全部 GLB / KTX2 加载完：有失败 / 占位就整页重进（负载高时 vite preview 偶发 Failed to fetch） */
@@ -176,14 +177,25 @@ async function occlusion(name) {
   console.log(`  遮挡 ${name}：新礁石实例 ${sum.newRockInstances}，目标 ${sum.targets}（画内 ${sum.inView}：脚印点 ${sum.footprintsInView}、路线点 ${sum.routeInView}），被新礁石挡 ${sum.blockedByNew}`, sum.blocked.slice(0, 6).join(' | '));
 }
 
-/** 汐特写机位：正面 = 角色根节点 +Z（模型面朝 +Z） */
+/**
+ * 汐特写机位：正面按骨骼现算——两脚 foot → toe 的水平方向平均（脚尖朝向 = 身体正面）；没有脚骨时退回 coat_back → coat_front。
+ * batch15 修：原来取实体根节点 +Z，但 PlayerController 转的是子节点 visual（根节点不转），按出生朝向转了约 90° 后
+ * s1-xi-hem 拍成了腰侧。xiCam 返回 front / rootFront 夹角，报告里能看出两者是否一致。
+ */
 const xiCam = (kind, fov) => `(() => { const s = __s1; const o = s.rig.entity.object3D; o.updateMatrixWorld(true); const V = o.position.constructor;
-  const p = o.getWorldPosition(new V()); const f = o.getWorldDirection(new V()).setY(0).normalize(); const up = new V(0, 1, 0); const c = s.camera; let eye, at;
+  const p = o.getWorldPosition(new V()); const wp = (n) => o.getObjectByName(n)?.getWorldPosition(new V()) ?? null;
+  const rootF = o.getWorldDirection(new V()).setY(0).normalize();
+  let f = null; const tl = wp('toe_l'), fl = wp('foot_l'), tr = wp('toe_r'), fr = wp('foot_r');
+  if (tl && fl && tr && fr) f = tl.clone().sub(fl).add(tr.clone().sub(fr)).setY(0);
+  if (!f || f.lengthSq() < 1e-6) { const cf = wp('coat_front_l_01'), cb = wp('coat_back_01'); if (cf && cb) f = cf.sub(cb).setY(0); }
+  if (!f || f.lengthSq() < 1e-6) f = rootF.clone();
+  f.normalize(); const frontVsRootDeg = +(Math.acos(Math.max(-1, Math.min(1, f.dot(rootF)))) * 180 / Math.PI).toFixed(1);
+  const up = new V(0, 1, 0); const c = s.camera; let eye, at;
   const cuff = (sd) => { const hand = o.getObjectByName('hand_' + sd), el = o.getObjectByName('lower_arm_' + sd); const w = hand.getWorldPosition(new V()); return w.lerp(el.getWorldPosition(new V()), 0.18); };
   if ('${kind}' === 'hem') { at = new V(p.x, p.y + 0.85, p.z); eye = at.clone().addScaledVector(f, 1.0).add(new V(0, 0.08, 0)); }
   else if ('${kind}' === 'cuff-side') { at = cuff('r'); const out = at.clone().sub(p).setY(0).normalize(); eye = at.clone().addScaledVector(out, 0.55).add(new V(0, 0.05, 0)); }
   else { const sd = '${kind}'.slice(-1); at = cuff(sd); const out = at.clone().sub(p).setY(0).normalize(); eye = at.clone().addScaledVector(f, 0.55).addScaledVector(out, 0.18).add(new V(0, 0.06, 0)); }
-  c.position.copy(eye); c.fov = ${fov}; c.lookAt(at); c.updateProjectionMatrix(); return { eye: eye.toArray().map((v) => +v.toFixed(3)), at: at.toArray().map((v) => +v.toFixed(3)) }; })()`;
+  c.position.copy(eye); c.fov = ${fov}; c.lookAt(at); c.updateProjectionMatrix(); return { eye: eye.toArray().map((v) => +v.toFixed(3)), at: at.toArray().map((v) => +v.toFixed(3)), front: f.toArray().map((v) => +v.toFixed(3)), frontVsRootDeg }; })()`;
 
 try {
   await setView(...SMALL);
