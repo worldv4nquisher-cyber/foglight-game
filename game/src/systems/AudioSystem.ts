@@ -12,6 +12,18 @@ export const MUSIC_BUS_DB = AMBIENCE_FILE_LUFS - MUSIC_BELOW_AMBIENCE_DB - MUSIC
 export const MUSIC_BUS_GAIN = Math.pow(10, MUSIC_BUS_DB / 20);
 /** 036：场景之间（含主菜单 → S1）音乐交叉淡化时长（s） */
 export const MUSIC_XFADE_SEC = 2;
+/** 1031：同步层增益变化的平滑时长（s）：按玩家高度逐帧改目标值，线性斜坡跟过去，不出拉链噪声 */
+export const MUSIC_LAYER_RAMP_SEC = 0.25;
+/** 1031：同步层晚到时的起播提前量（s）：start(when, offset) 的 when 留在未来，保证 offset 和底层样本对齐 */
+export const MUSIC_LAYER_LEAD_SEC = 0.1;
+
+/** 1031：和底层同步循环的附加层（S3 紧张层 mus-s3-lighthouse-upper） */
+export interface MusicLayerOptions {
+  name: string;
+  buffer: AudioBuffer;
+  /** 初始增益（线性，默认 0） */
+  gain?: number;
+}
 
 export interface MusicOptions {
   /** 曲目 key（manifest）：同一首已在播 → 不重开（返回 false） */
@@ -40,12 +52,17 @@ export interface MusicOptions {
    * loop 曲按时长取模。不是 seek：起播一次定下，之后不改。
    */
   offset?: number;
+  /**
+   * 1031：同步层——和底层**同一 AudioContext 时刻、同一 offset** start，同为 loop（S3 两层）。
+   * 时长必须和底层一样（样本对齐循环），不一样的层丢掉不放。层增益用 setMusicLayerGain 改；层永远不单独 seek / 重启。
+   */
+  layers?: MusicLayerOptions[];
 }
 
 /** 音乐调试记录（冒烟读取）：每次 playMusic / stopMusic 一条，时间是 AudioContext 时钟（挂起时不走） */
 export interface MusicLogEntry {
-  /** play / stop；1031：end = 不循环的曲子（结尾曲）自然放完 */
-  op: 'play' | 'stop' | 'end';
+  /** play / stop；1031：end = 不循环的曲子（结尾曲）自然放完；layer = 同步层起播（和底层同刻或晚到对齐） */
+  op: 'play' | 'stop' | 'end' | 'layer';
   key: string | null;
   /** 被替换 / 停掉的曲目 */
   from: string | null;
@@ -59,6 +76,19 @@ export interface MusicLogEntry {
   offset?: number;
   /** 1031：fadeOutPrev 时旧曲的淡出时长（fade 是新曲淡入） */
   fadeOut?: number;
+  /** 1031：同步层名（play 时一起起播的层 / op layer 的层） */
+  layers?: string[];
+}
+
+interface MusicLayer {
+  name: string;
+  source: AudioBufferSourceNode;
+  gain: GainNode;
+  /** 最近一次设的目标增益 */
+  target: number;
+  /** start(when, offset) 的 when / offset：when − offset ≡ 底层 startAt（mod duration） */
+  when: number;
+  offset: number;
 }
 
 interface MusicVoice {
@@ -70,6 +100,8 @@ interface MusicVoice {
   /** 1031：文件 0 s 对应的 AudioContext 时刻（= 起播时刻 − offset）；播放位置 = (now − startAt) [mod duration] */
   startAt: number;
   duration: number;
+  /** 1031：同步层 */
+  layers: Map<string, MusicLayer>;
 }
 
 /** 循环音：按名字启停。source 是 buffer 循环或合成占位振荡器；gain 做淡入淡出 */
@@ -263,7 +295,12 @@ export class AudioSystem {
     src.connect(gain).connect(this.musicGain);
     if (offset > 0) src.start(now, offset);
     else src.start(now);
-    const voice: MusicVoice = { key, source: src, gain, level, startAt: now - offset, duration };
+    const voice: MusicVoice = { key, source: src, gain, level, startAt: now - offset, duration, layers: new Map() };
+    // 1031 同步层：同一时刻 now、同一 offset 起播（和底层同一个 start 参数 → 样本对齐），接在曲目 gain 前面（一起交叉淡化）
+    for (const l of opts.layers ?? []) {
+      if (!this.sameLength(l.buffer, duration) || voice.layers.has(l.name)) continue;
+      this.startLayer(voice, l, now, offset);
+    }
     this.music = voice;
     if (!loop) {
       // 1031 结尾曲：一次性，放完自己清掉（被替换 / 停掉时 releaseMusic 会换掉 onended）
@@ -276,8 +313,81 @@ export class AudioSystem {
       };
     }
     if (prev) this.releaseMusic(prev, prevFade);
-    this.logMusic({ op: 'play', key, from: prev?.key ?? null, at: now, fade, loop, ctxState: ctx.state, ...(offset > 0 ? { offset } : {}), ...(split && prev ? { fadeOut: prevFade } : {}) });
+    this.logMusic({
+      op: 'play',
+      key,
+      from: prev?.key ?? null,
+      at: now,
+      fade,
+      loop,
+      ctxState: ctx.state,
+      ...(offset > 0 ? { offset } : {}),
+      ...(split && prev ? { fadeOut: prevFade } : {}),
+      ...(voice.layers.size ? { layers: [...voice.layers.keys()] } : {}),
+    });
     return true;
+  }
+
+  private sameLength(b: AudioBuffer, duration: number): boolean {
+    return Math.abs(b.duration - duration) < 1e-3;
+  }
+
+  private startLayer(v: MusicVoice, l: MusicLayerOptions, when: number, offset: number): MusicLayer {
+    const ctx = this.context!;
+    const src = ctx.createBufferSource();
+    src.buffer = l.buffer;
+    src.loop = v.source.loop;
+    const g = ctx.createGain();
+    const target = Math.max(0, l.gain ?? 0);
+    g.gain.setValueAtTime(target, ctx.currentTime);
+    src.connect(g).connect(v.gain);
+    if (offset > 0) src.start(when, offset);
+    else src.start(when);
+    const layer: MusicLayer = { name: l.name, source: src, gain: g, target, when, offset };
+    v.layers.set(l.name, layer);
+    return layer;
+  }
+
+  /**
+   * 1031：底层先到、上层晚到——按底层**当前播放位置**对齐起播：when = now + MUSIC_LAYER_LEAD_SEC，
+   * offset = (when − 底层 startAt) mod duration，两层此后按同一时钟循环。只给正在放的 loop 曲加；时长不同 / 同名已有 → false。
+   * 上层只这样起播一次，之后不 seek、不重启（底层换曲时跟着一起淡出停掉）。
+   */
+  addMusicLayer(l: MusicLayerOptions, key?: string): boolean {
+    const ctx = this.context;
+    const v = this.music;
+    if (!ctx || !v || ctx.state === 'closed') return false;
+    if (key !== undefined && v.key !== key) return false;
+    if (!v.source.loop || v.duration <= 0 || !this.sameLength(l.buffer, v.duration) || v.layers.has(l.name)) return false;
+    const when = ctx.currentTime + MUSIC_LAYER_LEAD_SEC;
+    const offset = (((when - v.startAt) % v.duration) + v.duration) % v.duration;
+    this.startLayer(v, l, when, offset);
+    this.logMusic({ op: 'layer', key: v.key, from: null, at: when, fade: 0, loop: true, ctxState: ctx.state, offset, layers: [l.name] });
+    return true;
+  }
+
+  /** 1031：设同步层增益（线性，MUSIC_LAYER_RAMP_SEC 斜坡跟过去）；没有这个层 → false（例如结尾曲已经接管） */
+  setMusicLayerGain(name: string, gain: number): boolean {
+    const ctx = this.context;
+    const l = this.music?.layers.get(name);
+    if (!ctx || !l) return false;
+    const g = Math.max(0, gain);
+    if (Math.abs(g - l.target) < 1e-4) return true;
+    const now = ctx.currentTime;
+    const p = l.gain.gain;
+    const cur = p.value;
+    p.cancelScheduledValues(now);
+    p.setValueAtTime(cur, now);
+    p.linearRampToValueAtTime(g, now + MUSIC_LAYER_RAMP_SEC);
+    l.target = g;
+    return true;
+  }
+
+  /** 1031：同步层读数（冒烟 / 单测）：名字、目标增益、当前增益、起播 when / offset、换算出的「文件 0 s」时刻（应和底层 startAt 同余） */
+  get musicLayers(): Array<{ name: string; target: number; gain: number; when: number; offset: number; startAt: number }> {
+    const v = this.music;
+    if (!v) return [];
+    return [...v.layers.values()].map((l) => ({ name: l.name, target: l.target, gain: l.gain.gain.value, when: l.when, offset: l.offset, startAt: l.when - l.offset }));
   }
 
   /** 停止背景音乐（fadeOut s 线性淡出，默认立即） */
@@ -303,11 +413,18 @@ export class AudioSystem {
     v.source.onended = () => {
       v.source.disconnect();
       v.gain.disconnect();
+      for (const l of v.layers.values()) {
+        l.source.disconnect();
+        l.gain.disconnect();
+      }
     };
-    try {
-      v.source.stop(now + fade);
-    } catch {
-      // 已经停过
+    // 同步层接在曲目 gain 前面，跟底层一起淡出、同一时刻停
+    for (const l of [v.source, ...[...v.layers.values()].map((x) => x.source)]) {
+      try {
+        l.stop(now + fade);
+      } catch {
+        // 已经停过
+      }
     }
   }
 

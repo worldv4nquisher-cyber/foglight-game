@@ -18,7 +18,10 @@ import { bindPuzzleSfx, DIAL_GROUPS, MIRROR_FINE_MIN_SEC } from '@/systems/audio
 import { BeamHum, PushLoop, BEAM_HUM_ID, LENS_ROTATE_ID, LENS_ROTATE_DELAY_SEC } from '@/systems/audio/loops';
 import { BellWindTimer, BELL_WIND_INTERVAL } from '@/systems/audio/bellWind';
 import { MUSIC_XFADE_SEC, MUSIC_BUS_DB, MUSIC_BUS_GAIN, MUSIC_FILE_LUFS, AMBIENCE_FILE_LUFS } from '@/systems/AudioSystem';
-import { switchMusic, switchMusicLazy, musicTrackGain } from '@/systems/audio/music';
+import { switchMusic, switchMusicLazy, switchLayeredMusicLazy, musicTrackGain } from '@/systems/audio/music';
+import { s3UpperLayerGain, S3_MUSIC_BASE, S3_MUSIC_UPPER, S3_UPPER_Y0, S3_UPPER_Y1 } from '@/levels/s3/music';
+import { S3, toWorld, toLocal } from '@/levels/s3/layout';
+import { MUSIC_LAYER_LEAD_SEC, MUSIC_LAYER_RAMP_SEC } from '@/systems/AudioSystem';
 import { MUSIC_FILE_LEVELS, MUSIC_MATCH_TOL_DB } from '@/systems/audio/musicLevels';
 import { spawnSync } from 'node:child_process';
 import { LazyAudioCache, LazyAudioTimeout, LAZY_AUDIO_TIMEOUT_MS } from '@/assets/lazyAudio';
@@ -923,6 +926,174 @@ test('1031 结尾曲 EndingMusic：manifest s3 lazy；预取后 lighthouse:ignit
   assert.ok(/events\.on\('scene:firstFrame', \(\) => \{\s*offFirst\(\);\s*void ending\.prefetch\(\);/.test(s3), 'S3 首帧后预取结尾曲');
   const menu = readFileSync(new URL('../src/scenes/MenuScene.ts', import.meta.url), 'utf8');
   assert.ok(menu.includes('if (this.game.audio.musicKey === ENDING_MUSIC) return;'), '章节结束页不掐结尾曲');
+});
+
+// ---- 1031 配乐 2：S3 两层
+test('1031 S3 两层 AudioSystem：layers 和底层同一时刻同一 offset start、同为 loop、初始增益 0、接在曲目 gain 前；时长不同的层不放；交叉淡化时两层一起停；setMusicLayerGain 斜坡', () => {
+  const ctx = new FakeContext();
+  const a = new AudioSystem(ctx);
+  a.playMusic({ duration: 151.1 }, { key: 'mus-s2-keeper-house' });
+  ctx.currentTime = 77.7;
+  const dur = 6615000 / 44100;
+  a.playMusic({ duration: dur }, { key: S3_MUSIC_BASE, crossfade: 2, layers: [{ name: S3_MUSIC_UPPER, buffer: { duration: dur } }, { name: 'bad', buffer: { duration: 149 } }] });
+  const [, base, up] = ctx.sources;
+  assert.equal(ctx.sources.length, 3, '时长不同的层丢掉');
+  assert.deepEqual([base.started, base.offset, base.loop], [77.7, 0, true]);
+  assert.deepEqual([up.started, up.offset, up.loop], [base.started, base.offset, true], '同一 AudioContext 时刻、同一 offset、同为 loop');
+  assert.equal(up.loopStart, undefined);
+  const layerGain = up.out[0];
+  assert.equal(layerGain.gain.value, 0, '上层初始增益 0');
+  assert.equal(layerGain.out[0], base.out[0], '上层接在曲目 gain 前（一起交叉淡化）');
+  assert.deepEqual(a.musicLog.at(-1).layers, [S3_MUSIC_UPPER]);
+  assert.deepEqual(a.musicLayers.map((l) => [l.name, l.when, l.offset, l.startAt]), [[S3_MUSIC_UPPER, 77.7, 0, a.musicStartAt]]);
+  // 增益：斜坡到目标
+  ctx.currentTime = 80;
+  assert.equal(a.setMusicLayerGain(S3_MUSIC_UPPER, 0.5), true);
+  assert.deepEqual(layerGain.gain.events.slice(-3), [['cancel', 80], ['set', 0, 80], ['ramp', 0.5, 80 + MUSIC_LAYER_RAMP_SEC]]);
+  const n = layerGain.gain.events.length;
+  a.setMusicLayerGain(S3_MUSIC_UPPER, 0.5);
+  assert.equal(layerGain.gain.events.length, n, '目标没变不重排');
+  assert.equal(a.setMusicLayerGain('nope', 1), false);
+  assert.equal(up.started, 77.7, '改增益不重启、不 seek');
+  // 换曲（结尾曲）：两层一起淡出、同一时刻停
+  ctx.currentTime = 90;
+  a.playMusic({ duration: 107 }, { key: ENDING_MUSIC, loop: false, fadeOutPrev: 2 });
+  assert.deepEqual([base.stopped, up.stopped], [92, 92]);
+  assert.equal(a.setMusicLayerGain(S3_MUSIC_UPPER, 1), false, '结尾曲接管后不再有上层');
+  assert.equal(a.addMusicLayer({ name: S3_MUSIC_UPPER, buffer: { duration: 107 } }), false, '不循环的曲子不加层');
+});
+
+test('1031 S3 两层 addMusicLayer：上层晚到 → when = now + lead、offset = 底层当前播放位置（取模），换算的文件 0 s 和底层 startAt 同余；不同曲 / 已有 / 时长不同拒绝', () => {
+  const ctx = new FakeContext();
+  const a = new AudioSystem(ctx);
+  const dur = 150;
+  ctx.currentTime = 10;
+  a.playMusic({ duration: dur }, { key: S3_MUSIC_BASE });
+  ctx.currentTime = 10 + dur * 2 + 37.25; // 底层已经循环了两圈多
+  assert.equal(a.addMusicLayer({ name: S3_MUSIC_UPPER, buffer: { duration: dur }, gain: 0.3 }, 'other'), false, '底层不是指定曲');
+  assert.equal(a.addMusicLayer({ name: S3_MUSIC_UPPER, buffer: { duration: 149 } }), false, '时长不同');
+  assert.equal(a.addMusicLayer({ name: S3_MUSIC_UPPER, buffer: { duration: dur }, gain: 0.3 }, S3_MUSIC_BASE), true);
+  const up = ctx.sources.at(-1);
+  assert.ok(Math.abs(up.started - (ctx.currentTime + MUSIC_LAYER_LEAD_SEC)) < 1e-9);
+  assert.ok(Math.abs(up.offset - (37.25 + MUSIC_LAYER_LEAD_SEC)) < 1e-9, '对齐到底层播放位置');
+  const l = a.musicLayers[0];
+  assert.ok(Math.abs((((l.startAt - a.musicStartAt) % dur) + dur) % dur) < 1e-9, '两层文件 0 s 同余');
+  assert.equal(up.out[0].gain.value, 0.3, '对齐起播时用当时高度的增益');
+  assert.equal(a.musicLog.at(-1).op, 'layer');
+  assert.equal(a.addMusicLayer({ name: S3_MUSIC_UPPER, buffer: { duration: dur } }), false, '只起播一次');
+  assert.equal(ctx.sources.filter((x) => x.started !== null).length, 2, '底层没被重启 / seek');
+});
+
+test('1031 S3 两层 switchLayeredMusicLazy：两层都到 → 一个 playMusic 同时起播；只到底层 → 先放底层、上层到了按位置对齐；底层失败不放、上层失败只放底层；离场丢弃', async () => {
+  assert.equal(LEVELS.s3.music, S3_MUSIC_BASE);
+  assert.equal(LEVELS.s3.musicUpper, S3_MUSIC_UPPER);
+  for (const k of [S3_MUSIC_BASE, S3_MUSIC_UPPER]) {
+    const e = manifest.find((x) => x.key === k);
+    assert.deepEqual([e.type, e.group, e.lazy, e.optional, e.art, e.gainDb ?? 0], ['audio', 's3', true, true, true, 0], k);
+    assert.deepEqual(sizeBucket(e), { group: 's3', lazyAfterEntry: true });
+  }
+  const buf = { duration: 150 };
+  const setup = () => {
+    const ctx = new FakeContext();
+    const a = new AudioSystem(ctx);
+    a.playMusic({ duration: 151.1 }, { key: 'mus-s2-keeper-house' });
+    const gates = {};
+    const load = (k) => new Promise((r) => (gates[k] = r));
+    return { ctx, a, gates, load };
+  };
+  const flush = async () => {
+    for (let i = 0; i < 10; i++) await Promise.resolve();
+  };
+  // 1) 上层先到、底层后到 → 同时起播
+  {
+    const { ctx, a, gates, load } = setup();
+    const p = switchLayeredMusicLazy(a, load, S3_MUSIC_BASE, S3_MUSIC_UPPER, () => true, () => 0.25);
+    await flush();
+    gates[S3_MUSIC_UPPER](buf);
+    await flush();
+    assert.equal(a.musicKey, 'mus-s2-keeper-house', '只到上层不起播');
+    ctx.currentTime = 4;
+    gates[S3_MUSIC_BASE](buf);
+    assert.deepEqual(await p, { base: 'play', upper: 'with-base' });
+    const [, base, up] = ctx.sources;
+    assert.deepEqual([base.started, up.started, base.offset, up.offset], [4, 4, 0, 0]);
+    assert.equal(up.out[0].gain.value, 0.25);
+    assert.deepEqual(lastRamp(base.out[0].gain), ['ramp', 1, 6], '和 S2 曲 2 s 交叉淡化');
+  }
+  // 2) 底层先到 → 先放底层；上层到了对齐
+  {
+    const { ctx, a, gates, load } = setup();
+    const p = switchLayeredMusicLazy(a, load, S3_MUSIC_BASE, S3_MUSIC_UPPER, () => true, () => 0);
+    await flush();
+    ctx.currentTime = 3;
+    gates[S3_MUSIC_BASE](buf);
+    await flush();
+    assert.equal(a.musicKey, S3_MUSIC_BASE);
+    assert.equal(ctx.sources.length, 2, '只放底层');
+    ctx.currentTime = 11.5;
+    gates[S3_MUSIC_UPPER](buf);
+    assert.deepEqual(await p, { base: 'play', upper: 'aligned' });
+    const up = ctx.sources[2];
+    assert.ok(Math.abs(up.started - 11.6) < 1e-9 && Math.abs(up.offset - 8.6) < 1e-9, JSON.stringify([up.started, up.offset]));
+    assert.equal(ctx.sources[1].started, 3, '底层不动');
+  }
+  // 3) 底层失败（上层到了也不单放）/ 上层失败 / 离场
+  {
+    const { ctx, a, gates, load } = setup();
+    const p = switchLayeredMusicLazy(a, load, S3_MUSIC_BASE, S3_MUSIC_UPPER);
+    await flush();
+    gates[S3_MUSIC_UPPER](buf);
+    gates[S3_MUSIC_BASE](null);
+    assert.deepEqual(await p, { base: 'missing', upper: 'no-base' });
+    assert.equal(a.musicKey, null);
+    assert.equal(ctx.sources.length, 1);
+  }
+  {
+    const { ctx, a, gates, load } = setup();
+    const p = switchLayeredMusicLazy(a, load, S3_MUSIC_BASE, S3_MUSIC_UPPER);
+    await flush();
+    gates[S3_MUSIC_BASE](buf);
+    await flush();
+    gates[S3_MUSIC_UPPER](null);
+    assert.deepEqual(await p, { base: 'play', upper: 'missing' });
+    assert.equal(ctx.sources.length, 2);
+  }
+  {
+    const { ctx, a, gates, load } = setup();
+    let alive = true;
+    const p = switchLayeredMusicLazy(a, load, S3_MUSIC_BASE, S3_MUSIC_UPPER, () => alive);
+    await flush();
+    gates[S3_MUSIC_BASE](buf);
+    await flush();
+    alive = false;
+    gates[S3_MUSIC_UPPER](buf);
+    assert.deepEqual(await p, { base: 'play', upper: 'stale' });
+    assert.equal(ctx.sources.length, 2, '离场后不再加层');
+  }
+  // 接线：LevelScene 首帧后走两层懒加载、每帧 setMusicLayerGain；S3Scene 按高度
+  const lvl = readFileSync(new URL('../src/scenes/LevelScene.ts', import.meta.url), 'utf8');
+  assert.ok(lvl.indexOf('switchLayeredMusicLazy(audio, (k) => this.game.assets.loadAudio(k), music, upper') > lvl.indexOf("events.on('scene:firstFrame'"));
+  assert.ok(lvl.includes('this.game.audio.setMusicLayerGain(this.level.musicUpper, this.upperLayerLevel())'));
+  const s3 = readFileSync(new URL('../src/levels/s3/S3Scene.ts', import.meta.url), 'utf8');
+  assert.ok(s3.includes('s3UpperLayerGain(toLocal(this.rig.body.position, this.upperTmp))'));
+});
+
+test('1031 S3 上层增益 = f(玩家高度)：塔内楼梯底 y 0.2 → 0、灯室地板 y 22 → 1、中间线性、两端夹住；塔外（桥 / 礁石）恒 0；世界 ↔ 局部换算一致', () => {
+  assert.deepEqual([S3_UPPER_Y0, S3_UPPER_Y1], [S3.groundFloorY, S3.lampRoom.floorY]);
+  const [sx, , sz] = S3.points.stairBottom;
+  const at = (y) => s3UpperLayerGain({ x: sx, y, z: sz });
+  assert.equal(at(0.2), 0);
+  assert.equal(at(-1), 0);
+  assert.equal(at(22), 1);
+  assert.equal(at(25), 1);
+  assert.ok(Math.abs(at(11.1) - 0.5) < 1e-9);
+  for (let y = 0.2; y <= 22; y += 0.7) assert.ok(Math.abs(at(y) - (y - 0.2) / 21.8) < 1e-9, '线性');
+  assert.ok(Math.abs(s3UpperLayerGain({ x: S3.points.stairTop[0], y: S3.points.stairTop[1], z: S3.points.stairTop[2] }) - 21.6 / 21.8) < 1e-9, '楼梯顶');
+  assert.equal(s3UpperLayerGain({ x: S3.points.lampRoomArrive[0], y: 22, z: S3.points.lampRoomArrive[2] }), 1, '灯室');
+  assert.equal(s3UpperLayerGain({ x: S3.points.spawnFromS2[0], y: S3.points.spawnFromS2[1], z: S3.points.spawnFromS2[2] }), 0, '桥尾出生点 y 3 在塔外');
+  // 世界坐标进出（S3Scene 用 toLocal(rig.body.position)）
+  const w = toWorld([sx, 11.1, sz]);
+  assert.ok(Math.abs(s3UpperLayerGain(toLocal(w)) - 0.5) < 1e-9);
 });
 
 test('033 改 LazyAudioCache：并发共享一次下载；404 → null 不抛、记缺失、下次重试；超时 → null、迟到的结果丢掉；?art=0 / 没登记不发请求', async () => {

@@ -15,12 +15,13 @@ import { collectIndoorVolumes } from '@/systems/CameraFollowSystem';
 import type { CameraKey } from '@/systems/camera/CameraTrack';
 import type { TextId } from '@/content/text';
 import type { Collider } from '@/systems/PhysicsSystem';
-import { S3, S3_FRAME, alongDoor, cameraYawFacing, toWorld } from './layout';
+import { S3, S3_FRAME, alongDoor, cameraYawFacing, toLocal, toWorld } from './layout';
 import { buildS3Greybox, defaultS3GreyboxMaterials, type S3Greybox } from './greybox';
 import { buildS3Art, S3_DOOR_PROP_KEY, type S3Art } from './art';
 import { buildS3Puzzles, OUTRO_CUT_SEC, type S3Puzzles } from './puzzles';
 import { doorLightmapScale } from '@/render/lightmap';
 import { EndingMusic } from '@/systems/audio/endingMusic';
+import { s3UpperLayerGain } from './music';
 import { S3_TOWER_CLOSED_LM } from '@/levels/lightmaps';
 
 /** 点灯后多久进章节结束页（s）。结尾演出（035）做好后由演出结束触发 */
@@ -140,6 +141,12 @@ export class S3Scene extends LevelScene {
     if (this.ending) return;
     this.ending = true;
     this.puzzles.igniteNow();
+  }
+
+  private readonly upperTmp = new THREE.Vector3();
+  /** 1031：紧张层增益 = 玩家（S3 局部）高度，楼梯底 0 → 灯室 1（levels/s3/music.ts） */
+  protected override musicUpperGain(): number {
+    return this.rig ? s3UpperLayerGain(toLocal(this.rig.body.position, this.upperTmp)) : 0;
   }
 
   /** 灯是否亮着（smoke / 测试读） */

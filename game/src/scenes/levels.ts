@@ -20,12 +20,14 @@ export interface LevelDef {
   defaultEntry: string;
   /** 场景曲（manifest 音频 key，033；S2 1031 接入）：进场时从上一首 2 s 交叉淡化；null = 没有场景曲（进场时上一首 2 s 淡出） */
   music: string | null;
+  /** 1031：和 music 同步循环的上层（S3 紧张层）：同时起播、样本对齐，增益由场景 musicUpperGain() 每帧给 */
+  musicUpper?: string;
 }
 
 export const LEVELS: Record<LevelId, LevelDef> = {
   s1: { id: 's1', scene: 's1-ebb-shore', group: 's1', next: 's2', defaultEntry: 'start', music: 'mus-s1-ebb-shore' },
   s2: { id: 's2', scene: 's2-keeper-house', group: 's2', next: 's3', defaultEntry: 'from-s1', music: 'mus-s2-keeper-house' },
-  s3: { id: 's3', scene: 's3-lighthouse', group: 's3', next: null, defaultEntry: 'from-s2', music: null },
+  s3: { id: 's3', scene: 's3-lighthouse', group: 's3', next: null, defaultEntry: 'from-s2', music: 'mus-s3-lighthouse', musicUpper: 'mus-s3-lighthouse-upper' },
 };
 
 /** 主菜单曲（033 定稿，menu 组） */

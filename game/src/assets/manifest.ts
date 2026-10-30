@@ -236,7 +236,11 @@ export const manifest: AssetEntry[] = [
   // s2：守灯人小屋场景曲（2,577,617 B，151.1 s，−20 LUFS），和 S1 一样懒加载：S2 首帧渲染后才 loadAudio，解码完和上一首 2 s 交叉淡化；
   //     整文件循环（README：loop 0 – 6664000 样本 = 整个文件）；404 / 超时 → 上一首淡出、不放音乐。npm run size 记在「s2 进场后懒加载」
   { key: 'mus-s2-keeper-house', type: 'audio', url: 'assets/art/audio/music/mus-s2-keeper-house.ogg', group: 's2', optional: true, art: true, lazy: true },
-  // s3：mus-s3-lighthouse + mus-s3-lighthouse-upper 两层要同一时刻起播、按玩家高度淡入上层，同步层逻辑未做，暂不登记
+  // s3：灯塔两层场景曲（各 150.0 s = 6615000 样本，loop 整文件）：底层 −20 LUFS、上层（紧张层）−21 LUFS，gainDb 都 0（上层的 −1 LU 是设计值，
+  //     全开时两层合起来比底层单放响 +2.5 LU）。和 S1 一样首帧后懒加载、两层并行；同一 AudioContext 时刻起播、样本对齐（switchLayeredMusicLazy），
+  //     上层增益 = 玩家高度函数（levels/s3/music.ts）。npm run size 记在「s3 进场后懒加载」
+  { key: 'mus-s3-lighthouse', type: 'audio', url: 'assets/art/audio/music/mus-s3-lighthouse.ogg', group: 's3', optional: true, art: true, lazy: true },
+  { key: 'mus-s3-lighthouse-upper', type: 'audio', url: 'assets/art/audio/music/mus-s3-lighthouse-upper.ogg', group: 's3', optional: true, art: true, lazy: true },
   // s3：第一章结尾曲（1,839,809 B，107.0 s，−20 LUFS，不循环）。lazy：进 S3 首帧后就预取（EndingMusic.prefetch），
   //     lighthouse:ignited 那一帧 start(0)（文件 0 s = 点燃）；不计入首场景包，npm run size 记在「s3 进场后懒加载」
   { key: 'mus-ending-ch1', type: 'audio', url: 'assets/art/audio/music/mus-ending-ch1.ogg', group: 's3', optional: true, art: true, lazy: true },

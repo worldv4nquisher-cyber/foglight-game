@@ -66,3 +66,51 @@ export async function switchMusicLazy(
   audio.playMusic(buf, { key, loop: true, crossfade, fadeIn: crossfade, gain: musicTrackGain(key) });
   return 'play';
 }
+
+export type LayerResult = 'with-base' | 'aligned' | 'missing' | 'no-base' | 'stale' | 'mismatch';
+
+/**
+ * 1031 S3 两层场景曲（mus-s3-lighthouse 底层 + mus-s3-lighthouse-upper 紧张层，README：同时起播、样本对齐、同为 loop，
+ * 上层初始增益 0、按玩家高度 0 → 1 线性淡入，不要单独起播或中途 seek）。两层都按 S1 的懒加载办法：首帧后并行下载解码。
+ * - 两层都解码完才「一起起播」：底层解码完时上层也已经到了 → 同一个 playMusic、同一 AudioContext 时刻 start
+ * - 只到了底层：先只放底层（和上一首 2 s 交叉淡化）；上层到了以后 addMusicLayer 按底层当前播放位置对齐起播（不 seek 底层）
+ * - 底层失败：上一首照常淡出、不放音乐（上层到了也不单放）；上层失败：只放底层
+ * - upperGain()：起播 / 对齐那一刻的上层增益（按玩家高度，之后每帧由场景 setMusicLayerGain）
+ * 返回 { base: 底层结果, upper: 上层结果 }
+ */
+export async function switchLayeredMusicLazy(
+  audio: AudioSystem,
+  load: (key: string) => Promise<AudioBuffer | null | undefined>,
+  base: string,
+  upper: string,
+  alive: () => boolean = () => true,
+  upperGain: () => number = () => 0,
+  crossfade: number = MUSIC_XFADE_SEC,
+): Promise<{ base: LazyMusicResult; upper: LayerResult }> {
+  if (audio.musicKey === base) return { base: 'same', upper: audio.musicLayers.some((l) => l.name === upper) ? 'with-base' : 'missing' };
+  const safe = (k: string): Promise<AudioBuffer | null> =>
+    Promise.resolve()
+      .then(() => load(k))
+      .then((b) => b ?? null)
+      .catch(() => null);
+  let upperBuf: AudioBuffer | null | undefined; // undefined = 还没到
+  const upperP = safe(upper).then((b) => (upperBuf = b));
+  const baseBuf = await safe(base);
+  if (!alive()) return { base: 'stale', upper: 'stale' };
+  if (audio.musicKey === base) return { base: 'same', upper: 'stale' };
+  if (!baseBuf) {
+    audio.stopMusic(crossfade);
+    return { base: 'missing', upper: 'no-base' };
+  }
+  const layer = (b: AudioBuffer) => ({ name: upper, buffer: b, gain: upperGain() });
+  if (upperBuf) {
+    audio.playMusic(baseBuf, { key: base, loop: true, crossfade, fadeIn: crossfade, gain: musicTrackGain(base), layers: [layer(upperBuf)] });
+    return { base: 'play', upper: audio.musicLayers.some((l) => l.name === upper) ? 'with-base' : 'mismatch' };
+  }
+  audio.playMusic(baseBuf, { key: base, loop: true, crossfade, fadeIn: crossfade, gain: musicTrackGain(base) });
+  if (upperBuf === null) return { base: 'play', upper: 'missing' };
+  const ub = await upperP;
+  if (!alive() || audio.musicKey !== base) return { base: 'play', upper: 'stale' };
+  if (!ub) return { base: 'play', upper: 'missing' };
+  return { base: 'play', upper: audio.addMusicLayer(layer(ub), base) ? 'aligned' : 'mismatch' };
+}

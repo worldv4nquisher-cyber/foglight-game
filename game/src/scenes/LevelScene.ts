@@ -29,7 +29,7 @@ import type { HintSystem } from '@/systems/HintSystem';
 import { createSceneHints } from './sceneHints';
 import { TideSet } from '@/systems/tide/TideController';
 import type { TideBell } from '@/systems/tide/TideBell';
-import { switchMusic, switchMusicLazy } from '@/systems/audio/music';
+import { switchMusic, switchMusicLazy, switchLayeredMusicLazy, musicTrackGain } from '@/systems/audio/music';
 import { bindSfxFallback, recallToSafePoint } from '@/systems/tide/tideScene';
 import { PushLoop } from '@/systems/audio/loops';
 import { bindPuzzleSfx } from '@/systems/audio/puzzleSfx';
@@ -118,6 +118,8 @@ export abstract class LevelScene extends BaseScene {
   musicFirstFrameAt: number | null = null;
   musicRequestedAt: number | null = null;
   musicLazyResult: string | null = null;
+  /** 1031：同步上层的结果（with-base 同时起播 / aligned 晚到对齐 / missing …） */
+  musicUpperResult: string | null = null;
   private pendingExits: SceneExitOptions[] = [];
 
   constructor(game: Game, level: LevelDef) {
@@ -197,9 +199,17 @@ export abstract class LevelScene extends BaseScene {
         if (this.disposed) return;
         this.musicRequestedAt = performance.now();
         this.musicFirstFrameAt = at;
-        void switchMusicLazy(audio, (k) => this.game.assets.loadAudio(k), music, () => !this.disposed).then((r) => {
-          this.musicLazyResult = r;
-        });
+        const upper = this.level.musicUpper;
+        if (upper) {
+          // 1031 S3 两层：并行下载；都到了同一时刻起播，只到底层先放底层、上层到了按底层位置对齐（见 switchLayeredMusicLazy）
+          void switchLayeredMusicLazy(audio, (k) => this.game.assets.loadAudio(k), music, upper, () => !this.disposed, () => this.upperLayerLevel()).then((r) => {
+            this.musicLazyResult = r.base;
+            this.musicUpperResult = r.upper;
+          });
+        } else
+          void switchMusicLazy(audio, (k) => this.game.assets.loadAudio(k), music, () => !this.disposed).then((r) => {
+            this.musicLazyResult = r;
+          });
       });
       this.cleanups.push(offFirst);
     } else switchMusic(audio, (k) => this.game.assets.getAudio(k), music);
@@ -460,8 +470,21 @@ export abstract class LevelScene extends BaseScene {
     this.hints.fixedUpdate(dt, this.rig.body.position);
   }
 
+  /** 1031：同步上层增益（0–1，LevelDef.musicUpper 有才用；默认 0，S3 按玩家高度） */
+  protected musicUpperGain(): number {
+    return 0;
+  }
+
+  /** 上层实际增益 = musicUpperGain() × 上层曲目增益（manifest gainDb） */
+  private upperLayerLevel(): number {
+    const upper = this.level.musicUpper;
+    return upper ? this.musicUpperGain() * musicTrackGain(upper) : 0;
+  }
+
   override update(dt: number, alpha: number): void {
     if (!this.rig) return;
+    // 1031：上层（S3 紧张层）增益跟玩家高度走；层还没到 / 结尾曲已接管时 setMusicLayerGain 什么都不做
+    if (this.level.musicUpper) this.game.audio.setMusicLayerGain(this.level.musicUpper, this.upperLayerLevel());
     this.entities.update(dt, alpha);
     this.cameraFollow.update(dt);
     this.interaction.update(dt);
