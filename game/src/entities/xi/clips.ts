@@ -71,10 +71,13 @@ export const XI_CLIP_NAMES = Object.keys(XI_CLIP_SPECS) as XiClipName[];
  * 带 --batch=3 跑全部通过（美术工具，不改）。
  */
 export const XI_CLIP_OFF_TICKET = {
-  'xi-pickup-table': { status: 'used', uses: ['s2/puzzles.ts 书桌上拿提灯（onDesk 时代替 xi-pickup）', 'xi-pickup-shelf 缺失时的 fallback'] }, // text-ok: 开发登记，不显示给玩家
-  'xi-place-table': { status: 'used', uses: ['s2/puzzles.ts 书桌放提灯 desk-lantern-s2（release 第 34 帧放下）'] }, // text-ok: 开发登记
-  'xi-pickup-shelf': { status: 'used', uses: ['s2/puzzles.ts 地窖架子拿钥匙（env-cellar-s2-shelf-interact，grab 第 22 帧挂钥匙骨）'] }, // text-ok: 开发登记
-} as const satisfies Partial<Record<string, { status: 'used' | 'unused-keep'; uses: readonly string[] }>>;
+  // s2/puzzles.ts 书桌上拿提灯（onDesk 时代替 xi-pickup）；xi-pickup-shelf 缺失时的 fallback
+  'xi-pickup-table': { status: 'used' },
+  // s2/puzzles.ts 书桌放提灯 desk-lantern-s2（release 第 34 帧放下）
+  'xi-place-table': { status: 'used' },
+  // s2/puzzles.ts 地窖架子拿钥匙（env-cellar-s2-shelf-interact，grab 第 22 帧挂钥匙骨）
+  'xi-pickup-shelf': { status: 'used' },
+} as const satisfies Partial<Record<string, { status: 'used' | 'unused-keep' }>>;
 
 /**
  * 运行时 clip 缺失时的代替（旧版 anims.glb 没有 xi-pickup-shelf → 用 pickup-table，grab 帧 20 vs 22）。
