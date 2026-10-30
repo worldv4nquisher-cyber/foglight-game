@@ -28,6 +28,8 @@ export interface MusicOptions {
    * 这时从 0 淡入（MUSIC_XFADE_SEC），不硬切进来。有旧曲时不看这个，按 crossfade。
    */
   fadeIn?: number;
+  /** 曲目增益（线性，默认 1；033 改：manifest gainDb → 主菜单曲 +0.3 dB 对齐 S1 场景曲），淡入到这个值 */
+  gain?: number;
 }
 
 /** 音乐调试记录（冒烟读取）：每次 playMusic / stopMusic 一条，时间是 AudioContext 时钟（挂起时不走） */
@@ -48,6 +50,8 @@ interface MusicVoice {
   key: string | null;
   source: AudioBufferSourceNode;
   gain: GainNode;
+  /** 曲目增益（线性，满音量时 gain.gain 的目标值） */
+  level: number;
 }
 
 /** 循环音：按名字启停。source 是 buffer 循环或合成占位振荡器；gain 做淡入淡出 */
@@ -180,6 +184,11 @@ export class AudioSystem {
     return this.music?.key ?? null;
   }
 
+  /** 当前曲目增益（线性，manifest gainDb；没在播 = 0） */
+  get musicLevel(): number {
+    return this.music?.level ?? 0;
+  }
+
   /** 当前曲目的 loop 标志（冒烟 / 单测） */
   get musicLoop(): boolean | null {
     return this.music ? this.music.source.loop : null;
@@ -204,13 +213,14 @@ export class AudioSystem {
     src.buffer = buffer;
     src.loop = loop;
     const gain = ctx.createGain();
+    const level = Math.max(0, opts.gain ?? 1);
     if (fade > 0) {
       gain.gain.setValueAtTime(0, now);
-      gain.gain.linearRampToValueAtTime(1, now + fade);
-    } else gain.gain.setValueAtTime(1, now);
+      gain.gain.linearRampToValueAtTime(level, now + fade);
+    } else gain.gain.setValueAtTime(level, now);
     src.connect(gain).connect(this.musicGain);
     src.start(now);
-    this.music = { key, source: src, gain };
+    this.music = { key, source: src, gain, level };
     if (prev) this.releaseMusic(prev, fade);
     this.logMusic({ op: 'play', key, from: prev?.key ?? null, at: now, fade, loop, ctxState: ctx.state });
     return true;

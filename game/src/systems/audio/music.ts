@@ -1,4 +1,8 @@
 import { MUSIC_XFADE_SEC, type AudioSystem } from '@/systems/AudioSystem';
+import { sfxGain } from '@/systems/audio/sfxBank';
+
+/** 曲目增益（线性）= manifest gainDb（033 改：主菜单曲 +0.3 dB，见 musicLevels.ts） */
+export const musicTrackGain = (key: string): number => sfxGain(key);
 
 export type MusicSwitch = 'play' | 'same' | 'stop' | 'missing';
 
@@ -19,7 +23,7 @@ export function switchMusic(
   if (key !== null && audio.musicKey === key) return 'same';
   const buf = key !== null ? getBuffer(key) : undefined;
   if (key !== null && buf) {
-    audio.playMusic(buf, { key, loop: true, crossfade });
+    audio.playMusic(buf, { key, loop: true, crossfade, gain: musicTrackGain(key) });
     return 'play';
   }
   audio.stopMusic(crossfade);
@@ -59,6 +63,6 @@ export async function switchMusicLazy(
     audio.stopMusic(crossfade);
     return 'missing';
   }
-  audio.playMusic(buf, { key, loop: true, crossfade, fadeIn: crossfade });
+  audio.playMusic(buf, { key, loop: true, crossfade, fadeIn: crossfade, gain: musicTrackGain(key) });
   return 'play';
 }

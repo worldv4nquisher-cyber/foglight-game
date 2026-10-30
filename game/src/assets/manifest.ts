@@ -226,8 +226,10 @@ export const manifest: AssetEntry[] = [
   { key: 'sfx-ui-journal', type: 'audio', url: 'assets/art/audio/sfx/sfx-ui-journal.ogg', group: 'menu', optional: true, art: true },
   // ---- 033 配乐（art/audio/music/README.md；−20 LUFS、整文件循环 loop = true，不设循环点、不加淡入淡出；036 混音：音乐总线 −16 dB = 比环境音低 12 dB，场景间 2 s 交叉淡化）
   // 样张 art/audio/music/preview/ 不进 manifest（verify-assets / verify-audio 断言）
-  // menu：主菜单曲（036「主菜单包只有 mus-menu 和 UI 音效」；1,779,931 B）
-  { key: 'mus-menu', type: 'audio', url: 'assets/art/audio/music/mus-menu.ogg', group: 'menu', optional: true, art: true },
+  // menu：主菜单曲（036「主菜单包只有 mus-menu 和 UI 音效」；1,779,931 B）。
+  //   gainDb（033 改）：主菜单没有环境音，不按「比环境音低 12 dB」，而是和 S1 场景曲在音乐总线上一样响——
+  //   整条 RMS −22.09 vs −21.83 dBFS → +0.3 dB（量法和数字见 src/systems/audio/musicLevels.ts）
+  { key: 'mus-menu', type: 'audio', url: 'assets/art/audio/music/mus-menu.ogg', group: 'menu', optional: true, art: true, gainDb: 0.3 },
   // s1：退潮岸场景曲，懒加载（制作人 c0d81c9 反馈：不随 s1 组预下载、不算首场景包）——S1 首帧渲染出来后才 loadAudio，
   //     解码完再和主菜单曲 2 s 交叉淡化；404 / 超时 → 菜单曲淡出、不放音乐。npm run size 记在「S1 进场后懒加载」
   { key: 'mus-s1-ebb-shore', type: 'audio', url: 'assets/art/audio/music/mus-s1-ebb-shore.ogg', group: 's1', optional: true, art: true, lazy: true },

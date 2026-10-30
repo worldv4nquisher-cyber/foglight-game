@@ -18,7 +18,9 @@ import { bindPuzzleSfx, DIAL_GROUPS, MIRROR_FINE_MIN_SEC } from '@/systems/audio
 import { BeamHum, PushLoop, BEAM_HUM_ID, LENS_ROTATE_ID, LENS_ROTATE_DELAY_SEC } from '@/systems/audio/loops';
 import { BellWindTimer, BELL_WIND_INTERVAL } from '@/systems/audio/bellWind';
 import { MUSIC_XFADE_SEC, MUSIC_BUS_DB, MUSIC_BUS_GAIN, MUSIC_FILE_LUFS, AMBIENCE_FILE_LUFS } from '@/systems/AudioSystem';
-import { switchMusic, switchMusicLazy } from '@/systems/audio/music';
+import { switchMusic, switchMusicLazy, musicTrackGain } from '@/systems/audio/music';
+import { MUSIC_FILE_LEVELS, MUSIC_MATCH_TOL_DB } from '@/systems/audio/musicLevels';
+import { spawnSync } from 'node:child_process';
 import { LazyAudioCache, LazyAudioTimeout, LAZY_AUDIO_TIMEOUT_MS } from '@/assets/lazyAudio';
 import { sizeBucket } from './lib/size-groups.mjs';
 import { LEVELS, MENU_MUSIC } from '@/scenes/levels';
@@ -880,6 +882,50 @@ test('033 改 接入点：Game 在新场景第一次 render 之后发 scene:firs
   const iOn = lvl.indexOf("events.on('scene:firstFrame'");
   const iLoad = lvl.indexOf('switchMusicLazy(audio, (k) => this.game.assets.loadAudio(k), music');
   assert.ok(iOn > 0 && iLoad > iOn, 'loadAudio 在 scene:firstFrame 回调里');
+});
+
+// ---- 033 改（制作人 c0d81c9 反馈 2）：主菜单曲单独增益，和 S1 场景曲在音乐总线上一样响
+test('033 改 主菜单曲电平：manifest gainDb 后 mus-menu 与 mus-s1-ebb-shore 整条 RMS / 积分响度差 ≤ 1 dB，不削波；两首同走音乐总线', () => {
+  const db = (g) => 20 * Math.log10(g);
+  const menu = MUSIC_FILE_LEVELS['mus-menu'];
+  const s1 = MUSIC_FILE_LEVELS['mus-s1-ebb-shore'];
+  const gMenu = db(musicTrackGain('mus-menu'));
+  const gS1 = db(musicTrackGain('mus-s1-ebb-shore'));
+  assert.ok(Math.abs(gMenu - 0.3) < 1e-9, `主菜单曲增益 ${gMenu}`);
+  assert.ok(Math.abs(gS1) < 1e-9, 'S1 曲不加增益（基准）');
+  // 关系断言：总线后电平 = 文件电平 + 曲目增益 + 总线增益（两首同一总线，总线项相消）
+  const rmsDiff = menu.rmsDb + gMenu + MUSIC_BUS_DB - (s1.rmsDb + gS1 + MUSIC_BUS_DB);
+  const lufsDiff = menu.lufs + gMenu - (s1.lufs + gS1);
+  assert.ok(Math.abs(rmsDiff) <= MUSIC_MATCH_TOL_DB, `RMS 差 ${rmsDiff.toFixed(2)} dB`);
+  assert.ok(Math.abs(lufsDiff) <= MUSIC_MATCH_TOL_DB, `LUFS 差 ${lufsDiff.toFixed(2)}`);
+  assert.ok(Math.abs(rmsDiff) <= 0.1, `增益应按 RMS 对齐到 0.1 dB 内：${rmsDiff.toFixed(2)}`);
+  // 不削波：曲目增益后（进总线前）采样峰值 / 真峰值 < 0 dBFS
+  assert.ok(menu.peakDb + gMenu < 0 && menu.truePeakDb + gMenu < 0, `主菜单曲峰值 ${menu.peakDb + gMenu}`);
+  // 实际播放路径带上增益
+  const ctx = new FakeContext();
+  const a = new AudioSystem(ctx);
+  const bufs = { 'mus-menu': { duration: 106.67 }, 'mus-s1-ebb-shore': { duration: 150 } };
+  switchMusic(a, (k) => bufs[k], MENU_MUSIC);
+  assert.ok(Math.abs(ctx.sources[0].out[0].gain.value - musicTrackGain('mus-menu')) < 1e-9);
+  assert.ok(Math.abs(a.musicLevel - 10 ** (0.3 / 20)) < 1e-9);
+  ctx.currentTime = 3;
+  switchMusic(a, (k) => bufs[k], LEVELS.s1.music);
+  assert.deepEqual(lastRamp(ctx.sources[1].out[0].gain), ['ramp', 1, 5]);
+  assert.equal(ctx.sources[1].out[0].out[0], ctx.sources[0].out[0].out[0], '同一条音乐总线');
+  // 有 ffmpeg 和美术文件时重新量整条 RMS：文件换了就要重定增益
+  const remeasured = [];
+  for (const key of ['mus-menu', 'mus-s1-ebb-shore']) {
+    const f = new URL(`../../art/audio/music/${key}.ogg`, import.meta.url);
+    if (!existsSync(f)) continue;
+    const r = spawnSync('ffmpeg', ['-hide_banner', '-nostats', '-i', f.pathname, '-af', 'astats=measure_perchannel=none', '-f', 'null', '-'], { encoding: 'utf8' });
+    if (r.error) continue; // 没装 ffmpeg：跳过重测
+    const txt = r.stderr;
+    remeasured.push(key);
+    const m = /Overall[\s\S]*?RMS level dB:\s*(-?[\d.]+)/.exec(txt);
+    if (!m) continue;
+    assert.ok(Math.abs(Number(m[1]) - MUSIC_FILE_LEVELS[key].rmsDb) <= 0.05, `${key} 重测 RMS ${m[1]} ≠ 记录 ${MUSIC_FILE_LEVELS[key].rmsDb}`);
+  }
+  if (remeasured.length) console.log(`    （ffmpeg 重测整条 RMS：${remeasured.join(', ')}）`);
 });
 
 await Promise.all(pending);

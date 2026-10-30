@@ -74,6 +74,8 @@ export class AssetLoader {
       console.info(`[assets] UI 图片缺失，退回底色：${key} (${url})`, err);
     },
   });
+  /** 懒加载音频失败记录（原因 + performance.now()），冒烟 / QA 排查用：__game.assets.lazyAudioFailures */
+  readonly lazyAudioFailures: { key: string; url: string; error: string; wall: number }[] = [];
   /** 懒加载音频（033 改：S1 场景曲等首帧后才请求；超时 LAZY_AUDIO_TIMEOUT_MS） */
   private lazyAudio = new LazyAudioCache<AudioBuffer>({
     lookup: (key) => {
@@ -89,6 +91,7 @@ export class AssetLoader {
     },
     onFailed: (key, url, err) => {
       this.missing.add(key);
+      this.lazyAudioFailures.push({ key, url, error: String((err as Error)?.message ?? err), wall: typeof performance !== 'undefined' ? performance.now() : 0 });
       // text-ok: 只进控制台日志
       console.info(`[assets] lazy audio missing / timed out, no music: ${key} (${url})`, err);
     },

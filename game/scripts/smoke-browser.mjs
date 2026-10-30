@@ -2848,8 +2848,20 @@ CHECKS.push({
       if (!(await until(`(${clockExpr}) >= ${t0 + sec}`, ms))) throw new Error(`${clockExpr} 在 ${ms / 1000}s 墙钟内没走过 ${sec}s`);
     };
     const audio = `__game.audio`;
-    const level = `(() => { const a = __game.audio; if (!window.__musAn) { window.__musAn = a.context.createAnalyser(); window.__musAn.fftSize = 2048; a.musicGain.connect(window.__musAn); }
-      const d = new Float32Array(2048); window.__musAn.getFloatTimeDomainData(d); let s = 0; for (const v of d) s += v * v; const rms = Math.sqrt(s / d.length); return rms > 0 ? 20 * Math.log10(rms) : -999; })()`;
+    // 033 改（反馈 2）电平量法：A 整条——解码后的 AudioBuffer 全部声道整条 RMS + 曲目增益 + 音乐总线增益（= 音乐总线输出的整首电平）；
+    // B 实采——ScriptProcessor 挂在音乐总线后，按音频时钟采 8 s 的 RMS（旁证；稀疏曲子的短窗口和整条差得多）
+    const fullLevel = `(() => { const a = __game.audio; const v = a.music; const b = v.source.buffer; let s = 0, n = 0;
+      for (let c = 0; c < b.numberOfChannels; c++) { const d = b.getChannelData(c); for (let i = 0; i < d.length; i++) s += d[i] * d[i]; n += d.length; }
+      const file = 10 * Math.log10(s / n); return { key: v.key, file, track: 20 * Math.log10(a.musicLevel), bus: 20 * Math.log10(a.musicGain.gain.value), out: file + 20 * Math.log10(a.musicLevel) + 20 * Math.log10(a.musicGain.gain.value) }; })()`;
+    const liveStart = `(() => { const a = __game.audio; if (!window.__musCap) { const sp = a.context.createScriptProcessor(4096, 2, 2); const z = a.context.createGain(); z.gain.value = 0;
+      window.__musCap = { s: 0, n: 0 }; sp.onaudioprocess = (e) => { const c = window.__musCap; for (let ch = 0; ch < e.inputBuffer.numberOfChannels; ch++) { const d = e.inputBuffer.getChannelData(ch); for (let i = 0; i < d.length; i++) c.s += d[i] * d[i]; c.n += d.length; } };
+      a.musicGain.connect(sp); sp.connect(z).connect(a.context.destination); } window.__musCap.s = 0; window.__musCap.n = 0; return a.context.currentTime; })()`;
+    const liveRead = `(() => { const c = window.__musCap; return c.n ? 10 * Math.log10(c.s / c.n) : -999; })()`;
+    const live = async () => {
+      await evaluate(liveStart);
+      await waitClock(`${audio}.context.currentTime`, 8);
+      return evaluate(liveRead);
+    };
     await evaluate(`localStorage.clear(); 1`);
     await cdp.gotoMenu('art=1');
     if (!(await until(`${audio}.musicKey === 'mus-menu'`, 30000))) throw new Error('主菜单没起 mus-menu ' + JSON.stringify(await evaluate(`({ k: ${audio}.musicKey, log: ${audio}.musicLog, has: !!__game.assets.getAudio('mus-menu') })`)));
@@ -2865,18 +2877,15 @@ CHECKS.push({
     await cdp.click(100, 650);
     if (!(await until(`${audio}.context.state === 'running'`, 10000))) throw new Error('点击后 AudioContext 没解锁：' + (await evaluate(`${audio}.context.state`)));
     await waitClock(`${audio}.context.currentTime`, 1.5);
-    let lv = -999;
-    for (let i = 0; i < 20 && lv < -90; i++) {
-      lv = Math.max(lv, await evaluate(level));
-      if (lv < -90) await waitClock(`${audio}.context.currentTime`, 0.2);
-    }
+    const fm = await evaluate(fullLevel);
+    const lv = await live();
     if (lv < -90) throw new Error('mus-menu 在播但音乐总线没有电平 ' + lv);
-    out.push(`首次点击后 context=running，菜单曲电平 ${lv.toFixed(1)} dBFS（音乐总线后）`);
+    out.push(`首次点击后 context=running；菜单曲电平：整条 ${fm.out.toFixed(2)} dBFS（文件 ${fm.file.toFixed(2)} + 曲目 ${fm.track.toFixed(2)} + 总线 ${fm.bus.toFixed(2)}），实采 8 s ${lv.toFixed(1)} dBFS`);
     // 新游戏 → S1（033 改：S1 曲懒加载——首帧渲染出来后才请求，解码完再和菜单曲 2 s 交叉淡化）
     const r = await evaluate(`(() => { const e = document.querySelector('.main-menu [data-act="new"]'); const b = e.getBoundingClientRect(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 }; })()`);
     await cdp.click(r.x, r.y);
     // 交叉淡化一开始就读（不等别的），淡化中途新曲增益应在 0–1 之间
-    if (!(await until(`__game.scenes.current?.name === 's1-ebb-shore' && ${audio}.musicKey === 'mus-s1-ebb-shore'`, 240000))) throw new Error('新游戏进 S1 后没切到 mus-s1-ebb-shore ' + JSON.stringify(await evaluate(`({ s: __game.scenes.current?.name, k: ${audio}.musicKey, log: ${audio}.musicLog, res: __game.scenes.current?.musicLazyResult })`)));
+    if (!(await until(`__game.scenes.current?.name === 's1-ebb-shore' && ${audio}.musicKey === 'mus-s1-ebb-shore'`, 240000))) throw new Error('新游戏进 S1 后没切到 mus-s1-ebb-shore ' + JSON.stringify(await evaluate(`({ s: __game.scenes.current?.name, k: ${audio}.musicKey, log: ${audio}.musicLog, res: __game.scenes.current?.musicLazyResult, ff: __game.scenes.current?.musicFirstFrameAt, req: __game.scenes.current?.musicRequestedAt, now: performance.now(), fail: __game.assets.lazyAudioFailures, rt: performance.getEntriesByType('resource').filter((e) => /mus-s1/.test(e.name)).map((e) => ({ s: Math.round(e.startTime), e: Math.round(e.responseEnd), st: e.responseStatus })) })`)));
     const x = await evaluate(`(() => { const l = ${audio}.musicLog.at(-1); const v = ${audio}.music; const sc = __game.scenes.current; const ff = __game.lastFirstFrame;
       const res = performance.getEntriesByType('resource').filter((e) => /mus-s1-ebb-shore\\.ogg/.test(e.name)).map((e) => ({ start: e.startTime, end: e.responseEnd }));
       return { l, now: ${audio}.context.currentTime, loop: v.source.loop, g: v.gain.gain.value, ff, req: sc.musicRequestedAt, ffSeen: sc.musicFirstFrameAt, res, menuStillPlaying: ${audio}.musicLog.filter((e) => e.op === 'stop').length }; })()`);
@@ -2889,11 +2898,16 @@ CHECKS.push({
     await waitClock(`${audio}.context.currentTime`, Math.max(0, x.l.at + 2.2 - x.now));
     const y = await evaluate(`({ g: ${audio}.music.gain.gain.value, k: ${audio}.musicKey, log: ${audio}.musicLog.length })`);
     if (Math.abs(y.g - 1) > 1e-3) throw new Error('交叉淡化 2 s 后 S1 曲应满音量 ' + JSON.stringify(y));
-    await waitClock(`__game.time.elapsed`, 1);
-    const lv2 = await evaluate(level);
+    // S1 稳定后（交叉淡化完 + 游戏时间 3 s）同一方法量 S1 曲
+    await waitClock(`__game.time.elapsed`, 3);
+    const fs1 = await evaluate(fullLevel);
+    const lv2 = await live();
+    if (fs1.key !== 'mus-s1-ebb-shore') throw new Error('S1 稳定后应在播 S1 曲 ' + fs1.key);
+    if (Math.abs(fm.out - fs1.out) > 1) throw new Error(`主菜单曲与 S1 曲整条电平差 ${(fm.out - fs1.out).toFixed(2)} dB > 1 dB`);
+    if (lv2 < -90) throw new Error('S1 曲在播但音乐总线没有电平');
     out.push(
       `进 S1：首帧 render @${x.ff.at.toFixed(0)} ms → 发起请求 @${x.req.toFixed(0)} ms（+${(x.req - x.ff.at).toFixed(0)}）→ 下载 ${x.res[0].start.toFixed(0)}–${x.res[0].end.toFixed(0)} ms → 淡入 @${x.l.wall.toFixed(0)} ms` +
-        `；mus-menu → mus-s1-ebb-shore 交叉淡化 ${x.l.fade} s（读数时 ${(x.now - x.l.at).toFixed(2)} s 处新曲增益 ${x.g.toFixed(2)}），2.2 s 后增益 ${y.g.toFixed(2)}，电平 ${lv2.toFixed(1)} dBFS`,
+        `；mus-menu → mus-s1-ebb-shore 交叉淡化 ${x.l.fade} s（读数时 ${(x.now - x.l.at).toFixed(2)} s 处新曲增益 ${x.g.toFixed(2)}），2.2 s 后增益 ${y.g.toFixed(2)}；S1 稳定后电平：整条 ${fs1.out.toFixed(2)} dBFS（文件 ${fs1.file.toFixed(2)} + 曲目 ${fs1.track.toFixed(2)} + 总线 ${fs1.bus.toFixed(2)}），实采 8 s ${lv2.toFixed(1)} dBFS；主菜单 − S1 整条差 ${(fm.out - fs1.out).toFixed(2)} dB`,
     );
     await evaluate(`localStorage.clear(); 1`);
     await cdp.goto('');
