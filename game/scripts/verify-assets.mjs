@@ -12,6 +12,8 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { Document, NodeIO } from '@gltf-transform/core';
 import { checkOutlineNormals, prepareOutlineNormals } from '../src/assets/vertexColors.ts';
 import { auditGlb } from './lib/glb-audit.mjs';
+import { guessGroup } from './lib/size-groups.mjs';
+
 
 let passed = 0;
 const ok = (msg) => {
@@ -336,8 +338,14 @@ try {
   ok('HTTP 404 不重试，直接回退');
   // CSS 回退栈：Foglight 之后必须有系统中文字体
   const css = readFileSync(resolve(root, 'src/ui/styles.css'), 'utf8');
-  for (const v of ['--ui-font', '--ui-serif']) {
-    const line = new RegExp(`${v}:\\s*([^;]+);`).exec(css)?.[1] ?? '';
+  // 030：--ui-font / --ui-serif 是 --ui-font-body / --ui-font-title 的别名，顺着 var() 解到真正的字体栈
+  const cssVar = (v, depth = 0) => {
+    const line = new RegExp(`${v}:\\s*([^;]+);`).exec(css)?.[1]?.trim() ?? '';
+    const alias = /^var\((--[\w-]+)\)$/.exec(line);
+    return alias && depth < 4 ? cssVar(alias[1], depth + 1) : line;
+  };
+  for (const v of ['--ui-font', '--ui-serif', '--ui-font-title', '--ui-font-body', '--ui-font-num']) {
+    const line = cssVar(v);
     assert.ok(/^'Foglight/.test(line) && /(Microsoft YaHei|Songti SC|PingFang SC|Noto)/.test(line) && /(sans-serif|serif)\s*$/.test(line), v + ': ' + line);
   }
   // 唯一下载路径：index.html 不 preload 字体，CSS 不用 @font-face url() 再下一份
@@ -468,6 +476,22 @@ try {
     assert.equal(mat.normalMap, null, '法线槽不放棋盘格');
   }
   ok('GLTFLoader 外部 KTX2：取消后重试 → 材质颜色 / 法线贴图都在；全部失败 → 颜色槽棋盘格占位、法线槽清空');
+}
+
+// ---- 031 准备：check-size 对 art/ 里未登记资源的分组估算
+{
+  assert.equal(guessGroup('char-xi.glb'), 'common', 'char-* 默认常驻 common');
+  assert.equal(guessGroup('char-xi-anims.glb'), 'common');
+  assert.equal(guessGroup('char-ayan.glb'), 'common', '新角色默认 common');
+  assert.equal(guessGroup('char-father.glb'), 's3', '父亲只在 S3');
+  assert.equal(guessGroup('char-father-anims.glb'), 's3');
+  assert.equal(guessGroup('char-father.ktx2'), 's3');
+  assert.equal(guessGroup('char-fatherland.glb'), 'common', '前缀要整段匹配');
+  assert.equal(guessGroup('env-cellar-s2.glb'), 's2');
+  assert.equal(guessGroup('prop-lens-s3.glb'), 's3');
+  assert.equal(guessGroup('tex-wood-planks.ktx2'), 'common');
+  assert.equal(guessGroup('env-pier.glb'), 's1');
+  ok('check-size 分组估算：char-* 默认 common，char-father → s3，-s2/-s3 后缀按场景，其余 s1');
 }
 
 console.log(`\n资源加载后处理 / 交付自检校验通过（${passed} 项）`);

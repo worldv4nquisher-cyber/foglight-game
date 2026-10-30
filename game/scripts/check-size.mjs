@@ -14,6 +14,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, dirname, basename, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { manifest, ASSET_GROUPS } from '../src/assets/manifest.ts';
+import { guessGroup } from './lib/size-groups.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const DIST = join(ROOT, 'dist');
@@ -104,13 +105,7 @@ const first = groups.common.bytes + groups.s1.bytes;
 const firstTotal = groups.menu.bytes + first;
 const json = process.argv.includes('--json');
 
-// ../art 里已交付、未进清单的运行时资源（估算）
-function guessGroup(name) {
-  if (/-s2\b|-s2-|-s2\./.test(name)) return 's2';
-  if (/-s3\b|-s3-|-s3\./.test(name)) return 's3';
-  if (/^(char-|tex-xi|prop-lantern-brass|tex-props-puzzle|tex-stone-masonry|tex-wood)/.test(name)) return 'common';
-  return 's1';
-}
+// ../art 里已交付、未进清单的运行时资源（估算；规则见 scripts/lib/size-groups.mjs）
 const listedNames = new Set([...manifest.map((e) => basename(e.url)), ...externalNames]);
 const art = { common: 0, s1: 0, s2: 0, s3: 0, files: 0 };
 for (const f of walk(ART)) {
