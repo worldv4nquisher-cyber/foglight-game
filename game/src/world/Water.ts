@@ -208,8 +208,8 @@ export class Water extends THREE.Mesh<THREE.PlaneGeometry, THREE.MeshStandardMat
     const u = this.uniforms;
     const t = (u.uTime.value += dt);
     const L = ATMO028.water.normal.layers;
-    const l0 = L[0]!;
-    const l1 = L[1]!;
+    const l0 = L[0];
+    const l1 = L[1];
     u.uL0.value.set(1 / l0.tileM, 1 / l0.tileM, ((l0.scroll[0] * t) / l0.tileM) % 1, ((l0.scroll[1] * t) / l0.tileM) % 1);
     u.uL1.value.set(1 / l1.tileM, 1 / l1.tileM, ((l1.scroll[0] * t) / l1.tileM) % 1, ((l1.scroll[1] * t) / l1.tileM) % 1);
     const R = ATMO028.water.ripple;

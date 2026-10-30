@@ -3,7 +3,6 @@
  * 美术改 JSON 后重新生成：node scripts/gen-atmo028.mjs（verify-render 会逐项比对 art 原件，不一致就失败）。
  * 单位：米 / 秒；颜色 sRGB hex；贴图 key = art/textures/<key>.ktx2。说明见 art/source/atmosphere/README-028.md。
  */
-/* eslint-disable */
 export const ATMO028 = {
   "version": "028-v1 (2026-10-30)",
   "textures": {

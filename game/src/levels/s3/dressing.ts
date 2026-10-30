@@ -2,7 +2,7 @@ import type { DressingSpec } from '../dressing';
 import { S3, S3_FRAME, toWorld } from './layout';
 
 /** layout 点是 S3 局部坐标：回退时转世界、朝向跟 S3 框架 */
-const W = (p: readonly [number, number, number]): [number, number, number] => toWorld(p).toArray() as [number, number, number];
+const W = (p: readonly [number, number, number]): [number, number, number] => toWorld(p).toArray();
 const yaw = S3_FRAME.rotationY;
 
 const surface = { roots: ['s3-art'], maxSnap: 0.1 };

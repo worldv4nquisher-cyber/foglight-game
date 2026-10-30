@@ -109,7 +109,7 @@ export class SkyDome extends THREE.Mesh<THREE.SphereGeometry, THREE.ShaderMateri
     const db = s.duskBand;
     (u.dusk!.value as THREE.Color).set(db?.color ?? '#000000');
     const dir = db?.dir ?? [1, 0, 0];
-    (u.duskDir!.value as THREE.Vector3).set(dir[0]!, dir[1]!, dir[2]!).normalize();
+    (u.duskDir!.value as THREE.Vector3).set(dir[0], dir[1], dir[2]).normalize();
     (u.duskK!.value as THREE.Vector3).set(db?.power ?? 1, db?.maxElev ?? 0.1, db ? db.strength : 0);
     const cl = s.clouds;
     u.cScale!.value = cl.scale;

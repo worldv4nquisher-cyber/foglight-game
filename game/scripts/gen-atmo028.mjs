@@ -30,7 +30,6 @@ function render(data) {
  * 美术改 JSON 后重新生成：node scripts/gen-atmo028.mjs（verify-render 会逐项比对 art 原件，不一致就失败）。
  * 单位：米 / 秒；颜色 sRGB hex；贴图 key = art/textures/<key>.ktx2。说明见 art/source/atmosphere/README-028.md。
  */
-/* eslint-disable */
 export const ATMO028 = ${JSON.stringify(data, null, 2)} as const;
 
 export type Atmo028PresetName = keyof typeof ATMO028.presets;
