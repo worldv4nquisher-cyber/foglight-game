@@ -562,6 +562,7 @@ export function buildS3Puzzles(d: S3PuzzleDeps): S3Puzzles {
   };
   const playLever = (rig: PlayerRig): void => {
     actions ??= new XiActions(rig.controller, rig.animator);
+    sfx('sfx-ignite-lever'); // 032：与拉杆动画第 0 帧同播（文件 1.133 s = f34 到底咔嗒；sfx-ignite 另在 f34 由 igniteNow 发）
     void actions.play(leverIx.resolveAnim() ?? 'xi-ignite-lever', { onTick: (t) => setLeverAngle(igniteLeverAngleAt(t)), onMarker: igniteNow }).then(() => {
       rig.controller.locked = true;
     });

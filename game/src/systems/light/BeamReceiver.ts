@@ -30,8 +30,8 @@ export interface BeamReceiverOptions {
   reminderSec?: number;
 }
 
-/** 提醒脉冲包络（s）：0.2 s 升到峰值、0.8 s 落回（美术 022 点火口四态表） */
-export const REMINDER_PULSE = { rise: 0.2, fall: 0.8 } as const;
+/** 提醒脉冲包络（s）：0.8 s 升到峰值、0.8 s 落回（美术 022 点火口四态表的落；升改 0.8 s 对齐 032 sfx-ignite-ready-pulse 膨胀峰 0.8 s，声画同峰） */
+export const REMINDER_PULSE = { rise: 0.8, fall: 0.8 } as const;
 
 /**
  * 接收器（v0.1-012：光感锁 / 点火口）。光路命中半径内持续 holdSec 触发 receiver:activated（锁存，之后不再变化，除非 resetState）；
@@ -94,7 +94,7 @@ export class BeamReceiver {
     return this.state === 'ready';
   }
 
-  /** manual：提醒脉冲强度 0–1（ignition:reminder 之后 1 s 内：0.2 s 升、0.8 s 落；其余时间 0），给渲染器加强微光 */
+  /** manual：提醒脉冲强度 0–1（ignition:reminder 之后 1.6 s 内：0.8 s 升、0.8 s 落；其余时间 0），给渲染器加强微光 */
   get reminderPulse(): number {
     if (this.state !== 'ready' || !this.reminded) return 0;
     const t = this.readySec - this.reminderSec;

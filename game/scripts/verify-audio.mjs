@@ -11,6 +11,7 @@ import { SfxBank, SFX_ALIASES, sfxGain, STEP_SURFACES } from '@/systems/audio/sf
 import { manifest } from '@/assets/manifest';
 import { existsSync } from 'node:fs';
 import { IgniterHum } from '@/levels/s3/igniterHum';
+import { bindPuzzleSfx, DIAL_GROUPS, MIRROR_FINE_MIN_SEC } from '@/systems/audio/puzzleSfx';
 import { BeamHum, PushLoop, BEAM_HUM_ID, LENS_ROTATE_ID, LENS_ROTATE_DELAY_SEC } from '@/systems/audio/loops';
 
 class FakeParam {
@@ -407,6 +408,48 @@ test('032 可点灯嗡鸣：有 sfx-ignite-ready-loop 文件 → 整文件 buffe
   assert.equal(src.stopped, gameplay.beam.igniterHumFadeOutSec);
   unb();
   off();
+});
+
+test('032 谜题件：拨盘 / 镜子 / 微调限频 60 ms / 提灯拿放 / 木筏浮起（仅搁浅→浮起）与落位 / 涨退潮 / 落水；地窖门、拉杆 f0 在场景脚本；每个 id 都有登记的文件', () => {
+  const ev = new EventBus();
+  const got = [];
+  ev.on('sfx:play', ({ id }) => got.push(id));
+  let t = 0;
+  const off = bindPuzzleSfx(ev, () => t);
+  const rot = (group, fine = false) => ev.emit('puzzle:partRotated', { group, part: 'x', axis: 0, angle: 0, angles: [0], fine });
+  rot('dial-gate-s2');
+  rot('mirrors-s2');
+  rot('mirrors-s2', true);
+  t += 0.03;
+  rot('mirrors-s2', true);
+  t += MIRROR_FINE_MIN_SEC;
+  rot('mirrors-s2', true);
+  assert.deepEqual(got.splice(0), ['sfx-dial-click', 'sfx-mirror-click', 'sfx-mirror-click-fine', 'sfx-mirror-click-fine']);
+  ev.emit('item:pickup', { item: 'lantern', from: null });
+  ev.emit('item:place', { item: 'lantern', socket: 'desk' });
+  ev.emit('item:pickup', { item: 'key', from: null });
+  assert.deepEqual(got.splice(0), ['sfx-lantern-pickup', 'sfx-lantern-place']);
+  ev.emit('float:state', { id: 'raft-s1', state: 'floating' });
+  ev.emit('float:state', { id: 'raft-s1', state: 'drifting' });
+  ev.emit('float:state', { id: 'raft-s1', state: 'floating' });
+  ev.emit('interact:pushEnd', { id: 'raft-s1' });
+  ev.emit('interact:pushEnd', { id: 'crate' });
+  assert.deepEqual(got.splice(0), ['sfx-raft-float', 'sfx-raft-lock']);
+  ev.emit('tide:changing', { zone: 'z', state: 'high', from: 'low' });
+  ev.emit('tide:changing', { zone: 'z', state: 'low', from: 'high' });
+  ev.emit('tide:recall', { zone: 'z' });
+  assert.deepEqual(got.splice(0), ['sfx-tide-rise', 'sfx-tide-fall', 'sfx-splash-cold']);
+  off();
+  rot('dial-gate-s2');
+  assert.equal(got.length, 0, '解绑后不再响');
+  const keys = new Set(manifest.filter((e) => e.type === 'audio').map((e) => e.key));
+  for (const id of ['sfx-dial-click', 'sfx-mirror-click', 'sfx-mirror-click-fine', 'sfx-lantern-pickup', 'sfx-lantern-place', 'sfx-raft-float', 'sfx-raft-lock', 'sfx-tide-rise', 'sfx-tide-fall', 'sfx-splash-cold', 'sfx-cellar-door-open', 'sfx-ignite-lever']) assert.ok(keys.has(id), id);
+  const s2 = readFileSync(new URL('../src/levels/s2/puzzles.ts', import.meta.url), 'utf8');
+  const s3 = readFileSync(new URL('../src/levels/s3/puzzles.ts', import.meta.url), 'utf8');
+  assert.ok(s2.includes(`dialGate: '${[...DIAL_GROUPS][0]}'`), 'DIAL_GROUPS 与 S2_IDS.dialGate 一致');
+  assert.ok(/doorT = 0;\n\s*events\.emit\('sfx:play', \{ id: 'sfx-cellar-door-open' \}\)/.test(s2), '地窖门开始转同帧');
+  assert.ok(/sfx\('sfx-ignite-lever'\);[^\n]*\n\s*void actions\.play\(/.test(s3), '拉杆音与动画第 0 帧同播');
+  assert.ok(readFileSync(new URL('../src/scenes/LevelScene.ts', import.meta.url), 'utf8').includes('bindPuzzleSfx(events)'));
 });
 
 test('Game：scene:change 时调 audio.stopAllLoops；暂停菜单走 audio.suspend（循环音同一 context，一起挂起）', () => {

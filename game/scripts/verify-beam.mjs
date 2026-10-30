@@ -345,7 +345,7 @@ test('点火口未开阀：只红光（blocked）+ receiver:blocked，不进可�
   rend.dispose();
 });
 
-test('点火口 20 s 提醒：可点灯 20 s 没点 → ignition:reminder 一次 + 脉冲（0.2 s 升 / 0.8 s 落）；退出再进入重新计时', () => {
+test('点火口 20 s 提醒：可点灯 20 s 没点 → ignition:reminder 一次 + 脉冲（0.8 s 升到峰——对齐 sfx-ignite-ready-pulse 峰 0.8 s / 0.8 s 落）；退出再进入重新计时', () => {
   const { ev, tr, r, aim } = manualRig();
   run(tr, 1.0 + DT);
   assert.equal(r.state, 'ready');
@@ -353,9 +353,15 @@ test('点火口 20 s 提醒：可点灯 20 s 没点 → ignition:reminder 一次
   assert.ok(!ev.includes('ignition:reminder'));
   run(tr, 0.3);
   assert.equal(ev.filter((n) => n === 'ignition:reminder').length, 1);
-  assert.ok(r.reminderPulse > 0.5, `脉冲 ${r.reminderPulse}`);
-  run(tr, 1.2);
-  assert.equal(r.reminderPulse, 0, '脉冲 1 s 后落回');
+  const t0 = r.readySec - r.reminderSec;
+  assert.ok(t0 >= 0 && t0 < 0.3, `提醒后 ${t0}`);
+  assert.ok(r.reminderPulse < 0.4, `0.3 s 内还在升 ${r.reminderPulse}`);
+  run(tr, 0.8 - t0);
+  assert.ok(r.reminderPulse > 0.95, `0.8 s 到峰 ${r.reminderPulse}`);
+  run(tr, 0.4);
+  assert.ok(r.reminderPulse > 0.4 && r.reminderPulse < 0.6, `1.2 s 落一半 ${r.reminderPulse}`);
+  run(tr, 0.5);
+  assert.equal(r.reminderPulse, 0, '脉冲 1.6 s 后落回');
   run(tr, 30);
   assert.equal(ev.filter((n) => n === 'ignition:reminder').length, 1, '每次进入可点灯最多一次');
   assert.equal(r.state, 'ready', '提醒后不自动点燃');

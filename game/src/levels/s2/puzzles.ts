@@ -372,6 +372,7 @@ export function buildS2Puzzles(d: S2PuzzleDeps): S2Puzzles {
       events.emit('sfx:play', { id: 'sfx-lock-open' });
       slit.visible = true;
       doorT = 0;
+      events.emit('sfx:play', { id: 'sfx-cellar-door-open' }); // 032：地窖门开始转（cellar:open 同帧）
       const c = d.collider(greybox.cellarDoorLeaf);
       if (c) c.enabled = false;
     }),

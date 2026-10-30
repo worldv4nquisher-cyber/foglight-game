@@ -25,6 +25,7 @@ import { TideSet } from '@/systems/tide/TideController';
 import type { TideBell } from '@/systems/tide/TideBell';
 import { bindSfxFallback, recallToSafePoint } from '@/systems/tide/tideScene';
 import { PushLoop } from '@/systems/audio/loops';
+import { bindPuzzleSfx } from '@/systems/audio/puzzleSfx';
 
 /** 建立镜头迟迟不结束时（慢机器上画质检测拖住），进场多久后无论如何开始预加载下一个场景 */
 const PRELOAD_FALLBACK_MS = 8000;
@@ -160,6 +161,7 @@ export abstract class LevelScene extends BaseScene {
       () => this.cameraFollow.dispose(),
       bindSfxFallback(events, audio, (id) => this.game.assets.getAudio(id)),
       () => this.pushLoop?.dispose(),
+      bindPuzzleSfx(events),
       () => {
         for (const b of this.bells) b.dispose();
       },
