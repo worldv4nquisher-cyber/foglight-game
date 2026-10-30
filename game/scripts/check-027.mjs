@@ -72,8 +72,8 @@ const prev = (() => { try { return JSON.parse(readFileSync(join(OUT, 'check-027.
 const report = { scenes: { ...(prev?.scenes ?? {}) }, errors };
 const SCENES = [
   { q: '', name: 's1-ebb-shore', focus: [['s1-notice', 'prop-notice-board-s1']], props: ['prop-notice-board-s1', 'prop-letter-a-s1', 's1-footprints-decal'] },
-  { q: 'scene=s2', name: 's2-keeper-house', focus: [['journal-s2', 'prop-journal-father-s2']], props: ['prop-journal-father-s2', 'prop-letter-c-s2', 'prop-desk-set-a-s2', 'prop-kitchen-set-a-s2', 'prop-cup-tin-s2-a', 'prop-sketch-sheet-s2'] },
-  { q: 'scene=s3', name: 's3-lighthouse', focus: [['logbook-s3', 'prop-logbook-s3']], props: ['prop-logbook-s3', 'prop-letter-b-s3', 'prop-journal-father-s3'] },
+  { q: 'debug=1&scene=s2', name: 's2-keeper-house', focus: [['journal-s2', 'prop-journal-father-s2']], props: ['prop-journal-father-s2', 'prop-letter-c-s2', 'prop-desk-set-a-s2', 'prop-kitchen-set-a-s2', 'prop-cup-tin-s2-a', 'prop-sketch-sheet-s2'] },
+  { q: 'debug=1&scene=s3', name: 's3-lighthouse', focus: [['logbook-s3', 'prop-logbook-s3']], props: ['prop-logbook-s3', 'prop-letter-b-s3', 'prop-journal-father-s3'] },
 ];
 for (const sc of SCENES.filter((x) => !only || x.name.startsWith(only))) {
   try {
