@@ -17,13 +17,25 @@ import {
 import { N8AOPostPass } from 'n8ao';
 import type { AtmospherePreset } from '@/config/atmosphere';
 import type { QualityPreset } from '@/config/quality';
+import { LutEffect, prepareLutTexture } from './LutEffect';
+
+/** 调色 LUT 来源（Game 注入 AssetLoader；文件名 → manifest key = 去掉 .png） */
+export type LutSource = (key: string) => THREE.Texture | null;
+
+/** URL ?lut=0 关掉 LUT（回到 026 的色相 / 饱和度 / 亮度 / 对比度调色）；?lut=identity 换成 lut-identity（校验方向用） */
+function lutOverride(): string | null {
+  return typeof location === 'undefined' ? null : new URLSearchParams(location.search).get('lut');
+}
 
 /**
  * 后处理管线（pmndrs/postprocessing + N8AO）：
  *
  *   RenderPass(HDR, HalfFloat)
  *     → N8AOPostPass（环境光遮蔽，standard 档关闭）
- *     → EffectPass[ Bloom → ACES 色调映射 → 冷色低饱和调色(色相/饱和度、亮度/对比度) → 暗角 → 胶片颗粒 ]
+ *     → EffectPass[ Bloom → ACES 色调映射 → 028 调色 LUT → 冷色低饱和调色(色相/饱和度、亮度/对比度) → 暗角 → 胶片颗粒 ]
+ *
+ * v0.1-028：LUT 在色调映射之后（LutEffect 内部 linear → sRGB 查表 → linear）。LUT 生效时色相 / 饱和度 / 亮度 / 对比度置中性
+ * （调色交给 LUT，避免调两遍）；LUT 缺失（?art=0）/ 画质档 lut 关 / ?lut=0 时回到预设 grade。
  *     → EffectPass[ SMAA ]
  *
  * 参数来源：效果强度来自「气氛预设」(config/atmosphere.ts)，开关与质量来自画质档位(config/quality.ts)。
@@ -42,6 +54,8 @@ export class PostFX {
   private brightContrast: BrightnessContrastEffect | null = null;
   private vignette: VignetteEffect | null = null;
   private noise: NoiseEffect | null = null;
+  private lutEffect: LutEffect | null = null;
+  private lutSource: LutSource | null = null;
 
   private scene: THREE.Scene | null = null;
   private camera: THREE.Camera | null = null;
@@ -97,6 +111,7 @@ export class PostFX {
       radius: a?.bloom.radius ?? 0.7,
     });
     this.toneMapping = new ToneMappingEffect({ mode: ToneMappingMode.ACES_FILMIC });
+    this.lutEffect = new LutEffect();
     this.hueSat = new HueSaturationEffect();
     this.brightContrast = new BrightnessContrastEffect();
     this.vignette = new VignetteEffect();
@@ -106,6 +121,7 @@ export class PostFX {
       camera,
       this.bloom,
       this.toneMapping,
+      this.lutEffect,
       this.hueSat,
       this.brightContrast,
       this.vignette,
@@ -131,14 +147,7 @@ export class PostFX {
       this.bloom.luminanceMaterial.smoothing = a.bloom.smoothing;
       this.bloom.mipmapBlurPass.radius = a.bloom.radius;
     }
-    if (this.hueSat) {
-      this.hueSat.hue = a.grade.hue;
-      this.hueSat.saturation = a.grade.saturation;
-    }
-    if (this.brightContrast) {
-      this.brightContrast.brightness = a.grade.brightness;
-      this.brightContrast.contrast = a.grade.contrast;
-    }
+    this.applyGrade();
     if (this.vignette) {
       this.vignette.offset = a.vignette.offset;
       this.vignette.darkness = a.vignette.darkness;
@@ -150,6 +159,40 @@ export class PostFX {
       c.distanceFalloff = a.ao.distanceFalloff;
       c.intensity = a.ao.intensity;
       c.color = new THREE.Color(a.ao.color);
+    }
+  }
+
+  /** Game 注入：按 key 取 LUT 贴图（缺失 → null） */
+  setLutSource(src: LutSource | null): void {
+    this.lutSource = src;
+    this.applyGrade();
+  }
+
+  /** 当前生效的 LUT key（null = 没用 LUT，走预设 grade） */
+  get activeLut(): string | null {
+    return this.activeLutKey;
+  }
+  private activeLutKey: string | null = null;
+
+  /** LUT 有就用 LUT（grade 置中性），没有回到预设 grade */
+  private applyGrade(): void {
+    const a = this.atmosphere;
+    if (!a) return;
+    const o = lutOverride();
+    let key: string | null = this.quality.lut && o !== '0' ? (o === 'identity' ? 'lut-identity' : a.lut.replace(/\.png$/, '')) : null;
+    let tex = key && this.lutSource ? this.lutSource(key) : null;
+    if (!tex) key = null;
+    else if (tex.flipY || tex.colorSpace !== THREE.NoColorSpace || tex.generateMipmaps) tex = prepareLutTexture(tex);
+    this.activeLutKey = key;
+    if (this.lutEffect) this.lutEffect.lut = tex;
+    const g = tex ? { hue: 0, saturation: 0, brightness: 0, contrast: 0 } : a.grade;
+    if (this.hueSat) {
+      this.hueSat.hue = g.hue;
+      this.hueSat.saturation = g.saturation;
+    }
+    if (this.brightContrast) {
+      this.brightContrast.brightness = g.brightness;
+      this.brightContrast.contrast = g.contrast;
     }
   }
 
@@ -168,6 +211,7 @@ export class PostFX {
     if (this.bloom && this.bloom.mipmapBlurPass.levels !== q.bloom.mipLevels) this.bloom.mipmapBlurPass.levels = q.bloom.mipLevels;
     if (this.noise) this.noise.blendMode.opacity.value = q.filmGrain ? (this.atmosphere?.grain ?? 0) : 0;
     if (this.vignette) this.vignette.blendMode.opacity.value = q.vignette ? 1 : 0;
+    this.applyGrade();
     if (rebuild && q.postprocessing && this.scene && !this.renderPass) this.build();
   }
 
@@ -185,7 +229,7 @@ export class PostFX {
     this.composer.removeAllPasses();
     for (const p of [this.renderPass, this.aoPass, this.gradePass, this.smaaPass]) p?.dispose();
     this.renderPass = this.aoPass = this.gradePass = this.smaaPass = null;
-    this.bloom = this.toneMapping = this.hueSat = this.brightContrast = this.vignette = this.noise = null;
+    this.bloom = this.toneMapping = this.hueSat = this.brightContrast = this.vignette = this.noise = this.lutEffect = null;
   }
 
   dispose(): void {

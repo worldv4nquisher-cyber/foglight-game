@@ -85,6 +85,7 @@ export class Game {
       simulateFps: parseSimulateFps(location.search),
     });
     this.postfx = new PostFX(this.renderer, this.quality.preset);
+    this.postfx.setLutSource((k) => (this.assets.has(k) ? this.assets.getTexture(k) : null));
     this.applyQuality();
 
     this.input = new InputManager(this.events);

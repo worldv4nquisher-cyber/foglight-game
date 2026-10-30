@@ -14,6 +14,8 @@ import { ATMO028 } from '@/config/atmosphere028';
 import { silhouetteColor } from '@/render/skyLayer';
 import { FogCards028 } from '@/world/FogCards028';
 import { Water } from '@/world/Water';
+import { applyLutCpu } from '@/render/LutEffect';
+import { inflateSync } from 'node:zlib';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const ART = resolve(ROOT, '../art');
@@ -168,7 +170,86 @@ await test('028 水面：两层法线 + textureGrad 雨圈（mip ≤ 3）、只�
   near(sh.uniforms.uNScale.value, ATMO028.presets['rain-night'].water.normalScale, 1e-9);
 });
 
-// ---- 雨 / LUT（后续条目）
+// ---- LUT
+/** 最小 PNG 解码（8 位 RGB / RGBA、非隔行；LUT 用） */
+function decodePng(buf) {
+  let p = 8;
+  let w = 0, h = 0, ct = 0;
+  const idat = [];
+  while (p < buf.length) {
+    const len = buf.readUInt32BE(p);
+    const type = buf.toString('ascii', p + 4, p + 8);
+    const d = buf.subarray(p + 8, p + 8 + len);
+    if (type === 'IHDR') {
+      w = d.readUInt32BE(0);
+      h = d.readUInt32BE(4);
+      assert.equal(d[8], 8, '8 位');
+      ct = d[9];
+      assert.equal(d[12], 0, '非隔行');
+    } else if (type === 'IDAT') idat.push(d);
+    p += 12 + len;
+  }
+  const ch = ct === 6 ? 4 : ct === 2 ? 3 : assert.fail(`色彩类型 ${ct}`);
+  const raw = inflateSync(Buffer.concat(idat));
+  const out = new Uint8Array(w * h * ch);
+  const stride = w * ch;
+  for (let y = 0; y < h; y++) {
+    const f = raw[y * (stride + 1)];
+    for (let x = 0; x < stride; x++) {
+      const v = raw[y * (stride + 1) + 1 + x];
+      const a = x >= ch ? out[y * stride + x - ch] : 0;
+      const b = y > 0 ? out[(y - 1) * stride + x] : 0;
+      const c = x >= ch && y > 0 ? out[(y - 1) * stride + x - ch] : 0;
+      let r;
+      if (f === 0) r = v;
+      else if (f === 1) r = v + a;
+      else if (f === 2) r = v + b;
+      else if (f === 3) r = v + ((a + b) >> 1);
+      else {
+        const pp = a + b - c, pa = Math.abs(pp - a), pb = Math.abs(pp - b), pc = Math.abs(pp - c);
+        r = v + (pa <= pb && pa <= pc ? a : pb <= pc ? b : c);
+      }
+      out[y * stride + x] = r & 255;
+    }
+  }
+  return { width: w, height: h, channels: ch, data: out };
+}
+await test('LUT：lut-identity 查表后像素不变（≤ 1/255），四张预设 LUT 格式 1024×32', () => {
+  if (!hasArt) return '（无 ../art，跳过）';
+  const dir = resolve(ART, 'textures/lut');
+  const id = decodePng(readFileSync(resolve(dir, 'lut-identity.png')));
+  assert.equal(id.width, 1024);
+  assert.equal(id.height, 32);
+  let maxErr = 0;
+  let s = 3;
+  const R = () => ((s = (s * 16807) % 2147483647) / 2147483647);
+  const samples = [[0, 0, 0], [1, 1, 1], [0.5, 0.25, 0.75], [1, 0, 0], [0, 1, 0], [0, 0, 1]];
+  for (let i = 0; i < 4000; i++) samples.push([R(), R(), R()]);
+  for (const c of samples) {
+    const o = applyLutCpu(id, c);
+    for (let k = 0; k < 3; k++) maxErr = Math.max(maxErr, Math.abs(o[k] - c[k]));
+  }
+  assert.ok(maxErr <= 1 / 255, `identity 最大误差 ${(maxErr * 255).toFixed(3)}/255`);
+  // 方向：G 自上而下 0→1（flipY=false），B 片横排，片内 x = R —— 单独验证一个非对称颜色
+  const o = applyLutCpu(id, [0.2, 0.6, 0.9]);
+  near(o[0], 0.2, 1 / 255, 'R');
+  near(o[1], 0.6, 1 / 255, 'G');
+  near(o[2], 0.9, 1 / 255, 'B');
+  const sizes = [];
+  for (const p of Object.values(ATMOSPHERE_PRESETS)) {
+    const l = decodePng(readFileSync(resolve(dir, p.lut)));
+    assert.equal(l.width, 1024);
+    assert.equal(l.height, 32);
+    // 环境色（中灰）过 LUT 后仍是低饱和（HSV S ≤ 25%）
+    const g = applyLutCpu(l, [0.5, 0.52, 0.55]);
+    const mx = Math.max(...g), mn = Math.min(...g);
+    assert.ok((mx - mn) / mx <= 0.25, `${p.lut} 中灰饱和度 ${(((mx - mn) / mx) * 100).toFixed(1)}%`);
+    sizes.push(p.lut);
+  }
+  return `identity 最大误差 ${(maxErr * 255).toFixed(3)}/255；${sizes.length} 张预设 LUT`;
+});
+
+// ---- 雨（后续条目）
 
 
 let failed = 0;
