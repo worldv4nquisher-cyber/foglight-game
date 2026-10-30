@@ -2384,6 +2384,21 @@ const CHECKS = [
       if (!(await until(`__game.input.context === 'explore' && !__s3.rig.controller.busy`, 40000))) throw new Error('S3 建立镜头后没回到 explore');
       const nodeAnims = await evaluate(`({ bell: __s3.puzzles.bell.interactable.resolveAnim(), lever: __s3.puzzles.leverIx.resolveAnim() })`);
       if (nodeAnims.bell !== 'xi-ring-bell' || nodeAnims.lever !== 'xi-ignite-lever') throw new Error('S3 交互 clip 不对 ' + JSON.stringify(nodeAnims));
+      // 1030c 第 3 批：油阀 / 窗口镜 / 点火口 + 拉杆挂上、站位读美术 -interact；塔门 -interact 关门时缓存给 doorStand；白盒透镜球隐藏
+      const b3 = await evaluate(`(() => { const s = __s3, P = s.puzzles; const V = s.scene.position.constructor; const wp = (o) => o.getWorldPosition(new V());
+        const m = (id) => (s.artSlots?.mounted ?? []).find((x) => x.id === id);
+        const find = (root, n) => { let r = null; root.traverse((o) => { if (!r && (o.name === n || o.name.endsWith('-' + n))) r = o; }); return r; };
+        const st = (id, node, ix) => { const x = m(id); if (!x) return { id, mounted: false }; const a = find(x.model, node); return { id, parent: x.model.parent?.name, missing: x.missingNodes, d: a ? wp(a).distanceTo(wp(ix.interactPoint)) : -1 }; };
+        const door = s.art.door; const di = door && find(door, 'prop-lighthouse-door-s3-interact');
+        const vw = m('prop-oil-valve-s3') && find(m('prop-oil-valve-s3').model, 'valve-wheel'); const lv = m('prop-ignition-port-s3') && find(m('prop-ignition-port-s3').model, 'ignite-lever');
+        window.__b3rest = { valve: vw?.getWorldQuaternion(vw.quaternion.clone()), lever: lv?.getWorldQuaternion(lv.quaternion.clone()) };
+        return { items: [st('prop-oil-valve-s3', 'prop-oil-valve-s3-interact', P.valveIx), st('prop-guide-mirror-window-s3', 'prop-guide-mirror-window-s3-interact', P.mirrorIx.window), st('prop-ignition-port-s3', 'prop-ignition-port-s3-interact', P.leverIx)],
+          door: door?.name, doorD: di ? wp(di).distanceTo(wp(P.doorIx.interactPoint)) : -1, lens: s.scene.getObjectByName('ignition-port-s3-lens')?.visible }; })()`);
+      for (const it of b3.items) if (it.mounted === false || it.missing.length || it.d < 0 || it.d > 0.001) throw new Error('art=1 第 3 批道具没挂好 / 站位没读美术 ' + JSON.stringify(b3));
+      if (b3.door !== 'prop-lighthouse-door-s3' || b3.doorD < 0 || b3.doorD > 0.001 || b3.lens !== false) throw new Error('art=1 塔门 / 点火口透镜不对 ' + JSON.stringify(b3));
+      out.push(`art=1 第 3 批：油阀 / 窗口镜 / 点火口挂上（${b3.items.map((x) => x.parent).join('、')}）、站位 = 美术 -interact，塔门 doorStand = 关门时的美术 -interact，白盒透镜球隐藏 ✓`);
+      const glowOf = `(() => { const s = __s3, x = s.artSlots.mounted.find((y) => y.id === 'prop-ignition-port-s3'); let g = null; x.model.traverse((o) => { if (o.isMesh && o.material.name === 'mat-prop-ignition-glow') g = o.material; });
+        const l = s.scene.getObjectByName('ignition-port-s3-lens').material; return { hex: g.emissive.getHex(), k: g.emissiveIntensity, lhex: l.emissive.getHex(), lk: l.emissiveIntensity, st: s.puzzles.beam.igniter.state }; })()`;
       // 敲钟（use + clip，节点 anim）+ 021 美术钟断言
       out.push(await ringArtBell('__s3', 'prop-tide-bell-s3', null));
       if (!(await evaluate(`__s3.puzzles.bell.rings === 1`))) throw new Error('xi-ring-bell 播到触发帧没敲响');
@@ -2408,9 +2423,15 @@ const CHECKS = [
       if (!opened) throw new Error('按住 E 开阀没生效 ' + JSON.stringify(await evaluate(`__s3.interaction.animState`)));
       if (!(await until(`!__s3.interaction.animState && !__s3.rig.controller.locked`, 4000))) throw new Error('xi-valve-hold 松手段播完没解锁');
       out.push('S3 开阀 xi-valve-hold（按住 → 生效 → 松手段播完）✓');
+      const vTurn = await evaluate(`(() => { const x = __s3.artSlots.mounted.find((y) => y.id === 'prop-oil-valve-s3'); let w = null; x.model.traverse((o) => { if (!w && o.name.endsWith('valve-wheel')) w = o; }); return (w.getWorldQuaternion(w.quaternion.clone()).angleTo(__b3rest.valve) * 180) / Math.PI; })()`);
+      if (Math.abs(vTurn - 90) > 0.5) throw new Error('art=1 开阀后美术手轮应转 90° ' + vTurn);
+      out.push(`art=1 开阀美术手轮转 ${vTurn.toFixed(1)}° ✓`);
       // 拉杆：光路直接解开 → 可点灯 → startIgnite（锁输入 → 走位 → xi-ignite-lever 第 34 帧点燃）
       await evaluate(`(() => { const b = __s3.puzzles.beam; b.solve(); for (let i = 0; i < 50; i++) __s3.puzzles.fixedUpdate(0.05); return 1; })()`);
       if (!(await until(`__s3.puzzles.leverIx.enabled && __s3.puzzles.canIgnite()`, 4000))) throw new Error('开阀 + 光路解开后拉杆没开放 ' + (await evaluate(`__s3.puzzles.beam.igniter.state`)));
+      await sleep(300);
+      const gReady = await evaluate(glowOf);
+      if (gReady.st !== 'ready' || gReady.hex !== 0xdce6ee || gReady.lhex !== gReady.hex || Math.abs(gReady.k - gReady.lk) > 1e-6 || gReady.k < 0.14) throw new Error('art=1 可点灯时点火口美术发光应跟白盒冷白 ' + JSON.stringify(gReady));
       await evaluate(standAt('__s3', '__s3.puzzles.leverIx'));
       await sleep(200);
       if (!(await evaluate(`__s3.puzzles.startIgnite()`))) throw new Error('startIgnite 没生效');
@@ -2420,6 +2441,10 @@ const CHECKS = [
       const rot = await evaluate(`__s3.puzzles.leverSwing.rotation.x * 180 / Math.PI`);
       if (Math.abs(rot + 60) > 0.5) throw new Error('拉杆没转到 −60° ' + rot);
       out.push(`S3 拉杆 xi-ignite-lever → 点燃、拉杆 ${rot.toFixed(1)}° ✓`);
+      const gLit = await evaluate(glowOf);
+      const lTurn = await evaluate(`(() => { const x = __s3.artSlots.mounted.find((y) => y.id === 'prop-ignition-port-s3'); let w = null; x.model.traverse((o) => { if (!w && o.name.endsWith('ignite-lever')) w = o; }); return (w.getWorldQuaternion(w.quaternion.clone()).angleTo(__b3rest.lever) * 180) / Math.PI; })()`);
+      if (gLit.hex !== 0xffb25e || Math.abs(gLit.k - 2) > 1e-6 || Math.abs(lTurn - 60) > 0.5) throw new Error('art=1 点燃后点火口暖光 2.0 / 美术拉杆 60° ' + JSON.stringify({ gLit, lTurn }));
+      out.push(`art=1 点火口四态：可点灯冷白 ${gReady.k.toFixed(2)} = 白盒 → 点燃暖 #FFB25E ×2.0；美术拉杆转 ${lTurn.toFixed(1)}° ✓`);
       return out.join('；');
     },
   },
