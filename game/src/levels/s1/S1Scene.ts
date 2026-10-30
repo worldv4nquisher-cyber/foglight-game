@@ -16,6 +16,8 @@ import { S1, v3 } from './layout';
 import { buildS1Greybox, defaultGreyboxMaterials, type S1Greybox } from './greybox';
 import { buildS1Puzzles, type S1Puzzles } from './puzzles';
 import { buildS1Art, type S1Art } from './art';
+import { buildFogCards028, type FogCards028 } from '@/world/FogCards028';
+import type { AtmospherePreset } from '@/config/atmosphere';
 
 /** 跳过开场后接的 S1 建立镜头（画质检测第 1 轮没测完时；不可跳过） */
 export const S1_HOLD_SHOT = 's1-establishing-hold';
@@ -33,6 +35,8 @@ export class S1Scene extends LevelScene {
   protected override goalId: TextId | null = 'ch1.s1.goal.find_bell';
   greybox!: S1Greybox;
   art!: S1Art;
+  /** 028 雾片（远景雾墙 + 岛边地面雾） */
+  fog028: FogCards028 | null = null;
   puzzles!: S1Puzzles;
   artSlots: ArtSlots | null = null;
   artSlotGreyboxMissing: string[] = [];
@@ -61,6 +65,9 @@ export class S1Scene extends LevelScene {
     if (this.art.farFog) this.midFogs.push(this.art.farFog);
     if (this.art.sky) this.farSilhouettes.push({ handle: this.art.sky, fog: 'none' });
     this.scene.add(this.art.root);
+    // 028 雾墙 / 岛边地面雾（贴图缺失时不建）
+    this.fog028 = buildFogCards028(this.game.assets);
+    if (this.fog028) this.scene.add(this.fog028);
     this.setGreyboxVisible(!this.art.loaded || greyboxVisible);
 
     this.addExit({ target: 's2', entry: 'from-s1', center: v3(S1.exitToS2), radius: 1.1 });
@@ -160,6 +167,12 @@ export class S1Scene extends LevelScene {
   protected override applyQuality(): void {
     super.applyQuality();
     this.art?.applyQuality(this.game.quality.preset);
+    this.fog028?.applyQuality(this.game.quality.preset.tier);
+  }
+
+  protected override applyAtmosphere(a: AtmospherePreset): void {
+    super.applyAtmosphere(a);
+    this.fog028?.applyAtmosphere(a);
   }
 
   override fixedUpdate(dt: number): void {
@@ -183,6 +196,7 @@ export class S1Scene extends LevelScene {
   override update(dt: number, alpha: number): void {
     super.update(dt, alpha);
     if (this.rig) this.art.update(this.camera, this.puzzles.tide.level);
+    if (this.rig) this.fog028?.update(dt, this.camera, this.puzzles.tide.level);
     if (this.rig && this.puzzles) this.refreshResetPrompt();
     this.artSlots?.update();
   }

@@ -12,6 +12,7 @@ import * as THREE from 'three';
 import { ATMOSPHERE_PRESETS, RAIN_NIGHT_LIGHT_MUL, resolveAtmosphereName } from '@/config/atmosphere';
 import { ATMO028 } from '@/config/atmosphere028';
 import { silhouetteColor } from '@/render/skyLayer';
+import { FogCards028 } from '@/world/FogCards028';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const ART = resolve(ROOT, '../art');
@@ -81,7 +82,60 @@ await test('远景剪影色 = #56616B → farWallTint（黄昏 0.38 / 雨夜 0.5
   return '#' + c.getHexString();
 });
 
-// ---- 雨 / 雾片 / 水面 / LUT（后续条目）
+// ---- 雾片
+/** 模拟 three 编译：返回 onBeforeCompile 之后的着色器 */
+function compiled(mat, lib = 'basic') {
+  const sh = { vertexShader: THREE.ShaderLib[lib].vertexShader, fragmentShader: THREE.ShaderLib[lib].fragmentShader, uniforms: {} };
+  mat.onBeforeCompile(sh, {});
+  return sh;
+}
+await test('028 雾片：5 层雾墙跟随相机 xz、两端 + 近相机淡出、深度夹在远平面内侧', () => {
+  const t = () => new THREE.Texture();
+  const f = new FogCards028({ wall: t(), puff: t(), ground: t() });
+  const walls = f.children.filter((o) => o.name.startsWith('fog028-wall'));
+  const cards = f.children.filter((o) => !o.name.startsWith('fog028-wall'));
+  assert.equal(walls.length, ATMO028.s1.farWalls.length);
+  const gf = ATMO028.s1.groundFog;
+  assert.equal(cards.length, gf.island.rings.reduce((n, r) => n + r.count, 0) + gf.island.puffs.length + gf.nearWater.count);
+  const cam = new THREE.PerspectiveCamera();
+  cam.position.set(30, 4, -50);
+  f.update(0.016, cam, 1.2);
+  for (const w of walls) assert.ok(w.position.x === 30 && w.position.z === -50 && w.position.y < 15, '雾墙跟随相机 xz，不跟 y');
+  for (const w of walls) {
+    assert.equal(w.material.fog, false);
+    assert.equal(w.material.depthWrite, false);
+    assert.equal(w.renderOrder, 2);
+    assert.equal(w.frustumCulled, false);
+    const sh = compiled(w.material);
+    assert.match(sh.fragmentShader, /smoothstep\(0\.0, 0\.120, vEdgeU\) \* smoothstep\(1\.0, 0\.880, vEdgeU\) \* smoothstep\(20\.0, 60\.0, vViewD\)/);
+    assert.match(sh.vertexShader, /gl_Position\.z = min\(gl_Position\.z, gl_Position\.w \* 0\.999990\)/);
+  }
+  for (const c of cards) {
+    const sh = compiled(c.material);
+    assert.match(sh.fragmentShader, /smoothstep\(0\.0, 0\.220, vEdgeU\) \* smoothstep\(1\.0, 0\.780, vEdgeU\) \* smoothstep\(8\.0, 25\.0, vViewD\)/, c.name);
+    assert.equal(c.material.fog, true);
+  }
+  // 潮位抬雾片（只抬不降）
+  const ring = cards[0];
+  const r0 = gf.island.rings[0];
+  near(ring.position.y, r0.y + r0.height * 0.5 + 1.2, 1e-6, '岛边雾片 y 跟潮位');
+  f.update(0.016, cam, -0.5);
+  near(ring.position.y, r0.y + r0.height * 0.5, 1e-6, '退潮回到基准');
+  // 档位 / 预设
+  f.applyQuality('standard');
+  assert.equal(walls.filter((w) => w.visible).length, 4);
+  near(cards[0].material.opacity, r0.opacity * 1.15, 1e-9, 'standard 地面雾 ×1.15');
+  f.applyQuality('ultra');
+  assert.equal(walls.filter((w) => w.visible).length, 5);
+  f.applyAtmosphere(ATMOSPHERE_PRESETS['rain-night']);
+  const night = walls[2].material.color.clone();
+  f.applyAtmosphere(ATMOSPHERE_PRESETS['overcast-dusk']);
+  assert.ok(night.r < walls[2].material.color.r * 0.5, '雨夜雾墙随预设变暗');
+  near(walls[2].material.color.r, new THREE.Color(0xc9d0d4).r, 1e-6, '黄昏第 3 层 = farWallTint');
+  return `${walls.length} 层雾墙 + ${cards.length} 片地面雾`;
+});
+
+// ---- 雨 / 水面 / LUT（后续条目）
 
 
 let failed = 0;
