@@ -491,25 +491,35 @@ if (existsSync(animsFile) && existsSync(modelFile)) {
       near(keyRoot.userData.attach.atFrame, xiEventSec('xi-pickup-shelf', 'grab') * XI_FPS, 1e-6, 'attach.atFrame = grab 帧');
       assert.ok(!readKeyAttach({}).fromGlb && readKeyAttach({ attach: { translation: [1, 2] } }).translation === XI_KEY_ATTACH.translation, '缺 / 坏 extras → 缺省');
       assert.ok(keyG.scene.getObjectByName(`${keyName}-collider`), `${keyName} 碰撞体`);
-      // LOD：三级组装成 THREE.LOD；setForceLod0 强制 0 级、放下恢复
-      const st = buildLods(keyG.scene);
-      assert.equal(st.lodGroups, 1, '钥匙 LOD 组');
-      applyLodDistances(keyG.scene, [5, 15, 40]);
-      let lod = null;
-      keyG.scene.traverse((o) => o.isLOD && (lod = o));
-      assert.equal(lod.levels.length, 3);
-      const cam = new THREE.PerspectiveCamera();
-      cam.position.set(0, 0, 30);
-      cam.updateMatrixWorld(true);
-      keyG.scene.updateMatrixWorld(true);
-      lod.update(cam);
-      assert.equal(lod.getCurrentLevel(), 2, '30 m 外本来是 LOD2');
-      assert.equal(setForceLod0(keyG.scene, true), 1);
-      lod.update(cam);
-      assert.equal(lod.getCurrentLevel(), 0, 'forceLod0 → LOD0');
-      setForceLod0(keyG.scene, false);
-      lod.update(cam);
-      assert.equal(lod.getCurrentLevel(), 2, '取消 forceLod0 恢复距离');
+      // LOD：三级组装成 THREE.LOD；setForceLod0 强制 0 级、放下恢复。美术 extras.lods = 1（灯塔钥匙 puzzleCritical 只交 LOD0）= 不组 LOD、单级常显
+      const lodCount = keyRoot.userData.lods ?? 3;
+      let lodNote = 'LOD 3 级，forceLod0 开 / 关 ✓';
+      if (lodCount === 1) {
+        const st1 = buildLods(keyG.scene);
+        assert.equal(st1.lodGroups, 0, `${keyName} 只有 LOD0：不组 LOD`);
+        assert.ok(keyG.scene.getObjectByName(`${keyName}_lod0`)?.visible !== false, `${keyName}_lod0 常显`);
+        lodNote = '只交 LOD0（extras.lods = 1），不组 LOD ✓';
+      } else {
+        // LOD：三级组装成 THREE.LOD；setForceLod0 强制 0 级、放下恢复
+        const st = buildLods(keyG.scene);
+        assert.equal(st.lodGroups, 1, '钥匙 LOD 组');
+        applyLodDistances(keyG.scene, [5, 15, 40]);
+        let lod = null;
+        keyG.scene.traverse((o) => o.isLOD && (lod = o));
+        assert.equal(lod.levels.length, 3);
+        const cam = new THREE.PerspectiveCamera();
+        cam.position.set(0, 0, 30);
+        cam.updateMatrixWorld(true);
+        keyG.scene.updateMatrixWorld(true);
+        lod.update(cam);
+        assert.equal(lod.getCurrentLevel(), 2, '30 m 外本来是 LOD2');
+        assert.equal(setForceLod0(keyG.scene, true), 1);
+        lod.update(cam);
+        assert.equal(lod.getCurrentLevel(), 0, 'forceLod0 → LOD0');
+        setForceLod0(keyG.scene, false);
+        lod.update(cam);
+        assert.equal(lod.getCurrentLevel(), 2, '取消 forceLod0 恢复距离');
+      }
       // grab 帧：汐站在 shelf-interact（原点、朝 +Z），socket 在它的局部坐标里
       cellar.scene.updateMatrixWorld(true);
       const ix = cellar.scene.getObjectByName('env-cellar-s2-shelf-interact');
@@ -527,7 +537,7 @@ if (existsSync(animsFile) && existsSync(modelFile)) {
       const jump = p0.distanceTo(p1);
       const ang = (q0.angleTo(q1) * 180) / Math.PI;
       assert.ok(jump <= 0.02 && ang <= 5, `grab 帧钥匙跳动 ${(jump * 100).toFixed(1)} cm / ${ang.toFixed(1)}°`);
-      out.push(`钥匙 ${keyName}：extras.attach = 缺省 T/Q ✓；grab 帧 22 middle_03_r × attach 对 socket 偏差 ${(jump * 1000).toFixed(1)} mm / ${ang.toFixed(2)}°；LOD 3 级，forceLod0 开 / 关 ✓`);
+      out.push(`钥匙 ${keyName}：extras.attach = 缺省 T/Q ✓；grab 帧 22 middle_03_r × attach 对 socket 偏差 ${(jump * 1000).toFixed(1)} mm / ${ang.toFixed(2)}°；${lodNote}`);
     }
   }
 
