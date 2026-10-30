@@ -228,6 +228,7 @@ async function loadGlb(rel) {
 }
 
 await test('18 个 GLB：根 extras.lightmap 与需求单一致，uv1 落在 rect 内，挂图只挂可见网格', async () => {
+  const allUvTypes = new Set();
   if (!hasArt) return '跳过（没有 ../art）';
   const lines = [];
   const notes = [];
@@ -255,6 +256,7 @@ await test('18 个 GLB：根 extras.lightmap 与需求单一致，uv1 落在 rec
     const noUv1 = [];
     const outside = [];
     const extra = [];
+    const uvTypes = new Set();
     root.traverse((o) => {
       if (!o.isMesh || /-(collider|wall)$/.test(o.name) || /-(collider|wall)$/.test(o.parent?.name ?? '')) return;
       const a = o.geometry.getAttribute('uv1');
@@ -267,6 +269,11 @@ await test('18 个 GLB：根 extras.lightmap 与需求单一致，uv1 落在 rec
       // LOD 网格在 rect 内；非 LOD 的挂件（码头船绳 = uv2-report extra）由美术排在图集空位，只要求在 [0,1]
       const isLod = /_lod\d/.test(o.name) || /_lod\d/.test(o.parent?.name ?? '');
       const r = isLod ? rect : [0, 0, 1, 1];
+      // 1030 clifftop 重交：uv1 可以是 KHR_mesh_quantization 的 16 / 8 位 normalized 整数；getX/getY 会反归一化、GPU 端 vertexAttribPointer 带 normalized，
+      // 着色器里拿到的仍是 [0,1] 浮点。整数存储却没标 normalized 的 uv1 是坏数据（着色器里会是 0–65535）
+      const arr = a.array.constructor.name;
+      if (!(a.array instanceof Float32Array)) assert.ok(a.normalized, `${name}/${o.name} uv1 是 ${arr} 但没标 normalized`);
+      uvTypes.add(a.array instanceof Float32Array ? 'float' : `${arr.replace('Array', '')}-norm`);
       let out = 0, worst = 0;
       for (let i = 0; i < a.count; i++) {
         const u = a.getX(i), v = a.getY(i);
@@ -276,14 +283,17 @@ await test('18 个 GLB：根 extras.lightmap 与需求单一致，uv1 落在 rec
           worst = Math.max(worst, d);
         }
       }
-      // LOD1/2 减面后有少量顶点落在分块外（uv2-report vertsOutsideChart），允许 ≤ 5% 且出界 ≤ 0.05（clifftop 材质 2 有 4% 出 [0,1] 约 65px，贴图 ClampToEdge 兜底，已报美术）
-      assert.ok(out <= a.count * 0.05 && worst <= 0.05, `${name}/${o.name} uv1 有 ${out}/${a.count} 个顶点出 rect，最远 ${worst.toFixed(4)}`);
+      // 1030 起收紧到 0：clifftop 材质 2 原先 LOD0/1/2 有约 4% 顶点出 [0,1]（≈65px），美术修 UV2 后各 GLB 出 rect（容差 2px）的顶点都是 0。
+      // 贴图 ClampToEdge 兜底照留（下面断言 wrapS），防以后重交再出界时不至于平铺采样
+      assert.equal(out, 0, `${name}/${o.name} uv1 有 ${out}/${a.count} 个顶点出 rect，最远 ${worst.toFixed(4)}（${(worst * 2048).toFixed(0)}px）`);
       if (out) outside.push(`${o.name.replace(name, '')} ${out}/${a.count}(${(worst * 2048).toFixed(0)}px)`);
       if (!isLod) extra.push(o.name.replace(name, ''));
       lodMeshes++;
     });
     if (noUv1.length) notes.push(`${name} 无 uv1 不挂：${noUv1.join(' ')}`);
     if (outside.length) notes.push(`${name} 少量顶点出 rect：${outside.join(' ')}`);
+    if (uvTypes.has('float')) notes.push(`${name} uv1 有 float 存储：${[...uvTypes].join(' / ')}`);
+    for (const t of uvTypes) allUvTypes.add(t);
     if (extra.length) notes.push(`${name} 挂件也挂（图集空位）：${extra.join(' ')}`);
     assert.ok(lodMeshes > 0, `${name} 没有 LOD 网格`);
     // 挂图
@@ -296,6 +306,7 @@ await test('18 个 GLB：根 extras.lightmap 与需求单一致，uv1 落在 rec
     assert.equal(tex.flipY, false);
     assert.equal(tex.colorSpace, THREE.NoColorSpace);
     assert.equal(tex.wrapS, THREE.ClampToEdgeWrapping);
+    assert.equal(tex.wrapT, THREE.ClampToEdgeWrapping);
     scene.traverse((o) => {
       if (!o.isMesh) return;
       const ms = [].concat(o.material);
@@ -327,7 +338,7 @@ await test('18 个 GLB：根 extras.lightmap 与需求单一致，uv1 落在 rec
     assert.equal(bad, null, `${rel} 不该有 extras.lightmap.texture（${bad}）`);
     assert.equal(applySceneLightmaps(scene, () => new THREE.Texture()).length, 0, `${rel} 不该被挂`);
   }
-  return `${lines.join('，')}\n   ${notes.join('\n   ')}\n   门 / 透镜 / 钥匙 / 草图 / 日记 / 锡杯 不挂；${Object.keys(EXPECT).length} 个 GLB 一致`;
+  return `${lines.join('，')}\n   ${notes.join('\n   ')}\n   门 / 透镜 / 钥匙 / 草图 / 日记 / 锡杯 不挂；${Object.keys(EXPECT).length} 个 GLB 一致；uv1 存储 ${[...allUvTypes].join(' / ')}（getX 反归一化，出 rect 顶点全 0）`;
 
 });
 
