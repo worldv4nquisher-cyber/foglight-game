@@ -87,7 +87,7 @@ await send('Runtime.enable', {}, sessionId);
 await send('Page.enable', {}, sessionId);
 const setView = (w, h) => send('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: 1, mobile: false }, sessionId);
 const SMALL = [480, 270];
-const EVAL_MS = 300000;
+const EVAL_MS = 600000;
 const evaluate = async (expression) => {
   const r = await Promise.race([
     send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true }, sessionId),
