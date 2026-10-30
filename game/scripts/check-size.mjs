@@ -4,7 +4,8 @@
 //   menu  = index.html + 全部代码（dist/static：JS / CSS / wasm）+ boot / menu 组资源（字体子集等）  预算 ≤ 15 MB
 //   首场景包 = common + s1                                                                       预算 ≤ 150 MB
 //   首次进入 S1 的总下载 = menu + common + s1                                                       也按 150 MB 检查
-//   进场后懒加载（033 改）= 清单里 lazy 的 audio（S1 场景曲）：进了场景、首帧渲染后才下载，单列，不计入上面两项
+//   进场后懒加载（033 改；1031 加 S2、S3 两层、结尾曲）= 清单里 lazy 的 audio：进了场景、首帧渲染后才下载，按组单列，不计入上面两项
+//   另列 6 首配乐（mus-*）合计
 //   单个字体文件 ≤ 2 MB
 // 超预算 → 退出码 1（构建失败）。dist/assets 里没登记进清单的文件只警告（不会被加载，但会打进包）。
 // 另外列出 ../art 里已交付、还没登记进清单的运行时资源（glb / ktx2 / 音频）按文件名估算的分组，供 034 接入前预估（只提示，不判失败）。
@@ -110,6 +111,15 @@ for (const g of ASSET_GROUPS) {
 
 const unlisted = walk(join(DIST, 'assets')).filter((f) => !counted.has(f) && !basename(f).startsWith('.'));
 
+// 1031：配乐（manifest 里 key 以 mus- 开头的 audio）合计
+const music = { bytes: 0, lazyBytes: 0, files: [] };
+for (const e of manifest.filter((x) => x.type === 'audio' && x.key.startsWith('mus-'))) {
+  const p = join(DIST, e.url);
+  if (!existsSync(p)) continue;
+  music.bytes += size(p);
+  if (sizeBucket(e).lazyAfterEntry) music.lazyBytes += size(p);
+  music.files.push(e.key);
+}
 const first = groups.common.bytes + groups.s1.bytes;
 const firstTotal = groups.menu.bytes + first;
 const json = process.argv.includes('--json');
@@ -126,7 +136,7 @@ for (const f of walk(ART)) {
 }
 
 if (json) {
-  console.log(JSON.stringify({ groups: Object.fromEntries(Object.entries(groups).map(([k, v]) => [k, v.bytes])), firstPackage: first, firstTotal, lazyAfterEntry: Object.fromEntries(Object.entries(lazyAfter).map(([k, v]) => [k, v.bytes])), unlisted: unlisted.map((f) => relative(DIST, f)), art, budget: BUDGET }, null, 2));
+  console.log(JSON.stringify({ groups: Object.fromEntries(Object.entries(groups).map(([k, v]) => [k, v.bytes])), firstPackage: first, firstTotal, lazyAfterEntry: Object.fromEntries(Object.entries(lazyAfter).map(([k, v]) => [k, v.bytes])), music, unlisted: unlisted.map((f) => relative(DIST, f)), art, budget: BUDGET }, null, 2));
 } else {
   console.log('分包体积（dist/，按 src/assets/manifest.ts 分组）');
   for (const g of ASSET_GROUPS) {
@@ -140,6 +150,7 @@ if (json) {
   for (const [g, v] of Object.entries(lazyAfter)) {
     console.log(`  ${g} 进场后懒加载（首帧后）     ${mb(v.bytes)}  ${v.files.map((f) => basename(f)).join(', ')}（不计入上面两项）`);
   }
+  if (music.files.length) console.log(`  配乐 mus-* 合计 ${music.files.length} 首        ${mb(music.bytes)}（${music.bytes.toLocaleString('en-US')} B；预加载 ${mb(music.bytes - music.lazyBytes)}，进场后懒加载 ${mb(music.lazyBytes)}）`);
   if (art.files) {
     const est = art.common + art.s1;
     console.log(

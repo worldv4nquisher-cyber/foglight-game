@@ -499,6 +499,10 @@ try {
   assert.equal(guessGroup('mus-s1-ebb-shore.ogg'), 's1');
   assert.equal(guessGroup('mus-s3-lighthouse.ogg'), 's3');
   assert.equal(guessGroup('mus-s3-lighthouse-upper.ogg'), 's3');
+  // 1031：S2 场景曲、结尾曲（S3 点燃时起播）
+  assert.equal(guessGroup('mus-s2-keeper-house.ogg'), 's2');
+  assert.equal(guessGroup('mus-ending-ch1.ogg'), 's3', '结尾曲属 s3，不落进 s1');
+  assert.equal(guessGroup('mus-endingx.ogg'), 's1', 'mus-ending 前缀要整段匹配');
   // 031 美术交付父亲（README-031）：两个 GLB + 三张贴图都算 s3，不进 common / s1
   const father = ['char-father.glb', 'char-father-anims.glb', 'tex-father-albedo.ktx2', 'tex-father-normal.ktx2', 'tex-father-orm.ktx2'];
   for (const f of father) assert.equal(guessGroup(f), 's3', `${f} 应算 s3`);

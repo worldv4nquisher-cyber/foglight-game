@@ -9,7 +9,7 @@ import { bindSfxFallback } from '@/systems/tide/tideScene';
 import { gameplay } from '@/config/gameplay';
 import { SfxBank, SFX_ALIASES, sfxGain, STEP_SURFACES } from '@/systems/audio/sfxBank';
 import { manifest } from '@/assets/manifest';
-import { existsSync } from 'node:fs';
+import { existsSync, statSync } from 'node:fs';
 import { IgniterHum } from '@/levels/s3/igniterHum';
 import { Footsteps, surfaceOf, STEP_M, SCENE_SURFACES } from '@/systems/audio/footsteps';
 import { AMBIENCE, Ambience, AMBIENCE_XFADE_SEC } from '@/levels/ambience';
@@ -1094,6 +1094,20 @@ test('1031 S3 上层增益 = f(玩家高度)：塔内楼梯底 y 0.2 → 0、灯
   // 世界坐标进出（S3Scene 用 toLocal(rig.body.position)）
   const w = toWorld([sx, 11.1, sz]);
   assert.ok(Math.abs(s3UpperLayerGain(toLocal(w)) - 0.5) < 1e-9);
+});
+
+test('1031 体积：6 首配乐全部登记；只有 mus-menu 随 menu 组预加载，其余 5 首都是进场后懒加载（不进首场景包 / 首次进 S1 总下载）；size 单列配乐合计', () => {
+  const mus = manifest.filter((e) => e.type === 'audio' && e.key.startsWith('mus-'));
+  assert.deepEqual(mus.map((e) => e.key).sort(), ['mus-ending-ch1', 'mus-menu', 'mus-s1-ebb-shore', 'mus-s2-keeper-house', 'mus-s3-lighthouse', 'mus-s3-lighthouse-upper']);
+  assert.deepEqual(mus.filter((e) => !sizeBucket(e).lazyAfterEntry).map((e) => e.key), ['mus-menu']);
+  assert.ok(!mus.some((e) => e.group === 'common'), '配乐不进 common');
+  assert.deepEqual(Object.fromEntries(mus.map((e) => [e.key, e.group])), { 'mus-menu': 'menu', 'mus-s1-ebb-shore': 's1', 'mus-s2-keeper-house': 's2', 'mus-ending-ch1': 's3', 'mus-s3-lighthouse': 's3', 'mus-s3-lighthouse-upper': 's3' });
+  const size = readFileSync(new URL('./check-size.mjs', import.meta.url), 'utf8');
+  assert.ok(size.includes('配乐 mus-* 合计'));
+  if (existsSync(new URL('../../art/audio/music/mus-ending-ch1.ogg', import.meta.url))) {
+    const bytes = { 'mus-menu': 1779931, 'mus-s1-ebb-shore': 2526324, 'mus-s2-keeper-house': 2577617, 'mus-s3-lighthouse': 2416936, 'mus-s3-lighthouse-upper': 2482648, 'mus-ending-ch1': 1839809 };
+    for (const [k, b] of Object.entries(bytes)) assert.equal(statSync(new URL(`../../art/audio/music/${k}.ogg`, import.meta.url)).size, b, k + ' 交付字节数');
+  }
 });
 
 test('033 改 LazyAudioCache：并发共享一次下载；404 → null 不抛、记缺失、下次重试；超时 → null、迟到的结果丢掉；?art=0 / 没登记不发请求', async () => {
