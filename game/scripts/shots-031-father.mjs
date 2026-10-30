@@ -93,7 +93,16 @@ const PTS = `(() => { const s = __s3, f = s.father; const V = s.scene.position.c
   const fwd = new V(0, 0, 1).transformDirection(r.matrixWorld).setY(0).normalize();
   const palm = wp(r, 'hand_r').add(wp(r, 'middle_01_r') ?? wp(r, 'hand_r')).multiplyScalar(0.5);
   const crown = wp(xi, 'head').add(new V(0, 0.13, 0));
-  return { root: r.getWorldPosition(new V()).toArray(), fwd: fwd.toArray(), head: wp(r, 'head').toArray(), chest: (wp(r, 'spine_03') ?? wp(r, 'head')).toArray(), palm: palm.toArray(), crown: crown.toArray(), palmCrown: palm.distanceTo(crown),
+  // 汐头 r2：按蒙皮后的真网格量——head 骨 0.35 m 内 LOD0 顶点的最高点（网格头顶）和离掌心最近的顶点（掌心到头发表面）
+  const hb = wp(xi, 'head'); let meshCrown = null, near = Infinity; const v = new V();
+  xi.traverse((o) => { if (!o.isSkinnedMesh || /_lod[12]/.test(o.name + (o.parent?.name ?? ''))) return; const n = o.geometry.attributes.position.count;
+    for (let i = 0; i < n; i++) { o.getVertexPosition(i, v); v.applyMatrix4(o.matrixWorld); if (v.distanceTo(hb) > 0.35) continue;
+      if (!meshCrown || v.y > meshCrown.y) meshCrown = v.clone(); near = Math.min(near, v.distanceTo(palm)); } });
+  // BUG-024 袖口：手腕往前臂 18% 处为袖口中心；机位在外侧、略高、偏肘侧斜看上沿
+  const cuffs = {}; for (const sd of ['l', 'r']) { const h = wp(r, 'hand_' + sd), e = wp(r, 'lower_arm_' + sd); if (!h || !e) continue; const c = h.clone().lerp(e, 0.18);
+    const out = c.clone().sub(r.getWorldPosition(new V())).setY(0).normalize(); const toE = e.clone().sub(c).normalize();
+    cuffs[sd] = { at: c.toArray(), eye: c.clone().addScaledVector(out, 0.42).addScaledVector(toE, 0.18).add(new V(0, 0.12, 0)).toArray() }; }
+  return { cuffs, meshCrown: meshCrown?.toArray(), palmMeshCrown: meshCrown ? palm.distanceTo(meshCrown) : null, palmSurface: near, crownBoneVsMesh: meshCrown ? meshCrown.y - crown.y : null, root: r.getWorldPosition(new V()).toArray(), fwd: fwd.toArray(), head: wp(r, 'head').toArray(), chest: (wp(r, 'spine_03') ?? wp(r, 'head')).toArray(), palm: palm.toArray(), crown: crown.toArray(), palmCrown: palm.distanceTo(crown),
     xiRoot: xi.getWorldPosition(new V()).toArray(), mode: f.mode, frame: Math.round(f.clipTime * 30), visible: r.visible,
     lods: (() => { const out = []; r.traverse((o) => o.isLOD && out.push(o.levels.map((l) => l.distance))); return out; })() }; })()`;
 const camTo = (eye, at, fov) => evaluate(`(() => { const c = __s3.camera; c.position.set(${eye.join(',')}); c.fov = ${fov}; c.lookAt(${at.join(',')}); c.updateProjectionMatrix(); return 1; })()`);
@@ -106,11 +115,19 @@ async function big(name, extra) {
   await evaluate('new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(() => r(1)))))');
   const pts = await evaluate(PTS);
   const file = await shot(`${name}.png`);
-  report.shots.push({ name, file, frame: pts.frame, palmCrown: +pts.palmCrown.toFixed(3), ...extra });
-  console.log('  ✓', name, 'frame', pts.frame, 'palm→crown', pts.palmCrown.toFixed(3));
+  report.shots.push({ name, file, frame: pts.frame, palmCrown: +pts.palmCrown.toFixed(3), palmMeshCrown: pts.palmMeshCrown == null ? null : +pts.palmMeshCrown.toFixed(3), palmSurface: +(+pts.palmSurface).toFixed(3), crownBoneVsMesh: pts.crownBoneVsMesh == null ? null : +pts.crownBoneVsMesh.toFixed(3), ...extra });
+  console.log('  ✓', name, 'frame', pts.frame, 'palm→crown', pts.palmCrown.toFixed(3), 'palm→meshCrown', pts.palmMeshCrown?.toFixed(3), 'palm→surface', (+pts.palmSurface).toFixed(3), 'meshCrown−boneCrown', pts.crownBoneVsMesh?.toFixed(3));
   await setView(...SMALL);
   return pts;
 }
+
+const cuffShots = async (p, tag) => {
+  for (const sd of ['l', 'r']) {
+    const c = p.cuffs?.[sd]; if (!c) continue;
+    await camTo(c.eye, c.at, 35);
+    await big(`s3-father-cuff-${sd}-${tag}`, { mode: tag, cuff: sd });
+  }
+};
 
 const MODES = ['gaze', 'walk', 'hand'];
 try {
@@ -134,6 +151,7 @@ try {
         const eye = add(add(add(p.root, p.fwd, 2.6), side(p.fwd), 0.9), [0, 1.55, 0]);
         await camTo(eye, add(p.root, [0, 1.15, 0]), 45);
         await big('s3-father-gaze', { mode, eye });
+        await cuffShots(p, 'gaze');
       } else if (mode === 'walk') {
         await waitGame(3);
         const p = await evaluate(PTS);
@@ -155,6 +173,7 @@ try {
         await big('s3-father-hand', { mode });
         await camTo(add(add(add(p.crown, s, 0.95), p.fwd, -0.25), [0, 0.12, 0]), add(p.crown, [0, -0.04, 0]), 40);
         await big('s3-father-hand-closeup', { mode });
+        await cuffShots(p, 'hand80');
         await evaluate(`(() => { __unfreeze(); return 1; })()`);
         // 全程事件 / 收尾：再播一遍记事件帧
         await evaluate(`(async () => { window.__fev = []; __s3.father.onEvent = (e) => __fev.push([e, Math.round(__s3.father.clipTime * 30)]); __s3.hideFather(); await __s3.playFather('hand'); return 1; })()`);
