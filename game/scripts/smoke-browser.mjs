@@ -2960,6 +2960,446 @@ CHECKS.push({
   },
 });
 
+// ---------------------------------------------------------------- 1031 配乐 2：S2 场景曲 / S3 两层 + 爬塔 / 点燃 → 结尾曲
+// 证据：__game.audio.musicLog（AudioContext 时钟）+ AnalyserNode 挂在音乐总线 / 上层 GainNode 上按音频时钟采样（getFloatTimeDomainData）。
+// 等待一律按 AudioContext 时钟或游戏时间（__game.time.elapsed），不按墙钟。
+const music1031 = ({ evaluate, sleep }) => {
+  const until = async (expr, ms = 60000) => {
+    const end = Date.now() + ms;
+    while (Date.now() < end) {
+      if (await evaluate(expr).catch(() => false)) return true;
+      await sleep(100);
+    }
+    return false;
+  };
+  const waitClock = async (clockExpr, sec, ms = 120000) => {
+    const t0 = await evaluate(clockExpr);
+    if (!(await until(`(${clockExpr}) >= ${t0 + sec}`, ms)))
+      throw new Error(`${clockExpr} 在 ${ms / 1000}s 墙钟内没走过 ${sec}s`);
+  };
+  const ac = `__game.audio.context.currentTime`;
+  // AnalyserNode 采样：每 40 ms（墙钟定时器，只决定采样密度）取一帧时域数据累加 RMS / 峰值；窗口长度按音频时钟算
+  const anInstall = `(() => { if (window.__an1031) return 1; window.__an1031 = { list: {} };
+    window.__an1031.attach = (name, node) => { const a = __game.audio.context; const old = window.__an1031.list[name]; if (old) { clearInterval(old.id); try { old.node.disconnect(old.an); } catch {} }
+      const an = a.createAnalyser(); an.fftSize = 2048; node.connect(an); const buf = new Float32Array(an.fftSize); const st = { s: 0, n: 0, peak: 0, frames: 0, t0: a.currentTime, t1: a.currentTime };
+      const id = setInterval(() => { an.getFloatTimeDomainData(buf); for (let i = 0; i < buf.length; i++) { const v = buf[i]; st.s += v * v; if (Math.abs(v) > st.peak) st.peak = Math.abs(v); } st.n += buf.length; st.frames++; st.t1 = a.currentTime; }, 40);
+      window.__an1031.list[name] = { an, st, id, node }; return 1; };
+    window.__an1031.reset = (name) => { const st = window.__an1031.list[name].st; st.s = 0; st.n = 0; st.peak = 0; st.frames = 0; st.t0 = st.t1 = __game.audio.context.currentTime; return 1; };
+    window.__an1031.read = (name) => { const st = window.__an1031.list[name].st; return { rms: st.n ? (st.s > 0 ? 10 * Math.log10(st.s / st.n) : -999) : null, peak: st.peak > 0 ? 20 * Math.log10(st.peak) : -999, frames: st.frames, sec: st.t1 - st.t0 }; };
+    return 1; })()`;
+  const measure = async (name, sec) => {
+    await evaluate(`window.__an1031.reset(${JSON.stringify(name)})`);
+    await waitClock(ac, sec);
+    return evaluate(`window.__an1031.read(${JSON.stringify(name)})`);
+  };
+  const unlock = async (cdp) => {
+    await cdp.click(100, 650);
+    if (!(await until(`__game.audio.context.state === 'running'`, 10000)))
+      throw new Error("点击后 AudioContext 没解锁");
+  };
+  // 软件渲染下 S2 / S3 冷启动可能超过 cdp.goto 的 60 s：超时后再按场景名等到 240 s
+  const gotoLong = async (cdp, query, scene) => {
+    try {
+      await cdp.goto(query, scene);
+    } catch {
+      if (
+        !(await until(
+          `window.__game?.scenes?.current?.name === ${JSON.stringify(scene)}`,
+          240000,
+        ))
+      )
+        throw new Error("换地址后 300 秒内 " + scene + " 没就绪");
+    }
+  };
+  const fmt = (r) =>
+    `RMS ${r.rms === null ? "—" : r.rms.toFixed(1)} dBFS / 峰值 ${r.peak.toFixed(1)}（${r.frames} 帧 ${r.sec.toFixed(1)} s）`;
+  return { until, waitClock, ac, anInstall, measure, unlock, fmt, gotoLong };
+};
+
+CHECKS.push({
+  name: "v0.1-1031 配乐 S2：S1 → S2 首帧后懒加载 mus-s2-keeper-house，整文件 loop、和 S1 曲 2 s 交叉淡化、音乐总线有电平",
+  async run({ evaluate, cdp, sleep }) {
+    const { until, waitClock, ac, anInstall, measure, unlock, fmt } = music1031(
+      { evaluate, sleep },
+    );
+    const out = [];
+    await evaluate(`localStorage.clear(); 1`);
+    await cdp.goto("scene=s1&art=1", "s1-ebb-shore");
+    await unlock(cdp);
+    if (!(await until(`__game.audio.musicKey === 'mus-s1-ebb-shore'`, 120000)))
+      throw new Error(
+        "S1 曲没起 " + JSON.stringify(await evaluate(`__game.audio.musicLog`)),
+      );
+    await waitClock(ac, 2.2);
+    await evaluate(
+      `(() => { window.__s2ff = null; __game.events.on('scene:firstFrame', (e) => { if (e.scene === 's2-keeper-house') window.__s2ff = e.at; }); void __game.flow.goToLevel('s2'); return 1; })()`,
+    );
+    if (
+      !(await until(
+        `__game.scenes.current?.name === 's2-keeper-house' && __game.audio.musicKey === 'mus-s2-keeper-house'`,
+        240000,
+      ))
+    )
+      throw new Error(
+        "进 S2 后没切到 mus-s2-keeper-house " +
+          JSON.stringify(
+            await evaluate(
+              `({ s: __game.scenes.current?.name, k: __game.audio.musicKey, log: __game.audio.musicLog.slice(-3), res: __game.scenes.current?.musicLazyResult, fail: __game.assets.lazyAudioFailures })`,
+            ),
+          ),
+      );
+    const x =
+      await evaluate(`(() => { const a = __game.audio; const l = a.musicLog.at(-1); const v = a.music; const sc = __game.scenes.current;
+      const res = performance.getEntriesByType('resource').filter((e) => /mus-s2-keeper-house\\.ogg/.test(e.name)).map((e) => ({ start: e.startTime, end: e.responseEnd }));
+      return { l, now: a.context.currentTime, loop: v.source.loop, ls: v.source.loopStart, le: v.source.loopEnd, dur: v.source.buffer.duration, len: v.source.buffer.length, sr: v.source.buffer.sampleRate, g: v.gain.gain.value, ff: window.__s2ff, req: sc.musicRequestedAt, res }; })()`);
+    if (
+      x.l.op !== "play" ||
+      x.l.from !== "mus-s1-ebb-shore" ||
+      x.l.fade !== 2 ||
+      x.l.loop !== true ||
+      !x.loop ||
+      x.ls !== 0 ||
+      x.le !== 0
+    )
+      throw new Error(
+        "S2 曲应整文件 loop、从 S1 曲 2 s 交叉淡化 " + JSON.stringify(x),
+      );
+    if (Math.abs(x.dur - 151.111) > 0.01)
+      throw new Error("S2 曲时长不对 " + x.dur);
+    if (
+      !x.ff ||
+      !(x.req >= x.ff) ||
+      x.res.length !== 1 ||
+      !(x.res[0].start >= x.ff) ||
+      !(x.l.wall >= x.res[0].end)
+    )
+      throw new Error(
+        "S2 曲应在 S2 首帧之后才请求 / 起播 " + JSON.stringify(x),
+      );
+    out.push(
+      `S2 首帧 @${x.ff.toFixed(0)} ms → 请求 @${x.req.toFixed(0)} → 下载 ${x.res[0].start.toFixed(0)}–${x.res[0].end.toFixed(0)} ms → 起播 @${x.l.wall.toFixed(0)} ms；mus-s1-ebb-shore → mus-s2-keeper-house 交叉淡化 ${x.l.fade} s、loop=true 循环点 0/0、${x.dur.toFixed(3)} s（解码后 ${x.len} 样本 @${x.sr} Hz）`,
+    );
+    await waitClock(ac, Math.max(0, x.l.at + 2.2 - x.now));
+    const y = await evaluate(
+      `({ g: __game.audio.music.gain.gain.value, log: __game.audio.musicLog.slice(-2).map((e) => [e.op, e.key, e.from, e.fade]) })`,
+    );
+    if (Math.abs(y.g - 1) > 1e-3)
+      throw new Error("交叉淡化 2 s 后 S2 曲应满音量 " + JSON.stringify(y));
+    await evaluate(anInstall);
+    await evaluate(`window.__an1031.attach('bus', __game.audio.musicGain)`);
+    const lv = await measure("bus", 6);
+    if (!(lv.rms > -90) || lv.frames < 10)
+      throw new Error("S2 曲在播但音乐总线没有电平 " + JSON.stringify(lv));
+    out.push(
+      `2.2 s 后增益 ${y.g.toFixed(2)}；AnalyserNode 音乐总线 ${fmt(lv)}`,
+    );
+    await evaluate(`localStorage.clear(); 1`);
+    await cdp.goto("");
+    return out.join("；");
+  },
+});
+
+CHECKS.push({
+  name: "v0.1-1031 配乐 S3 两层 + 爬塔：S2 → S3 两层同一 AudioContext 时刻起播、样本对齐、上层增益随玩家高度 0 → 1（楼梯底 → 灯室）",
+  async run({ evaluate, cdp, sleep }) {
+    const { until, waitClock, ac, anInstall, measure, unlock, fmt, gotoLong } =
+      music1031({ evaluate, sleep });
+    const out = [];
+    await evaluate(`localStorage.clear(); 1`);
+    await gotoLong(cdp, "debug=1&scene=s2&art=1", "s2-keeper-house");
+    await unlock(cdp);
+    if (
+      !(await until(`__game.audio.musicKey === 'mus-s2-keeper-house'`, 120000))
+    )
+      throw new Error("S2 曲没起");
+    await evaluate(
+      `(() => { window.__s3ff = null; __game.events.on('scene:firstFrame', (e) => { if (e.scene === 's3-lighthouse') window.__s3ff = e.at; }); void __game.flow.goToLevel('s3'); return 1; })()`,
+    );
+    if (
+      !(await until(
+        `__game.scenes.current?.name === 's3-lighthouse' && __game.scenes.current.musicUpperResult !== null`,
+        240000,
+      ))
+    )
+      throw new Error(
+        "进 S3 两层没结果 " +
+          JSON.stringify(
+            await evaluate(
+              `({ s: __game.scenes.current?.name, k: __game.audio.musicKey, log: __game.audio.musicLog.slice(-3), fail: __game.assets.lazyAudioFailures })`,
+            ),
+          ),
+      );
+    const x =
+      await evaluate(`(() => { const a = __game.audio; const sc = __game.scenes.current; const v = a.music; const up = v.layers.get('mus-s3-lighthouse-upper');
+      const log = a.musicLog.filter((e) => e.key === 'mus-s3-lighthouse');
+      const res = performance.getEntriesByType('resource').filter((e) => /mus-s3-lighthouse(-upper)?\\.ogg|mus-ending-ch1\\.ogg/.test(e.name)).map((e) => ({ f: e.name.split('/').pop().split('?')[0], start: e.startTime, end: e.responseEnd }));
+      return { base: sc.musicLazyResult, upper: sc.musicUpperResult, key: a.musicKey, startAt: a.musicStartAt, layers: a.musicLayers, log, ff: window.__s3ff, req: sc.musicRequestedAt, res,
+        bl: v.source.loop, ul: up?.source.loop, bd: v.source.buffer.duration, ud: up?.source.buffer.duration, blen: v.source.buffer.length, ulen: up?.source.buffer.length, now: a.context.currentTime }; })()`);
+    if (
+      x.key !== "mus-s3-lighthouse" ||
+      x.base !== "play" ||
+      !["with-base", "aligned"].includes(x.upper) ||
+      x.layers.length !== 1
+    )
+      throw new Error("S3 两层没起来 " + JSON.stringify(x));
+    if (!x.bl || !x.ul || x.blen !== x.ulen || Math.abs(x.bd - 150) > 0.01)
+      throw new Error("两层应同为 loop、同长 150 s " + JSON.stringify(x));
+    const L = x.layers[0];
+    const phase =
+      ((((((L.startAt - x.startAt) % x.bd) + x.bd) % x.bd) + x.bd / 2) % x.bd) -
+      x.bd / 2;
+    if (Math.abs(phase) > 1e-6)
+      throw new Error(
+        "上层换算的文件 0 s 和底层不同余（没对齐） " +
+          JSON.stringify({ L, startAt: x.startAt, phase }),
+      );
+    if (x.upper === "with-base" && (L.when !== x.startAt || L.offset !== 0))
+      throw new Error(
+        "两层同时起播应是同一 when、offset 0 " + JSON.stringify(L),
+      );
+    const play = x.log.find((e) => e.op === "play");
+    if (!play || play.from !== "mus-s2-keeper-house" || play.fade !== 2)
+      throw new Error("S3 应从 S2 曲 2 s 交叉淡化 " + JSON.stringify(x.log));
+    const r = (f) => x.res.find((e) => e.f === f);
+    for (const f of [
+      "mus-s3-lighthouse.ogg",
+      "mus-s3-lighthouse-upper.ogg",
+      "mus-ending-ch1.ogg",
+    ])
+      if (!r(f) || !(r(f).start >= x.ff))
+        throw new Error(
+          f +
+            " 应在 S3 首帧之后才请求 " +
+            JSON.stringify(x.res) +
+            " ff " +
+            x.ff,
+        );
+    out.push(
+      `S3 首帧 @${x.ff.toFixed(0)} ms 后请求底层 ${r("mus-s3-lighthouse.ogg").start.toFixed(0)}–${r("mus-s3-lighthouse.ogg").end.toFixed(0)} / 上层 ${r("mus-s3-lighthouse-upper.ogg").start.toFixed(0)}–${r("mus-s3-lighthouse-upper.ogg").end.toFixed(0)} / 结尾曲预取 ${r("mus-ending-ch1.ogg").start.toFixed(0)}–${r("mus-ending-ch1.ogg").end.toFixed(0)} ms；` +
+        `上层 ${x.upper}（底层 start @${x.startAt.toFixed(4)}，上层 when ${L.when.toFixed(4)} offset ${L.offset.toFixed(4)} → 文件 0 s 同余差 ${phase.toExponential(1)} s），两层 loop、各 ${x.blen} 样本；从 S2 曲 2 s 交叉淡化`,
+    );
+    await waitClock(ac, Math.max(0, play.at + 2.2 - x.now));
+    // 爬塔：传送到塔内各高度（S3 局部 → 世界用场景根节点 frame），各等游戏时间 1 s 让增益斜坡走完，读目标 / 实际增益，AnalyserNode 量上层输出
+    // S3 进场有建立镜头（控制器 busy、位置被演出接管）：回到 explore 再传送
+    if (
+      !(await until(
+        `__game.input.context === 'explore' && !__s3.rig.controller.busy`,
+        60000,
+      ))
+    )
+      throw new Error("S3 建立镜头后没回到 explore");
+    // 进场是涨潮（机房水深 1.4，站楼梯底会被潮水送回桥尾）：冒烟直接退潮
+    await evaluate(`__s3.puzzles.tide.set('low', { instant: true }), 1`);
+    await evaluate(anInstall);
+    await evaluate(
+      `window.__an1031.attach('upper', __game.audio.music.layers.get('mus-s3-lighthouse-upper').gain)`,
+    );
+    await evaluate(`window.__an1031.attach('bus', __game.audio.musicGain)`);
+    const stops = [
+      ["桥尾（塔外 y 3）", null, 0],
+      ["楼梯底", [-2.12, 0.2, 1.325], 0],
+      ["门内平台", [-1.768, 2.4, -1.768], 2.2 / 21.8],
+      ["平台 A", [-1.915, 10, 1.607], 9.8 / 21.8],
+      ["平台 B", [2.462, 16, -0.434], 15.8 / 21.8],
+      ["灯室", [-2.462, 22, -0.434], 1],
+    ];
+    const rows = [];
+    for (const [label, p, want] of stops) {
+      if (p)
+        await evaluate(
+          `(() => { const s = __s3; s.interaction.cancel?.(); const w = s.frame.localToWorld(new s.rig.body.position.constructor(${p[0]}, ${p[1] + 0.05}, ${p[2]})); s.rig.body.teleport(w); return 1; })()`,
+        );
+      await waitClock(`__game.time.elapsed`, 1);
+      const lv = await measure("upper", 3);
+      const st = await evaluate(
+        `(() => { const s = __s3; const l = __game.audio.musicLayers[0]; const w = s.rig.body.position; s.frame.updateMatrixWorld(true); const loc = s.frame.worldToLocal(w.clone()); return { y: loc.y, r: Math.hypot(loc.x, loc.z), target: l.target, gain: l.gain, f: s.musicUpperGain() }; })()`,
+      );
+      // 角色落地后的脚底高度可能比传送点低几厘米：按实际局部 y 重算期望
+      const expect = p ? Math.min(1, Math.max(0, (st.y - 0.2) / 21.8)) : 0;
+      if (
+        Math.abs(st.target - expect) > 0.01 ||
+        Math.abs(st.gain - st.target) > 0.01 ||
+        Math.abs(expect - want) > 0.02
+      )
+        throw new Error(
+          `${label} 上层增益不对 ` + JSON.stringify({ st, want, expect }),
+        );
+      if (want === 0 && lv.rms !== -999 && lv.rms > -100)
+        throw new Error(
+          `${label} 上层增益 0 时 AnalyserNode 不该有电平 ` +
+            JSON.stringify(lv),
+        );
+      if (want > 0.5 && !(lv.rms > -70))
+        throw new Error(`${label} 上层应有电平 ` + JSON.stringify(lv));
+      rows.push(
+        `${label} y ${st.y.toFixed(2)} r ${st.r.toFixed(2)} → 增益 ${st.gain.toFixed(3)}（f = ${st.f.toFixed(3)}）上层 ${fmt(lv)}`,
+      );
+    }
+    const bus = await measure("bus", 3);
+    if (!(bus.rms > -90))
+      throw new Error("灯室音乐总线没电平 " + JSON.stringify(bus));
+    const after = await evaluate(
+      `({ startAt: __game.audio.musicStartAt, layers: __game.audio.musicLayers.map((l) => [l.when, l.offset]), plays: __game.audio.musicLog.filter((e) => e.op === 'play' || e.op === 'layer').length })`,
+    );
+    if (
+      after.startAt !== x.startAt ||
+      after.layers[0][0] !== L.when ||
+      after.layers[0][1] !== L.offset
+    )
+      throw new Error("爬塔过程中两层被重启 / seek " + JSON.stringify(after));
+    out.push(
+      "爬塔：" +
+        rows.join("；") +
+        `；灯室音乐总线 ${fmt(bus)}；全程两层 start / offset 不变`,
+    );
+    await evaluate(`localStorage.clear(); 1`);
+    await cdp.goto("");
+    return out.join("；");
+  },
+});
+
+CHECKS.push({
+  name: "v0.1-1031 配乐 S3 点燃 → 结尾曲：ignited 那一帧 start(0)、单次、两层 2 s 淡出；章节结束页接着放；跳过 0.75 s 淡出",
+  async run({ evaluate, cdp, sleep }) {
+    const { until, waitClock, ac, anInstall, measure, unlock, fmt, gotoLong } =
+      music1031({ evaluate, sleep });
+    const out = [];
+    const enterS3 = async () => {
+      await evaluate(`localStorage.clear(); 1`);
+      await gotoLong(cdp, "debug=1&scene=s3&art=1", "s3-lighthouse");
+      await unlock(cdp);
+      if (
+        !(await until(
+          `__game.audio.musicKey === 'mus-s3-lighthouse' && __game.audio.musicLayers.length === 1 && !!__s3.endingMusic?.buffer`,
+          180000,
+        ))
+      )
+        throw new Error(
+          "S3 两层 / 结尾曲预取没到 " +
+            JSON.stringify(
+              await evaluate(
+                `({ k: __game.audio.musicKey, l: __game.audio.musicLayers, e: !!__s3.endingMusic?.buffer, fail: __game.assets.lazyAudioFailures })`,
+              ),
+            ),
+        );
+      await evaluate(
+        `(() => { window.__ig = null; __game.events.on('lighthouse:ignited', () => { window.__ig = { at: __game.audio.context.currentTime, key: __game.audio.musicKey, game: __game.time.elapsed }; }); return 1; })()`,
+      );
+      await evaluate(anInstall);
+      await evaluate(`window.__an1031.attach('bus', __game.audio.musicGain)`);
+    };
+    // A) 点燃 → 结尾曲同帧起播 → 0:04 切章节结束页后继续放
+    await enterS3();
+    await waitClock(ac, 2.5);
+    await evaluate(`__s3.lightTheLamp(); 1`);
+    if (
+      !(await until(
+        `!!window.__ig && __game.audio.musicKey === 'mus-ending-ch1'`,
+        10000,
+      ))
+    )
+      throw new Error(
+        "点燃后结尾曲没起 " +
+          JSON.stringify(
+            await evaluate(
+              `({ ig: window.__ig, k: __game.audio.musicKey, log: __game.audio.musicLog.slice(-3) })`,
+            ),
+          ),
+      );
+    const e = await evaluate(
+      `(() => { const a = __game.audio; const l = a.musicLog.at(-1); const v = a.music; return { ig: window.__ig, l, startAt: a.musicStartAt, loop: v.source.loop, dur: v.source.buffer.duration, em: { at: __s3.endingMusic.ignitedAt, res: __s3.endingMusic.result } }; })()`,
+    );
+    if (
+      e.ig.key !== "mus-ending-ch1" ||
+      e.l.op !== "play" ||
+      e.l.from !== "mus-s3-lighthouse" ||
+      e.l.loop !== false ||
+      e.loop !== false ||
+      e.l.fade !== 0 ||
+      e.l.fadeOut !== 2 ||
+      e.l.offset
+    )
+      throw new Error(
+        "结尾曲应在 ignited 回调里 loop=false、不淡入、场景曲 2 s 淡出 " +
+          JSON.stringify(e),
+      );
+    if (
+      e.l.at !== e.ig.at ||
+      e.startAt !== e.ig.at ||
+      e.em.at !== e.ig.at ||
+      e.em.res !== "play"
+    )
+      throw new Error("结尾曲起播时刻 ≠ 点燃帧音频时钟 " + JSON.stringify(e));
+    if (Math.abs(e.dur - 107) > 0.01)
+      throw new Error("结尾曲时长不对 " + e.dur);
+    out.push(
+      `点燃 @音频 ${e.ig.at.toFixed(4)} s（游戏 ${e.ig.game.toFixed(3)} s）→ 结尾曲 start @${e.l.at.toFixed(4)}（差 ${(e.l.at - e.ig.at).toFixed(4)} s）、文件 0 s、loop=false、淡入 ${e.l.fade} s；两层淡出 ${e.l.fadeOut} s`,
+    );
+    const lv0 = await measure("bus", 3);
+    if (!(lv0.rms > -90))
+      throw new Error("结尾曲开头音乐总线没电平 " + JSON.stringify(lv0));
+    // 0:04 是游戏时间：软件渲染（swiftshader）下 S3 帧率很低，游戏时间 4 s 时音频时钟已走了 100+ s、结尾曲已放完 / 在 95 s 后的淡出里，
+    // 测不出「结束页接着放」。所以这里直接调 S3 在 0:04 调的同一个 flow.completeChapter()（不等游戏时间），音频时钟上就是点燃后几秒进结束页
+    await evaluate(`void __game.flow.completeChapter(), 1`);
+    if (!(await until(`__game.scenes.current?.name === 'chapter-end'`, 120000)))
+      throw new Error("completeChapter 后没进章节结束页");
+    await waitClock(ac, 1);
+    const ce = await evaluate(
+      `({ k: __game.audio.musicKey, pos: __game.audio.musicPosition, el: __game.audio.context.currentTime - window.__ig.at, stops: __game.audio.musicLog.filter((e) => e.op === 'stop' && e.from === 'mus-ending-ch1').length })`,
+    );
+    if (
+      ce.k !== "mus-ending-ch1" ||
+      ce.stops ||
+      Math.abs(ce.pos - ce.el) > 1e-6
+    )
+      throw new Error(
+        "章节结束页应接着放结尾曲（位置 = 点燃后秒数） " + JSON.stringify(ce),
+      );
+    await evaluate(`window.__an1031.attach('bus', __game.audio.musicGain)`);
+    const lv1 = await measure("bus", 3);
+    if (!(lv1.rms > -90))
+      throw new Error(
+        "结束页上结尾曲没电平 " +
+          JSON.stringify({
+            lv1,
+            d: await evaluate(
+              `(() => { const a = __game.audio, v = a.music; return { st: a.context.state, bus: a.musicGain.gain.value, master: a.master?.gain.value, g: v?.gain.gain.value, buf: !!v?.source.buffer, pos: a.musicPosition, lv: a.levels, log: a.musicLog.slice(-4) }; })()`,
+            ),
+          }),
+      );
+    out.push(
+      `点燃后 3 s 音乐总线 ${fmt(lv0)}；completeChapter（S3 0:04 调的同一入口）进章节结束页，结尾曲继续（位置 ${ce.pos.toFixed(2)} s = 点燃后 ${ce.el.toFixed(2)} s），结束页上 ${fmt(lv1)}`,
+    );
+    // B) 重进 S3：点燃 1.5 s 后跳过 → 0.75 s 淡出、之后总线静音
+    await enterS3();
+    await waitClock(ac, 2.5);
+    await evaluate(`__s3.lightTheLamp(); 1`);
+    if (!(await until(`__game.audio.musicKey === 'mus-ending-ch1'`, 10000)))
+      throw new Error("第二次点燃结尾曲没起");
+    await waitClock(ac, 1.5);
+    const sk = await evaluate(
+      `(() => { __game.events.emit('cutscene:skip', { id: 'ch1-ending' }); return { l: __game.audio.musicLog.at(-1), k: __game.audio.musicKey, now: __game.audio.context.currentTime }; })()`,
+    );
+    if (
+      sk.k !== null ||
+      sk.l.op !== "stop" ||
+      sk.l.from !== "mus-ending-ch1" ||
+      sk.l.fade !== 0.75
+    )
+      throw new Error("跳过应 0.75 s 淡出结尾曲 " + JSON.stringify(sk));
+    await waitClock(ac, 0.9);
+    const lv2 = await measure("bus", 2);
+    if (lv2.rms !== -999 && lv2.rms > -100)
+      throw new Error("跳过淡出后音乐总线应静音 " + JSON.stringify(lv2));
+    out.push(
+      `跳过（cutscene:skip ch1-ending）@点燃后 1.5 s → stop fade ${sk.l.fade} s；0.9 s 后音乐总线 ${fmt(lv2)}`,
+    );
+    await evaluate(`localStorage.clear(); 1`);
+    await cdp.goto("");
+    return out.join("；");
+  },
+});
+
 const extra = process.env.SMOKE_ONLY ? CHECKS.filter((c) => process.env.SMOKE_ONLY.split('|').some((k) => c.name.includes(k))) : CHECKS;
 
 // ---------------------------------------------------------------- 起服务 + 浏览器
