@@ -14,7 +14,11 @@ import { ATMO028 } from '@/config/atmosphere028';
 import { silhouetteColor } from '@/render/skyLayer';
 import { FogCards028 } from '@/world/FogCards028';
 import { Water } from '@/world/Water';
-import { Rain } from '@/world/Rain';
+import { Rain, collectIndoorShapes, insideIndoorShapes } from '@/world/Rain';
+import { buildS2Greybox } from '@/levels/s2/greybox';
+import { S2 } from '@/levels/s2/layout';
+import { buildS3Greybox } from '@/levels/s3/greybox';
+import { S3, S3_FRAME, polar } from '@/levels/s3/layout';
 import { LensDropletsEffect } from '@/render/LensDropletsEffect';
 import { applyLutCpu } from '@/render/LutEffect';
 import { inflateSync } from 'node:zlib';
@@ -333,6 +337,97 @@ await test('镜头水滴：仅 ultra 档配置、refraction 0.015、fadeIn 0.6 s
   return 'ok';
 });
 
+
+await test('BUG-020 室内雨剔除：体积读 S2 / S3 白盒 -indoor 节点（layout 生成），地窖 / 石屋 / 塔内雨丝与溅水剔除，窗外 / 门外 / 屋顶上照常', () => {
+  const tex = () => new THREE.DataTexture(new Uint8Array(4), 1, 1);
+  // ---- S2（场景根不转）
+  const g2 = buildS2Greybox();
+  const s2 = collectIndoorShapes(g2.root);
+  assert.equal(s2.length, 2, 'S2 应有石屋 + 地窖两个 -indoor');
+  const H = S2.house, I = H.inner, O = S2.openings, C = S2.cellar;
+  const mid = (o) => (o.a + o.b) / 2, midY = (o) => (o.y0 + o.y1) / 2;
+  const v = (x, y, z) => new THREE.Vector3(x, y, z);
+  const s2In = [
+    ['地窖（QA 复现相机位）', v(-2.29, -0.73, -0.57)],
+    ['地窖底层钥匙架前', v((C.x[0] + C.x[1]) / 2, C.floorY + 1, (C.z[0] + C.z[1]) / 2)],
+    ['一层屋内', v(-2, 1.2, 1)],
+    ['二层西窗内 0.3 m', v(I.x1 - 0.3, midY(O.winW2), mid(O.winW2))],
+    ['前门内 0.3 m', v(mid(O.frontDoor), 1, I.z0 + 0.3)],
+  ];
+  const s2Out = [
+    ['二层西窗外 0.5 m', v(H.x1 + 0.5, midY(O.winW2), mid(O.winW2))],
+    ['前门外 0.5 m', v(mid(O.frontDoor), 1, H.z0 - 0.5)],
+    ['地窖门外 0.5 m', v(mid(O.cellarDoor), 1, H.z1 + 0.5)],
+    ['一层东窗外 0.5 m', v(H.x0 - 0.5, midY(O.winE1), mid(O.winE1))],
+    ['屋顶上方', v(-2, H.ridge + 0.5, 1)],
+    ['院子', v(-2, 1, H.z1 + 4)],
+  ];
+  // ---- S3（塔身在 frame 下绕 Y 转 135°，同 S3Scene）
+  const frame = new THREE.Group();
+  frame.position.set(...S3_FRAME.position);
+  frame.rotation.y = S3_FRAME.rotationY;
+  const g3 = buildS3Greybox();
+  frame.add(g3.root);
+  const s3 = collectIndoorShapes(frame);
+  assert.equal(s3.length, 1, 'S3 应有塔内一个 -indoor');
+  assert.ok(s3[0].cylinder && Math.abs(s3[0].half.x - S3.tower.rIn) < 1e-9, 'S3 塔内按 layout rIn 的圆柱');
+  const T = S3.tower;
+  const w3 = (r, th, y) => frame.localToWorld(new THREE.Vector3(...polar(r, th, y)));
+  const D = S3.door, W = S3.westWindow, SW = S3.stairWindows[0];
+  const s3In = [
+    ['塔底中心', w3(0, 0, 1.2)],
+    ['门内 0.3 m', w3(T.rIn - 0.3, D.th, (D.y0 + D.y1) / 2)],
+    ['底层西窗内 0.3 m', w3(T.rIn - 0.3, W.th, (W.y0 + W.y1) / 2)],
+    ['5 m 平台窗内', w3(T.rIn - 0.3, SW.th, (SW.y0 + SW.y1) / 2)],
+    ['塔内贴内壁（方盒够不到的边）', w3(T.rIn - 0.1, 90, 10)],
+  ];
+  const outerR = (y) => T.rBase + ((T.rTop - T.rBase) * y) / T.height;
+  const c3 = frame.localToWorld(new THREE.Vector3(0, 20, 0));
+  const s3Out = [
+    ['门外 0.4 m', w3(T.rBase + 0.4, D.th, (D.y0 + D.y1) / 2)],
+    ['底层西窗外 0.4 m', w3(T.rBase + 0.4, W.th, (W.y0 + W.y1) / 2)],
+    ['5 m 平台窗外 0.4 m', w3(T.rBase + 0.4, SW.th, (SW.y0 + SW.y1) / 2)],
+    // 世界 45° 方向、y 20 外壁外 0.1 m：旧的轴对齐 5.6 m 方盒（半宽 2.8）会把它剔掉
+    ['塔外斜角（方盒角伸出墙外处）', v(c3.x + (outerR(20) + 0.1) / Math.SQRT2, c3.y, c3.z + (outerR(20) + 0.1) / Math.SQRT2)],
+    ['塔顶上方', frame.localToWorld(new THREE.Vector3(0, T.height + 3, 0))],
+  ];
+  const bad = [];
+  for (const [shapes, ins, outs, tag] of [[s2, s2In, s2Out, 'S2'], [s3, s3In, s3Out, 'S3']]) {
+    for (const [n, p] of ins) if (!insideIndoorShapes(shapes, p)) bad.push(`${tag} ${n} 应剔除`);
+    for (const [n, p] of outs) if (insideIndoorShapes(shapes, p)) bad.push(`${tag} ${n} 不应剔除`);
+  }
+  assert.ok(!bad.length, bad.join('；'));
+  // ---- Rain：uniform 与 JS 判定一致；两种形式的着色器都用 indoorAt 剔除上下端
+  const r = new Rain(46, 26, tex(), tex());
+  r.setTier('ultra', 30000);
+  r.applyAtmosphere(ATMOSPHERE_PRESETS['rain-night']);
+  r.setIndoor([...s2, ...s3]);
+  const u = r.lines.material.uniforms;
+  assert.equal(u.uIndoorN.value, 3);
+  assert.equal(r.quads.material.uniforms, u, 'line / quad 共用 uniform');
+  assert.equal(u.uIndoorHalf.value[2].w, 1, 'S3 圆柱标记');
+  for (const m of [r.lines.material, r.quads.material]) assert.ok(/indoorAt\(dropPos\(seed, 0\.0\)\)/.test(m.vertexShader), '着色器剔除雨丝上端');
+  for (const [, p] of [...s2In, ...s3In]) assert.ok(r.culledAt(p));
+  for (const [, p] of [...s2Out, ...s3Out]) assert.ok(!r.culledAt(p));
+  // ---- 溅水：相机在塔内、落点查询一律给塔内地面 → 不溅；同一相机放到塔外空地 → 照常溅
+  const cam = new THREE.PerspectiveCamera();
+  const floorW = frame.localToWorld(new THREE.Vector3(0, S3.groundFloorY, 0)).y;
+  r.setGround(() => floorW);
+  r.setIndoor(s3);
+  cam.position.copy(frame.localToWorld(new THREE.Vector3(0, 1.8, 0)));
+  let t = 0;
+  for (let i = 0; i < 20; i++) { r.update(0.05, cam); t += 0.05; }
+  const a = r.splashes.geometry.getAttribute('aSpawn').array;
+  let indoorSplash = 0, aliveIn = 0;
+  for (let i = 0; i < 1024; i++) if (a[i * 4 + 3] > -1) { aliveIn++; if (insideIndoorShapes(s3, v(a[i * 4], a[i * 4 + 1] + 0.05, a[i * 4 + 2]))) indoorSplash++; }
+  assert.equal(indoorSplash, 0, `塔内溅水 ${indoorSplash}`);
+  const sp = ATMO028.rainTiers.ultra.splash;
+  cam.position.copy(frame.localToWorld(new THREE.Vector3(T.rBase + sp.radius + 2, 1.8, 0)));
+  for (let i = 0; i < 20; i++) { r.update(0.05, cam); t += 0.05; }
+  const aliveOut = r.splashes.aliveCount(t);
+  assert.ok(aliveOut > sp.perSecond * 0.4 * 0.5, `塔外溅水 ${aliveOut}`);
+  return `S2 ${s2In.length} 内 / ${s2Out.length} 外、S3 ${s3In.length} 内 / ${s3Out.length} 外 ✓；塔内溅水 0（塔内候选落点 ${aliveIn} 个全在体积外 = 门洞 / 墙外），塔外存活 ${aliveOut}`;
+});
 
 let failed = 0;
 for (const [name, err, out] of results) {

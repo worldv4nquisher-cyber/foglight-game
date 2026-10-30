@@ -19,6 +19,9 @@ function rng(seed: number): () => number {
   return () => (s = (s * 16807) % 2147483647) / 2147483647;
 }
 
+/** 室内体积上限（S2 石屋 + 地窖、S3 塔内、testbed 房间；超出的忽略并告警） */
+const MAX_INDOOR = 8;
+
 /** 雨滴循环平铺 + 距离淡出（line / quad 共用；照搬 atmo028.js makeRain） */
 const COMMON = /* glsl */ `
 uniform float uTime, uSpeed, uTilt;
@@ -26,6 +29,19 @@ uniform vec3 uCenter;
 uniform vec2 uArea;
 uniform vec4 uFade;
 uniform vec2 uBoost[5];
+uniform mat4 uIndoorInv[${MAX_INDOOR}];
+uniform vec4 uIndoorHalf[${MAX_INDOOR}];
+uniform int uIndoorN;
+// BUG-020：点在任一室内体积里（局部空间：w = 0 轴对齐盒半尺寸 xyz；w = 1 竖直圆柱，x = 半径、y = 半高）
+bool indoorAt(vec3 p) {
+  for (int i = 0; i < ${MAX_INDOOR}; i++) {
+    if (i >= uIndoorN) break;
+    vec3 l = (uIndoorInv[i] * vec4(p, 1.0)).xyz;
+    vec4 h = uIndoorHalf[i];
+    if (h.w > 0.5 ? (length(l.xz) < h.x && abs(l.y) < h.y) : all(lessThan(abs(l), h.xyz))) return true;
+  }
+  return false;
+}
 vec3 dropPos(vec4 sd, float w) {
   float S = uArea.x, H = uArea.y;
   vec3 p;
@@ -62,7 +78,61 @@ function makeUniforms(area: [number, number]): Record<string, THREE.IUniform> {
     uW: { value: new THREE.Vector3(0.01, 1, 2.5) },
     uViewH: { value: 720 },
     map: { value: null },
+    uIndoorInv: { value: Array.from({ length: MAX_INDOOR }, () => new THREE.Matrix4()) },
+    uIndoorHalf: { value: Array.from({ length: MAX_INDOOR }, () => new THREE.Vector4()) },
+    uIndoorN: { value: 0 },
   };
+}
+
+/**
+ * BUG-020 室内体积（雨丝 / 溅水剔除用）：世界 → 局部的逆矩阵 + 局部半尺寸；cylinder = 竖直圆柱（半径 half.x、半高 half.y）。
+ * 来自场景里名字以 -indoor 结尾的节点（白盒按 layout 生成，美术 GLB 带的也算），见 collectIndoorShapes()。
+ */
+export interface RainIndoorShape {
+  inverse: THREE.Matrix4;
+  half: THREE.Vector3;
+  cylinder: boolean;
+}
+
+const INDOOR_NAME = /-indoor(\.\d+)?$/i;
+const tmpBox3 = new THREE.Box3();
+const tmpV = new THREE.Vector3();
+
+/**
+ * 收集 root 下所有 -indoor 网格的室内体积（不改可见性；相机用的世界 AABB 仍是 collectIndoorVolumes）。
+ * 形状：几何体局部包围盒（跟着节点的旋转 / 缩放，不会因为场景根绕 Y 转了就放大成世界 AABB）；
+ * 节点 userData.indoorRadius（m，layout 给的内壁半径）= 竖直圆柱（S3 圆塔：方盒的角会伸出墙外、边又贴不到墙）。
+ */
+export function collectIndoorShapes(root: THREE.Object3D): RainIndoorShape[] {
+  root.updateWorldMatrix(true, true);
+  const out: RainIndoorShape[] = [];
+  root.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (!INDOOR_NAME.test(o.name) || !m.geometry) return;
+    m.geometry.computeBoundingBox();
+    const bb = tmpBox3.copy(m.geometry.boundingBox!);
+    const center = bb.getCenter(tmpV);
+    const half = bb.getSize(new THREE.Vector3()).multiplyScalar(0.5);
+    const local = new THREE.Matrix4().multiplyMatrices(o.matrixWorld, new THREE.Matrix4().makeTranslation(center.x, center.y, center.z));
+    const r: unknown = o.userData.indoorRadius;
+    const cylinder = typeof r === 'number' && r > 0;
+    if (cylinder) {
+      // 半径按节点世界缩放（取 x）换回局部
+      const sx = new THREE.Vector3().setFromMatrixColumn(o.matrixWorld, 0).length() || 1;
+      half.x = half.z = r / sx;
+    }
+    out.push({ inverse: local.invert(), half, cylinder });
+  });
+  return out;
+}
+
+/** 世界点是否在任一室内体积里（与着色器 indoorAt 同一判定；溅水 / 测试用） */
+export function insideIndoorShapes(shapes: readonly RainIndoorShape[], p: THREE.Vector3): boolean {
+  for (const s of shapes) {
+    const l = tmpV.copy(p).applyMatrix4(s.inverse);
+    if (s.cylinder ? Math.hypot(l.x, l.z) < s.half.x && Math.abs(l.y) < s.half.y : Math.abs(l.x) < s.half.x && Math.abs(l.y) < s.half.y && Math.abs(l.z) < s.half.z) return true;
+  }
+  return false;
 }
 
 /** 落点高度查询：从 (x, fromY, z) 往下找地面 / 水面；null = 没有（不溅） */
@@ -80,6 +150,8 @@ class RainSplashes extends THREE.Mesh<THREE.InstancedBufferGeometry, THREE.Shade
   private readonly rand = rng(29);
   cfg: TierCfg['splash'] | null = null;
   ground: RainGroundQuery | null = null;
+  indoor: readonly RainIndoorShape[] = [];
+  private readonly probe = new THREE.Vector3();
 
   constructor(map: THREE.Texture, cap = 512) {
     const g = new THREE.InstancedBufferGeometry();
@@ -182,6 +254,8 @@ class RainSplashes extends THREE.Mesh<THREE.InstancedBufferGeometry, THREE.Shade
       const z = center.z + Math.sin(th) * r;
       const y = this.ground(x, z, center.y + 12);
       if (y === null) continue;
+      // BUG-020：落点在室内（塔内楼梯 / 地窖地面——射线从相机上方 12 m 起，塔内够不到屋顶）不溅
+      if (this.indoor.length && insideIndoorShapes(this.indoor, this.probe.set(x, y + 0.05, z))) continue;
       const i = this.head;
       a.set([x, y + 0.005, z, time - this.rand() / c.fps], i * 4);
       sz[i] = c.size[0] + this.rand() * (c.size[1] - c.size[0]);
@@ -274,6 +348,8 @@ export class Rain extends THREE.Group {
             vec4 mv = modelViewMatrix * vec4(p, 1.0);
             vF = fadeAt(length(mv.xyz));
             gl_Position = projectionMatrix * mv;
+            // BUG-020：上端或（最长）下端落在室内体积里 → 整条丢到裁剪空间外（两个顶点同一判定，不会半截）
+            if (indoorAt(dropPos(seed, 0.0)) || indoorAt(dropPos(seed, uLen.y))) { vF = 0.0; gl_Position = vec4(2.0, 2.0, 2.0, 1.0); }
           }
         `,
         fragmentShader: /* glsl */ `
@@ -330,6 +406,8 @@ export class Rain extends THREE.Group {
             vF = fadeAt(length(mix(p0, p1, 0.5))) * min(wpx / wc, 1.0);   // 不足 minPx 的按覆盖率降 alpha
             vUv = vec2((vari + position.x + 0.5) / 4.0, position.y);
             gl_Position = projectionMatrix * vec4(pos, 1.0);
+            // BUG-020：雨丝上 / 下端在室内体积里 → 整条丢掉（窗外 / 门外的雨不在体积里，照常画）
+            if (indoorAt(dropPos(seed, 0.0)) || indoorAt(dropPos(seed, len))) { vF = 0.0; gl_Position = vec4(2.0, 2.0, 2.0, 1.0); }
           }
         `,
         fragmentShader: /* glsl */ `
@@ -394,6 +472,27 @@ export class Rain extends THREE.Group {
 
   get tier(): TierCfg | null {
     return this.tierCfg;
+  }
+
+  /** 室内体积（BUG-020）：体积里的雨丝不画、落点不溅；超过 MAX_INDOOR 的忽略 */
+  indoor: RainIndoorShape[] = [];
+  setIndoor(shapes: readonly RainIndoorShape[]): void {
+    if (shapes.length > MAX_INDOOR) console.warn(`[rain] 室内体积 ${shapes.length} 个，只用前 ${MAX_INDOOR} 个`);
+    this.indoor = shapes.slice(0, MAX_INDOOR);
+    const u = this.uniforms;
+    const inv = u.uIndoorInv!.value as THREE.Matrix4[];
+    const half = u.uIndoorHalf!.value as THREE.Vector4[];
+    this.indoor.forEach((sh, i) => {
+      inv[i]!.copy(sh.inverse);
+      half[i]!.set(sh.half.x, sh.half.y, sh.half.z, sh.cylinder ? 1 : 0);
+    });
+    u.uIndoorN!.value = this.indoor.length;
+    if (this.splashes) this.splashes.indoor = this.indoor;
+  }
+
+  /** 世界点上的雨丝会不会被室内剔除（测试 / 调试读；与着色器同一判定） */
+  culledAt(p: THREE.Vector3): boolean {
+    return insideIndoorShapes(this.indoor, p);
   }
 
   /** 溅水落点查询（关卡：物理射线 + 水面；不设 = 不溅） */

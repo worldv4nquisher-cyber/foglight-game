@@ -282,6 +282,8 @@ export function buildS3Greybox(mats: S3GreyboxMaterials = defaultS3GreyboxMateri
     m.position.y = 12.25;
     // 场景根节点绕 Y 135°：这里转 −135° 让它在世界里轴对齐（collectIndoorVolumes 取世界 AABB）
     m.rotation.y = -S3_FRAME.rotationY;
+    // BUG-020：雨丝剔除按内壁圆柱（layout rIn），相机室内判定仍用这个方盒的世界 AABB
+    m.userData.indoorRadius = S3.tower.rIn;
     m.visible = false;
     root.add(m);
     indoor.push(m);

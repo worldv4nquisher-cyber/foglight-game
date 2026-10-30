@@ -14,7 +14,7 @@ import { InteractionSystem, actorFromRig } from '@/systems/interaction/Interacti
 import { SkyDome, SKY_CLOUDS_KEY } from '@/world/SkyDome';
 import { Water, WATER_NORMAL_KEY, RAIN_RIPPLE_KEY } from '@/world/Water';
 import { ATMO028, type Atmo028Tier } from '@/config/atmosphere028';
-import { Rain, RAIN_STREAK_KEY, RAIN_SPLASH_KEY } from '@/world/Rain';
+import { Rain, RAIN_STREAK_KEY, RAIN_SPLASH_KEY, collectIndoorShapes } from '@/world/Rain';
 import { applyLodDistances } from '@/render/lod';
 import { applySceneLightmaps, presetLightmapScale, type LightmapHandle } from '@/render/lightmap';
 import { lightmapEnabled } from '@/config/debug';
@@ -155,6 +155,8 @@ export abstract class LevelScene extends BaseScene {
     const a = this.atmosphere!;
     this.buildEnvironment(a);
     this.buildLevel();
+    // BUG-020：雨丝 / 溅水的室内剔除体积 = 场景里所有 -indoor 节点（白盒按 layout 生成；美术 GLB 带的也算）
+    this.rain?.setIndoor(collectIndoorShapes(this.scene));
     this.attachLightmaps();
     const spawn = this.pickSpawn();
     this.buildPlayer(spawn);
