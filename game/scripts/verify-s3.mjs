@@ -667,6 +667,97 @@ const wz = (o) => new THREE.Vector3(0, 0, 1).transformDirection(o.matrixWorld);
   }
 }
 
+// 4c-3 点火口 + 拉杆 prop-ignition-port-s3：挂 lamp-room ignition-port-s3-socket（翻转）、-receiver 对齐白盒受光点；拉杆 delta 跟白盒 swing，第 34 帧 = −60° 握点到底；
+//      glowNodes（透镜 + 观察窗）共用一份克隆材质，四态跟白盒透镜；白盒透镜 / 拉杆隐藏；-interact = 白盒拉杆站位
+{
+  const key = 'prop-ignition-port-s3';
+  const model = await art3.load(`props/${key}.glb`);
+  const room = await art3.load('env/env-lamp-room-ch1.glb');
+  if (!model || !room) out.push('点火口美术未交付');
+  else {
+    const { XI_IGNITE_LEVER_ALIGN: AL, igniteLeverAngleAt } = await import('@/entities/xiActions');
+    const { gameplay } = await import('@/config/gameplay');
+    const L = S3.igniteLever;
+    // 白盒（同 puzzles.ts / beam.ts）：受光点 + 透镜球（四态材质）+ 拉杆组 / swing
+    const loc = new THREE.Group();
+    loc.add(room);
+    const receiver = new THREE.Object3D();
+    receiver.name = 'ignition-port-s3-receiver';
+    receiver.position.set(...S3.points.ignitionPort);
+    const lensMat = new THREE.MeshStandardMaterial();
+    const lens = new THREE.Mesh(new THREE.SphereGeometry(0.12), lensMat);
+    lens.name = 'ignition-port-s3-lens';
+    lens.position.set(...S3.points.ignitionPort);
+    const standYaw = Math.atan2(L.facing[0], L.facing[2]);
+    const lever = new THREE.Group();
+    lever.name = 'ignite-lever-s3';
+    lever.position.set(...L.pivot);
+    lever.rotation.y = standYaw;
+    const swing = new THREE.Group();
+    swing.name = 'ignite-lever-s3-swing';
+    lever.add(swing);
+    const knob = new THREE.Mesh(new THREE.SphereGeometry(0.045));
+    knob.position.copy(new THREE.Vector3(...L.gripRest).sub(new THREE.Vector3(...L.pivot)).applyAxisAngle(new THREE.Vector3(0, 1, 0), -standYaw));
+    swing.add(knob);
+    loc.add(receiver, lens, lever);
+    loc.updateMatrixWorld(true);
+    const spec = art3.S3_ART_SLOTS.find((x) => x.key === key);
+    const slots = art3.mountArtSlots({ has: (x) => x === key, getModel: () => model }, loc, [spec]);
+    loc.updateMatrixWorld(true);
+    assert.equal(slots.mounted.length, 1, '点火口挂上');
+    assert.deepEqual(slots.mounted[0].missingNodes, [], '点火口约定节点 / 发光材质齐');
+    assert.equal(model.parent.name, 'ignition-port-s3-socket', '点火口挂 lamp-room ignition-port-s3-socket');
+    const dRecv = wp(art3.findNode(model, 'receiver')).distanceTo(wp(receiver));
+    assert.ok(dRecv < 1e-4, `点火口 -receiver 对齐白盒受光点 ${dRecv}`);
+    near3(wp(art3.findNode(model, 'ignition-glow-lens')).toArray(), [0, 21.83, 0], 0.03, '透镜在受光点下方（朝下）');
+    assert.ok(!lens.visible && !knob.visible, '白盒透镜球 / 拉杆隐藏');
+    // 拉杆：美术枢轴 = 白盒枢轴；握点（美术 gripRestS3 换到 ignite-lever 局部）跟 swing 走，第 34 帧到 gripPulled
+    const al = art3.findNode(model, 'ignite-lever');
+    near3(wp(al).toArray(), L.pivot, 1e-3, '美术拉杆枢轴 = S3 (0.9, 22.74, 0)');
+    near3(al.userData.gripRestS3, L.gripRest, 0.002, '美术静止握点 = 白盒');
+    near3(al.userData.gripPulledS3, L.gripPulled, 0.002, '美术拉到底握点 = 白盒');
+    const gripLocal = al.worldToLocal(new THREE.Vector3(...L.gripRest));
+    const gripAt = (t) => {
+      swing.rotation.x = AL.pullSign * THREE.MathUtils.degToRad(igniteLeverAngleAt(t));
+      loc.updateMatrixWorld(true);
+      slots.update();
+      loc.updateMatrixWorld(true);
+      return al.localToWorld(gripLocal.clone());
+    };
+    let dMax = 0;
+    for (let f = 0; f <= 46; f++) dMax = Math.max(dMax, gripAt(f / 30).distanceTo(knob.getWorldPosition(new THREE.Vector3())));
+    const g34 = gripAt(34 / 30);
+    assert.ok(g34.distanceTo(new THREE.Vector3(...L.gripPulled)) < 0.002, `第 34 帧美术握点到底 ${g34.toArray().map((x) => x.toFixed(3))}`);
+    assert.ok(dMax < 0.002, `逐帧美术握点 = 白盒握点（最大差 ${dMax}）`);
+    gripAt(34 / 30);
+    const q34 = al.quaternion.clone();
+    gripAt(0);
+    const turnDeg = (q34.angleTo(al.quaternion) * 180) / Math.PI;
+    assert.ok(Math.abs(turnDeg - 60) < 0.05, `第 34 帧美术拉杆转 ${turnDeg.toFixed(2)}°`);
+    // 四态：白盒透镜材质 → 美术 glowNodes（共用一份克隆，原材质不改）
+    const glowMeshes = [];
+    model.traverse((o) => o.isMesh && o.material?.name === 'mat-prop-ignition-glow' && glowMeshes.push(o));
+    assert.deepEqual(glowMeshes.map((m) => m.name).sort(), ['ignition-glow-lens', 'ignition-glow-sight']);
+    assert.ok(glowMeshes[0].material === glowMeshes[1].material, '透镜 / 观察窗同一材质');
+    const P = gameplay.beam.igniterPort;
+    const states = { off: [0x000000, 0], noOil: [P.noOil, P.noOilIntensity], coldLo: [P.cold, P.coldBreath[0]], coldHi: [P.cold, P.coldBreath[1]], pulse: [P.cold, P.pulsePeak], lit: [P.lit, P.litIntensity] };
+    const artHex = { noOil: 0xc8382a, cold: 0xdce6ee, lit: 0xffb25e };
+    assert.ok(P.noOil === artHex.noOil && P.cold === artHex.cold && P.lit === artHex.lit && P.noOilIntensity === 0.6 && P.litIntensity === 2 && P.coldBreath[0] === 0.15 && P.coldBreath[1] === 0.35 && P.coldPeriodSec === 4, '白盒四态 = 美术材质 extras');
+    for (const [st, [hex, k]] of Object.entries(states)) {
+      lensMat.emissive.setHex(hex);
+      lensMat.emissiveIntensity = k;
+      slots.update();
+      for (const m of glowMeshes) assert.ok(m.material.emissive.getHex() === hex && m.material.emissiveIntensity === k, `四态 ${st}：${m.name}`);
+    }
+    // 站位
+    const ixN = art3.findNode(model, 'prop-ignition-port-s3-interact');
+    const dStand = wp(ixN).distanceTo(new THREE.Vector3(...L.interact));
+    const fwd = new THREE.Vector3(0, 0, 1).applyQuaternion(ixN.getWorldQuaternion(new THREE.Quaternion()));
+    assert.ok(dStand < 0.01 && fwd.angleTo(new THREE.Vector3(...L.facing)) < 0.01, `点火口 -interact 离白盒站位 ${dStand.toFixed(3)} m、朝 −X`);
+    out.push(`点火口 + 拉杆：挂 ignition-port-s3-socket、-receiver 对齐白盒受光点（差 ${(dRecv * 1000).toFixed(2)} mm）；拉杆枢轴 / 握点 = 白盒，逐帧握点差 ≤ ${(dMax * 1000).toFixed(2)} mm，第 34 帧转 ${turnDeg.toFixed(1)}° 到底；透镜 + 观察窗共用克隆材质，四态（关 / 红 0.6 / 冷白 0.15–0.35 + 脉冲 / 暖 2.0）跟白盒透镜；白盒透镜球 / 拉杆隐藏；-interact = 白盒站位（站位读美术） ✓`);
+  }
+}
+
 // 017 收尾：塔内不淋湿（s3-tower-indoor，y 0–24.5）
 {
   const vols = collectIndoorVolumes(gb.root);

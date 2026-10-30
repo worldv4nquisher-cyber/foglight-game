@@ -103,6 +103,8 @@ export class S3Scene extends LevelScene {
     snapToArt(this.artSlots, 'prop-oil-valve-s3', 'prop-oil-valve-s3-interact', this.puzzles.valveIx.interactPoint);
     // 1030c 窗口镜：站位读美术 prop-guide-mirror-window-s3-interact（= 白盒 (1.45, 0.2, 0)，+Z 朝镜）
     snapToArt(this.artSlots, 'prop-guide-mirror-window-s3', 'prop-guide-mirror-window-s3-interact', this.puzzles.mirrorIx.window.interactPoint);
+    // 1030c 点火口 + 拉杆：站位读美术 prop-ignition-port-s3-interact（= env ignite-lever-interact S3 (1.45, 22, −0.15)，+Z 朝 −X）
+    snapToArt(this.artSlots, 'prop-ignition-port-s3', 'prop-ignition-port-s3-interact', this.puzzles.leverIx.interactPoint);
     // 钟锤碰壁阈值：美术根 extras.clapperHitRad 优先（1030b 方案 A，缺省 0.055；1030c 重建钟根 0.0537）
     applyArtClapperHitRad(this.puzzles.bell, this.artSlots?.mounted.find((m) => m.id === 'prop-tide-bell-s3')?.model);
     this.artSlotGreyboxMissing = missingGreyboxNodes(this.scene, S3_ART_SLOTS);

@@ -9,6 +9,7 @@ import type { ArtSlotSpec } from '../artSlots';
  * - 导光镜 prop-guide-mirror-wall-s3-a / -b（1030b 拆两个文件，根原点 = 镜心、轴向 = S3 局部不旋转）：挂白盒组、`-mirror-plane` 对齐；
  *   `mirror-pivot` 拷白盒 yaw（单轴；正解 ψ = 白盒 yaw.rotation.y，a 109.777° / b −70.755°）；`mirror-pitch` 固定俯仰烘在节点里，不转。
  * - 点火口 + 拉杆 prop-ignition-port-s3：挂 ignition-port-s3-socket，`-receiver` 对齐白盒受光点；`ignite-lever` 跟白盒拉杆增量转；
+ *   1030c：美术 glowNodes 用 mat-prop-ignition-glow，每帧拷白盒透镜材质的四态 emissive（无油红 / 冷白呼吸 / 脉冲 / 点燃暖光），白盒透镜隐藏；站位读 `-interact`。
  * - 油阀 1030c：`valve-wheel` 开阀绕本地 +Z 转 +90°（白盒手轮同向同角，delta 驱动）；站位读 `-interact`（手轮正前 0.40 m 地面）。
  */
 const wall = (k: 'a' | 'b'): ArtSlotSpec => ({
@@ -40,6 +41,8 @@ export const S3_ART_SLOTS: readonly ArtSlotSpec[] = [
     at: ['ignition-port-s3-socket'],
     align: { art: 'receiver', logic: 'ignition-port-s3-receiver' },
     drive: [{ art: 'ignite-lever', logic: 'ignite-lever-s3-swing' }],
-    hide: ['ignite-lever-s3'],
+    // 1030c：glowNodes（透镜 + 观察窗，mat-prop-ignition-glow）跟白盒透镜四态（BeamRenderer.igniterLens）；白盒透镜球隐藏（光路 / 受光逻辑不受影响）
+    glow: { material: 'mat-prop-ignition-glow', logic: 'ignition-port-s3-lens' },
+    hide: ['ignite-lever-s3', 'ignition-port-s3-lens'],
   },
 ];

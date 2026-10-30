@@ -35,6 +35,11 @@ export interface ArtSlotSpec {
   drive?: readonly ArtSlotDrive[];
   hide?: readonly string[];
   keep?: readonly string[];
+  /**
+   * 程序控制的发光件：美术里用 `material` 这个材质名的网格换成同一份克隆，每帧把白盒 `logic` 网格材质的
+   * emissive 颜色 / 强度拷过来（如点火口四态：白盒透镜由 BeamRenderer 驱动，美术 glowNodes 跟着亮）
+   */
+  glow?: { material: string; logic: string };
 }
 export interface ArtSlotModelSource {
   has(key: string): boolean;
@@ -106,6 +111,7 @@ function hideGreybox(node: THREE.Object3D, keep: readonly string[]): void {
 /** 按表挂入已交付的道具；没交付（assets 里没有 key）的跳过 */
 export function mountArtSlots(assets: ArtSlotModelSource, scene: THREE.Object3D, specs: readonly ArtSlotSpec[], opts: { showGreybox?: boolean } = {}): ArtSlots {
   const mounted: MountedArtSlot[] = [];
+  const glows: { art: THREE.MeshStandardMaterial; logic: THREE.Mesh }[] = [];
   const drives: { art: THREE.Object3D; logic: THREE.Object3D; mode: 'copy' | 'delta' | 'world'; sign: number; artRestW: THREE.Quaternion; logicRestWInv: THREE.Quaternion }[] = [];
   const worldQ = (o: THREE.Object3D, out: THREE.Quaternion): THREE.Quaternion => {
     o.updateWorldMatrix(true, false);
@@ -142,6 +148,19 @@ export function mountArtSlots(assets: ArtSlotModelSource, scene: THREE.Object3D,
       if (mode === 'world') setWorldQ(art, worldQ(logic, new THREE.Quaternion()));
       drives.push({ art, logic, mode, sign: d.sign ?? 1, artRestW: worldQ(art, new THREE.Quaternion()), logicRestWInv: worldQ(logic, new THREE.Quaternion()).invert() });
     }
+    if (spec.glow) {
+      const g = spec.glow;
+      const logic = scene.getObjectByName(g.logic) as THREE.Mesh | undefined;
+      let clone: THREE.MeshStandardMaterial | null = null;
+      model.traverse((o) => {
+        const m = o as THREE.Mesh;
+        if (!m.isMesh || Array.isArray(m.material) || m.material.name !== g.material || !(m.material instanceof THREE.MeshStandardMaterial)) return;
+        clone ??= m.material.clone();
+        m.material = clone;
+      });
+      if (!clone) missingNodes.push(`material:${g.material}`); // text-ok: 开发期 console 提示
+      else if (logic?.isMesh) glows.push({ art: clone, logic });
+    }
     if (spec.align) {
       const a = findNode(model, spec.align.art);
       const l = scene.getObjectByName(spec.align.logic);
@@ -165,6 +184,12 @@ export function mountArtSlots(assets: ArtSlotModelSource, scene: THREE.Object3D,
   return {
     mounted,
     update() {
+      for (const g of glows) {
+        const src = g.logic.material;
+        if (Array.isArray(src) || !(src instanceof THREE.MeshStandardMaterial)) continue;
+        g.art.emissive.copy(src.emissive);
+        g.art.emissiveIntensity = src.emissiveIntensity;
+      }
       for (const d of drives) {
         if (d.mode === 'copy') {
           d.art.quaternion.copy(d.logic.quaternion);
@@ -213,6 +238,7 @@ export function missingGreyboxNodes(scene: THREE.Object3D, specs: readonly ArtSl
   const names = new Set<string>();
   for (const s of specs) {
     for (const d of s.drive ?? []) names.add(d.logic);
+    if (s.glow) names.add(s.glow.logic);
     for (const h of s.hide ?? []) names.add(h);
     if (s.align) names.add(s.align.logic);
   }
