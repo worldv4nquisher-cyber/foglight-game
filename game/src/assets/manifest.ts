@@ -80,8 +80,8 @@ export const manifest: AssetEntry[] = [
   { key: 'env-net-rack-b', type: 'gltf', url: 'assets/art/models/env/env-net-rack-b.glb', group: 's1', optional: true, art: true },
   // 021 潮汐钟（10-30 交付；S1 / S3 同一文件，S3 另登记 prop-tide-bell-s3）：挂 bell-anchor，bell-swing 跟白盒钟摆（src/levels/s1/artSlots.ts）
   { key: 'prop-tide-bell', type: 'gltf', url: 'assets/art/models/props/prop-tide-bell.glb', group: 's1', optional: true, art: true },
-  // 021 解谜道具（未交付，pending：文件到了自动加载，挂点 / 节点见 src/levels/s1/artSlots.ts）
-  { key: 'prop-raft-s1', type: 'gltf', url: 'assets/art/models/props/prop-raft-s1.glb', group: 's1', optional: true, art: true, pending: true },
+  // 021 木筏（10-30 交付）：根 = 白盒 raft-s1 根（甲板顶面中心），零变换挂上（src/levels/s1/artSlots.ts）
+  { key: 'prop-raft-s1', type: 'gltf', url: 'assets/art/models/props/prop-raft-s1.glb', group: 's1', optional: true, art: true },
   { key: 'env-lighthouse-silhouette-far', type: 'gltf', url: 'assets/art/models/env/env-lighthouse-silhouette-far.glb', group: 's1', optional: true, art: true },
   { key: 'env-lighthouse-island-main-s3tower', type: 'gltf', url: 'assets/art/models/env/env-lighthouse-island-main-s3tower.glb', group: 's1', optional: true, art: true },
   { key: 'env-lighthouse-ch1', type: 'gltf', url: 'assets/art/models/env/env-lighthouse-ch1.glb', group: 's1', optional: true, art: true },

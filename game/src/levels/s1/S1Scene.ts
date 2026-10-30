@@ -88,6 +88,8 @@ export class S1Scene extends LevelScene {
     this.artSlots = mountArtSlots(this.game.assets, this.scene, S1_ART_SLOTS, { showGreybox: greyboxVisible });
     // 021 潮汐钟：汐的站位直接读美术 prop-tide-bell-interact（白盒 1.05 m → 模型 0.98 m）
     snapToArt(this.artSlots, 'prop-tide-bell', 'prop-tide-bell-interact', this.puzzles.bell.interactable.interactPoint);
+    // 021 木筏：推站位读 prop-raft-s1-interact（与白盒同位同向，以 GLB 为准）
+    snapToArt(this.artSlots, 'prop-raft-s1', 'prop-raft-s1-interact', this.puzzles.raftPush.interactPoint);
     this.artSlotGreyboxMissing = missingGreyboxNodes(this.scene, S1_ART_SLOTS);
     if (this.artSlotGreyboxMissing.length) console.warn('[art-slot] 白盒节点名对不上：' + this.artSlotGreyboxMissing.join('、'));
   }

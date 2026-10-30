@@ -2224,6 +2224,14 @@ const CHECKS = [
       const pT = await evaluate(`__s1.puzzles.raftPush.pushT`);
       if (!(await until(`!__s1.interaction.animState && !__s1.rig.controller.locked && !__s1.rig.animator.looping`, 4000))) throw new Error('xi-push-end 播完没解锁');
       if (Math.abs((await evaluate(`__s1.puzzles.raftPush.pushT`)) - pT) > 1e-6) throw new Error('push-end 期间浮台不该再动');
+      // 021 美术木筏：挂在白盒 raft-s1 根下零变换（推动后跟着走）、白盒网格隐藏、vertexColors 关、推站位 = prop-raft-s1-interact
+      const ra = await evaluate(`(() => { const m = __s1.artSlots.mounted.find((x) => x.id === 'prop-raft-s1'); if (!m) return { err: 'not-mounted' }; const root = __s1.scene.getObjectByName('raft-s1');
+        const ip = m.model.getObjectByName('prop-raft-s1-interact'); ip.updateWorldMatrix(true, false); const a = ip.getWorldPosition(ip.position.clone()); const sp = __s1.puzzles.raftPush.standPoint(a.clone()).position;
+        let vc = 0, gbVis = 0; m.model.traverse((o) => { if (o.isMesh) for (const mt of [o.material].flat()) if (mt.vertexColors) vc++; });
+        root.traverse((o) => { if (!o.isMesh || !o.visible) return; let p = o, art = false; while (p) { if (p.userData.artSlot) art = true; p = p.parent; } if (!art) gbVis++; });
+        return { parentOk: m.model.parent === root, zero: m.model.position.lengthSq() === 0, standD: sp.distanceTo(a), vc, gbVis, x: root.position.x }; })()`);
+      if (ra.err || !ra.parentOk || !ra.zero || ra.standD > 0.01 || ra.vc || ra.gbVis) throw new Error('美术木筏挂法不对 ' + JSON.stringify(ra));
+      out.push(`S1 美术木筏：挂 raft-s1 零变换（推到 x ${ra.x.toFixed(2)} 跟着走）、白盒隐藏、vertexColors 关、推站位 = prop-raft-s1-interact ✓`);
       out.push(`S1 推浮台：按住 E ${tMove.toFixed(3)} s 浮台开始动（push-start 内）→ push-loop（推到 ${pT.toFixed(2)}）→ 松手 xi-push-end → 解锁 ✓`);
 
       // ---------------- S3：敲钟 / 开阀 / 拉杆
@@ -2474,7 +2482,7 @@ const CHECKS = [
     },
   },
   {
-    name: 'v0.1-021/022 替换入口 art=1：S1 / S2 / S3 表里的白盒节点名都在、未交付道具不发请求（不 404），已交付的（潮汐钟）挂上',
+    name: 'v0.1-021/022 替换入口 art=1：S1 / S2 / S3 表里的白盒节点名都在、未交付道具不发请求（不 404），已交付的（潮汐钟、木筏）挂上',
     async run({ evaluate, cdp, sleep }) {
       const out = [];
       for (const [q, scene, v] of [['s1', 's1-ebb-shore', '__s1'], ['s2', 's2-keeper-house', '__s2'], ['s3', 's3-lighthouse', '__s3']]) {
@@ -2489,6 +2497,7 @@ const CHECKS = [
         const r = await evaluate(`(() => { const s = ${v}; const mounted = s.artSlots.mounted.map((m) => m.id); const req = performance.getEntriesByType('resource').map((e) => /models\\/props\\/(prop-(?:tide-bell|raft-s1|mirror-stand|light-lock|white-stones|dial-gate|oil-valve|guide-mirror|ignition-port)[a-z0-9-]*)\\.glb/.exec(e.name)?.[1]).filter((n) => n && !mounted.some((id) => id.startsWith(n))); return { miss: s.artSlotGreyboxMissing, mounted, req }; })()`);
         if (r.miss.length) throw new Error(`${q} 替换表白盒节点名对不上：${r.miss.join('、')}`);
         if (q !== 's2' && !r.mounted.some((id) => id.startsWith('prop-tide-bell'))) throw new Error(`${q} 潮汐钟美术没挂上 ` + JSON.stringify(r));
+        if (q === 's1' && !r.mounted.includes('prop-raft-s1')) throw new Error('s1 木筏美术没挂上 ' + JSON.stringify(r));
         if (r.req.length) throw new Error(`${q} 请求了没挂上的道具（未交付应不请求）：${r.req.join('、')}`);
         out.push(`${q}：节点齐、挂上 ${r.mounted.length} 件${r.mounted.length ? '（' + r.mounted.join('/') + '）' : ''}、未交付 0 请求`);
       }

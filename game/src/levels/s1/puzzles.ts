@@ -150,8 +150,9 @@ export function buildS1Puzzles(o: S1PuzzleOptions): S1Puzzles {
   raftMesh.position.y = -rf.size[1] / 2;
   raftMesh.castShadow = raftMesh.receiveShadow = true;
   raftRoot.add(raftMesh);
+  // 装饰横板与碰撞同宽 2.0（021 美术木筏板外缘 ±1.0）
   for (const dz of [-1, 0, 1]) {
-    const plank = new THREE.Mesh(new THREE.BoxGeometry(rf.size[0] + 0.1, 0.06, 0.18), o.wood);
+    const plank = new THREE.Mesh(new THREE.BoxGeometry(rf.size[0], 0.06, 0.18), o.wood);
     plank.position.set(0, 0.02, dz * 1.1);
     raftRoot.add(plank);
   }

@@ -590,6 +590,81 @@ if (hasArt) {
     return out.join('；');
   });
 
+  await test('021 木筏 prop-raft-s1：根零变换挂白盒 raft-s1、collider 2.0×0.3×3.0 = 白盒、interact / waterline / stand / takeoff / 甲板高与白盒逻辑一致（跨越落点离沿 ≥ 0.30）', async () => {
+    const { S1, s1StepLinks } = await import('@/levels/s1/layout');
+    const { XI_STEP_ACROSS, xiEventSec } = await import('@/entities/xi/clips');
+    const { gameplay } = await import('@/config/gameplay');
+    const glb = await loadGlb('models/props/prop-raft-s1.glb');
+    const rf = S1.raft;
+    let rootEx = null;
+    glb.traverse((o) => { if (!rootEx && o.userData?.deckGroundedY !== undefined) rootEx = o.userData; });
+    assert.ok(rootEx, '根 extras 缺 deckGroundedY');
+    near(rootEx.deckGroundedY, rf.home[1], 1e-6, 'deckGroundedY = home y');
+    near(rootEx.deckFloatY, S1.nearPlatform.topY, 1e-6, 'deckFloatY = 岸台顶面（跨越条件 ±5 cm）');
+    near(rootEx.floatOffset, rf.floatOffset, 1e-6, 'floatOffset');
+    // 白盒浮台根（同 puzzles.ts）+ 美术零变换挂上
+    const scene = new THREE.Group();
+    const raftRoot = new THREE.Group();
+    raftRoot.name = 'raft-s1';
+    raftRoot.position.set(...rf.home);
+    const gbBox = new THREE.Mesh(new THREE.BoxGeometry(...rf.size));
+    gbBox.position.y = -rf.size[1] / 2;
+    raftRoot.add(gbBox);
+    const gbPoint = new THREE.Object3D();
+    gbPoint.position.set(rf.size[0] / 2 + 0.45, -(rf.home[1] - S1.sandY), 0);
+    gbPoint.rotation.y = -Math.PI / 2;
+    raftRoot.add(gbPoint);
+    scene.add(raftRoot);
+    scene.updateMatrixWorld(true);
+    const spec = S1_ART_SLOTS.find((x) => x.key === 'prop-raft-s1');
+    const slots = mountArtSlots({ has: () => true, getModel: () => glb.clone() }, scene, [spec]);
+    const art = slots.mounted[0].model;
+    assert.equal(art.parent, raftRoot);
+    assert.ok(art.position.lengthSq() === 0 && art.quaternion.equals(new THREE.Quaternion()), '零变换');
+    scene.updateMatrixWorld(true);
+    const local = (n) => { const o = art.getObjectByName(n); assert.ok(o, '缺节点 ' + n); return raftRoot.worldToLocal(o.getWorldPosition(new THREE.Vector3())); };
+    // collider：2.0 × 0.30 × 3.0，顶面 y 0 = 白盒
+    const col = art.getObjectByName('prop-raft-s1-collider');
+    const cb = new THREE.Box3().setFromObject(col, true);
+    const gb = new THREE.Box3().setFromObject(gbBox, true);
+    for (const k of ['min', 'max']) for (const ax of ['x', 'y', 'z']) near(cb[k][ax], gb[k][ax], 0.01, `collider ${k}.${ax}`);
+    // 推站位：同位同向；snap 后也不动
+    const ip = local('prop-raft-s1-interact');
+    near(ip.distanceTo(gbPoint.position), 0, 0.01, 'interact 位置 = 白盒');
+    const { snapToArt } = await import('@/levels/artSlots');
+    const before = gbPoint.getWorldPosition(new THREE.Vector3());
+    assert.ok(snapToArt(slots, 'prop-raft-s1', 'prop-raft-s1-interact', gbPoint));
+    near(gbPoint.getWorldPosition(new THREE.Vector3()).distanceTo(before), 0, 0.01, 'snap 后推站位不变');
+    const f = new THREE.Vector3(0, 0, 1).transformDirection(gbPoint.matrixWorld);
+    near(f.x, -1, 1e-3, '推站位 +Z 朝 −X（推向石槽）');
+    const ie = art.getObjectByName('prop-raft-s1-interact').userData;
+    if (ie.speedMps !== undefined) near(ie.speedMps, gameplay.interaction?.pushSpeed ?? 0.8, 1e-6, 'speedMps = pushSpeed');
+    if (ie.events?.handsOn !== undefined) near(ie.events.handsOn / 30, xiEventSec('xi-push-start', 'handsOn'), 1e-6, 'handsOn 帧');
+    // 漂浮：waterline = −floatOffset
+    near(local('prop-raft-s1-waterline').y, -rf.floatOffset, 0.005, 'waterline');
+    // 跨越：stand-s / -n 离沿 = landMargin（≥ 0.30）、takeoff 离沿 = 起跳内缩；与 s1StepLinks 一致
+    const half = rf.size[2] / 2;
+    const links = s1StepLinks();
+    const sS = local('prop-raft-s1-stand-s'), sN = local('prop-raft-s1-stand-n');
+    near(half + sS.z, XI_STEP_ACROSS.landMarginM, 0.005, 'stand-s 离南沿');
+    near(half - sN.z, XI_STEP_ACROSS.landMarginM, 0.005, 'stand-n 离北沿');
+    assert.ok(half + sS.z >= 0.3 && half - sN.z >= 0.3, '落点离沿 ≥ 0.30');
+    near(rf.slot[2] + sS.z, links[0].end, 0.005, '岸台 → 浮台落点 = stand-s');
+    near(rf.slot[2] + sN.z, links[3].end, 0.005, '台阶 → 浮台落点 = stand-n');
+    for (const [n, li] of [['prop-raft-s1-stand-s', 1], ['prop-raft-s1-stand-n', 2]]) {
+      const t = art.getObjectByName(n).userData.takeoff;
+      assert.ok(Array.isArray(t), n + ' extras.takeoff');
+      near(rf.slot[2] + t[2], links[li].start, 0.005, `${n} takeoff = 浮台起跳点`);
+    }
+    // 外形：除 +X 推把外在 2.0 × 3.0 内
+    const lod = new THREE.Box3();
+    art.traverse((o) => { if (o.isMesh && o.visible && !/collider/.test(o.name)) lod.expandByObject(o, true); });
+    assert.ok(!lod.isEmpty(), '没有渲染网格');
+    const lx = raftRoot.worldToLocal(lod.min.clone()), hx = raftRoot.worldToLocal(lod.max.clone());
+    assert.ok(lx.x >= -1.01 && Math.abs(lx.z) <= 1.51 && Math.abs(hx.z) <= 1.51, '外形越界 ' + JSON.stringify([lx, hx]));
+    return `collider = 白盒、interact (${ip.x.toFixed(2)}, ${ip.y.toFixed(2)}, ${ip.z.toFixed(2)})、stand 离沿 ${(half + sS.z).toFixed(2)} / ${(half - sN.z).toFixed(2)}、takeoff = s1StepLinks 起跳点、deck ${rootEx.deckGroundedY} → ${rootEx.deckFloatY}`;
+  });
+
   await test('外部 KTX2：S1 全部 GLB 的 images.uri 相对 GLB 解析后存在（运行时 assets/art/models/env/../../textures/ 同理）', () => {
     const files = [...new Set(Object.values(layout.nodes).flatMap((n) => [n.file, ...(n.socketInstances ?? []).map((s) => s.file)]).filter(Boolean))];
     let n = 0;
