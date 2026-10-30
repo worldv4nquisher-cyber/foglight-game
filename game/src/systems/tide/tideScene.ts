@@ -3,6 +3,7 @@ import type { EventBus } from '@/core/EventBus';
 import type { Game } from '@/core/Game';
 import type { PlayerRig } from '@/entities/createPlayer';
 import type { AudioSystem } from '@/systems/AudioSystem';
+import { SfxBank } from '@/systems/audio/sfxBank';
 import type { TideController } from './TideController';
 
 /**
@@ -42,22 +43,33 @@ const FALLBACK: Record<string, { freq: number; duration: number; type: Oscillato
   'sfx-ignite': { freq: 262, duration: 1.8, type: 'triangle' },
 };
 
-/** `sfx:play` → 有资源播资源，否则合成占位音；`sfx:loop` / `sfx:loopStop` → AudioSystem 循环音（缺资源用 FALLBACK 的频率持续振荡）。返回取消订阅 */
+/**
+ * `sfx:play` → 有资源播资源，否则合成占位音；`sfx:loop` / `sfx:loopStop` → AudioSystem 循环音（缺资源用 FALLBACK 的频率持续振荡）。返回取消订阅。
+ * 032：id 先过 SfxBank（旧 id 别名 → 032 文件、a–d 变体随机不连续重复、manifest gainDb 增益）。
+ * 没文件、FALLBACK 里也没有的 id（脚步 / 环境音 / UI 等 032 新增）静默：art=0 不用合成音顶替。
+ */
 export function bindSfxFallback(events: EventBus, audio: AudioSystem, getBuffer?: (id: string) => AudioBuffer | undefined): () => void {
+  const bank = new SfxBank(getBuffer ?? (() => undefined));
   const offs = [
     events.on('sfx:play', ({ id, optional }) => {
-      const buf = getBuffer?.(id);
-      if (!buf && optional) return;
-      const fb = FALLBACK[id] ?? { freq: 440, duration: 0.15, type: 'sine' as OscillatorType };
-      audio.playSfx(buf, fb);
+      const r = bank.resolve(id);
+      if (r) {
+        audio.playBuffer(r.buffer, r.volume);
+        return;
+      }
+      const fb = FALLBACK[id];
+      if (!fb || optional) return;
+      audio.playSfx(undefined, fb);
     }),
     events.on('sfx:loop', ({ id, fadeIn, volume }) => {
-      const fb = FALLBACK[id] ?? { freq: 220, duration: 0, type: 'sine' as OscillatorType };
+      const r = bank.resolve(id);
+      const fb = FALLBACK[id];
+      if (!r && !fb) return;
       audio.startLoop(id, {
-        buffer: getBuffer?.(id),
-        fallback: { freq: fb.freq, type: fb.type },
+        buffer: r?.buffer,
+        ...(fb ? { fallback: { freq: fb.freq, type: fb.type } } : {}),
         ...(fadeIn !== undefined ? { fadeIn } : {}),
-        ...(volume !== undefined ? { volume } : {}),
+        volume: (volume ?? 1) * (r?.volume ?? 1),
       });
     }),
     events.on('sfx:loopStop', ({ id, fadeOut }) => {

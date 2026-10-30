@@ -47,6 +47,8 @@ export interface AssetEntry {
    * 否则直接按缺失处理（不发请求、不 404）。文件放进 art/ 后重新 `npm run build`（dev 重启）即生效，代码不用改。
    */
   pending?: boolean;
+  /** 仅 audio：播放增益（dB，可正可负；缺省 0）。短促音按文件补响度用（032） */
+  gainDb?: number;
   /** 仅 font：CSS font-family 名（styles.css 的 --ui-font / --ui-serif 排在最前） */
   family?: string;
 }
@@ -129,14 +131,94 @@ export const manifest: AssetEntry[] = [
   { key: 'prop-guide-mirror-wall-s3-a', type: 'gltf', url: 'assets/art/models/props/prop-guide-mirror-wall-s3-a.glb', group: 's3', optional: true, art: true, pending: true },
   { key: 'prop-guide-mirror-wall-s3-b', type: 'gltf', url: 'assets/art/models/props/prop-guide-mirror-wall-s3-b.glb', group: 's3', optional: true, art: true, pending: true },
   { key: 'prop-ignition-port-s3', type: 'gltf', url: 'assets/art/models/props/prop-ignition-port-s3.glb', group: 's3', optional: true, art: true, pending: true },
-  // ---- 032 音效（未交付，pending；到了自动加载，sfx:play / sfx:loop 按 key 取 buffer）
-  // 钟锤碰壁补音（美术回复 1030）：TideBell 钟锤相对角到 clapperHitRad 时 sfx:play optional（缺失静默，可叠主钟声）
-  { key: 'sfx-tide-bell-clapper', type: 'audio', url: 'assets/art/audio/sfx/sfx-tide-bell-clapper.ogg', group: 'common', optional: true, art: true, pending: true },
-  // 015 可点灯嗡鸣循环（IgniterHum，sfx:loop）
-  { key: 'sfx-ignite-ready-loop', type: 'audio', url: 'assets/art/audio/sfx/sfx-ignite-ready-loop.ogg', group: 's3', optional: true, art: true, pending: true },
+  // ---- 032 音效 / 环境音（美术 10-30 交付，art/audio/README.md 为准；79 个 ogg 7.66 MB）。程序旧 id → 032 文件名的别名、变体随机见 src/audio/sfxBank.ts
+  // gainDb：短促瞬态音（脚步 / 咔嗒 / UI 等）受 −1 dBTP 限幅、积分响度比目标低 2–8 LU，按 audio-report.json 的 target − lufs 补增益（最多 8 dB），听感一致
+  // menu：UI 音效（主菜单就要用；036「主菜单包只有 UI 音效」）
+  { key: 'sfx-ui-back', type: 'audio', url: 'assets/art/audio/sfx/sfx-ui-back.ogg', group: 'menu', optional: true, art: true, gainDb: 1.2 },
+  { key: 'sfx-ui-confirm', type: 'audio', url: 'assets/art/audio/sfx/sfx-ui-confirm.ogg', group: 'menu', optional: true, art: true, gainDb: 1.2 },
+  { key: 'sfx-ui-journal', type: 'audio', url: 'assets/art/audio/sfx/sfx-ui-journal.ogg', group: 'menu', optional: true, art: true },
+  // common：通用（日记纸声、脚步 5 地面 × a–d、落水、潮汐钟 S1/S3 共用、涨退潮、户外雾号 / 海鸟 / 轻风、光束接通 / 持续、镜架咔哒 S2/S3 共用）
+  { key: 'amb-foghorn-far-a', type: 'audio', url: 'assets/art/audio/ambience/amb-foghorn-far-a.ogg', group: 'common', optional: true, art: true },
+  { key: 'amb-foghorn-far-b', type: 'audio', url: 'assets/art/audio/ambience/amb-foghorn-far-b.ogg', group: 'common', optional: true, art: true },
+  { key: 'amb-foghorn-far-c', type: 'audio', url: 'assets/art/audio/ambience/amb-foghorn-far-c.ogg', group: 'common', optional: true, art: true },
+  { key: 'amb-seabird-far-a', type: 'audio', url: 'assets/art/audio/ambience/amb-seabird-far-a.ogg', group: 'common', optional: true, art: true },
+  { key: 'amb-seabird-far-b', type: 'audio', url: 'assets/art/audio/ambience/amb-seabird-far-b.ogg', group: 'common', optional: true, art: true },
+  { key: 'amb-wind-soft', type: 'audio', url: 'assets/art/audio/ambience/amb-wind-soft.ogg', group: 'common', optional: true, art: true },
+  { key: 'sfx-beam-connect', type: 'audio', url: 'assets/art/audio/sfx/sfx-beam-connect.ogg', group: 'common', optional: true, art: true },
+  { key: 'sfx-beam-hum-loop', type: 'audio', url: 'assets/art/audio/sfx/sfx-beam-hum-loop.ogg', group: 'common', optional: true, art: true },
+  { key: 'sfx-mirror-click', type: 'audio', url: 'assets/art/audio/sfx/sfx-mirror-click.ogg', group: 'common', optional: true, art: true, gainDb: 1.5 },
+  { key: 'sfx-mirror-click-fine', type: 'audio', url: 'assets/art/audio/sfx/sfx-mirror-click-fine.ogg', group: 'common', optional: true, art: true, gainDb: 0.8 },
+  { key: 'sfx-paper-flip-a', type: 'audio', url: 'assets/art/audio/sfx/sfx-paper-flip-a.ogg', group: 'common', optional: true, art: true },
+  { key: 'sfx-paper-flip-b', type: 'audio', url: 'assets/art/audio/sfx/sfx-paper-flip-b.ogg', group: 'common', optional: true, art: true },
+  { key: 'sfx-paper-flip-c', type: 'audio', url: 'assets/art/audio/sfx/sfx-paper-flip-c.ogg', group: 'common', optional: true, art: true },
+  { key: 'sfx-paper-open', type: 'audio', url: 'assets/art/audio/sfx/sfx-paper-open.ogg', group: 'common', optional: true, art: true, gainDb: 3.7 },
+  { key: 'sfx-splash-cold', type: 'audio', url: 'assets/art/audio/sfx/sfx-splash-cold.ogg', group: 'common', optional: true, art: true, gainDb: 0.6 },
+  { key: 'sfx-step-indoor-a', type: 'audio', url: 'assets/art/audio/sfx/sfx-step-indoor-a.ogg', group: 'common', optional: true, art: true, gainDb: 2.4 },
+  { key: 'sfx-step-indoor-b', type: 'audio', url: 'assets/art/audio/sfx/sfx-step-indoor-b.ogg', group: 'common', optional: true, art: true, gainDb: 2.1 },
+  { key: 'sfx-step-indoor-c', type: 'audio', url: 'assets/art/audio/sfx/sfx-step-indoor-c.ogg', group: 'common', optional: true, art: true, gainDb: 1.2 },
+  { key: 'sfx-step-indoor-d', type: 'audio', url: 'assets/art/audio/sfx/sfx-step-indoor-d.ogg', group: 'common', optional: true, art: true, gainDb: 0.6 },
+  { key: 'sfx-step-sand-a', type: 'audio', url: 'assets/art/audio/sfx/sfx-step-sand-a.ogg', group: 'common', optional: true, art: true },
+  { key: 'sfx-step-sand-b', type: 'audio', url: 'assets/art/audio/sfx/sfx-step-sand-b.ogg', group: 'common', optional: true, art: true, gainDb: 0.8 },
+  { key: 'sfx-step-sand-c', type: 'audio', url: 'assets/art/audio/sfx/sfx-step-sand-c.ogg', group: 'common', optional: true, art: true, gainDb: 0.5 },
+  { key: 'sfx-step-sand-d', type: 'audio', url: 'assets/art/audio/sfx/sfx-step-sand-d.ogg', group: 'common', optional: true, art: true },
+  { key: 'sfx-step-stone-a', type: 'audio', url: 'assets/art/audio/sfx/sfx-step-stone-a.ogg', group: 'common', optional: true, art: true, gainDb: 4.9 },
+  { key: 'sfx-step-stone-b', type: 'audio', url: 'assets/art/audio/sfx/sfx-step-stone-b.ogg', group: 'common', optional: true, art: true, gainDb: 3.7 },
+  { key: 'sfx-step-stone-c', type: 'audio', url: 'assets/art/audio/sfx/sfx-step-stone-c.ogg', group: 'common', optional: true, art: true, gainDb: 5.6 },
+  { key: 'sfx-step-stone-d', type: 'audio', url: 'assets/art/audio/sfx/sfx-step-stone-d.ogg', group: 'common', optional: true, art: true, gainDb: 3.7 },
+  { key: 'sfx-step-wet-a', type: 'audio', url: 'assets/art/audio/sfx/sfx-step-wet-a.ogg', group: 'common', optional: true, art: true },
+  { key: 'sfx-step-wet-b', type: 'audio', url: 'assets/art/audio/sfx/sfx-step-wet-b.ogg', group: 'common', optional: true, art: true },
+  { key: 'sfx-step-wet-c', type: 'audio', url: 'assets/art/audio/sfx/sfx-step-wet-c.ogg', group: 'common', optional: true, art: true },
+  { key: 'sfx-step-wet-d', type: 'audio', url: 'assets/art/audio/sfx/sfx-step-wet-d.ogg', group: 'common', optional: true, art: true },
+  { key: 'sfx-step-wood-a', type: 'audio', url: 'assets/art/audio/sfx/sfx-step-wood-a.ogg', group: 'common', optional: true, art: true, gainDb: 5.3 },
+  { key: 'sfx-step-wood-b', type: 'audio', url: 'assets/art/audio/sfx/sfx-step-wood-b.ogg', group: 'common', optional: true, art: true, gainDb: 4.1 },
+  { key: 'sfx-step-wood-c', type: 'audio', url: 'assets/art/audio/sfx/sfx-step-wood-c.ogg', group: 'common', optional: true, art: true, gainDb: 5.1 },
+  { key: 'sfx-step-wood-d', type: 'audio', url: 'assets/art/audio/sfx/sfx-step-wood-d.ogg', group: 'common', optional: true, art: true, gainDb: 2.0 },
+  { key: 'sfx-tide-bell-clapper', type: 'audio', url: 'assets/art/audio/sfx/sfx-tide-bell-clapper.ogg', group: 'common', optional: true, art: true, gainDb: 1.7 },
+  { key: 'sfx-tide-bell-ring', type: 'audio', url: 'assets/art/audio/sfx/sfx-tide-bell-ring.ogg', group: 'common', optional: true, art: true },
+  { key: 'sfx-tide-fall', type: 'audio', url: 'assets/art/audio/sfx/sfx-tide-fall.ogg', group: 'common', optional: true, art: true },
+  { key: 'sfx-tide-rise', type: 'audio', url: 'assets/art/audio/sfx/sfx-tide-rise.ogg', group: 'common', optional: true, art: true },
+  // s1：近岸浪、细雨、码头吱呀、潮汐钟风吹轻响、木筏
+  { key: 'amb-pier-creak-a', type: 'audio', url: 'assets/art/audio/ambience/amb-pier-creak-a.ogg', group: 's1', optional: true, art: true },
+  { key: 'amb-pier-creak-b', type: 'audio', url: 'assets/art/audio/ambience/amb-pier-creak-b.ogg', group: 's1', optional: true, art: true },
+  { key: 'amb-pier-creak-c', type: 'audio', url: 'assets/art/audio/ambience/amb-pier-creak-c.ogg', group: 's1', optional: true, art: true },
+  { key: 'amb-rain-light', type: 'audio', url: 'assets/art/audio/ambience/amb-rain-light.ogg', group: 's1', optional: true, art: true },
+  { key: 'amb-waves-near', type: 'audio', url: 'assets/art/audio/ambience/amb-waves-near.ogg', group: 's1', optional: true, art: true },
+  { key: 'sfx-raft-float', type: 'audio', url: 'assets/art/audio/sfx/sfx-raft-float.ogg', group: 's1', optional: true, art: true },
+  { key: 'sfx-raft-lock', type: 'audio', url: 'assets/art/audio/sfx/sfx-raft-lock.ogg', group: 's1', optional: true, art: true, gainDb: 2.4 },
+  { key: 'sfx-raft-push-loop', type: 'audio', url: 'assets/art/audio/sfx/sfx-raft-push-loop.ogg', group: 's1', optional: true, art: true },
+  { key: 'sfx-tide-bell-wind-a', type: 'audio', url: 'assets/art/audio/sfx/sfx-tide-bell-wind-a.ogg', group: 's1', optional: true, art: true },
+  { key: 'sfx-tide-bell-wind-b', type: 'audio', url: 'assets/art/audio/sfx/sfx-tide-bell-wind-b.ogg', group: 's1', optional: true, art: true },
+  { key: 'sfx-tide-bell-wind-c', type: 'audio', url: 'assets/art/audio/sfx/sfx-tide-bell-wind-c.ogg', group: 's1', optional: true, art: true },
+  // s2：屋檐滴水 / 雨（室外）、屋顶雨 / 雨打窗 / 钟摆（室内）、远浪、光感锁、钥匙、铁门、风铃、地窖门、转盘、风灯
+  { key: 'amb-eaves-drip', type: 'audio', url: 'assets/art/audio/ambience/amb-eaves-drip.ogg', group: 's2', optional: true, art: true },
+  { key: 'amb-rain-on-glass', type: 'audio', url: 'assets/art/audio/ambience/amb-rain-on-glass.ogg', group: 's2', optional: true, art: true },
+  { key: 'amb-rain-on-roof', type: 'audio', url: 'assets/art/audio/ambience/amb-rain-on-roof.ogg', group: 's2', optional: true, art: true },
+  { key: 'amb-room-clock', type: 'audio', url: 'assets/art/audio/ambience/amb-room-clock.ogg', group: 's2', optional: true, art: true },
+  { key: 'amb-waves-far', type: 'audio', url: 'assets/art/audio/ambience/amb-waves-far.ogg', group: 's2', optional: true, art: true },
+  { key: 'sfx-cellar-door-open', type: 'audio', url: 'assets/art/audio/sfx/sfx-cellar-door-open.ogg', group: 's2', optional: true, art: true, gainDb: 1.9 },
+  { key: 'sfx-dial-click', type: 'audio', url: 'assets/art/audio/sfx/sfx-dial-click.ogg', group: 's2', optional: true, art: true, gainDb: 5.7 },
+  { key: 'sfx-gate-open', type: 'audio', url: 'assets/art/audio/sfx/sfx-gate-open.ogg', group: 's2', optional: true, art: true },
+  { key: 'sfx-key-pickup', type: 'audio', url: 'assets/art/audio/sfx/sfx-key-pickup.ogg', group: 's2', optional: true, art: true, gainDb: 0.6 },
+  { key: 'sfx-lantern-pickup', type: 'audio', url: 'assets/art/audio/sfx/sfx-lantern-pickup.ogg', group: 's2', optional: true, art: true },
+  { key: 'sfx-lantern-place', type: 'audio', url: 'assets/art/audio/sfx/sfx-lantern-place.ogg', group: 's2', optional: true, art: true, gainDb: 3.8 },
+  { key: 'sfx-light-lock-open', type: 'audio', url: 'assets/art/audio/sfx/sfx-light-lock-open.ogg', group: 's2', optional: true, art: true, gainDb: 2.3 },
+  { key: 'sfx-wind-chime', type: 'audio', url: 'assets/art/audio/sfx/sfx-wind-chime.ogg', group: 's2', optional: true, art: true },
+  // s3：拍岸浪、大雨、塔内风 / 塔底积水、塔门、油阀、油流、点火四件、透镜转动
+  { key: 'amb-rain-heavy', type: 'audio', url: 'assets/art/audio/ambience/amb-rain-heavy.ogg', group: 's3', optional: true, art: true },
+  { key: 'amb-water-in-tower', type: 'audio', url: 'assets/art/audio/ambience/amb-water-in-tower.ogg', group: 's3', optional: true, art: true },
+  { key: 'amb-waves-crash', type: 'audio', url: 'assets/art/audio/ambience/amb-waves-crash.ogg', group: 's3', optional: true, art: true },
+  { key: 'amb-wind-tower', type: 'audio', url: 'assets/art/audio/ambience/amb-wind-tower.ogg', group: 's3', optional: true, art: true },
+  { key: 'sfx-door-lighthouse-unlock', type: 'audio', url: 'assets/art/audio/sfx/sfx-door-lighthouse-unlock.ogg', group: 's3', optional: true, art: true, gainDb: 3.0 },
+  { key: 'sfx-ignite', type: 'audio', url: 'assets/art/audio/sfx/sfx-ignite.ogg', group: 's3', optional: true, art: true, gainDb: 2.8 },
+  { key: 'sfx-ignite-fail', type: 'audio', url: 'assets/art/audio/sfx/sfx-ignite-fail.ogg', group: 's3', optional: true, art: true, gainDb: 3.4 },
+  { key: 'sfx-ignite-lever', type: 'audio', url: 'assets/art/audio/sfx/sfx-ignite-lever.ogg', group: 's3', optional: true, art: true, gainDb: 2.4 },
+  { key: 'sfx-ignite-ready-loop', type: 'audio', url: 'assets/art/audio/sfx/sfx-ignite-ready-loop.ogg', group: 's3', optional: true, art: true },
+  { key: 'sfx-ignite-ready-pulse', type: 'audio', url: 'assets/art/audio/sfx/sfx-ignite-ready-pulse.ogg', group: 's3', optional: true, art: true },
+  { key: 'sfx-lens-rotate-loop', type: 'audio', url: 'assets/art/audio/sfx/sfx-lens-rotate-loop.ogg', group: 's3', optional: true, art: true },
+  { key: 'sfx-oil-flow', type: 'audio', url: 'assets/art/audio/sfx/sfx-oil-flow.ogg', group: 's3', optional: true, art: true },
+  { key: 'sfx-valve-turn', type: 'audio', url: 'assets/art/audio/sfx/sfx-valve-turn.ogg', group: 's3', optional: true, art: true, gainDb: 0.9 },
   // ---- 更多示例（取消注释即可登记）----
   // { key: 'ground-diffuse', type: 'ktx2', url: 'assets/textures/ground-diffuse.ktx2', group: 's1', optional: true },
-  // { key: 'sfx-footstep', type: 'audio', url: 'assets/audio/sfx-footstep.ogg', group: 'common', optional: true },
 ];
 
 export function entriesForGroup(group: string): AssetEntry[] {

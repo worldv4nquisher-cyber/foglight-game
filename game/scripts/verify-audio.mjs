@@ -7,6 +7,9 @@ import { AudioSystem } from '@/systems/AudioSystem';
 import { EventBus } from '@/core/EventBus';
 import { bindSfxFallback } from '@/systems/tide/tideScene';
 import { gameplay } from '@/config/gameplay';
+import { SfxBank, SFX_ALIASES, sfxGain, STEP_SURFACES } from '@/systems/audio/sfxBank';
+import { manifest } from '@/assets/manifest';
+import { existsSync } from 'node:fs';
 
 class FakeParam {
   constructor(v = 1) {
@@ -267,6 +270,69 @@ test('sfx:play optional（032 补音，如钟锤 sfx-tide-bell-clapper）：有�
   ev.emit('sfx:play', { id: 'sfx-tide-bell' });
   assert.equal(ctx.sources.length, 3, '不带 optional 缺文件仍播合成占位');
   assert.equal(ctx.sources[2].kind, 'osc');
+  off();
+});
+
+test('032 登记：79 个 ogg 全在清单（sfx 59 / ambience 20，url = assets/art/audio/<类>/<名>.ogg，art 可缺省）；../art 在时文件都存在；分组 menu 只放 UI、common 不放场景专属', () => {
+  const au = manifest.filter((e) => e.type === 'audio');
+  assert.equal(au.length, 79);
+  assert.equal(au.filter((e) => e.url.includes('/audio/sfx/')).length, 59);
+  assert.equal(au.filter((e) => e.url.includes('/audio/ambience/')).length, 20);
+  for (const e of au) {
+    assert.equal(e.url, `assets/art/audio/${e.key.startsWith('amb-') ? 'ambience' : 'sfx'}/${e.key}.ogg`);
+    assert.ok(e.optional && e.art && !e.pending, e.key);
+    const f = new URL(`../../art/audio/${e.url.slice('assets/art/audio/'.length)}`, import.meta.url);
+    if (existsSync(new URL('../../art/audio/', import.meta.url))) assert.ok(existsSync(f), '缺文件 ' + e.key);
+  }
+  assert.deepEqual(au.filter((e) => e.group === 'menu').map((e) => e.key).sort(), ['sfx-ui-back', 'sfx-ui-confirm', 'sfx-ui-journal']);
+  for (const k of ['sfx-ignite-ready-loop', 'amb-room-clock', 'amb-waves-near', 'sfx-raft-lock']) assert.notEqual(au.find((e) => e.key === k).group, 'common', k);
+});
+
+test('032 SfxBank：旧 id 别名（README 对照表）→ 032 文件；a–d 变体随机、同一 id 不连续重复、只挑已加载的；gainDb → 线性增益；全缺返回 null', () => {
+  const keys = new Set(manifest.map((e) => e.key));
+  for (const [id, files] of Object.entries(SFX_ALIASES)) for (const f of files) assert.ok(keys.has(f), `${id} → ${f} 不在清单`);
+  assert.deepEqual(SFX_ALIASES['sfx-tide-bell'], ['sfx-tide-bell-ring']);
+  assert.deepEqual(SFX_ALIASES['sfx-lock-open'], ['sfx-light-lock-open']);
+  assert.deepEqual(SFX_ALIASES['sfx-glass-resonance'], ['sfx-beam-connect']);
+  assert.equal(SFX_ALIASES['sfx-bell-wind'].length, 3);
+  for (const s of STEP_SURFACES) assert.equal(SFX_ALIASES[`sfx-step-${s}`].length, 4);
+  const bufs = new Map([...keys].map((k) => [k, { k }]));
+  let i = 0;
+  const seq = [0, 0, 0.99, 0.99, 0.5, 0.5, 0.1, 0.1];
+  const bank = new SfxBank((k) => bufs.get(k), () => seq[i++ % seq.length]);
+  const picks = Array.from({ length: 8 }, () => bank.resolve('sfx-step-wood').key);
+  for (let j = 1; j < picks.length; j++) assert.notEqual(picks[j], picks[j - 1], '连续重复 ' + picks);
+  assert.equal(bank.resolve('sfx-tide-bell').key, 'sfx-tide-bell-ring');
+  // 只加载了 b → 只能挑 b（单个也不算重复）
+  const only = new SfxBank((k) => (k === 'sfx-paper-flip-b' ? {} : undefined));
+  assert.equal(only.resolve('sfx-paper-flip').key, 'sfx-paper-flip-b');
+  assert.equal(only.resolve('sfx-paper-flip').key, 'sfx-paper-flip-b');
+  assert.equal(only.resolve('sfx-step-sand'), null);
+  // 增益表：石面脚步 a −25.9 → 目标 −21：+4.9 dB；UI 返回 +1.2；长环境音不补
+  assert.ok(Math.abs(sfxGain('sfx-step-stone-a') - 10 ** (4.9 / 20)) < 1e-9);
+  assert.ok(Math.abs(sfxGain('sfx-ui-back') - 10 ** (1.2 / 20)) < 1e-9);
+  assert.equal(sfxGain('amb-room-clock'), 1);
+  assert.equal(sfxGain('sfx-ignite-ready-loop'), 1);
+  for (const e of manifest) if (e.gainDb !== undefined) assert.ok(e.gainDb > 0 && e.gainDb <= 8, e.key);
+});
+
+test('032 桥接：别名 / 增益走 SfxBank；没文件又没合成占位的新 id（脚步、环境音、UI）静默，不播 440 Hz 兜底', () => {
+  const ctx = new FakeContext();
+  const a = new AudioSystem(ctx);
+  const ev = new EventBus();
+  const ring = { duration: 10 };
+  const step = { duration: 0.45 };
+  const off = bindSfxFallback(ev, a, (k) => (k === 'sfx-tide-bell-ring' ? ring : k === 'sfx-step-stone-a' ? step : undefined));
+  ev.emit('sfx:play', { id: 'sfx-tide-bell' });
+  assert.equal(ctx.sources[0].buffer, ring, '旧 id sfx-tide-bell → sfx-tide-bell-ring');
+  ev.emit('sfx:play', { id: 'sfx-step-stone' });
+  assert.equal(ctx.sources[1].buffer, step);
+  assert.ok(Math.abs(ctx.sources[1].out[0].gain.value - 10 ** (4.9 / 20)) < 1e-9, '脚步补增益');
+  ev.emit('sfx:play', { id: 'sfx-step-sand' });
+  ev.emit('sfx:play', { id: 'sfx-ui-confirm' });
+  ev.emit('sfx:loop', { id: 'amb-rain-light' });
+  assert.equal(ctx.sources.length, 2, '新 id 缺文件静默');
+  assert.equal(a.isLooping('amb-rain-light'), false);
   off();
 });
 

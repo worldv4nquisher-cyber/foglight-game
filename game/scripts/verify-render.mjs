@@ -303,12 +303,12 @@ await test('美术回复 1030 塔门 prop-lighthouse-door-s3（合成）：到�
   return '塔门单独文件优先 / door-leaf 对合页 / -collider 隐藏 / 回退 020 / 白盒 ✓（-interact 暂未接：白盒站位不变）';
 });
 
-await test('钟锤补音（1030b 方案 A）：阈值缺省 0.055 rad、美术根 extras.clapperHitRad 优先；按 xi-ring-bell 完整敲一次（touch→ring 推 + 自由摆）缺省阈值下钟锤碰壁会响（1–2 次）、美术重建 GLB 根 0.0537 生效也会响、emit sfx:play optional sfx-tide-bell-clapper（缺文件静默、叠在主钟声上）、碰壁期间不连发；manifest 登记 pending', async () => {
+await test('钟锤补音（1030b 方案 A）：阈值缺省 0.055 rad、美术根 extras.clapperHitRad 优先；按 xi-ring-bell 完整敲一次（touch→ring 推 + 自由摆）缺省阈值下钟锤碰壁会响（1–2 次）、美术重建 GLB 根 0.0537 生效也会响、emit sfx:play optional sfx-tide-bell-clapper（缺文件静默、叠在主钟声上）、碰壁期间不连发；manifest 登记（032 已交付）', async () => {
   const { TideBell, CLAPPER_SFX, readClapperHitRad, applyArtClapperHitRad } = await import('@/systems/tide/TideBell');
   const { xiEventSec } = await import('@/entities/xi/clips');
   assert.equal(CLAPPER_SFX, 'sfx-tide-bell-clapper');
   const e = manifest.find((x) => x.key === CLAPPER_SFX);
-  assert.ok(e && e.type === 'audio' && e.optional && e.pending && e.url.endsWith('audio/sfx/sfx-tide-bell-clapper.ogg'), 'manifest 登记钟锤补音（pending）');
+  assert.ok(e && e.type === 'audio' && e.optional && !e.pending && e.url.endsWith('audio/sfx/sfx-tide-bell-clapper.ogg'), 'manifest 登记钟锤补音（032 已交付，不再 pending）');
   const b = gameplay.tide.bell;
   assert.equal(b.clapperHitRad, 0.055, '缺省阈值 0.055');
   assert.equal(b.freeAmp, 0.2, '摆幅 0.2 不变');
