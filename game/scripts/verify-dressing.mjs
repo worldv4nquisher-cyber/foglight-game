@@ -2,7 +2,7 @@
 //   1. 027 交付的 GLB / 贴图都在 manifest 里（url 指向的文件存在，有 ../art 时）
 //   2. 植被：无 COLOR_0 / TEXCOORD_1，extras outline:false；海鸟 seabird-flap 0.6 s + morph flap-up / flap-down
 //   3. mountDressing：socket 优先 / layout 回退、白盒换载体材质（不隐藏子节点、不描边）、变体切显示、桌面实测吸附、GLB extras 倒扣姿态
-//   4. 脚印贴花：中心 = reefPath[2]，脚尖（−V）沿小径方向，坡度跟路面；白盒暗斑被贴花覆盖的标记
+//   4. 脚印贴花（033）：路径 json = 美术原件，4 块 T1–T4 按 json 摆、脚尖沿走向、roughness 0.65；字幕触发区两两不重叠
 //   5. 海鸟：间歇出现、扇翅 / 滑翔交替，朝向 = 切向
 // 运行：node --import ./scripts/register-ts-paths.mjs scripts/verify-dressing.mjs
 import assert from 'node:assert/strict';
@@ -12,7 +12,9 @@ import { fileURLToPath } from 'node:url';
 import * as THREE from 'three';
 import { manifest as MANIFEST } from '@/assets/manifest';
 import { mountDressing } from '@/levels/dressing';
-import { buildS1Dressing, FOOTPRINT_DECAL_KEY, s1DressingSpecs } from '@/levels/s1/dressing';
+import { buildS1Dressing, FOOTPRINT_DECAL_KEY, FOOTPRINT_DECAL_ROUGHNESS, FOOTPRINT_DECAL_SIZE, s1DressingSpecs } from '@/levels/s1/dressing';
+import { FOOTPRINT_TILES, footprintsMonoZone } from '@/levels/s1/footprints';
+import { s1SubtitleZones } from '@/levels/s1/subtitleZones';
 import { s2DressingSpecs } from '@/levels/s2/dressing';
 import { s3DressingSpecs } from '@/levels/s3/dressing';
 import { S1 } from '@/levels/s1/layout';
@@ -192,34 +194,100 @@ await test('S2 / S3 摆位规格：日志合 / 开两版、纸 B 不加 rotX、�
   return 'ok';
 });
 
-await test('脚印贴花：中心 reefPath[2]，脚尖沿小径（reefPath[1]→[3]），坡度跟路面；覆盖范围内白盒暗斑打标记', () => {
+await test('033 脚印路径：footprints-path.json = 美术原件（逐字节），4 块 T1–T4 首尾相接、每块 2 m、yaw = 走向，和美术给的参考值一致', () => {
+  const mine = readFileSync(resolve(ROOT, 'src/levels/s1/footprints-path.json'));
+  if (hasArt) assert.ok(mine.equals(readFileSync(resolve(ART, 'models/props/preview/033-footprints-path.json'))), 'src/levels/s1/footprints-path.json 和 art/models/props/preview/033-footprints-path.json 不一致，重新拷一份');
+  assert.equal(FOOTPRINT_TILES.length, 4);
+  // 美术 033 交付消息里的参考值（只在这里核对，代码里不写）
+  const REF = [[2.914, 0.119, 4.272, 0.9482], [4.608, 0.116, 5.331, 1.0499], [6.304, 0.114, 6.389, 0.9619], [7.882, 0.112, 7.615, 0.8414]];
+  FOOTPRINT_TILES.forEach((t, i) => {
+    assert.equal(t.id, 'T' + (i + 1));
+    const [x, y, z, yaw] = REF[i];
+    assert.ok(Math.abs(t.center[0] - x) < 1e-6 && Math.abs(t.center[1] - y) < 1e-6 && Math.abs(t.center[2] - z) < 1e-6 && Math.abs(t.yaw - yaw) < 1e-6, t.id + ' 和参考值不一致');
+    const dx = t.to[0] - t.from[0], dz = t.to[1] - t.from[1];
+    assert.ok(Math.abs(Math.hypot(dx, dz) - FOOTPRINT_DECAL_SIZE[1]) < 0.01, t.id + ' 长度不是 2 m');
+    assert.ok(Math.abs(Math.atan2(dx, dz) - t.yaw) < 1e-3, t.id + ' yaw ≠ from→to 走向');
+    assert.ok(Math.abs((t.from[0] + t.to[0]) / 2 - t.center[0]) < 0.03 && Math.abs((t.from[1] + t.to[1]) / 2 - t.center[2]) < 0.03, t.id + ' 中心离 from / to 中点超过 3 cm（路径是曲线，允许弦中点偏一点）');
+    if (i) assert.deepEqual(t.from, FOOTPRINT_TILES[i - 1].to, t.id + ' 没和上一块首尾相接');
+    // 高度 = 沙面（sandY 0.1）上方一点点，不是小径板高度（旧射线 0.38–0.54）
+    assert.ok(t.center[1] > S1.sandY - 0.01 && t.center[1] < S1.sandY + 0.03, t.id + ' 高度 ' + t.center[1]);
+  });
+  // 不压礁石踏石：踏石中心到每块贴花矩形的距离 ≥ 1 m
+  for (const t of FOOTPRINT_TILES) for (const [px, , pz] of S1.reefPath) {
+    const s = Math.sin(t.yaw), c = Math.cos(t.yaw);
+    const rx = px - t.center[0], rz = pz - t.center[2];
+    const u = rx * s + rz * c, v = rx * c - rz * s; // u 沿走向，v 横向
+    const d = Math.hypot(Math.max(0, Math.abs(u) - FOOTPRINT_DECAL_SIZE[1] / 2), Math.max(0, Math.abs(v) - FOOTPRINT_DECAL_SIZE[0] / 2));
+    assert.ok(d >= 1, `${t.id} 离踏石 (${px}, ${pz}) 只有 ${d.toFixed(2)} m`);
+  }
+  return FOOTPRINT_TILES.map((t) => `${t.id} (${t.center.join(', ')}) yaw ${t.yaw}`).join('；');
+});
+
+await test('033 脚印贴花：4 块 1 × 2 m 挂在 json 坐标（y 直接用、不打射线），rotation (0, yaw, 0, YXZ)，脚尖（−V）沿走向，roughness 0.65，共用几何 / 材质', () => {
   const scene = new THREE.Scene();
-  const p = S1.reefPath;
-  const dir = new THREE.Vector3(...p[3]).sub(new THREE.Vector3(...p[1])).setY(0).normalize();
-  const c = new THREE.Vector3(...p[2]);
-  const slope = 0.1; // 沿走向每米升 0.1
-  const ground = (x, z) => c.y + ((x - c.x) * dir.x + (z - c.z) * dir.z) * slope;
-  const near = new THREE.Object3D();
-  near.position.set(c.x + dir.x * 0.4, 0, c.z + dir.z * 0.4);
-  const farFp = new THREE.Object3D();
-  farFp.position.set(c.x + 5, 0, c.z + 5);
-  const d = buildS1Dressing(fakeAssets({ has: (k) => k === FOOTPRINT_DECAL_KEY }), scene, ground, { greyboxFootprints: [near, farFp] });
+  const d = buildS1Dressing(fakeAssets({ has: (k) => k === FOOTPRINT_DECAL_KEY }), scene);
   assert.ok(d.decal, '没有贴花');
+  assert.equal(d.decal.name, 's1-footprints-decal');
+  assert.equal(d.decal.parent, scene);
+  assert.equal(d.decals.length, 4);
   assert.equal(d.seabird, null);
-  d.decal.updateMatrixWorld(true);
-  const toe = new THREE.Vector3(0, 0, 1).transformDirection(d.decal.matrixWorld); // 局部 +Z = 纹理 −V = 脚尖
-  assert.ok(toe.clone().setY(0).normalize().dot(dir) > 0.999, '脚尖方向不对');
-  assert.ok(Math.abs(toe.y / Math.hypot(toe.x, toe.z) - slope) < 0.01, '坡度不对 ' + toe.y);
-  const n = new THREE.Vector3(0, 1, 0).transformDirection(d.decal.matrixWorld);
-  assert.ok(n.y > 0.99, '贴花法线应朝上');
-  assert.ok(Math.abs(d.decal.position.x - c.x) < 1e-6 && Math.abs(d.decal.position.z - c.z) < 1e-6);
-  assert.ok(d.decal.position.y > c.y && d.decal.position.y - c.y < 0.03, '贴花应略高于路面');
-  assert.equal(near.userData.replacedByDecal, true);
-  assert.notEqual(farFp.userData.replacedByDecal, true);
-  const m = d.decal.material;
+  scene.updateMatrixWorld(true);
+  d.decals.forEach((m, i) => {
+    const t = FOOTPRINT_TILES[i];
+    assert.equal(m.name, 's1-footprints-decal-' + t.id);
+    assert.deepEqual(m.position.toArray(), [...t.center], t.id + ' 位置');
+    assert.equal(m.rotation.order, 'YXZ');
+    assert.ok(m.rotation.x === 0 && m.rotation.z === 0 && m.rotation.y === t.yaw, t.id + ' 旋转');
+    const toe = new THREE.Vector3(0, 0, 1).transformDirection(m.matrixWorld); // 局部 +Z = 纹理 −V = 脚尖
+    assert.ok(Math.abs(toe.x - Math.sin(t.yaw)) < 1e-9 && Math.abs(toe.z - Math.cos(t.yaw)) < 1e-9 && Math.abs(toe.y) < 1e-9, t.id + ' 脚尖方向不对');
+    assert.ok(new THREE.Vector3(0, 1, 0).transformDirection(m.matrixWorld).y > 0.9999, t.id + ' 法线应朝上');
+    m.geometry.computeBoundingBox();
+    const sz = m.geometry.boundingBox.getSize(new THREE.Vector3());
+    assert.ok(Math.abs(sz.x - 1) < 1e-9 && Math.abs(sz.z - 2) < 1e-9, t.id + ' 尺寸 ' + sz.toArray());
+    assert.equal(m.geometry, d.decals[0].geometry);
+    assert.equal(m.material, d.decals[0].material);
+  });
+  const m = d.decals[0].material;
   assert.ok(m.transparent && !m.depthWrite && m.polygonOffset);
+  assert.equal(m.roughness, FOOTPRINT_DECAL_ROUGHNESS);
+  assert.equal(FOOTPRINT_DECAL_ROUGHNESS, 0.65);
   d.dispose();
-  return `朝向 ${Math.atan2(dir.x, dir.z).toFixed(3)} rad`;
+  assert.equal(d.decal.parent, null);
+  // 没贴图：不建
+  const d0 = buildS1Dressing(fakeAssets({ has: () => false }), new THREE.Scene());
+  assert.equal(d0.decal, null);
+  assert.equal(d0.decals.length, 0);
+  return '4 块 ✓';
+});
+
+await test('033 字幕触发区：「比我的脚印大」在 T2 中心 r 1.4，和 S1 其他独白 / 目标触发区两两不重叠（XZ）', () => {
+  const fz = footprintsMonoZone();
+  const t2 = FOOTPRINT_TILES[1];
+  assert.ok(fz.x === t2.center[0] && fz.z === t2.center[2] && fz.r === 1.4);
+  const zones = s1SubtitleZones();
+  const fp = zones.find((z) => z.id === 'ch1.s1.footprints.mono');
+  assert.ok(fp && fp.shape.kind === 'circle' && fp.shape.x === fz.x && fp.shape.z === fz.z && fp.shape.r === fz.r);
+  assert.ok(zones.some((z) => z.id === 'ch1.s1.goal.cross_channel'), '缺小径尽头');
+  const gap = (a, b) => {
+    if (a.kind === 'box' && b.kind === 'circle') return gap(b, a);
+    if (a.kind === 'circle' && b.kind === 'circle') return Math.hypot(a.x - b.x, a.z - b.z) - a.r - b.r;
+    if (a.kind === 'circle') {
+      const dx = Math.max(b.min[0] - a.x, 0, a.x - b.max[0]), dz = Math.max(b.min[1] - a.z, 0, a.z - b.max[1]);
+      return Math.hypot(dx, dz) - a.r;
+    }
+    const dx = Math.max(b.min[0] - a.max[0], a.min[0] - b.max[0]), dz = Math.max(b.min[1] - a.max[1], a.min[1] - b.max[1]);
+    return Math.max(dx, dz);
+  };
+  const out = [];
+  for (let i = 0; i < zones.length; i++) for (let j = i + 1; j < zones.length; j++) {
+    const g = gap(zones[i].shape, zones[j].shape);
+    assert.ok(g > 0, `${zones[i].id} 和 ${zones[j].id} 重叠（间隙 ${g.toFixed(2)} m）`);
+    if (zones[i].id === 'ch1.s1.footprints.mono' || zones[j].id === 'ch1.s1.footprints.mono') out.push(`${zones[i].id === 'ch1.s1.footprints.mono' ? zones[j].id : zones[i].id} ${g.toFixed(2)} m`);
+  }
+  // 旧放法（T1 中心）会和小径尽头重叠：断言能抓到
+  const t1 = FOOTPRINT_TILES[0];
+  assert.ok(gap({ kind: 'circle', x: t1.center[0], z: t1.center[2], r: 1.4 }, { kind: 'circle', x: S1.reefPathEnd[0], z: S1.reefPathEnd[2], r: S1.reefPathEndRadius }) < 0, '自检：T1 处应与小径尽头重叠');
+  return '脚印独白间隙：' + out.join('，');
 });
 
 await test('海鸟：间歇出现（每 period 秒飞 arc 弧度），扇翅 / 滑翔交替，朝向切向', () => {

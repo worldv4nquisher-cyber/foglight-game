@@ -3,10 +3,12 @@ import type { AssetLoader } from '@/assets/AssetLoader';
 import { mountDressing, type DressingSpec, type MountedDressing } from '../dressing';
 import { Seabird, SEABIRD_KEY } from '@/world/Seabird';
 import { S1, pierPoint } from './layout';
+import { FOOTPRINT_TILES } from './footprints';
 
-/** 027 脚印贴花（512 × 1024 RGBA，覆盖 1 × 2 m，沿 V 平铺；4 步，步距 0.5 m，脚尖朝 −V） */
+/** 027 / 033 脚印贴花（512 × 1024 RGBA，覆盖 1 × 2 m，沿 V 平铺；4 步，步距 0.5 m，脚尖朝 −V） */
 export const FOOTPRINT_DECAL_KEY = 'tex-decal-footprints-albedo';
 export const FOOTPRINT_DECAL_SIZE: readonly [number, number] = [1, 2];
+export const FOOTPRINT_DECAL_ROUGHNESS = 0.65;
 
 /** S1 剧情物件（README-027 建议摆放；坐标全部取自 layout / 白盒交互物） */
 export function s1DressingSpecs(): DressingSpec[] {
@@ -21,28 +23,25 @@ export function s1DressingSpecs(): DressingSpec[] {
 
 export interface S1Dressing {
   mounted: MountedDressing[];
-  decal: THREE.Mesh | null;
+  /** 033 贴花组（s1-footprints-decal，子网格 T1–T4，共用几何 / 材质）；没有贴图时 null */
+  decal: THREE.Group | null;
+  decals: THREE.Mesh[];
   seabird: Seabird | null;
   update(dt: number): void;
   dispose(): void;
 }
 
 /**
- * S1 027 接入：告示牌 / 纸条（挂白盒交互物下）、礁石小径脚印贴花（reefPath[2] 处，沿小径方向，贴物理路面）、远景海鸟。
- * groundY(x, z) = 物理路面高度（没打中 null）。
+ * S1 027 接入：告示牌 / 纸条（挂白盒交互物下）、脚印贴花（033：小径尽头 → 浮台的湿沙上 4 块，读 footprints-path.json）、远景海鸟。
+ * 白盒脚印暗斑不在这里管：美术模式下由 S1Scene.setGreyboxVisible 整组隐藏。
  */
-export function buildS1Dressing(assets: AssetLoader, scene: THREE.Object3D, groundY: (x: number, z: number) => number | null, opts: { showGreybox?: boolean; greyboxFootprints?: readonly THREE.Object3D[] } = {}): S1Dressing {
+export function buildS1Dressing(assets: AssetLoader, scene: THREE.Object3D, opts: { showGreybox?: boolean } = {}): S1Dressing {
   const mounted = mountDressing(assets, scene, s1DressingSpecs(), opts);
 
-  let decal: THREE.Mesh | null = null;
+  // 033：4 块 1 × 2 m 贴花 T1–T4，沿湿沙从小径尽头走向浮台（坐标 / yaw / 高度全读 footprints-path.json）
+  let decal: THREE.Group | null = null;
+  const decals: THREE.Mesh[] = [];
   if (assets.has(FOOTPRINT_DECAL_KEY)) {
-    const p = S1.reefPath;
-    const c = new THREE.Vector3(...p[2]!);
-    // 走向：小径上一块 → 下一块（父亲往尽头走），脚尖朝 −V
-    const dir = new THREE.Vector3(...p[3]!).sub(new THREE.Vector3(...p[1]!)).setY(0).normalize();
-    const half = FOOTPRINT_DECAL_SIZE[1] / 2;
-    const yAt = (s: number): number => groundY(c.x + dir.x * s, c.z + dir.z * s) ?? c.y;
-    const y0 = yAt(-half * 0.8), y1 = yAt(half * 0.8), yc = yAt(0);
     const tex = assets.getTexture(FOOTPRINT_DECAL_KEY);
     const mat = new THREE.MeshStandardMaterial({
       name: 'decal-footprints',
@@ -52,24 +51,27 @@ export function buildS1Dressing(assets: AssetLoader, scene: THREE.Object3D, grou
       polygonOffset: true,
       polygonOffsetFactor: -2,
       polygonOffsetUnits: -2,
-      roughness: 0.95,
+      // 033：0.95 → 0.65，脚跟积水有一点湿反光
+      roughness: FOOTPRINT_DECAL_ROUGHNESS,
       metalness: 0,
     });
     const g = new THREE.PlaneGeometry(FOOTPRINT_DECAL_SIZE[0], FOOTPRINT_DECAL_SIZE[1]);
     // 平面局部 +Y = 纹理 +V；放倒后 −V（脚尖）→ 世界 +Z，再转到走向
     g.rotateX(-Math.PI / 2);
-    decal = new THREE.Mesh(g, mat);
+    decal = new THREE.Group();
     decal.name = 's1-footprints-decal';
-    decal.renderOrder = 1;
-    decal.receiveShadow = true;
-    decal.position.set(c.x, Math.max(yc, (y0 + y1) / 2) + 0.015, c.z);
-    decal.rotation.set(-Math.atan2(y1 - y0, half * 1.6), Math.atan2(dir.x, dir.z), 0, 'YXZ');
-    scene.add(decal);
-    // 白盒脚印暗斑：贴花覆盖范围内的隐藏（其余小径段保留）
-    for (const f of opts.greyboxFootprints ?? []) {
-      const d = Math.hypot(f.position.x - c.x, f.position.z - c.z);
-      if (d < half + 0.2) f.userData.replacedByDecal = true;
+    for (const t of FOOTPRINT_TILES) {
+      const m = new THREE.Mesh(g, mat);
+      m.name = `s1-footprints-decal-${t.id}`;
+      m.renderOrder = 1;
+      m.receiveShadow = true;
+      // 高度直接用 json 的 y（美术地面 + 0.015），不打物理射线
+      m.position.set(...t.center);
+      m.rotation.set(0, t.yaw, 0, 'YXZ');
+      decal.add(m);
+      decals.push(m);
     }
+    scene.add(decal);
   }
 
   let seabird: Seabird | null = null;
@@ -80,15 +82,16 @@ export function buildS1Dressing(assets: AssetLoader, scene: THREE.Object3D, grou
   return {
     mounted,
     decal,
+    decals,
     seabird,
     update(dt) {
       seabird?.update(dt);
     },
     dispose() {
       seabird?.dispose();
-      if (decal) {
-        decal.geometry.dispose();
-        (decal.material as THREE.Material).dispose();
+      if (decal && decals[0]) {
+        decals[0].geometry.dispose();
+        (decals[0].material as THREE.Material).dispose();
         decal.removeFromParent();
       }
     },

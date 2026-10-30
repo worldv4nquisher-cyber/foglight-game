@@ -99,7 +99,7 @@ for (const sc of SCENES.filter((x) => !only || x.name.startsWith(only))) {
       return { iid, focus: f.toArray().map((v) => +v.toFixed(3)), fromArt: !!node && node.getWorldPosition(f.clone()).distanceTo(f) < 1e-4 };
     });
     out.carriers = []; s.scene.traverse((o) => { if (o.userData.dressingCarrier) out.carriers.push(o.name + (o.material.visible ? ' 可见!' : '')); });
-    if (s.dressing?.decal) { const d = s.dressing.decal; out.decal = { pos: d.position.toArray().map((v) => +v.toFixed(3)), rot: [d.rotation.x, d.rotation.y].map((v) => +v.toFixed(3)), map: !!d.material.map }; }
+    if (s.dressing?.decals?.length) out.decal = s.dressing.decals.map((d) => ({ name: d.name, pos: d.position.toArray().map((v) => +v.toFixed(3)), rot: [d.rotation.x, d.rotation.y].map((v) => +v.toFixed(3)), map: !!d.material.map, roughness: d.material.roughness }));
     if (s.dressing && 'seabird' in s.dressing) out.seabird = s.dressing.seabird ? { visible: s.dressing.seabird.object.visible, action: !!s.dressing.seabird.action, morph: (() => { let n = 0; s.dressing.seabird.object.traverse((o) => o.morphTargetInfluences && n++); return n; })() } : null;
     return out;
   })()`);

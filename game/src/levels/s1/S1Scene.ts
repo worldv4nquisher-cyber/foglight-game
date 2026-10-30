@@ -80,7 +80,8 @@ export class S1Scene extends LevelScene {
   /** 白盒外观开关（碰撞不受影响；空气墙始终不可见） */
   setGreyboxVisible(on: boolean): void {
     for (const m of this.greybox.colliders) m.visible = on;
-    for (const d of this.greybox.decor) d.visible = (on || /footprint/.test(d.name)) && !(d.userData.replacedByDecal && !greyboxVisible);
+    // 033：白盒脚印暗斑 s1-footprint-* 跟其他白盒外观一起开关（美术模式下全部隐藏：它们在小径板高度，美术地面上是悬空的深色方块）
+    for (const d of this.greybox.decor) d.visible = on;
   }
 
   protected override buildInteractables(): void {
@@ -108,18 +109,8 @@ export class S1Scene extends LevelScene {
     snapToArt(this.artSlots, 'prop-raft-s1', 'prop-raft-s1-interact', this.puzzles.raftPush.interactPoint);
     this.artSlotGreyboxMissing = missingGreyboxNodes(this.scene, S1_ART_SLOTS);
     if (this.artSlotGreyboxMissing.length) console.warn('[art-slot] 白盒节点名对不上：' + this.artSlotGreyboxMissing.join('、'));
-    // 027：告示牌 / 纸条挂白盒交互物下（焦点改读美术 -interact），脚印贴花贴物理路面，远景海鸟
-    const down = new THREE.Vector3(0, -1, 0);
-    const from = new THREE.Vector3();
-    this.dressing = buildS1Dressing(
-      this.game.assets,
-      this.scene,
-      (x, z) => {
-        const d = this.physics.raycast(from.set(x, 3, z), down, 6);
-        return d === null ? null : 3 - d;
-      },
-      { showGreybox: greyboxVisible, greyboxFootprints: this.greybox.decor.filter((d) => /footprint/.test(d.name)) },
-    );
+    // 027：告示牌 / 纸条挂白盒交互物下（焦点改读美术 -interact）、远景海鸟；033 脚印贴花 T1–T4 读 footprints-path.json
+    this.dressing = buildS1Dressing(this.game.assets, this.scene, { showGreybox: greyboxVisible });
     this.cleanups.push(() => this.dressing?.dispose());
     const noticeFocus = interactNode(this.dressing.mounted.find((m) => m.id === 'prop-notice-board-s1'));
     if (noticeFocus) this.interaction.get('s1-notice')?.setFocus(noticeFocus);

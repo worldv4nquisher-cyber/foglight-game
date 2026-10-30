@@ -14,6 +14,7 @@ import type { EntityManager } from '@/entities/EntityManager';
 import type { TextId } from '@/content/text';
 import { S1, pierPoint, s1StepLinks, v3 } from './layout';
 import { BellWindTimer } from '@/systems/audio/bellWind';
+import { BELL_HEAR_DISTANCE, s1SubtitleCircle } from './subtitleZones';
 
 /** 谜题 / 提示 / 交互 id（提示系统二级高亮、smoke 都按这些找） */
 export const S1_IDS = {
@@ -25,8 +26,7 @@ export const S1_IDS = {
   p2: 's1-p2-raft',
 } as const;
 
-/** 潮汐钟「风吹轻响」的距离与间隔（sfx-bell-wind → 032 sfx-tide-bell-wind-a~c 随机；README 建议 6–14 s 一次，均匀随机） */
-const BELL_HEAR_DISTANCE = 12;
+/** 潮汐钟「风吹轻响」的间隔（sfx-bell-wind → 032 sfx-tide-bell-wind-a~c 随机；README 建议 6–14 s 一次，均匀随机）；距离 BELL_HEAR_DISTANCE 在 subtitleZones.ts */
 export { BELL_WIND_INTERVAL } from '@/systems/audio/bellWind';
 
 export interface S1PuzzleOptions {
@@ -272,8 +272,11 @@ export function buildS1Puzzles(o: S1PuzzleOptions): S1Puzzles {
   const tmpRaft = new THREE.Vector3();
   const canReset = (): boolean => !p2Solved && tide.state === 'low' && !tide.transitioning && raft.state === 'grounded';
   const raftMoved = (): boolean => raftPush.locked || raftPush.pushT > 1e-3 || raftRoot.position.distanceTo(home) > 0.05;
-  const inPathEnd = circleZone({ x: S1.reefPathEnd[0], z: S1.reefPathEnd[2] }, S1.reefPathEndRadius);
-  const inFootprints = circleZone({ x: S1.reefPath[2]![0], z: S1.reefPath[2]![2] }, 1.6);
+  // 小径尽头 / 脚印独白（033：T2 中心 r 1.4）：圆取自 s1SubtitleZones，verify-dressing 断言它们和其他字幕触发区不重叠
+  const pe = s1SubtitleCircle('ch1.s1.goal.cross_channel');
+  const inPathEnd = circleZone(pe, pe.r);
+  const fz = s1SubtitleCircle('ch1.s1.footprints.mono');
+  const inFootprints = circleZone(fz, fz.r);
   const N = S1.nearPlatform;
   const inChannelEdge = boxZone({ x: N.min[0], y: N.topY - 0.3, z: N.max[1] - 1.0 }, { x: N.max[0], y: N.topY + 1, z: N.max[1] + 0.1 });
   const ft = S1.farTrigger;
