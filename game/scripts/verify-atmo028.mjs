@@ -14,6 +14,8 @@ import { ATMO028 } from '@/config/atmosphere028';
 import { silhouetteColor } from '@/render/skyLayer';
 import { FogCards028 } from '@/world/FogCards028';
 import { Water } from '@/world/Water';
+import { Rain } from '@/world/Rain';
+import { LensDropletsEffect } from '@/render/LensDropletsEffect';
 import { applyLutCpu } from '@/render/LutEffect';
 import { inflateSync } from 'node:zlib';
 
@@ -249,7 +251,87 @@ await test('LUT：lut-identity 查表后像素不变（≤ 1/255），四张预�
   return `identity 最大误差 ${(maxErr * 255).toFixed(3)}/255；${sizes.length} 张预设 LUT`;
 });
 
-// ---- 雨（后续条目）
+// ---- 雨
+await test('雨：ultra/high 细长 quad（贴图、1–2.5 px 钳制 + 透明度守恒、普通 alpha），standard 1 px 线', () => {
+  const tex = () => new THREE.DataTexture(new Uint8Array(4), 1, 1);
+  const r = new Rain(46, 26, tex(), tex());
+  const want = { ultra: [30000, 0.24, 'quad'], high: [15000, 0.28, 'quad'], standard: [6000, 0.2, 'line'] };
+  for (const [tier, [n, op, mode]] of Object.entries(want)) {
+    assert.equal(ATMO028.rainTiers[tier].count, n, `${tier} 数量`);
+    r.setTier(tier, n);
+    assert.equal(r.mode, mode, `${tier} 形式`);
+    assert.equal(r.dropCount, n);
+    const m = mode === 'quad' ? r.quads.material : r.lines.material;
+    near(m.uniforms.uOpacity.value, op, 1e-9, `${tier} opacity`);
+    assert.equal(m.blending, THREE.NormalBlending, `${tier} 普通 alpha 混合`);
+    assert.equal(m.transparent, true);
+    assert.equal(m.depthWrite, false);
+    if (mode === 'quad') {
+      assert.equal(r.quads.visible, true);
+      assert.equal(r.lines.visible, false);
+      assert.equal(r.quads.geometry.instanceCount, n);
+      const w = m.uniforms.uW.value;
+      assert.deepEqual([w.y, w.z], [1, 2.5], `${tier} 像素钳制`);
+      const vs = m.vertexShader;
+      assert.match(vs, /clamp\(/, '宽度钳制');
+      assert.match(vs, /uW\.y/, '细于 minPx 时按覆盖率降 alpha');
+    } else {
+      assert.equal(r.lines.visible, true);
+      assert.equal(r.quads.visible, false);
+      assert.equal(r.lines.geometry.drawRange.count, n * 2);
+    }
+  }
+  // 贴图缺失（?art=0）：quad 档退回线段，透明度仍按档位
+  const bare = new Rain(46, 26, null, null);
+  bare.setTier('ultra', 30000);
+  assert.equal(bare.mode, 'line');
+  near(bare.lines.material.uniforms.uOpacity.value, 0.24, 1e-9);
+  return 'ultra 30k/0.24 quad · high 15k/0.28 quad · standard 6k/0.20 线';
+});
+
+await test('雨：溅水按 setGround 落点生成（序列帧 16 帧 @40 fps = 0.4 s），无落点不溅；预设关雨时不更新', () => {
+  const tex = () => new THREE.DataTexture(new Uint8Array(4), 1, 1);
+  const r = new Rain(46, 26, tex(), tex());
+  r.setTier('ultra', 30000);
+  r.applyAtmosphere(ATMOSPHERE_PRESETS['rain-night']);
+  assert.equal(r.visible, true);
+  const cam = new THREE.PerspectiveCamera();
+  cam.position.set(0, 3, 0);
+  // 无 ground：不溅
+  for (let i = 0; i < 10; i++) r.update(0.05, cam);
+  assert.equal(r.splashes.aliveCount(0.5), 0);
+  const ys = [];
+  r.setGround((x, z, fromY) => { ys.push(fromY); return x > 0 ? 1.5 : null; });
+  let t = 0.5;
+  for (let i = 0; i < 20; i++) { r.update(0.05, cam); t += 0.05; }
+  const alive = r.splashes.aliveCount(t);
+  const per = ATMO028.rainTiers.ultra.splash.perSecond;
+  // 约一半落点有地面；0.4 s 寿命 → 稳态 ≈ perSecond × 0.4 × 0.5
+  assert.ok(alive > per * 0.4 * 0.5 * 0.5 && alive < per * 0.4 * 0.5 * 1.6, `存活 ${alive}`);
+  assert.ok(ys.every((y) => near(y, 15, 1e-9) === undefined));
+  const a = r.splashes.geometry.getAttribute('aSpawn').array;
+  for (let i = 0; i < 1024; i++) if (a[i * 4 + 3] > 0.5) { near(a[i * 4 + 1], 1.505, 1e-6, '落点 y'); assert.ok(a[i * 4] > 0); }
+  // 关雨：不再生成
+  r.applyAtmosphere(ATMOSPHERE_PRESETS['overcast-dusk']);
+  assert.equal(r.visible, ATMOSPHERE_PRESETS['overcast-dusk'].rain.enabled);
+  return `稳态存活 ${alive} 个（perSecond ${per}）`;
+});
+
+await test('镜头水滴：仅 ultra 档配置、refraction 0.015、fadeIn 0.6 s；强度 0 = pass 关', () => {
+  const ld = ATMO028.rainTiers.ultra.lensDroplets;
+  assert.equal(ld.enabled, true);
+  assert.equal(ld.cutsceneOnly, true);
+  near(ld.refraction, 0.015, 1e-9);
+  near(ld.fadeIn, 0.6, 1e-9);
+  assert.equal(ATMO028.rainTiers.high.lensDroplets.enabled, false);
+  assert.equal(ATMO028.rainTiers.standard.lensDroplets.enabled, false);
+  const e = new LensDropletsEffect({ refraction: ld.refraction, tilesPerScreenH: ld.tilesPerScreenH });
+  e.setSize(1920, 1080);
+  near(e.uniforms.get('aspect').value, 16 / 9, 1e-9);
+  e.strength = 0.5;
+  assert.equal(e.strength, 0.5);
+  return 'ok';
+});
 
 
 let failed = 0;

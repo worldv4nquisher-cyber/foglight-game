@@ -18,6 +18,8 @@ import { N8AOPostPass } from 'n8ao';
 import type { AtmospherePreset } from '@/config/atmosphere';
 import type { QualityPreset } from '@/config/quality';
 import { LutEffect, prepareLutTexture } from './LutEffect';
+import { LensDropletsEffect } from './LensDropletsEffect';
+import { ATMO028 } from '@/config/atmosphere028';
 
 /** 调色 LUT 来源（Game 注入 AssetLoader；文件名 → manifest key = 去掉 .png） */
 export type LutSource = (key: string) => THREE.Texture | null;
@@ -36,6 +38,7 @@ function lutOverride(): string | null {
  *
  * v0.1-028：LUT 在色调映射之后（LutEffect 内部 linear → sRGB 查表 → linear）。LUT 生效时色相 / 饱和度 / 亮度 / 对比度置中性
  * （调色交给 LUT，避免调两遍）；LUT 缺失（?art=0）/ 画质档 lut 关 / ?lut=0 时回到预设 grade。
+ *     → EffectPass[ 028 镜头水滴（ultra 过场下雨才开） ]
  *     → EffectPass[ SMAA ]
  *
  * 参数来源：效果强度来自「气氛预设」(config/atmosphere.ts)，开关与质量来自画质档位(config/quality.ts)。
@@ -47,6 +50,10 @@ export class PostFX {
   private aoPass: N8AOPostPass | null = null;
   private gradePass: EffectPass | null = null;
   private smaaPass: EffectPass | null = null;
+  /** 028 镜头水滴（单独一个 pass：要按偏移采样画面；强度 0 时关掉） */
+  private lensPass: EffectPass | null = null;
+  private lens: LensDropletsEffect | null = null;
+  private lensStrength = 0;
 
   private bloom: BloomEffect | null = null;
   private toneMapping: ToneMappingEffect | null = null;
@@ -129,6 +136,13 @@ export class PostFX {
     );
     this.composer.addPass(this.gradePass);
 
+    const ld = ATMO028.rainTiers.ultra.lensDroplets;
+    this.lens = new LensDropletsEffect({ refraction: ld.refraction, tilesPerScreenH: ld.tilesPerScreenH });
+    this.lens.map = this.lutSource?.(ATMO028.textures.lensDroplets) ?? null;
+    this.lensPass = new EffectPass(camera, this.lens);
+    this.composer.addPass(this.lensPass);
+    this.setLensDroplets(this.lensStrength);
+
     this.smaaPass = new EffectPass(camera, new SMAAEffect({ preset: SMAAPreset.HIGH }));
     this.composer.addPass(this.smaaPass);
 
@@ -166,6 +180,20 @@ export class PostFX {
   setLutSource(src: LutSource | null): void {
     this.lutSource = src;
     this.applyGrade();
+  }
+
+  /** 镜头水滴强度 0..1（场景按「ultra + 过场 + 下雨」带 fadeIn 驱动）；贴图缺失时始终关 */
+  setLensDroplets(strength: number): void {
+    this.lensStrength = strength;
+    if (!this.lens || !this.lensPass) return;
+    if (!this.lens.map) this.lens.map = this.lutSource?.(ATMO028.textures.lensDroplets) ?? null;
+    const on = strength > 0.001 && !!this.lens.map;
+    this.lens.strength = on ? strength : 0;
+    this.lensPass.enabled = on;
+  }
+
+  get lensDroplets(): number {
+    return this.lensPass?.enabled ? this.lensStrength : 0;
   }
 
   /** 当前生效的 LUT key（null = 没用 LUT，走预设 grade） */
@@ -227,8 +255,9 @@ export class PostFX {
 
   private disposePasses(): void {
     this.composer.removeAllPasses();
-    for (const p of [this.renderPass, this.aoPass, this.gradePass, this.smaaPass]) p?.dispose();
-    this.renderPass = this.aoPass = this.gradePass = this.smaaPass = null;
+    for (const p of [this.renderPass, this.aoPass, this.gradePass, this.lensPass, this.smaaPass]) p?.dispose();
+    this.renderPass = this.aoPass = this.gradePass = this.lensPass = this.smaaPass = null;
+    this.lens = null;
     this.bloom = this.toneMapping = this.hueSat = this.brightContrast = this.vignette = this.noise = this.lutEffect = null;
   }
 

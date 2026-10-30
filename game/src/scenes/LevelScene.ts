@@ -13,8 +13,8 @@ import type { CameraKey } from '@/systems/camera/CameraTrack';
 import { InteractionSystem, actorFromRig } from '@/systems/interaction/InteractionSystem';
 import { SkyDome, SKY_CLOUDS_KEY } from '@/world/SkyDome';
 import { Water, WATER_NORMAL_KEY, RAIN_RIPPLE_KEY } from '@/world/Water';
-import { ATMO028 } from '@/config/atmosphere028';
-import { Rain } from '@/world/Rain';
+import { ATMO028, type Atmo028Tier } from '@/config/atmosphere028';
+import { Rain, RAIN_STREAK_KEY, RAIN_SPLASH_KEY } from '@/world/Rain';
 import { applyLodDistances } from '@/render/lod';
 import { applySkyLayerAtmosphere, type SkyLayerHandle } from '@/render/skyLayer';
 import type { ObjectFogHandle } from '@/render/objectFog';
@@ -70,6 +70,11 @@ export abstract class LevelScene extends BaseScene {
   protected readonly farSilhouettes: Array<{ handle: SkyLayerHandle; fog: 'none' | 'mid' }> = [];
   /** 028 主岛 / 灯塔（fogLayer 'mid'）的按物体雾：密度按预设 fogDensityHint 覆盖 GLB extras */
   protected readonly midFogs: ObjectFogHandle[] = [];
+  private readonly viewSize = new THREE.Vector2();
+  private qualityTier: Atmo028Tier = 'high';
+  /** 028 镜头水滴：ultra + 下雨 + 过场（cutsceneOnly）才开，fadeIn 0.6 s；?lens=1 强制（截图 / 调试） */
+  private lensAmt = 0;
+  private readonly lensForced = typeof location !== 'undefined' && new URLSearchParams(location.search).get('lens') === '1';
   protected sun = new THREE.DirectionalLight();
   protected hemi = new THREE.HemisphereLight();
   interaction!: InteractionSystem;
@@ -284,7 +289,17 @@ export abstract class LevelScene extends BaseScene {
       const tex = (k: string): THREE.Texture | null => (this.game.assets.has(k) ? this.game.assets.getTexture(k) : null);
       this.water.setDetail(tex(WATER_NORMAL_KEY), tex(RAIN_RIPPLE_KEY));
       this.scene.add(this.water);
-      this.rain = new Rain();
+      // 028 雨：ultra / high 带贴图细长 quad、standard 1 px 线；溅水落点 = 物理射线（地面 / 礁石）与水面取高者
+      this.rain = new Rain(46, 26, tex(RAIN_STREAK_KEY), tex(RAIN_SPLASH_KEY));
+      const down = new THREE.Vector3(0, -1, 0);
+      const from = new THREE.Vector3();
+      this.rain.setGround((x, z, fromY) => {
+        const d = this.physics.raycast(from.set(x, fromY, z), down, 40);
+        const ground = d === null ? null : fromY - d;
+        const water = this.water ? this.water.level : null;
+        if (ground === null) return water;
+        return water === null ? ground : Math.max(ground, water);
+      });
       this.scene.add(this.rain);
     }
   }
@@ -345,7 +360,8 @@ export abstract class LevelScene extends BaseScene {
     const q = this.game.quality.preset;
     this.camera.far = q.viewDistance;
     this.camera.updateProjectionMatrix();
-    this.rain?.setCount(q.rainParticles.count);
+    this.rain?.setTier(q.tier, q.rainParticles.count);
+    this.qualityTier = q.tier;
     this.water?.setRipples(ATMO028.rainTiers[q.tier].ripples);
     // 阴影贴图尺寸 = §8 shadowType.mapSize（CSM 级数 / PCSS / 接触阴影在 023 做）；尺寸变了就丢掉旧贴图，下一帧按新尺寸重建
     const s = this.sun.shadow;
@@ -401,7 +417,11 @@ export abstract class LevelScene extends BaseScene {
     if (this.water && this.tides.primary) this.water.setLevel(this.tides.primary.level);
     this.water?.update(dt);
     for (const b of this.bells) b.update(dt);
-    this.rain?.update(dt, this.camera);
+    if (this.rain) {
+      this.rain.setViewHeight(this.game.renderer.getDrawingBufferSize(this.viewSize).y);
+      this.rain.update(dt, this.camera);
+    }
+    this.updateLensDroplets(dt);
     // 汐淋雨变湿（室外有雨）；室内（场景的 -indoor 触发体：S2 小屋 / 地窖、S3 塔内）/ 无雨慢慢干
     if (this.rig.look) this.rig.look.wetTarget = xiWetTarget(!!this.rain?.visible, this.rig.entity.object3D.position, this.cameraFollow.indoorVolumes);
     // 阴影相机跟随玩家（保证近处阴影精度），光照方向不变
@@ -411,12 +431,23 @@ export abstract class LevelScene extends BaseScene {
     this.sun.position.set(p.x + a.sunDirection[0], a.sunDirection[1], p.z + a.sunDirection[2]);
   }
 
+  private updateLensDroplets(dt: number): void {
+    const ld = ATMO028.rainTiers.ultra.lensDroplets;
+    const raining = !!this.rain?.visible && !this.cameraFollow.indoor;
+    const want = raining && this.qualityTier === 'ultra' && (this.lensForced || !ld.cutsceneOnly || this.cameraFollow.cutsceneName !== null);
+    const k = dt / ld.fadeIn;
+    this.lensAmt = want ? Math.min(1, this.lensAmt + k) : Math.max(0, this.lensAmt - k);
+    if (this.lensAmt > 0 || this.game.postfx.lensDroplets > 0) this.game.postfx.setLensDroplets(this.lensAmt);
+  }
+
   /** 角色位置（测试用） */
   get playerPosition(): THREE.Vector3 {
     return this.rig.body.position;
   }
 
   override exit(): void {
+    this.lensAmt = 0;
+    this.game.postfx.setLensDroplets(0);
     this.game.ui.hud.hide();
     this.game.ui.hud.setPrompt(null);
     this.game.ui.hud.setSecondaryPrompt(null);
