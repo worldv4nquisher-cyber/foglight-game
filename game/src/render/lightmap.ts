@@ -66,11 +66,11 @@ export const HEMI_IRRADIANCE_SRC = 'irradiance += getHemisphereLightIrradiance( 
 
 /** 把 three 的两个 chunk 改成 RGBM + 去半球光；chunk 原文变了（three 升级）抛错，不悄悄失效 */
 export function patchLightmapChunks(maps: string, begin: string): { maps: string; begin: string } {
-  if (!maps.includes(LIGHTMAP_SAMPLE_SRC)) throw new Error('[lightmap] three lights_fragment_maps 原文变了，RGBM 解码没替换上');
-  if (!begin.includes(HEMI_IRRADIANCE_SRC)) throw new Error('[lightmap] three lights_fragment_begin 原文变了，半球光没去掉');
+  if (!maps.includes(LIGHTMAP_SAMPLE_SRC)) throw new Error('[lightmap] three lights_fragment_maps chunk changed: RGBM decode not patched');
+  if (!begin.includes(HEMI_IRRADIANCE_SRC)) throw new Error('[lightmap] three lights_fragment_begin chunk changed: hemisphere irradiance not removed');
   return {
     maps: maps.replace(LIGHTMAP_SAMPLE_SRC, LIGHTMAP_SAMPLE_RGBM),
-    begin: begin.replace(HEMI_IRRADIANCE_SRC, '/* v0.1-029：烘焙对象不吃半球光（天光已在光照贴图里） */'),
+    begin: begin.replace(HEMI_IRRADIANCE_SRC, '/* v0.1-029: baked mesh, hemisphere light skipped (sky is in the lightmap) */'),
   };
 }
 
@@ -192,7 +192,7 @@ export function applySceneLightmaps(scene: THREE.Object3D, getTexture: (key: str
   const visit = (o: THREE.Object3D): void => {
     const ex = readLightmapExtras(o);
     if (ex) {
-      if (ex.encoding !== 'RGBM8') console.warn(`[lightmap] ${o.name}: 编码 ${ex.encoding} 不认识，按 RGBM8 解`);
+      if (ex.encoding !== 'RGBM8') console.warn(`[lightmap] ${o.name}: unknown encoding ${ex.encoding}, decoding as RGBM8`);
       const key = lightmapKey(ex.texture);
       const tex = getTexture(key);
       if (tex) {
