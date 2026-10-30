@@ -5,12 +5,13 @@ import type { ArtSlotSpec } from '../artSlots';
  * - 潮汐钟 prop-tide-bell（s3 组 key prop-tide-bell-s3，同一文件不缩放）：挂 env-rock-islet-a 的 tide-bell-s3-socket。
  * - 油阀 prop-oil-valve-s3：挂 oil-valve-s3-socket，`valve-wheel` 跟白盒手轮增量转。
  * - 窗口镜 prop-guide-mirror-window-s3：`-mirror-plane` 对齐白盒镜面；`mirror-yaw` / `mirror-pitch` 直接拷白盒 yaw / pitch。
- * - 导光镜 prop-guide-mirror-wall-s3 ×2：`-mirror-plane` 对齐；`mirror-pivot` 拷白盒 yaw（固定俯仰做在支架里）。
+ * - 导光镜 prop-guide-mirror-wall-s3-a / -b（1030b 拆两个文件，根原点 = 镜心、轴向 = S3 局部不旋转）：挂白盒组、`-mirror-plane` 对齐；
+ *   `mirror-pivot` 拷白盒 yaw（单轴；正解 ψ = 白盒 yaw.rotation.y，a 109.777° / b −70.755°）；`mirror-pitch` 固定俯仰烘在节点里，不转。
  * - 点火口 + 拉杆 prop-ignition-port-s3：挂 ignition-port-s3-socket，`-receiver` 对齐白盒受光点；`ignite-lever` 跟白盒拉杆增量转；
  *   白盒透镜保留（四态发光反馈，美术发光材质接程序前先用它）。
  */
 const wall = (k: 'a' | 'b'): ArtSlotSpec => ({
-  key: 'prop-guide-mirror-wall-s3',
+  key: `prop-guide-mirror-wall-s3-${k}`,
   id: `prop-guide-mirror-wall-s3-${k}`,
   at: [`guide-mirror-s3-mid-${k}`],
   align: { art: 'mirror-plane', logic: `guide-mirror-s3-mid-${k}-mirror-plane` },

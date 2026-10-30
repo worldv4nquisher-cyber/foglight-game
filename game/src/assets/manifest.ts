@@ -125,7 +125,9 @@ export const manifest: AssetEntry[] = [
   { key: 'prop-tide-bell-s3', type: 'gltf', url: 'assets/art/models/props/prop-tide-bell.glb', group: 's3', optional: true, art: true },
   { key: 'prop-oil-valve-s3', type: 'gltf', url: 'assets/art/models/props/prop-oil-valve-s3.glb', group: 's3', optional: true, art: true, pending: true },
   { key: 'prop-guide-mirror-window-s3', type: 'gltf', url: 'assets/art/models/props/prop-guide-mirror-window-s3.glb', group: 's3', optional: true, art: true, pending: true },
-  { key: 'prop-guide-mirror-wall-s3', type: 'gltf', url: 'assets/art/models/props/prop-guide-mirror-wall-s3.glb', group: 's3', optional: true, art: true, pending: true },
+  // 导光镜拆两个文件（美术 1030b 第 1 条）：a / b 各自镜心为原点、轴向 = S3 局部，mirror-pivot 单轴偏航
+  { key: 'prop-guide-mirror-wall-s3-a', type: 'gltf', url: 'assets/art/models/props/prop-guide-mirror-wall-s3-a.glb', group: 's3', optional: true, art: true, pending: true },
+  { key: 'prop-guide-mirror-wall-s3-b', type: 'gltf', url: 'assets/art/models/props/prop-guide-mirror-wall-s3-b.glb', group: 's3', optional: true, art: true, pending: true },
   { key: 'prop-ignition-port-s3', type: 'gltf', url: 'assets/art/models/props/prop-ignition-port-s3.glb', group: 's3', optional: true, art: true, pending: true },
   // ---- 032 音效（未交付，pending；到了自动加载，sfx:play / sfx:loop 按 key 取 buffer）
   // 钟锤碰壁补音（美术回复 1030）：TideBell 钟锤相对角到 clapperHitRad 时 sfx:play optional（缺失静默，可叠主钟声）

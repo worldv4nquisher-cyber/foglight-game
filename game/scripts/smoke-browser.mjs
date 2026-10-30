@@ -2341,6 +2341,32 @@ const CHECKS = [
       if (!s.art || keys.some((k) => !s.keys.includes(k)) || !s.door || s.gb) throw new Error('S3 美术件没加载全 / 白盒没隐藏 ' + JSON.stringify(s));
       if (s.warm || s.glow || s.on) throw new Error('S3 美术接入后点灯前不应有环境暖光 / 自发光 ' + JSON.stringify(s));
       out.push('art=1：020 六件 + 门扇挂合页、白盒隐藏、无暖光 ✓');
+      // 1030b 导光镜 a / b 两个文件：都挂上、约定节点齐；初始 / 正解两态美术镜面（位置 + 法线）= 白盒镜面
+      const gm = await evaluate(`(() => {
+        const s = __s3; const V = s.rig.body.position.constructor; const beam = s.puzzles.beam; const ms = s.artSlots?.mounted ?? []; const r = {};
+        const n = (o) => new V(0, 0, 1).transformDirection(o.matrixWorld);
+        for (const k of ['a', 'b']) {
+          const m = ms.find((x) => x.id === 'prop-guide-mirror-wall-s3-' + k);
+          if (!m) { r[k] = null; continue; }
+          let plane = null;
+          m.model.traverse((o) => { if (!plane && /mirror-plane$/.test(o.name)) plane = o; });
+          const rig = beam.mirrors[k]; const st = [];
+          for (const solved of [false, true]) {
+            if (solved) beam.solve(); else beam.reset();
+            s.artSlots.update(); s.scene.updateMatrixWorld(true);
+            st.push({ deg: (n(plane).angleTo(n(rig.plane)) * 180) / Math.PI, d: plane.getWorldPosition(new V()).distanceTo(rig.plane.getWorldPosition(new V())) });
+          }
+          beam.reset();
+          r[k] = { st, missing: m.missingNodes, parent: m.model.parent?.name, gbHidden: !rig.plane.visible };
+        }
+        return r;
+      })()`);
+      for (const k of ['a', 'b']) {
+        const g = gm[k];
+        if (!g) throw new Error(`art=1 导光镜 ${k}（prop-guide-mirror-wall-s3-${k}）没挂上 ` + JSON.stringify(gm));
+        if (g.missing.length || g.parent !== `guide-mirror-s3-mid-${k}` || !g.gbHidden || g.st.some((x) => x.deg > 0.05 || x.d > 0.005)) throw new Error(`art=1 导光镜 ${k} 不对 ` + JSON.stringify(g));
+      }
+      out.push(`art=1 导光镜 a / b 两个文件挂白盒组、初始 / 正解镜面 = 白盒（最大 ${Math.max(...['a', 'b'].flatMap((k) => gm[k].st.map((x) => x.deg))).toFixed(3)}°）✓`);
       await evaluate(`localStorage.removeItem('foglight.save.v1'); 1`);
       try { await cdp.goto(''); } catch (e) { throw new Error('回 S1 失败：' + e.message, { cause: e }); }
       return out.join('，');

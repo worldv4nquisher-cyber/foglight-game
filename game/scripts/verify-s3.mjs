@@ -255,6 +255,101 @@ const beam = buildS3Beam(ph, frameRoot);
   assert.ok(pv.end === 'blocker' && pt.distanceTo(new THREE.Vector3(...S3.points.skyPreviewTarget)) < 0.5, `天光预告应落在礁石 ${S3.points.skyPreviewTarget}，实际 ${pv.end} ${pt.toArray().map((v) => v.toFixed(2))}`);
 }
 
+// ---- 4b. 导光镜 a / b 美术文件（1030b 第 1 条）：挂白盒组、镜面对齐、mirror-pivot 拷白盒 yaw；正解角 / 固定俯仰 / 15° 档位与 015 白盒一致
+{
+  const { mountArtSlots, findNode } = await import('@/levels/artSlots');
+  const { S3_ART_SLOTS } = await import('@/levels/s3/artSlots');
+  const { manifest } = await import('@/assets/manifest');
+  const { gameplay } = await import('@/config/gameplay');
+  const { GLTFLoader } = await import('three/examples/jsm/loaders/GLTFLoader.js');
+  const { MeshoptDecoder } = await import('three/examples/jsm/libs/meshopt_decoder.module.js');
+  const ktx2Stub = { load: (_u, onLoad) => onLoad(new THREE.CompressedTexture([], 1, 1)) };
+  assert.ok(!manifest.some((e) => e.key === 'prop-guide-mirror-wall-s3'), '旧 key prop-guide-mirror-wall-s3 已拆掉');
+  const lines = [];
+  for (const k of ['a', 'b']) {
+    const key = `prop-guide-mirror-wall-s3-${k}`;
+    const e = manifest.find((x) => x.key === key);
+    assert.ok(e && e.group === 's3' && e.url === `assets/art/models/props/${key}.glb`, `manifest 登记 ${key}`);
+    const spec = S3_ART_SLOTS.find((x) => x.key === key);
+    assert.ok(spec && spec.id === key, `artSlots ${key}`);
+    const f = new URL(`../../art/models/props/${key}.glb`, import.meta.url);
+    if (!existsSync(f)) {
+      lines.push(`${k} 未交付`);
+      continue;
+    }
+    const buf = readFileSync(f);
+    const g = await new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).setKTX2Loader(ktx2Stub).parseAsync(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength), '');
+    const rootX = g.scene.children.find((o) => o.userData.name === key).userData;
+    const rig = beam.mirrors[k];
+    const L = S3.mirrors[k];
+    // 015 白盒：正解 sol[k]（15° 档的整数倍，初始 0 = 正解往回 sol 度）、固定俯仰、ψ = 白盒 yaw.rotation.y（正解时）
+    const sol = S3_BEAM.solution[k];
+    assert.equal(rig.part.stepDeg, gameplay.puzzle.stepDeg);
+    assert.equal(rig.part.stepDeg, 15, '导光镜 15° 档');
+    assert.equal(sol % 15, 0, `正解 ${sol}° 在 15° 档上`);
+    beam.solve();
+    frameRoot.updateMatrixWorld(true);
+    const yawNode = findNode(rig.root, `${L.id}-yaw`);
+    const pitchNode = findNode(rig.root, `${L.id}-pitch`);
+    const yawPsi = (o) => {
+      const v = new THREE.Vector3(0, 0, 1).applyQuaternion(o.quaternion);
+      return (Math.atan2(v.x, v.z) * 180) / Math.PI;
+    };
+    const psiGb = yawPsi(yawNode);
+    const angd = (x, y) => Math.abs(((x - y + 540) % 360) - 180);
+    assert.ok(angd(psiGb, rootX.solvedPsiDeg) < 0.01, `${k} 正解 ψ：白盒 ${psiGb.toFixed(3)} vs 美术 ${rootX.solvedPsiDeg}`);
+    assert.ok(angd(90 - rootX.artYawDeg, rootX.solvedPsiDeg) < 1e-6 && Math.abs(rootX.artYawDeg - L.artYawDeg) < 1e-6, `${k} ψ = 90 − artYawDeg、artYawDeg = layout`);
+    assert.ok(Math.abs(rootX.fixedPitchDeg - L.fixedPitchDeg) < 1e-6, `${k} 固定俯仰 = layout`);
+    const artPitch = findNode(g.scene, 'mirror-pitch');
+    near3([artPitch.rotation.x, 0, 0], [pitchNode.rotation.x, 0, 0], 1e-4, `${k} mirror-pitch 旋转 = 白盒 pitch`);
+    near3(rootX.mirrorCenterS3, L.center, 1e-6, `${k} 镜心`);
+    // 挂上：白盒组 guide-mirror-s3-mid-k（S3 局部、不旋转）
+    const slots = mountArtSlots({ has: (x) => x === key, getModel: () => g.scene }, frameRoot, [spec]);
+    assert.equal(slots.mounted.length, 1);
+    assert.deepEqual(slots.mounted[0].missingNodes, [], `${k} 约定节点齐`);
+    assert.equal(g.scene.parent, rig.root, `${k} 挂白盒组`);
+    const plane = findNode(g.scene, 'mirror-plane');
+    const nrm = (o) => new THREE.Vector3(0, 0, 1).transformDirection(o.matrixWorld);
+    const check = (tag) => {
+      slots.update();
+      frameRoot.updateMatrixWorld(true);
+      const d = plane.getWorldPosition(new THREE.Vector3()).distanceTo(rig.plane.getWorldPosition(new THREE.Vector3()));
+      assert.ok(d < 1e-3, `${k} ${tag} 镜心对齐 ${d}`);
+      const a = (nrm(plane).angleTo(nrm(rig.plane)) * 180) / Math.PI;
+      assert.ok(a < 0.01, `${k} ${tag} 镜面法线 = 白盒（差 ${a.toFixed(4)}°）`);
+      return d;
+    };
+    const dSol = check('正解');
+    // 美术镜面正解光路：上一镜心 → 美术镜面反射 → 下一目标的偏差
+    const from = k === 'a' ? S3.lightPath[1] : S3.lightPath[2];
+    const to = k === 'a' ? S3.lightPath[3] : S3.lightPath[4];
+    const at = plane.getWorldPosition(new THREE.Vector3());
+    const inDir = at.clone().sub(toWorld(from)).normalize();
+    const n = nrm(plane);
+    const out1 = inDir.clone().sub(n.clone().multiplyScalar(2 * inDir.dot(n)));
+    const miss = rayPointDist(at, out1, toWorld(to));
+    // 逐档：初始 0（= 正解 − sol）及每个 15° 档美术都跟白盒
+    for (let y = 0; y < 360; y += 15) {
+      rig.part.setAngle(0, y);
+      check(`${y}°`);
+    }
+    beam.reset();
+    check('初始');
+    const psi0 = yawPsi(findNode(g.scene, 'mirror-pivot'));
+    // 美术 -interact 与白盒站位（S3.points.platformA / B）
+    const ix = findNode(g.scene, 'interact').getWorldPosition(new THREE.Vector3());
+    const gbStand = toWorld(k === 'a' ? S3.points.platformA : S3.points.platformB);
+    const ixL = toLocal(ix);
+    beam.solve();
+    slots.update();
+    // 只验外观：拆掉挂上去的美术，不影响后面的白盒检查
+    g.scene.removeFromParent();
+    for (const m of rig.root.children) m.traverse((o) => o.isMesh && (o.visible = true));
+    lines.push(`导光镜 ${k}：正解 ψ 白盒 ${psiGb.toFixed(3)}° = 美术 ${rootX.solvedPsiDeg}°、固定俯仰 ${rootX.fixedPitchDeg}°、正解 ${sol}° / 15° 档 24 档美术法线都跟白盒（镜心差 ${(dSol * 1000).toFixed(2)} mm）、美术镜面反射离下一目标 ${(miss * 1000).toFixed(1)} mm、初始 ψ ${psi0.toFixed(3)}°；美术 -interact S3 局部 (${ixL.x.toFixed(3)}, ${ixL.y.toFixed(2)}, ${ixL.z.toFixed(3)}) 离白盒站位 ${ix.distanceTo(gbStand).toFixed(2)} m`);
+  }
+  out.push(lines.join('；'));
+}
+
 // ---- 5. 动线（世界坐标走路）
 function walk(ptsLocal, y0) {
   const b = new CharacterBody();
