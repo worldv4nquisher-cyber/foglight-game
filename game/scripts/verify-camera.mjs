@@ -7,7 +7,8 @@ import { gameplay } from '@/config/gameplay';
 import { EventBus } from '@/core/EventBus';
 import { InputManager } from '@/systems/input/InputManager';
 import { PhysicsSystem } from '@/systems/PhysicsSystem';
-import { CameraFollowSystem, CameraTrack, collectIndoorVolumes, cameraHeightCeiling } from '@/systems/CameraFollowSystem';
+import { CameraFollowSystem, CameraTrack, collectIndoorVolumes, cameraHeightCeiling, expandHeightCaps } from '@/systems/CameraFollowSystem';
+import { s2CameraHeightCaps, slopeY } from '@/levels/s2/layout';
 import { ViewpointTarget, viewAlignment } from '@/entities/components/ViewpointTarget';
 import { buildTestCourse } from '@/world/testCourse';
 
@@ -17,8 +18,8 @@ const DT = 1 / 60;
 const results = [];
 async function test(name, fn) {
   try {
-    await fn();
-    results.push([name]);
+    const note = await fn();
+    results.push([name, null, note]);
   } catch (e) {
     results.push([name, e]);
   }
@@ -501,12 +502,73 @@ await test('裁定 19 室外限高带：带内相机 ≤ 视线 − margin、出
   near(e.camera.position.distanceTo(free), 0, 0.05, '放开后回到原机位');
 });
 
+await test('BUG-019 西窗外限高带：走入 / 侧入 / 退出相机位置逐帧连续（60 Hz：进带单帧 ≤ 0.25 m、全程 ≤ 0.6 m），任何一帧不高过真实限高', () => {
+  // 与 S2 同一函数、同一视线（QA batch12 cam19 复算用的白石视线：眼 (0.95, 4.35, 1) → 字组中心）；不挂物理（只看限高），玩家贴坡面
+  const eye = { x: 0.95, y: 4.35, z: 1 };
+  const tgt = { x: eye.x + 0.9543876579245467 * 20, y: eye.y - 0.2985702570605802 * 20, z: 1 };
+  const caps = s2CameraHeightCaps(eye, tgt);
+  const c = caps[0];
+  const hl = Math.hypot(c.dir.x, c.dir.z);
+  const P = (s, lat) => ({ x: c.origin.x + (c.dir.x / hl) * s - (c.dir.z / hl) * lat, z: c.origin.z + (c.dir.z / hl) * s + (c.dir.x / hl) * lat });
+  // 单帧上限：进带 0.25 m（过渡区限速 8 m/s = 0.134 m/帧 + 跑步 0.053 m/帧 + 余量）；退出走 0.25 s smoothstep 恢复（峰值 ≈ 1.5 × 5.1 m / 0.25 s / 60 ≈ 0.51 m/帧），全程上限 0.6 m
+  const ENTER_MAX = 0.25, ANY_MAX = 0.6;
+  const yawPlusX = Math.PI / 2; // 相机在玩家 +x 侧（朝房子看）
+  const paths = [
+    ['沿视线走向房子 s 13→2', [13, 0], [2, 0], yawPlusX, true],
+    ['沿视线离开 s 2→13', [2, 0], [13, 0], yawPlusX, false],
+    ['横穿入带 lat 6→0（s 5.5，相机在 +x 侧）', [5.5, 6], [5.5, 0], yawPlusX, true],
+    ['横穿入带 lat 6→0（s 5.5，相机在身后 +z 侧）', [5.5, 6], [5.5, 0], 0, true],
+    ['横穿入带 lat −6→0（s 8，相机在身后 −z 侧）', [8, -6], [8, 0], Math.PI, true],
+    ['横穿出带 lat 0→6（s 5.5）', [5.5, 0], [5.5, 6], yawPlusX, false],
+    ['斜入 s 12 lat 5 → s 4 lat 0', [12, 5], [4, 0], yawPlusX, true],
+  ];
+  const lines = [];
+  for (const speed of [gameplay.player?.walkSpeed ?? 1.6, 3.2]) {
+    for (const [name, a, b, yaw, entering] of paths) {
+      const e = setup({ physics: undefined });
+      e.cam.heightCaps = caps;
+      e.cam.yaw = yaw;
+      e.cam.pitch = gameplay.camera.minPitchDeg * (Math.PI / 180); // 俯仰压到最低（相机最高）
+      e.cam.distance = gameplay.camera.maxDistance;
+      const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+      const n = Math.ceil(len / (speed * DT));
+      const put = (k) => {
+        const t = Math.min(k / n, 1);
+        const p = P(a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t);
+        e.target.position.set(p.x, slopeY(p.x), p.z);
+      };
+      put(0);
+      for (let i = 0; i < 30; i++) e.frame();
+      let last = e.camera.position.clone(), maxStep = 0, maxAt = 0, capped = 0, over = 0;
+      for (let k = 1; k <= n + 30; k++) {
+        put(k);
+        e.frame();
+        const st = e.camera.position.distanceTo(last);
+        if (st > maxStep) [maxStep, maxAt] = [st, k];
+        last = e.camera.position.clone();
+        if (e.cam.heightCapped) capped++;
+        const floorY = e.target.position.y + gameplay.camera.pivotHeight + 0.5;
+        const ceil = Math.max(floorY, cameraHeightCeiling(caps, e.camera.position.x, e.camera.position.z));
+        over = Math.max(over, e.camera.position.y - ceil);
+      }
+      lines.push(`${name} @${speed} m/s：单帧最大 ${maxStep.toFixed(3)} m（第 ${maxAt} 帧），限高帧 ${capped}`);
+      assert.ok(capped > 0 || !entering, `${name}：测试前提——路径要进带（限高帧 0）`);
+      assert.ok(over <= 0.02, `${name} @${speed}：相机高过真实限高 ${over.toFixed(3)} m`);
+      assert.ok(maxStep <= (entering ? ENTER_MAX : ANY_MAX), `${name} @${speed}：单帧位移 ${maxStep.toFixed(3)} m 超上限`);
+    }
+  }
+  // 外扩带限高处处 ≤ 原带（过渡区只会更早收，不会放高）
+  const lead = expandHeightCaps(caps, gameplay.camera.heightCapLeadPad);
+  for (let x = -2; x <= 26; x += 0.25) for (let z = -8; z <= 10; z += 0.25) assert.ok(cameraHeightCeiling(lead, x, z) <= cameraHeightCeiling(caps, x, z) + 1e-9, `外扩带在 (${x}, ${z}) 比原带高`);
+  return lines.join('\n   ');
+});
+
 let failed = 0;
-for (const [name, err] of results) {
+for (const [name, err, note] of results) {
   if (err) {
     failed++;
     console.log(`✗ ${name}\n   ${err.message}`);
-  } else console.log(`✓ ${name}`);
+  } else console.log(`✓ ${name}${note ? `\n   ${note}` : ''}`);
 }
 console.log(failed ? `\n${failed} 项失败` : `\n相机校验全部通过（${results.length} 项）`);
 process.exit(failed ? 1 : 0);

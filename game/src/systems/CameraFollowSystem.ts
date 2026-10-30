@@ -115,6 +115,9 @@ export class CameraFollowSystem {
   heightCaps: CameraHeightCap[] = [];
   /** 本帧相机距离被限高压短 */
   heightCapped = false;
+  /** BUG-019：外扩过渡区的限高带（由 heightCaps 派生，换数组时重算） */
+  private leadCaps: CameraHeightCap[] = [];
+  private leadCapsOf: CameraHeightCap[] | null = null;
   indoor = false;
   observing = false;
   /** 观察模式焦点距离（屏幕中心射线命中，m） */
@@ -333,28 +336,37 @@ export class CameraFollowSystem {
     pivot.copy(head).addScaledVector(right, side);
     if (physics) maxD = physics.sphereCast(pivot, back, r, maxD);
     // 室外限高（裁定 19；室内不管，观察固定眼位在上面已 return）
+    // BUG-019：hardD = 真实带（硬上限，立即生效）；leadD = 外扩过渡区（≤ hardD），限速往里收，走 / 跑进带时在过渡区里就收完，不再一帧 6 m → 0.87 m
+    const physD = maxD;
+    let leadD = maxD;
     if (!this.indoor && this.heightCaps.length) {
-      const capD = cameraHeightCapDistance(this.heightCaps, pivot, back, maxD);
-      this.heightCapped = capD < maxD - 1e-4;
-      maxD = Math.max(Math.min(maxD, cfg.minCollisionDistance), capD);
+      if (this.leadCapsOf !== this.heightCaps) {
+        this.leadCapsOf = this.heightCaps;
+        this.leadCaps = expandHeightCaps(this.heightCaps, cfg.heightCapLeadPad);
+      }
+      const floor = Math.min(physD, cfg.minCollisionDistance);
+      const capD = cameraHeightCapDistance(this.heightCaps, pivot, back, physD);
+      this.heightCapped = capD < physD - 1e-4;
+      maxD = Math.max(floor, capD);
+      leadD = Math.min(maxD, Math.max(floor, cameraHeightCapDistance(this.leadCaps, pivot, back, physD)));
     } else this.heightCapped = false;
     this.targetDistance = maxD;
 
-    // 被挡立即前拉；解除后 0.25 s 恢复（缓入缓出）
+    // 被挡（物理 / 真实限高带）立即前拉；过渡区限速前拉；解除后 0.25 s 恢复（缓入缓出）
     if (!this.initialized) {
-      this.currentDistance = maxD;
+      this.currentDistance = leadD;
       this.recover = null;
-    } else if (maxD < this.currentDistance - 1e-4) {
-      this.currentDistance = maxD;
+    } else if (leadD < this.currentDistance - 1e-4) {
+      this.currentDistance = Math.min(maxD, Math.max(leadD, this.currentDistance - cfg.heightCapPullSpeed * dt));
       this.recover = null;
-    } else if (maxD > this.currentDistance + 1e-4) {
+    } else if (leadD > this.currentDistance + 1e-4) {
       this.recover ??= { from: this.currentDistance, t: 0 };
       this.recover.t += dt;
       const k = smoothstep01(this.recover.t / cfg.recoverTime);
-      this.currentDistance = k >= 1 ? maxD : this.recover.from + (maxD - this.recover.from) * k;
+      this.currentDistance = k >= 1 ? leadD : this.recover.from + (leadD - this.recover.from) * k;
       if (k >= 1) this.recover = null;
     } else {
-      this.currentDistance = maxD;
+      this.currentDistance = leadD;
       this.recover = null;
     }
     this.initialized = true;
@@ -499,6 +511,11 @@ export function cameraHeightCeiling(caps: readonly CameraHeightCap[], x: number,
     out = Math.min(out, lineY - c.margin + (1 - w) * HEIGHT_CAP_RELEASE);
   }
   return out;
+}
+
+/** BUG-019：限高带外扩 pad（沿视线两端、横向各加 pad，fade 不变）做进入过渡区；带内限高不变，外扩带的限高处处 ≤ 原带 */
+export function expandHeightCaps(caps: readonly CameraHeightCap[], pad: number): CameraHeightCap[] {
+  return caps.map((c) => ({ ...c, from: c.from - pad, to: c.to + pad, halfWidth: c.halfWidth + pad }));
 }
 
 /** 从支点沿后退方向走，返回不超过限高的最大距离（≤ maxD；限高不低于支点 + 0.5 m） */

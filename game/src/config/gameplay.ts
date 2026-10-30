@@ -83,6 +83,13 @@ export const gameplay = {
     collisionRadius: 0.2,
     /** 遮挡解除后恢复到目标距离的时间（s） */
     recoverTime: 0.25,
+    /**
+     * BUG-019 室外限高带（裁定 19）进入过渡：带外扩 heightCapLeadPad（m）一圈做过渡区，进过渡区就按 heightCapPullSpeed（m/s）
+     * 限速往里收；真实带仍是硬上限（任何一帧都不高过它，sample-317 B 簇 = 0 不变）。8 m/s → 60 Hz 单帧 ≤ 0.134 m；
+     * 2.5 m 过渡区跑步（3.2 m/s）0.78 s 可收 6.25 m > 最大收距 5.65 m，所以走 / 跑进带时硬上限不起作用。
+     */
+    heightCapPullSpeed: 8,
+    heightCapLeadPad: 2.5,
     /** 相机离墙 / 地面的最小距离（m，被挡时最近也不贴到角色身上） */
     minCollisionDistance: 0.35,
     /** -indoor 触发体内的最大距离（m） */
