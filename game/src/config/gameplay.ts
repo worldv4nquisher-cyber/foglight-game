@@ -138,9 +138,12 @@ export const gameplay = {
       freeDecaySec: 1.2,
       freePeriodSec: 1.5,
       freePhaseSin: 0.5,
-      /** 钟锤滞后钟体（s）、相对角到这个值碰内壁（rad） */
+      /**
+       * 钟锤滞后钟体（s）、相对角到这个值碰内壁（rad；钟锤摆角也夹在 ±这个值）。
+       * 美术 1030b 方案 A：摆幅 0.2 不变、碰壁阈值 0.14（原 0.41 在摆幅 0.2 下碰不到）；美术 GLB 根 extras.clapperHitRad 存在时优先（TideBell.clapperHitRad）。
+       */
       clapperLagSec: 0.12,
-      clapperHitRad: 0.41,
+      clapperHitRad: 0.14,
     },
   },
   /** 光线反射（GDD §7 谜题 3、5，§8，§9；v0.1-012） */

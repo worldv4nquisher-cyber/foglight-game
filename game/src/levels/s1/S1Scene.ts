@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { applyArtClapperHitRad } from '@/systems/tide/TideBell';
 import { missingGreyboxNodes, mountArtSlots, snapToArt, type ArtSlots } from '../artSlots';
 import { S1_ART_SLOTS } from './artSlots';
 import type { Game } from '@/core/Game';
@@ -88,6 +89,8 @@ export class S1Scene extends LevelScene {
     this.artSlots = mountArtSlots(this.game.assets, this.scene, S1_ART_SLOTS, { showGreybox: greyboxVisible });
     // 021 潮汐钟：汐的站位直接读美术 prop-tide-bell-interact（白盒 1.05 m → 模型 0.98 m）
     snapToArt(this.artSlots, 'prop-tide-bell', 'prop-tide-bell-interact', this.puzzles.bell.interactable.interactPoint);
+    // 钟锤碰壁阈值：美术根 extras.clapperHitRad 优先（1030b 方案 A，缺省 0.14）
+    applyArtClapperHitRad(this.puzzles.bell, this.artSlots?.mounted.find((m) => m.id === 'prop-tide-bell')?.model);
     // 021 木筏：推站位读 prop-raft-s1-interact（与白盒同位同向，以 GLB 为准）
     snapToArt(this.artSlots, 'prop-raft-s1', 'prop-raft-s1-interact', this.puzzles.raftPush.interactPoint);
     this.artSlotGreyboxMissing = missingGreyboxNodes(this.scene, S1_ART_SLOTS);

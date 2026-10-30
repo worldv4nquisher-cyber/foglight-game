@@ -303,12 +303,16 @@ await test('美术回复 1030 塔门 prop-lighthouse-door-s3（合成）：到�
   return '塔门单独文件优先 / door-leaf 对合页 / -collider 隐藏 / 回退 020 / 白盒 ✓（-interact 暂未接：白盒站位不变）';
 });
 
-await test('美术回复 1030 钟锤补音 sfx-tide-bell-clapper：|相对角| 上升沿到 clapperHitRad（0.41）记一次、emit sfx:play optional（缺文件静默、可叠主钟声）、碰壁期间不连发；manifest 登记 pending', async () => {
-  const { TideBell, CLAPPER_SFX } = await import('@/systems/tide/TideBell');
+await test('钟锤补音（1030b 方案 A）：阈值缺省 0.14 rad、美术根 extras.clapperHitRad 优先；按 xi-ring-bell 完整敲一次（touch→ring 推 + 自由摆）：钟锤相对角到阈值才碰壁、emit sfx:play optional sfx-tide-bell-clapper（缺文件静默、叠在主钟声上）、碰壁期间不连发；manifest 登记 pending', async () => {
+  const { TideBell, CLAPPER_SFX, readClapperHitRad, applyArtClapperHitRad } = await import('@/systems/tide/TideBell');
+  const { xiEventSec } = await import('@/entities/xi/clips');
   assert.equal(CLAPPER_SFX, 'sfx-tide-bell-clapper');
   const e = manifest.find((x) => x.key === CLAPPER_SFX);
   assert.ok(e && e.type === 'audio' && e.optional && e.pending && e.url.endsWith('audio/sfx/sfx-tide-bell-clapper.ogg'), 'manifest 登记钟锤补音（pending）');
-  const run = () => {
+  const b = gameplay.tide.bell;
+  assert.equal(b.clapperHitRad, 0.14, '缺省阈值 0.14');
+  assert.equal(b.freeAmp, 0.2, '摆幅 0.2 不变');
+  const mk = () => {
     const emits = [];
     const gb = new THREE.Group();
     const sw = new THREE.Group();
@@ -316,35 +320,71 @@ await test('美术回复 1030 钟锤补音 sfx-tide-bell-clapper：|相对角| �
     sw.add(cl);
     gb.add(sw);
     const tide = { id: 'z', state: 'low', transitioning: false, toggle: () => true };
-    const bell = new TideBell({ id: 'b', tide, object: gb, swing: sw, clapper: cl, events: { on: () => () => {}, emit: (n, p) => emits.push([n, p]) } });
+    const anim = { animState: null };
+    const bell = new TideBell({ id: 'b', tide, object: gb, swing: sw, clapper: cl, animSource: anim, events: { on: () => () => {}, emit: (n, p) => emits.push([n, p]) } });
+    return { bell, anim, emits };
+  };
+  // 一次完整的敲钟：闲置 1 s → xi-ring-bell touch→ring 推钟 → ring 帧 interact:used（bell.ring）→ 自由摆 4 s
+  const ringOnce = ({ bell, anim, emits }) => {
     const dt = 1 / 60;
     for (let t = 0; t < 1; t += dt) bell.update(dt);
-    assert.ok(bell.ring());
-    let maxRel = 0;
-    let prev = 0;
-    for (let t = 0; t < 4; t += dt) {
+    const ringT = xiEventSec('xi-ring-bell', 'ring');
+    for (let t = 0; t <= ringT + 1e-9; t += dt) {
+      anim.animState = { id: 'b', clip: 'xi-ring-bell', t, fired: false };
       bell.update(dt);
+    }
+    anim.animState = null;
+    assert.ok(bell.ring());
+    let maxRel = 0, frames = 0, firstAt = null;
+    for (let t = 0; t < 4; t += dt) {
+      const h = bell.clapperHits;
+      bell.update(dt);
+      if (bell.clapperHits > h && firstAt === null) firstAt = t;
       maxRel = Math.max(maxRel, Math.abs(bell.clapperAngle));
-      prev = bell.clapperHits;
+      if (Math.abs(bell.clapperAngle) >= bell.clapperHitRad - 1e-12) frames++;
     }
     const clap = emits.filter(([n, p]) => n === 'sfx:play' && p.id === CLAPPER_SFX);
     clap.forEach(([, p]) => assert.equal(p.optional, true, 'optional = 缺文件静默'));
-    assert.equal(clap.length, bell.clapperHits);
+    assert.equal(clap.length, bell.clapperHits, '每次碰壁一声');
     assert.ok(emits.some(([n, p]) => n === 'sfx:play' && p.id === 'sfx-tide-bell'), '主钟声照常（补音叠在上面）');
-    return { hits: prev, maxRel };
+    return { hits: bell.clapperHits, maxRel, frames, firstAt };
   };
-  const b = gameplay.tide.bell;
-  const now = run();
-  const amp0 = b.freeAmp;
-  let big;
-  try {
-    b.freeAmp = 0.8; // 合成：大摆幅才碰得到壁
-    big = run();
-  } finally {
-    b.freeAmp = amp0;
+  // 缺省 0.14：现行钟锤模型（滞后 0.12 s，相对角 = θ(t − 0.12) − θ(t)）敲一次最大相对角只有 ≈ 0.061 → 不碰壁（见汇报：方案 A 的 0.14 对应的是钟体角 |θ| 最大 0.161）
+  const d = ringOnce(mk());
+  assert.ok(d.maxRel < 0.14, `现行模型相对角 < 0.14：${d.maxRel}`);
+  // 阈值低到碰得到时：敲一次至少一声、贴壁多帧只响一次
+  const lo = mk();
+  lo.bell.clapperHitRad = 0.06;
+  const l = ringOnce(lo);
+  assert.ok(l.hits >= 1 && l.hits <= 3, `阈值 0.06 敲一次碰壁 ${l.hits} 次`);
+  assert.ok(l.hits < l.frames || l.frames <= 1, '碰壁期间（多帧贴壁）只响一次，不逐帧连发');
+  // 美术根 extras.clapperHitRad 优先（gltf.scene 下的根节点也读得到）；无效值不用
+  const scene = new THREE.Group();
+  const root = new THREE.Group();
+  root.name = 'prop-tide-bell';
+  scene.add(root);
+  assert.equal(readClapperHitRad(scene), null, '没写 extras = null');
+  root.userData.clapperHitRad = 'x';
+  assert.equal(readClapperHitRad(scene), null, '非数字不用');
+  root.userData.clapperHitRad = 0.05;
+  assert.equal(readClapperHitRad(scene), 0.05, '读 GLB 根 extras');
+  const m = mk();
+  assert.equal(applyArtClapperHitRad(m.bell, null), 0.14, '没挂美术 = 缺省');
+  assert.equal(applyArtClapperHitRad(m.bell, scene), 0.05, 'extras 优先');
+  const o = ringOnce(m);
+  assert.ok(o.hits >= 1 && o.maxRel <= 0.05 + 1e-9, 'extras 阈值生效（钟锤也夹在它以内）');
+  const hi = mk();
+  root.userData.clapperHitRad = 0.41;
+  applyArtClapperHitRad(hi.bell, scene);
+  assert.equal(ringOnce(hi).hits, 0, '阈值 0.41（旧值）摆幅 0.2 碰不到 = 不响');
+  // 当前美术 prop-tide-bell.glb 根还没有 clapperHitRad → 用缺省
+  const glbPath = resolve(dirname(fileURLToPath(import.meta.url)), '../../art/models/props/prop-tide-bell.glb');
+  let artNow = '未交付';
+  if (existsSync(glbPath)) {
+    const v = readClapperHitRad(await loadGlb('models/props/prop-tide-bell.glb'));
+    artNow = v === null ? '根无 clapperHitRad → 缺省 0.14' : `根 clapperHitRad ${v}`;
   }
-  assert.ok(big.hits >= 1 && big.hits <= 8, `大摆幅碰壁次数 ${big.hits}`);
-  return `现参数（freeAmp ${amp0}、滞后 ${b.clapperLagSec} s）钟锤最大相对角 ${now.maxRel.toFixed(3)} rad < ${b.clapperHitRad} → 碰壁 ${now.hits} 次（补音不会响，见汇报）；合成 freeAmp 0.8 → 碰壁 ${big.hits} 次，每次一声`;
+  return `缺省 0.14：敲一次钟锤最大相对角 ${d.maxRel.toFixed(3)} → 碰壁 ${d.hits} 次（不响）；阈值 0.06 → ${l.hits} 次（ring 后 ${l.firstAt?.toFixed(2)} s）；extras 0.05 → ${o.hits} 次；0.41 → 0 次；当前美术 GLB：${artNow}`;
 });
 
 await test('岩石实例化（合成）：实例矩阵乘上 _lodN 节点矩阵，顶面 = 摆放 y + 节点平移 + 半高', () => {

@@ -9,6 +9,26 @@ import type { TideController } from './TideController';
 /** 钟锤碰壁补音（032 批次；manifest pending，缺失静默） */
 export const CLAPPER_SFX = 'sfx-tide-bell-clapper';
 
+/**
+ * 美术钟模型根 extras.clapperHitRad（1030b 方案 A：存在时优先）。传挂上的模型（gltf.scene 或 GLB 根节点都行：
+ * 按遍历顺序取第一个带这个 extras 的节点，根在前）；没有 / 不是正数 = null（用缺省 0.14）。
+ */
+export function readClapperHitRad(model: THREE.Object3D | null | undefined): number | null {
+  let out: number | null = null;
+  model?.traverse((o) => {
+    const v: unknown = (o.userData as Record<string, unknown> | undefined)?.clapperHitRad;
+    if (out === null && typeof v === 'number' && Number.isFinite(v) && v > 0) out = v;
+  });
+  return out;
+}
+
+/** 美术钟挂上后：根 extras.clapperHitRad 存在就用它，否则保持缺省；返回生效值 */
+export function applyArtClapperHitRad(bell: TideBell, model: THREE.Object3D | null | undefined): number {
+  const v = readClapperHitRad(model);
+  if (v !== null) bell.clapperHitRad = v;
+  return bell.clapperHitRad;
+}
+
 export interface TideBellOptions {
   /** Interactable id（提示系统高亮、谜题脚本都用它） */
   id: string;
@@ -53,6 +73,8 @@ export class TideBell {
   clapperAngle = 0;
   /** 钟锤碰壁次数（测试读）；|相对角| 上升沿到 clapperHitRad 记一次并补 sfx-tide-bell-clapper（文件缺失静默，可叠主钟声） */
   clapperHits = 0;
+  /** 碰壁阈值 / 钟锤摆角上限（rad）：缺省 gameplay.tide.bell.clapperHitRad（0.14）；美术挂上后用根 extras.clapperHitRad（readClapperHitRad） */
+  clapperHitRad: number = gameplay.tide.bell.clapperHitRad;
   private clapperTouching = false;
   private readonly swing: THREE.Object3D | null;
   private readonly clapper: THREE.Object3D | null;
@@ -142,9 +164,9 @@ export class TideBell {
       const lag = h1[0] > h0[0] ? h0[1] + ((h1[1] - h0[1]) * Math.min(1, Math.max(0, (tl - h0[0]) / (h1[0] - h0[0])))) : h0[1];
       // 钟锤吊在钟体里：世界上滞后于钟体，相对钟体 = θ(t − lag) − θ(t)，到 ±0.41 碰内壁
       const rel = lag - this.angle;
-      this.clapperAngle = Math.max(-b.clapperHitRad, Math.min(b.clapperHitRad, rel));
-      // 美术回复 1030：碰内壁（|相对角| ≥ 0.41）那一刻补一声钟锤；离开碰壁角（回滞 10 %）才能再响
-      const touching = Math.abs(rel) >= b.clapperHitRad || (this.clapperTouching && Math.abs(rel) >= b.clapperHitRad * 0.9);
+      this.clapperAngle = Math.max(-this.clapperHitRad, Math.min(this.clapperHitRad, rel));
+      // 美术回复 1030：碰内壁（|相对角| ≥ clapperHitRad）那一刻补一声钟锤；离开碰壁角（回滞 10 %）才能再响
+      const touching = Math.abs(rel) >= this.clapperHitRad || (this.clapperTouching && Math.abs(rel) >= this.clapperHitRad * 0.9);
       if (touching && !this.clapperTouching) {
         this.clapperHits++;
         this.events.emit('sfx:play', { id: CLAPPER_SFX, optional: true });
