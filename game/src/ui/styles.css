@@ -1,17 +1,37 @@
 /* 全局与 UI 样式。UI 风格：忧郁、克制——冷灰半透明面板 + 细字距衬线标题，暖色仅用于强调。 */
 :root {
-  /* style-guide §6：半透明深色面板 #1A2128 80%、细线描边、琥珀色悬停 / 可交互（v0.1-008） */
-  --ui-bg: rgba(26, 33, 40, 0.8);
-  --ui-border: rgba(228, 232, 234, 0.22);
-  --ui-line: #e4e8ea;
-  --ui-text: #d5dde4;
-  --ui-dim: #8b98a4;
-  --ui-warm: #f2b072;
-  --ui-amber: #f2b072;
-  --ui-amber-glow: rgba(242, 176, 114, 0.35);
-  /* 正文 / 字幕：思源黑体；标题：思源宋体。Foglight Sans / Serif = 按文本表子集化的 WOFF2（v0.1-010，npm run fonts，菜单包里加载）；后面是本机字体兜底 */
-  --ui-font: 'Foglight Sans', 'Source Han Sans SC', 'Noto Sans CJK SC', 'Noto Sans SC', system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
-  --ui-serif: 'Foglight Serif', 'Source Han Serif SC', 'Noto Serif CJK SC', 'Noto Serif SC', 'Cormorant Garamond', 'Songti SC', Georgia, serif;
+  /* 030 R2：按 art/ui/ui-style-tokens.css（= style-guide §2 UI 色、§6 字体）对齐（README-030 §6 对照表） */
+  --ui-panel: rgba(26, 33, 40, 0.8); /* 面板底 #1A2128 80% */
+  --ui-panel-solid: #1a2128;
+  --ui-stroke: #8c8f8e; /* 面板描边 */
+  --ui-stroke-soft: rgba(140, 143, 142, 0.38); /* 分隔线 / 弱描边 */
+  --ui-primary: #d9a257; /* 主按钮、琥珀线与填充 */
+  --ui-accent: #ffd38a; /* 悬停 / 选中文字、光点 */
+  --ui-text: #e4e8ea; /* 正文 / 图标线色 */
+  --ui-text-2: #8b959d; /* 次要文字 */
+  --ui-interact: var(--ui-interact); /* 场景里的可交互提示 */
+  --ui-warn: #b5584f;
+  --ui-glow: rgba(217, 162, 87, 0.32);
+  --ui-shadow-text: 0 1px 2px rgba(10, 14, 18, 0.85), 0 0 12px rgba(10, 14, 18, 0.55);
+  /* 字体：只用思源黑体 / 思源宋体（Foglight Sans / Serif = npm run fonts 按文本表子集化的 WOFF2，菜单包里加载；后面是本机思源兜底）。
+     030 裁定 4：Cormorant Garamond 不进包，数字 / 版本号 / 用时统一用宋体 --ui-font-num */
+  --ui-font-title: 'Foglight Serif', 'Noto Serif CJK SC', 'Source Han Serif SC', serif;
+  --ui-font-body: 'Foglight Sans', 'Noto Sans CJK SC', 'Source Han Sans SC', sans-serif;
+  --ui-font-num: var(--ui-font-title);
+  --fs-h1: 30px;
+  --fs-menu: 21px;
+  --fs-body: 16px;
+  --fs-small: 13px;
+  --track-title: 0.32em;
+  --track-menu: 0.28em;
+  --dur: 220ms;
+  --ease: cubic-bezier(0.25, 0.1, 0.25, 1);
+  /* 旧名（代码 / 冒烟里还在用的别名，值已对齐新 token） */
+  --ui-bg: var(--ui-panel);
+  --ui-border: var(--ui-stroke-soft);
+  --ui-dim: var(--ui-text-2);
+  --ui-font: var(--ui-font-body);
+  --ui-serif: var(--ui-font-title);
 }
 
 /* 所有 UI 层：hidden 一律不显示（面板本身是 flex 布局，不加 !important 会被覆盖） */
@@ -74,10 +94,12 @@ body {
   top: 8px;
   left: 8px;
   padding: 3px 8px;
-  font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  /* 调试用帧率面板（开发 / 设置「显示帧率」）：等宽数字用思源黑体的 tabular-nums */
+  font: 12px/1.4 var(--ui-font-body);
+  font-variant-numeric: tabular-nums;
   color: #b9f2c4;
   background: rgba(0, 0, 0, 0.55);
-  border-radius: 4px;
+  border-radius: 0;
   pointer-events: none !important;
   z-index: 50;
 }
@@ -106,7 +128,7 @@ body {
 .loading-title {
   font-family: var(--ui-serif);
   font-size: clamp(28px, 4vw, 44px);
-  letter-spacing: 0.35em;
+  letter-spacing: var(--track-title);
   color: var(--ui-text);
 }
 
@@ -118,22 +140,24 @@ body {
   margin-bottom: 18px;
 }
 
+/* 细线进度（tokens .ui-progress）：暖色只留给主按钮，进度线用雾白 + 微光 */
 .loading-track {
   width: min(360px, 70vw);
-  height: 2px;
-  background: rgba(255, 255, 255, 0.08);
-  overflow: hidden;
+  height: 1px;
+  background: rgba(139, 149, 157, 0.35);
 }
 
 .loading-bar {
   width: 0;
   height: 100%;
-  background: var(--ui-warm);
-  box-shadow: 0 0 10px var(--ui-warm);
+  background: var(--ui-text);
+  box-shadow: 0 0 8px rgba(228, 232, 234, 0.5);
   transition: width 0.2s ease;
 }
 
 .loading-label {
+  font-family: var(--ui-font-num);
+  font-variant-numeric: lining-nums tabular-nums;
   font-size: 12px;
   color: var(--ui-dim);
   letter-spacing: 0.2em;
@@ -205,8 +229,8 @@ body {
   font: 11px/16px var(--ui-font);
   text-align: center;
   color: var(--ui-text);
-  border: 1px solid var(--ui-border);
-  border-radius: 3px;
+  border: 1px solid rgba(228, 232, 234, 0.55);
+  border-radius: 0;
   background: rgba(0, 0, 0, 0.35);
 }
 
@@ -217,17 +241,17 @@ body {
   transform: translateX(-50%);
   padding: 6px 14px;
   font-size: 14px;
-  color: var(--ui-warm);
+  color: var(--ui-text);
+  text-shadow: var(--ui-shadow-text);
   background: var(--ui-bg);
   border: 1px solid var(--ui-border);
-  border-radius: 4px;
+  border-radius: 0;
 }
 
 /* v0.1-011：暂时不可用的交互（潮汐钟涨落中）—— 灰色、无暖色 */
 .hud-prompt.is-disabled {
-  color: #7d878d;
-  border-color: rgba(125, 135, 141, 0.35);
-  opacity: 0.75;
+  color: var(--ui-text-2);
+  opacity: 0.55;
 }
 
 /* v0.1-004 交互：小图标（style-guide §2 可交互提示 #A9BCC4）、hold 圆环、机关按键提示条 */
@@ -242,7 +266,7 @@ body {
   top: -5px;
   width: 10px;
   height: 10px;
-  border: 1.5px solid #a9bcc4;
+  border: 1.5px solid var(--ui-interact);
   border-radius: 50%;
   opacity: 0.55;
   transition: opacity 0.2s ease;
@@ -288,14 +312,14 @@ body {
 }
 
 .hud-hold-arc {
-  stroke: #a9bcc4;
+  stroke: var(--ui-interact);
   stroke-linecap: round;
   transform: rotate(-90deg);
   transform-origin: 50% 50%;
 }
 
 .hud-hold.full .hud-hold-arc {
-  stroke: var(--ui-warm);
+  stroke: var(--ui-primary);
 }
 
 .hud-puzzle-bar {
@@ -310,7 +334,7 @@ body {
   color: var(--ui-text);
   background: var(--ui-bg);
   border: 1px solid var(--ui-border);
-  border-radius: 4px;
+  border-radius: 0;
 }
 
 /* ---------- Pause ---------- */
@@ -339,7 +363,7 @@ body {
   gap: 12px;
   background: var(--ui-bg);
   border: 1px solid var(--ui-border);
-  border-radius: 6px;
+  border-radius: 0;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
 }
 
@@ -347,7 +371,8 @@ body {
   margin: 0 0 6px;
   font-family: var(--ui-serif);
   font-weight: normal;
-  letter-spacing: 0.5em;
+  font-size: var(--fs-h1);
+  letter-spacing: var(--track-title);
   text-align: center;
 }
 
@@ -364,7 +389,8 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  font-variant-numeric: tabular-nums;
+  font-family: var(--ui-font-num);
+  font-variant-numeric: lining-nums tabular-nums;
 }
 
 .menu-range input {
@@ -372,64 +398,193 @@ body {
   accent-color: var(--ui-text);
 }
 
-.menu-btn,
-.seg-btn {
-  font: inherit;
-  font-size: 14px;
+/* 按钮（030 裁定 2，GDD §12.2「按钮无边框文字为主」）：
+   - .menu-btn = 文字按钮（绝大多数）：无框无底，悬停文字变 --ui-accent + 下方饰条从中间展开（R2 ui-button-secondary.webp）+ 左侧小菱形
+   - .menu-btn.primary = 主按钮（每屏最多一个，唯一带细框）：悬停淡入光效层（R2 ui-button-primary.webp，9-slice），不动画 box-shadow */
+.menu-btn {
+  position: relative;
+  font: 400 var(--fs-body) / 1.3 var(--ui-font-title);
+  letter-spacing: 0.16em;
   color: var(--ui-text);
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid var(--ui-border);
-  border-radius: 4px;
-  padding: 9px 12px;
+  background: none;
+  border: 0;
+  border-radius: 0;
+  padding: 8px 6px;
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
+  transition: color var(--dur) var(--ease), border-color var(--dur) var(--ease);
+}
+
+.menu-btn::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -4px;
+  width: 120px;
+  max-width: 100%;
+  height: 12px;
+  transform: translateX(-50%) scaleX(0);
+  /* 饰条图到位前（?art=0）退回一条琥珀细线 */
+  background: var(--ui-img-button-secondary, linear-gradient(90deg, transparent, var(--ui-primary) 30%, var(--ui-primary) 70%, transparent)) center / 120px 12px no-repeat;
+  opacity: 0;
+  transition: transform var(--dur) var(--ease), opacity var(--dur) var(--ease);
+  pointer-events: none;
+}
+
+:root:not(.ui-art-button-secondary) .menu-btn::after {
+  height: 1px;
+  bottom: 2px;
+  background-size: 100% 1px;
+}
+
+.menu-btn::before {
+  content: '';
+  position: absolute;
+  left: -14px;
+  top: 50%;
+  width: 5px;
+  height: 5px;
+  margin-top: -3px;
+  border: 1px solid var(--ui-primary);
+  transform: rotate(45deg);
+  opacity: 0;
+  transition: opacity var(--dur) var(--ease);
+  pointer-events: none;
 }
 
 .menu-btn:hover,
-.seg-btn:hover,
-.menu-btn:focus-visible,
-.seg-btn:focus-visible,
-.menu-btn.primary:hover,
-.menu-btn.primary:focus-visible,
-.menu-btn.small.on:hover,
-.menu-btn.small.on:focus-visible {
-  /* style-guide §6：悬停时描边变琥珀色并轻微发光 */
-  background: rgba(255, 255, 255, 0.06);
-  border-color: var(--ui-amber);
-  box-shadow: 0 0 10px var(--ui-amber-glow);
+.menu-btn:focus-visible {
+  color: var(--ui-accent);
+  text-shadow: 0 0 14px var(--ui-glow);
   outline: none;
 }
 
-.menu-btn.primary {
-  border-color: rgba(242, 176, 114, 0.5);
-  color: var(--ui-warm);
+.menu-btn:hover::after,
+.menu-btn:focus-visible::after {
+  transform: translateX(-50%) scaleX(1);
+  opacity: 1;
 }
 
+.menu-btn:hover::before,
+.menu-btn:focus-visible::before {
+  opacity: 1;
+}
+
+.menu-btn:active {
+  color: var(--ui-primary);
+}
+
+.menu-btn:disabled {
+  color: var(--ui-text-2);
+  opacity: 0.55;
+  cursor: default;
+  text-shadow: none;
+}
+
+/* 主按钮：细描边矩形 */
+.menu-btn.primary {
+  padding: 11px 36px;
+  font-size: var(--fs-body);
+  border: 1px solid rgba(217, 162, 87, 0.55);
+  background: rgba(26, 33, 40, 0.35);
+  color: var(--ui-text);
+}
+
+.menu-btn.primary::after {
+  content: none;
+}
+
+/* 光效层：图里的 1 px 线正好压在按钮边框上，外扩 20 px 是辉光 + 四角小角标 */
+.menu-btn.primary::before {
+  left: auto;
+  top: auto;
+  inset: -21px;
+  width: auto;
+  height: auto;
+  margin: 0;
+  transform: none;
+  border: 28px solid transparent;
+  border-image: var(--ui-img-button-primary) 56 / 28px / 0 stretch;
+}
+
+.menu-btn.primary:hover,
+.menu-btn.primary:focus-visible {
+  border-color: var(--ui-primary);
+  color: var(--ui-accent);
+  text-shadow: none;
+}
+
+.menu-btn.primary:active {
+  background: rgba(217, 162, 87, 0.12);
+  border-color: var(--ui-accent);
+}
+
+.menu-btn.primary:disabled {
+  border-color: rgba(140, 143, 142, 0.35);
+  color: var(--ui-text-2);
+}
+
+.menu-btn.primary:disabled::before {
+  opacity: 0;
+}
+
+.menu-btn:focus-visible {
+  outline: 1px dashed var(--ui-interact);
+  outline-offset: 4px;
+}
+
+/* 开关（开 / 关）与分段选择（画质、字幕字号）：tokens .ui-seg —— 次要文字色，选中 = 雾白 + 下划线，悬停 --ui-accent */
 .menu-btn.small {
-  min-width: 64px;
-  padding: 5px 10px;
+  min-width: 48px;
+  padding: 3px 2px;
+  font: 400 var(--fs-body) / 1.3 var(--ui-font-body);
+  letter-spacing: 0.12em;
+  color: var(--ui-text-2);
+  border-bottom: 1px solid transparent;
+}
+
+.menu-btn.small::before,
+.menu-btn.small::after {
+  content: none;
+}
+
+.menu-btn.small.on {
+  color: var(--ui-text);
+  border-bottom-color: var(--ui-text);
+}
+
+.menu-btn.small:hover,
+.menu-btn.small:focus-visible {
+  color: var(--ui-accent);
+  text-shadow: none;
 }
 
 .seg {
   display: flex;
+  gap: 22px;
 }
 
 .seg-btn {
-  padding: 5px 12px;
+  font: 400 var(--fs-body) / 1.3 var(--ui-font-body);
+  letter-spacing: 0.12em;
+  color: var(--ui-text-2);
+  background: none;
+  border: 0;
+  border-bottom: 1px solid transparent;
   border-radius: 0;
-}
-
-.seg-btn:first-child {
-  border-radius: 4px 0 0 4px;
-}
-
-.seg-btn:last-child {
-  border-radius: 0 4px 4px 0;
+  padding: 3px 0;
+  cursor: pointer;
+  transition: color var(--dur) var(--ease), border-color var(--dur) var(--ease);
 }
 
 .seg-btn.active {
-  color: #0e1116;
-  background: var(--ui-text);
+  color: var(--ui-text);
+  border-bottom-color: var(--ui-text);
+}
+
+.seg-btn:hover,
+.seg-btn:focus-visible {
+  color: var(--ui-accent);
+  outline: none;
 }
 
 .menu-foot {
@@ -578,7 +733,7 @@ body {
   text-align: center;
   pointer-events: none !important;
   z-index: 10;
-  font-family: 'Foglight Sans', 'Source Han Sans SC', 'Noto Sans SC', var(--ui-font);
+  font-family: var(--ui-font-body);
 }
 
 .subtitle-line {
@@ -586,9 +741,9 @@ body {
   font-size: var(--subtitle-size, 22px);
   line-height: 1.5;
   letter-spacing: 0.04em;
-  color: #e4e8ea;
+  color: var(--ui-text);
   background: none;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.55), 0 0 8px rgba(0, 0, 0, 0.35);
+  text-shadow: var(--ui-shadow-text);
 }
 
 .subtitle-line[hidden] {
@@ -648,7 +803,7 @@ body {
   padding: 2.2em 2.4em 1.2em;
   background: #ddd5c3;
   color: #2c2a26;
-  border-radius: 2px;
+  border-radius: 0;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
   font-family: var(--ui-serif);
 }
@@ -670,6 +825,7 @@ body {
 }
 
 .reader-nav {
+  font-family: var(--ui-font-num);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -712,7 +868,7 @@ body {
   padding: 1.6em 2em;
   background: var(--ui-bg);
   border: 1px solid var(--ui-border);
-  border-radius: 4px;
+  border-radius: 0;
 }
 
 .journal-title {
@@ -738,7 +894,7 @@ body {
 
 .journal-goal-text {
   margin: 0.3em 0 0;
-  color: #8b959d;
+  color: var(--ui-text-2);
   font-family: var(--ui-serif);
   font-size: 16px;
 }
@@ -770,7 +926,7 @@ body {
 }
 
 .journal-entry:hover {
-  color: var(--ui-warm);
+  color: var(--ui-accent);
 }
 
 .journal-empty {
@@ -781,7 +937,7 @@ body {
 .ui-panel {
   background: var(--ui-bg);
   border: 1px solid var(--ui-border);
-  border-radius: 2px;
+  border-radius: 0;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
   position: relative;
 }
@@ -805,12 +961,13 @@ body {
   margin: 0 0 6px;
   font-family: var(--ui-serif);
   font-weight: normal;
-  letter-spacing: 0.5em;
+  font-size: var(--fs-h1);
+  letter-spacing: var(--track-title);
   text-align: center;
 }
 
 .pause-panel {
-  border-radius: 2px;
+  border-radius: 0;
 }
 
 .settings-panel {
@@ -832,11 +989,6 @@ body {
   gap: 8px;
   justify-content: flex-end;
   margin-top: 6px;
-}
-
-.menu-btn.small.on {
-  border-color: rgba(242, 176, 114, 0.5);
-  color: var(--ui-warm);
 }
 
 .menu-range-value {
@@ -879,29 +1031,37 @@ body {
   font-weight: normal;
   font-size: 64px;
   letter-spacing: 0.4em;
-  color: var(--ui-line);
+  color: var(--ui-text);
   text-shadow: 0 0 30px rgba(0, 0, 0, 0.6);
 }
 
 .main-buttons {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  width: 220px;
+  align-items: flex-start;
+  gap: 14px;
+  width: 260px;
 }
 
+/* 主菜单项：宋体 21 px、字距 .28em（tokens --fs-menu / --track-menu）；只有主按钮（继续 / 无存档时的新游戏）带细框 */
 .main-btn {
   text-align: left;
-  letter-spacing: 0.2em;
-  padding: 11px 16px;
-  background: rgba(26, 33, 40, 0.5);
+  font-size: var(--fs-menu);
+  letter-spacing: var(--track-menu);
+  padding: 8px 4px;
+}
+
+.main-btn.primary {
+  font-size: var(--fs-menu);
+  padding: 11px 36px;
+  margin-bottom: 6px;
 }
 
 .main-notice {
   max-width: 320px;
   margin: 0;
   font-size: 13px;
-  color: var(--ui-warm);
+  color: var(--ui-text-2);
 }
 
 .main-version {
@@ -910,7 +1070,8 @@ body {
   bottom: 14px;
   font-size: 12px;
   color: var(--ui-dim);
-  font-family: var(--ui-serif);
+  font-family: var(--ui-font-num);
+  letter-spacing: 0.08em;
 }
 
 .confirm-dialog {
@@ -993,7 +1154,7 @@ body {
   font-family: var(--ui-serif);
   font-weight: normal;
   font-size: 36px;
-  letter-spacing: 0.3em;
+  letter-spacing: var(--track-title);
 }
 
 .chapter-end-art {
@@ -1018,7 +1179,8 @@ body {
   margin: 0;
   font-size: 15px;
   color: var(--ui-text);
-  font-variant-numeric: tabular-nums;
+  font-family: var(--ui-font-num);
+  font-variant-numeric: lining-nums tabular-nums;
 }
 
 .chapter-end-tbc {
@@ -1060,13 +1222,13 @@ body {
 }
 
 .hint-flame {
-  fill: var(--ui-warm);
+  fill: var(--ui-primary);
   opacity: 0.55;
 }
 
 .hint-lantern.fresh .hint-flame {
   opacity: 0.95;
-  filter: drop-shadow(0 0 3px var(--ui-amber-glow));
+  filter: drop-shadow(0 0 3px var(--ui-glow));
 }
 
 .hint-panel {
@@ -1077,7 +1239,7 @@ body {
   padding: 1em 1.3em 0.8em;
   background: var(--ui-bg);
   border: 1px solid var(--ui-border);
-  border-radius: 4px;
+  border-radius: 0;
   color: var(--ui-text);
 }
 
@@ -1106,7 +1268,7 @@ body {
   width: 1.4em;
   font-family: var(--ui-serif);
   font-size: 13px;
-  color: var(--ui-warm);
+  color: var(--ui-accent);
 }
 
 .hint-text {

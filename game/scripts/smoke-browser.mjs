@@ -1030,9 +1030,10 @@ const CHECKS = [
       await cdp.move(hb.x, hb.y);
       // 悬停有 CSS 过渡，机器负载高时 400 ms 可能还没走完：最多等 3 s 到终值
       const hovExpr = `getComputedStyle(document.querySelector('.main-menu .settings-panel [data-act="back"]')).borderColor`;
-      await until(`${hovExpr} === 'rgb(242, 176, 114)'`, 3000);
+      // 030：主按钮（设置「返回」）悬停描边 = --ui-primary #D9A257
+      await until(`${hovExpr} === 'rgb(217, 162, 87)'`, 3000);
       const hov = await evaluate(hovExpr);
-      if (hov !== 'rgb(242, 176, 114)') throw new Error('悬停应为琥珀色描边：' + hov);
+      if (hov !== 'rgb(217, 162, 87)') throw new Error('悬停应为琥珀色描边 #D9A257：' + hov);
       // 设置即时生效：字幕字号、灵敏度
       await clickSel('.main-menu .settings-panel [data-size="l"]');
       await evaluate(`(() => { const r = document.querySelector('.main-menu .settings-panel input[data-act="sens"]') ?? document.querySelector('.main-menu .settings-panel [data-act="sens"] input'); r.value = '2.5'; r.dispatchEvent(new Event('input', { bubbles: true })); r.dispatchEvent(new Event('change', { bubbles: true })); return 1; })()`);
