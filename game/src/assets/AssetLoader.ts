@@ -14,6 +14,7 @@ import { buildLods } from '@/render/lod';
 import { prepareOutlineNormals } from './vertexColors';
 import { pendingArtPresent } from './artPresent';
 import { fontStats, forgetFont, loadFontOnce } from './fontLoader';
+import { ImageCache } from './imageCache';
 import { entriesForGroup, manifest, type AssetEntry, type AssetGroup } from './manifest';
 import { createPlaceholderModel, createPlaceholderTexture, createMissingTexture } from './placeholders';
 import { assetStats, createSharedKtx2, loadWithRetry, shareInflight, stripFallbackTextures } from './loadRetry';
@@ -58,8 +59,20 @@ export class AssetLoader {
   private fonts = new Map<string, FontFace>();
   private fontUrls = new Map<string, string>();
   /** 030 UI 图片：key → 已下载并解码的 URL（CSS / <img> 直接用，浏览器缓存命中） */
-  private images = new Map<string, string>();
-  private imageInflight = new Map<string, Promise<string | null>>();
+  private images = new ImageCache({
+    lookup: (key) => {
+      const e = manifest.find((x) => x.key === key && x.type === 'image');
+      return e ? { url: e.url.startsWith('http') ? e.url : `${BASE}${e.url}`, art: e.art } : null;
+    },
+    artEnabled: () => this.artEnabled,
+    fetchImage: (url) => this.fetchImage(url),
+    onLoaded: (key) => this.missing.delete(key),
+    onFailed: (key, url, err) => {
+      this.missing.add(key);
+      // text-ok: 只进控制台日志
+      console.info(`[assets] UI 图片缺失，退回纯色底：${key} (${url})`, err);
+    },
+  });
   /** 字体加载记录（每个 URL 的 fetch 次数 / 是否成功）：smoke 断言每个字体只请求一次，QA 可在控制台查 __game.assets.fontStats */
   get fontStats(): { url: string; family: string; attempts: number; ok: boolean; error?: string }[] {
     return [...fontStats.values()].map((s) => ({ ...s }));
@@ -373,7 +386,7 @@ export class AssetLoader {
 
   /** 已加载的 UI 图片 URL（没有 / 没交付 / ?art=0 → null） */
   imageUrl(key: string): string | null {
-    return this.images.get(key) ?? null;
+    return this.images.get(key);
   }
 
   /**
@@ -381,29 +394,9 @@ export class AssetLoader {
    * ?art=0 / 文件缺失 / 解码失败 → null（调用方退回纯色底），失败的下次再请求会重试。
    */
   loadImage(key: string): Promise<string | null> {
-    const done = this.images.get(key);
-    if (done) return Promise.resolve(done);
-    const entry = manifest.find((e) => e.key === key && e.type === 'image');
-    if (!entry || (entry.art && !this.artEnabled)) return Promise.resolve(null);
-    const inflight = this.imageInflight.get(key);
-    if (inflight) return inflight;
-    const url = entry.url.startsWith('http') ? entry.url : `${BASE}${entry.url}`;
-    const p = this.fetchImage(url)
-      .then((u) => {
-        this.images.set(key, u);
-        this.missing.delete(key);
-        return u;
-      })
-      .catch((err: unknown) => {
-        this.missing.add(key);
-        // text-ok: 只进控制台日志
-        console.info(`[assets] UI 图片缺失，退回纯色底：${key} (${entry.url})`, err);
-        return null;
-      })
-      .finally(() => this.imageInflight.delete(key));
-    this.imageInflight.set(key, p);
-    return p;
+    return this.images.load(key);
   }
+
 
   isMissing(key: string): boolean {
     return this.missing.has(key);

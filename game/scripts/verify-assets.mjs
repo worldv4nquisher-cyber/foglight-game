@@ -13,7 +13,9 @@ import { Document, NodeIO } from '@gltf-transform/core';
 import { checkOutlineNormals, prepareOutlineNormals } from '../src/assets/vertexColors.ts';
 import { auditGlb } from './lib/glb-audit.mjs';
 import { guessGroup } from './lib/size-groups.mjs';
-
+import { manifest } from '../src/assets/manifest.ts';
+import { PAPER_FOR_DOC, UI_CSS_VARS, UI_ICON_KEYS } from '../src/ui/uiArt.ts';
+import { readdirSync, statSync } from 'node:fs';
 
 let passed = 0;
 const ok = (msg) => {
@@ -492,6 +494,77 @@ try {
   assert.equal(guessGroup('tex-wood-planks.ktx2'), 'common');
   assert.equal(guessGroup('env-pier.glb'), 's1');
   ok('check-size 分组估算：char-* 默认 common，char-father → s3，-s2/-s3 后缀按场景，其余 s1');
+}
+
+// ---- 030 UI：art/ui 的 21 个运行时文件全部登记；懒加载 / 分组 / 纸张映射
+{
+  const ui = manifest.filter((e) => e.url.startsWith('assets/art/ui/'));
+  assert.equal(ui.length, 21, 'UI 文件 21 个');
+  assert.ok(ui.every((e) => e.type === 'image' && e.art && e.optional), 'UI 图都是 image + art（?art=0 跳过）+ optional（缺了退纯色）');
+  assert.equal(new Set(ui.map((e) => e.key)).size, 21, 'key 不重复');
+  const artUi = resolve(root, '../art/ui');
+  if (existsSync(artUi)) {
+    const files = readdirSync(artUi).filter((f) => /\.(webp|png|svg)$/.test(f)).sort();
+    assert.deepEqual(ui.map((e) => e.url.slice('assets/art/ui/'.length)).sort(), files, 'art/ui 下每个运行时文件都登记了，清单里没有多余文件');
+    const total = files.reduce((n, f) => n + statSync(join(artUi, f)).size, 0);
+    assert.ok(total < 5 * 1024 * 1024, `UI 运行时合计 ${total} B < 5 MB`);
+  }
+  const lazy = ui.filter((e) => e.lazy).map((e) => e.key).sort();
+  assert.deepEqual(lazy, ['ui-illust-chapter1-end', 'ui-illust-menu', 'ui-panel-corner', 'ui-paper-journal', 'ui-paper-letter', 'ui-paper-logbook', 'ui-paper-note', 'ui-paper-notice', 'ui-paper-sketch'], '纸张 / 结尾插画 / 菜单兜底 / 备选角饰懒加载');
+  for (const e of ui) {
+    if (/^ui-paper-|chapter1-end/.test(e.key)) assert.equal(e.group, 'common', `${e.key} 进 common`);
+    else assert.equal(e.group, 'menu', `${e.key} 进主菜单包`);
+  }
+  const byKey = new Map(ui.map((e) => [e.key, e]));
+  for (const k of Object.keys(UI_CSS_VARS)) assert.ok(byKey.get(k) && !byKey.get(k).lazy && byKey.get(k).group === 'menu', `${k} 随主菜单包预加载`);
+  for (const k of UI_ICON_KEYS) assert.ok(byKey.has(k) && byKey.get(k).url.endsWith('.svg'), `${k} 是 svg`);
+  const docs = ['ch1.s1.neighbor_note.doc', 'ch1.s1.notice.doc', 'ch1.s2.journal.doc', 'ch1.s2.reply_draft.doc', 'ch1.s2.sketch.doc', 'ch1.s2.xi_note.doc', 'ch1.s3.ignition_note.doc', 'ch1.s3.logbook.doc'];
+  assert.deepEqual(Object.keys(PAPER_FOR_DOC).sort(), docs, '8 份文档都有纸');
+  assert.equal(new Set(Object.values(PAPER_FOR_DOC)).size, 6, '6 种纸');
+  for (const k of Object.values(PAPER_FOR_DOC)) assert.ok(byKey.get(k)?.lazy, `${k} 已登记且懒加载`);
+  assert.equal(PAPER_FOR_DOC['ch1.s2.reply_draft.doc'], 'ui-paper-letter', '划线信纸只给没寄出的信');
+  for (const d of ['ch1.s1.neighbor_note.doc', 'ch1.s2.xi_note.doc', 'ch1.s3.ignition_note.doc']) assert.equal(PAPER_FOR_DOC[d], 'ui-paper-note');
+  ok('030 UI：21 个文件全部登记（menu 14 / common 7），纸张 ×6 + 结尾插画 + 菜单兜底懒加载，8 份文档 → 6 种纸（README-030 §2.2）');
+}
+
+// ---- 030 UI：AssetLoader.loadImage 懒加载（ImageCache）（同 key 共享一次下载、失败返回 null 可重试、?art=0 不下载）
+{
+  const { ImageCache } = await import('../src/assets/imageCache.ts');
+  const calls = [];
+  let failNext = 0;
+  let art = true;
+  const failed = [];
+  const cache = new ImageCache({
+    lookup: (k) => (k.startsWith('ui-') ? { url: `assets/art/ui/${k}.webp`, art: true } : null),
+    artEnabled: () => art,
+    fetchImage: async (url) => {
+      calls.push(url);
+      await new Promise((r) => setTimeout(r, 5));
+      if (failNext > 0) {
+        failNext--;
+        throw new Error('HTTP 404');
+      }
+      return url;
+    },
+    onFailed: (k) => failed.push(k),
+  });
+  const [a, b] = await Promise.all([cache.load('ui-paper-journal'), cache.load('ui-paper-journal')]);
+  assert.equal(a, 'assets/art/ui/ui-paper-journal.webp');
+  assert.equal(b, a);
+  assert.equal(calls.length, 1, '并发两次只下一次');
+  assert.equal(await cache.load('ui-paper-journal'), a);
+  assert.equal(calls.length, 1, '已加载直接返回');
+  assert.equal(cache.get('ui-paper-journal'), a);
+  failNext = 1;
+  assert.equal(await cache.load('ui-paper-letter'), null, '404 → null（退纯色纸底）');
+  assert.deepEqual(failed, ['ui-paper-letter']);
+  assert.equal(await cache.load('ui-paper-letter'), 'assets/art/ui/ui-paper-letter.webp', '下次再打开会重试');
+  assert.equal(await cache.load('no-such-key'), null, '没登记 → null');
+  art = false;
+  const n = calls.length;
+  assert.equal(await cache.load('ui-paper-note'), null, '?art=0 → null');
+  assert.equal(calls.length, n, '?art=0 不发请求');
+  ok('AssetLoader.loadImage：同 key 并发共享一次下载、已加载直接返回、404 → null 且可重试、未登记 / ?art=0 → null 不发请求');
 }
 
 console.log(`\n资源加载后处理 / 交付自检校验通过（${passed} 项）`);
