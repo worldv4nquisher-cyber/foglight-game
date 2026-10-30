@@ -477,7 +477,7 @@ export class Rain extends THREE.Group {
   /** 室内体积（BUG-020）：体积里的雨丝不画、落点不溅；超过 MAX_INDOOR 的忽略 */
   indoor: RainIndoorShape[] = [];
   setIndoor(shapes: readonly RainIndoorShape[]): void {
-    if (shapes.length > MAX_INDOOR) console.warn(`[rain] 室内体积 ${shapes.length} 个，只用前 ${MAX_INDOOR} 个`);
+    if (shapes.length > MAX_INDOOR) console.warn(`[rain] 室内 -indoor ${shapes.length} 个，只用前 ${MAX_INDOOR} 个`);
     this.indoor = shapes.slice(0, MAX_INDOOR);
     const u = this.uniforms;
     const inv = u.uIndoorInv!.value as THREE.Matrix4[];
