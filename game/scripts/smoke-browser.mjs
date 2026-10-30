@@ -1829,6 +1829,32 @@ const CHECKS = [
       if (s.far !== 's2-far-s3' || !s.farSky || s.gb) throw new Error('S2 远景 / 白盒隐藏不对 ' + JSON.stringify(s));
       if (s.warm || s.glow) throw new Error('S2 美术接入后不应有环境暖光 / 自发光 ' + JSON.stringify(s));
       out.push('art=1：019 七件 + 地窖门扇挂合页、远景岛塔天空层熄灭、白盒隐藏、无暖光 ✓');
+      // 1030b 立镜 ×2：挂院墙 socket；初始 / 正解两态美术镜面（位置 + 法线）与 mirror-pivot 世界旋转 = 白盒
+      const ms = await evaluate(`(() => {
+        const s = __s2; const V = s.rig.body.position.constructor; const Q = s.scene.quaternion.constructor; const beam = s.puzzles.beam; const ms = s.artSlots?.mounted ?? []; const r = {};
+        const n = (o) => new V(0, 0, 1).transformDirection(o.matrixWorld);
+        const find = (root, suf) => { let f = null; root.traverse((o) => { if (!f && (o.name === suf || o.name.endsWith('-' + suf))) f = o; }); return f; };
+        for (const k of ['a', 'b']) {
+          const m = ms.find((x) => x.id === 'prop-mirror-stand-s2-' + k);
+          if (!m) { r[k] = null; continue; }
+          const rig = k === 'a' ? beam.mirrorA : beam.mirrorB; const plane = find(m.model, 'mirror-plane'); const pivot = find(m.model, 'mirror-pivot');
+          const gp = find(rig.root, 'mirror-plane'); const gy = find(rig.root, 'yaw'); const st = [];
+          for (const solved of [false, true]) {
+            if (solved) beam.solve(); else { beam.mirrorA.part.setAngle(0, 0); beam.mirrorB.part.setAngle(0, 0); }
+            s.artSlots.update(); s.scene.updateMatrixWorld(true);
+            st.push({ deg: (n(plane).angleTo(n(gp)) * 180) / Math.PI, q: (pivot.getWorldQuaternion(new Q()).angleTo(gy.getWorldQuaternion(new Q())) * 180) / Math.PI, d: plane.getWorldPosition(new V()).distanceTo(gp.getWorldPosition(new V())) });
+          }
+          beam.mirrorA.part.setAngle(0, 0); beam.mirrorB.part.setAngle(0, 0); s.artSlots.update();
+          r[k] = { st, missing: m.missingNodes, parent: m.model.parent?.name };
+        }
+        return r;
+      })()`);
+      for (const k of ['a', 'b']) {
+        const g = ms[k];
+        if (!g) throw new Error(`art=1 立镜 ${k} 没挂上 ` + JSON.stringify(ms));
+        if (g.missing.length || g.parent !== `env-courtyard-wall-s2-mirror-${k}-socket` || g.st.some((x) => x.deg > 0.05 || x.q > 0.05 || x.d > 0.005)) throw new Error(`art=1 立镜 ${k} 不对 ` + JSON.stringify(g));
+      }
+      out.push('art=1 立镜 a / b 挂院墙 socket、初始 / 正解镜面与 pivot = 白盒 ✓');
       // 进 S2 会存档 s2，autostart 会接着存档进 S2：清掉存档再回 S1（后面的检查默认在 S1）
       await evaluate(`localStorage.removeItem('foglight.save.v1'); 1`);
       try { await cdp.goto(''); } catch (e) { throw new Error('回 S1 失败：' + e.message + ' ' + JSON.stringify(await evaluate(`({ scene: __game?.scenes?.current?.name, href: location.href, menu: __game?.ui?.mainMenu?.isOpen, err: window.__lastError ?? null })`).catch((x) => String(x))), { cause: e }); }

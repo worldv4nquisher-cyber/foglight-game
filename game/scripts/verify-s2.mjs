@@ -161,4 +161,74 @@ out.push('动线：二层观察点 / 书桌 / 地窖（门开才进得去）/ �
   assert.equal(xiWetTarget(true, { x: (door.a + door.b) / 2, y: 0, z: S2.house.z0 - 0.8 }, vols), 1, '门外淋湿');
   out.push(`室内判定：${vols.length} 个 -indoor 体积，一层 / 二层 / 地窖不淋湿、小院 / 门外淋湿 ✓`);
 }
+// ---- 1030b 第 2 条 立镜 prop-mirror-stand-s2 ×2（真文件）：挂院墙 socket、镜面对齐白盒、mirror-pivot 世界旋转 = 白盒 yaw（逐 15° 档）
+{
+  const { readFileSync, existsSync } = await import('node:fs');
+  const { mountArtSlots, findNode } = await import('@/levels/artSlots');
+  const { S2_ART_SLOTS } = await import('@/levels/s2/artSlots');
+  const { GLTFLoader } = await import('three/examples/jsm/loaders/GLTFLoader.js');
+  const { MeshoptDecoder } = await import('three/examples/jsm/libs/meshopt_decoder.module.js');
+  globalThis.self ??= globalThis;
+  const ktx2Stub = { load: (_u, onLoad) => onLoad(new THREE.CompressedTexture([], 1, 1)) };
+  const load = async (rel) => {
+    const f = new URL(`../../art/models/${rel}.glb`, import.meta.url);
+    if (!existsSync(f)) return null;
+    const buf = readFileSync(f);
+    return (await new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).setKTX2Loader(ktx2Stub).parseAsync(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength), '')).scene;
+  };
+  const stand = await load('props/prop-mirror-stand-s2');
+  const yard = await load('env/env-courtyard-wall-s2');
+  if (!stand || !yard) out.push('立镜 / 院墙美术未交付（跳过真文件检查）');
+  else {
+    const world = new THREE.Scene();
+    world.add(beam.root);
+    const pl = S2.artNodes['env-courtyard-wall-s2'];
+    yard.name = 'env-courtyard-wall-s2';
+    yard.position.set(...pl.translation);
+    yard.rotation.y = pl.rotationY;
+    world.add(yard);
+    world.updateMatrixWorld(true);
+    const models = { a: stand, b: stand.clone(true) };
+    const specs = S2_ART_SLOTS.filter((x) => x.key === 'prop-mirror-stand-s2');
+    assert.equal(specs.length, 2);
+    let n = 0;
+    const slots = mountArtSlots({ has: (x) => x === 'prop-mirror-stand-s2', getModel: () => models[n++ ? 'b' : 'a'] }, world, specs);
+    assert.equal(slots.mounted.length, 2, '立镜 a / b 都挂上');
+    const nrm = (o) => new THREE.Vector3(0, 0, 1).transformDirection(o.matrixWorld);
+    const wq = (o) => o.getWorldQuaternion(new THREE.Quaternion());
+    let worst = 0;
+    const ixs = [];
+    for (const k of ['a', 'b']) {
+      const m = slots.mounted.find((x) => x.id === `prop-mirror-stand-s2-${k}`);
+      assert.deepEqual(m.missingNodes, [], `立镜 ${k} 约定节点齐`);
+      assert.equal(m.model.parent?.name, `env-courtyard-wall-s2-mirror-${k}-socket`, `立镜 ${k} 挂院墙 socket`);
+      const rig = k === 'a' ? beam.mirrorA : beam.mirrorB;
+      const sock = m.model.parent.getWorldPosition(new THREE.Vector3());
+      assert.ok(Math.hypot(sock.x - rig.center.x, sock.z - rig.center.z) < 1e-3 && Math.abs(sock.y) < 1e-3, `立镜 ${k} socket ${sock.toArray()} = 白盒镜心地面 ${rig.center.toArray()}`);
+      const plane = findNode(m.model, 'mirror-plane');
+      const pivot = findNode(m.model, 'mirror-pivot');
+      const gbPlane = findNode(rig.root, `mirror-stand-s2-${k}-mirror-plane`);
+      const gbYaw = findNode(rig.root, `mirror-stand-s2-${k}-yaw`);
+      for (let y = 0; y < 360; y += 15) {
+        rig.part.setAngle(0, y);
+        slots.update();
+        world.updateMatrixWorld(true);
+        const d = plane.getWorldPosition(new THREE.Vector3()).distanceTo(gbPlane.getWorldPosition(new THREE.Vector3()));
+        const a = (nrm(plane).angleTo(nrm(gbPlane)) * 180) / Math.PI;
+        const q = (wq(pivot).angleTo(wq(gbYaw)) * 180) / Math.PI;
+        worst = Math.max(worst, a, q);
+        assert.ok(d < 1e-3 && a < 0.01 && q < 0.01, `立镜 ${k} ${y}°：镜心差 ${d}、法线差 ${a}°、pivot 世界旋转差 ${q}°`);
+      }
+      beam.solve();
+      slots.update();
+      world.updateMatrixWorld(true);
+      const ix = findNode(m.model, 'interact').getWorldPosition(new THREE.Vector3());
+      ixs.push(`${k} (${ix.x.toFixed(2)}, ${ix.z.toFixed(2)})`);
+      rig.part.setAngle(0, 0);
+    }
+    slots.update();
+    world.remove(beam.root);
+    out.push(`立镜真文件 ×2：挂院墙 socket（= 白盒镜心地面）、24 档镜面 / pivot 世界旋转 = 白盒（最大差 ${worst.toFixed(4)}°）、正解时 -interact ${ixs.join(' / ')} ✓`);
+  }
+}
 console.log('verify-s2 ✓ ' + out.join('；'));
