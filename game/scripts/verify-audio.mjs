@@ -720,8 +720,8 @@ test('036 交叉淡化：菜单 → S1 时长 2 s，旧曲淡出到 0 后 stop�
   ctx.advance(3);
   assert.equal(menu.disconnected, true, '淡出完断开');
   assert.equal(switchMusic(a, (k) => bufs[k], LEVELS.s1.music), 'same');
-  // S2 没有场景曲：上一首 2 s 淡出
-  assert.equal(switchMusic(a, (k) => bufs[k], LEVELS.s2.music), 'stop');
+  // 没有场景曲（key = null，如章节结束页以外的无曲场景）：上一首 2 s 淡出
+  assert.equal(switchMusic(a, (k) => bufs[k], null), 'stop');
   assert.equal(s1.stopped, 35);
   assert.equal(a.musicKey, null);
   // 资源缺失（?art=0）：不报错，返回 missing
@@ -760,6 +760,44 @@ test('033 改 manifest / 体积：mus-s1-ebb-shore lazy、不随 s1 组预下载
   assert.ok(/x\.type === 'audio' && x\.lazy/.test(loader), 'loadAudio 只认 lazy audio');
   const size = readFileSync(new URL('./check-size.mjs', import.meta.url), 'utf8');
   assert.ok(/sizeBucket\(e\)\.lazyAfterEntry/.test(size) && size.includes('进场后懒加载'));
+});
+
+// ---- 1031 配乐 2：S2 场景曲
+test('1031 S2 场景曲：mus-s2-keeper-house 登记 s2 组 lazy、gainDb 0（−20 LUFS = 和 S1 一样走 −16 dB 音乐总线，比环境音低 12 dB）；LevelDef.s2.music 指向它；懒加载后和 S1 曲 2 s 交叉淡化、整文件 loop、不设循环点；失败不放不抛', async () => {
+  const e = manifest.find((x) => x.key === 'mus-s2-keeper-house');
+  assert.deepEqual([e.type, e.group, e.lazy, e.optional, e.art, e.url], ['audio', 's2', true, true, true, 'assets/art/audio/music/mus-s2-keeper-house.ogg']);
+  assert.equal(e.gainDb ?? 0, 0);
+  assert.equal(musicTrackGain('mus-s2-keeper-house'), 1);
+  assert.equal(MUSIC_FILE_LUFS + MUSIC_BUS_DB, AMBIENCE_FILE_LUFS - 12, '−20 LUFS 曲过 −16 dB 音乐总线 = 环境音 −12 dB');
+  assert.deepEqual(sizeBucket(e), { group: 's2', lazyAfterEntry: true });
+  assert.equal(LEVELS.s2.music, 'mus-s2-keeper-house');
+  const bufs = { 'mus-s1-ebb-shore': { duration: 150 }, 'mus-s2-keeper-house': { duration: 6664000 / 44100 } };
+  const ctx = new FakeContext();
+  const a = new AudioSystem(ctx);
+  switchMusic(a, (k) => bufs[k], LEVELS.s1.music);
+  ctx.currentTime = 40;
+  let release;
+  const r = switchMusicLazy(a, () => new Promise((res) => (release = res)), LEVELS.s2.music);
+  assert.equal(a.musicKey, 'mus-s1-ebb-shore', '下载 / 解码期间 S1 曲继续');
+  ctx.currentTime = 43;
+  release(bufs['mus-s2-keeper-house']);
+  assert.equal(await r, 'play');
+  const [s1, s2] = ctx.sources;
+  assert.equal(s2.loop, true);
+  assert.equal(s2.loopStart, undefined);
+  assert.equal(s2.loopEnd, undefined);
+  assert.equal(s1.stopped, 45, 'S1 曲 2 s 后停');
+  assert.deepEqual(lastRamp(s1.out[0].gain), ['ramp', 0, 45]);
+  assert.deepEqual(s2.out[0].gain.events[0], ['set', 0, 43]);
+  assert.deepEqual(lastRamp(s2.out[0].gain), ['ramp', 1, 45]);
+  assert.deepEqual(((x) => [x.op, x.key, x.from, x.fade, x.loop])(a.musicLog.at(-1)), ['play', 'mus-s2-keeper-house', 'mus-s1-ebb-shore', 2, true]);
+  // 失败：S1 曲 2 s 淡出，不放、不抛
+  const ctx2 = new FakeContext();
+  const b = new AudioSystem(ctx2);
+  switchMusic(b, (k) => bufs[k], LEVELS.s1.music);
+  assert.equal(await switchMusicLazy(b, async () => null, LEVELS.s2.music), 'missing');
+  assert.equal(b.musicKey, null);
+  assert.equal(ctx2.sources.length, 1);
 });
 
 test('033 改 LazyAudioCache：并发共享一次下载；404 → null 不抛、记缺失、下次重试；超时 → null、迟到的结果丢掉；?art=0 / 没登记不发请求', async () => {

@@ -233,6 +233,9 @@ export const manifest: AssetEntry[] = [
   // s1：退潮岸场景曲，懒加载（制作人 c0d81c9 反馈：不随 s1 组预下载、不算首场景包）——S1 首帧渲染出来后才 loadAudio，
   //     解码完再和主菜单曲 2 s 交叉淡化；404 / 超时 → 菜单曲淡出、不放音乐。npm run size 记在「S1 进场后懒加载」
   { key: 'mus-s1-ebb-shore', type: 'audio', url: 'assets/art/audio/music/mus-s1-ebb-shore.ogg', group: 's1', optional: true, art: true, lazy: true },
+  // s2：守灯人小屋场景曲（2,577,617 B，151.1 s，−20 LUFS），和 S1 一样懒加载：S2 首帧渲染后才 loadAudio，解码完和上一首 2 s 交叉淡化；
+  //     整文件循环（README：loop 0 – 6664000 样本 = 整个文件）；404 / 超时 → 上一首淡出、不放音乐。npm run size 记在「s2 进场后懒加载」
+  { key: 'mus-s2-keeper-house', type: 'audio', url: 'assets/art/audio/music/mus-s2-keeper-house.ogg', group: 's2', optional: true, art: true, lazy: true },
   // s3：mus-s3-lighthouse + mus-s3-lighthouse-upper 两层要同一时刻起播、按玩家高度淡入上层，同步层逻辑未做，暂不登记
   // common：通用（日记纸声、脚步 5 地面 × a–d、落水、潮汐钟 S1/S3 共用、涨退潮、户外雾号 / 海鸟 / 轻风、光束接通 / 持续、镜架咔哒 S2/S3 共用）
   { key: 'amb-foghorn-far-a', type: 'audio', url: 'assets/art/audio/ambience/amb-foghorn-far-a.ogg', group: 'common', optional: true, art: true },
