@@ -1769,6 +1769,22 @@ const CHECKS = [
       const ls = await evaluate(`(() => { const s = __game.assets.loadStats; return { n: s.length, ktx2: s.filter((x) => x.kind === 'ktx2').length, pending: s.filter((x) => !x.done).length, bad: s.filter((x) => (x.done && !x.ok) || x.fallback), retried: s.filter((x) => x.attempts > 1).map((x) => x.url.split('/').pop() + '×' + x.attempts), degraded: document.documentElement.classList.contains('assets-fallback') }; })()`);
       if (ls.bad.length || ls.degraded || ls.ktx2 < 1) throw new Error('S1 art=1 有加载失败 / 占位 ' + JSON.stringify(ls));
       if (art.lit || art.warm) throw new Error('点灯前远景灯塔应熄灭、无环境暖光 ' + JSON.stringify(art));
+      // 美术 1030 船绳两版：涨潮 -rope-high 可见 / 退潮 -rope-low 可见（low 默认隐藏写在 extras.defaultVisible），船头端 = 船头环
+      const ropeAt = async (st) => {
+        await evaluate(`(() => { __s1.puzzles.tide.set('${st}', { instant: true }); window.__rt = __s1.game.time.fixedTick; return 1; })()`);
+        await until(`__s1.game.time.fixedTick >= window.__rt + 3`, 5000);
+        return evaluate(`(() => { const r = __s1.art.root, V = r.position.constructor; const g = (n) => r.getObjectByName(n); const wp = (o) => o ? o.getWorldPosition(new V()).toArray().map((v) => +v.toFixed(3)) : null; const ring = __s1.art.boat?.getObjectByName('prop-boat-rowboat-bow-ring');
+          return { sw: !!__s1.art.rope, state: __s1.art.rope?.state ?? null, level: __s1.puzzles.tide.level, hi: g('env-pier-wood-ch1-rope-high')?.visible ?? null, lo: g('env-pier-wood-ch1-rope-low')?.visible ?? null, end: wp(g('${st === 'high' ? 'env-pier-wood-ch1-rope-bow-end-high' : 'env-pier-wood-ch1-rope-bow-end-low'}')), ring: wp(ring), boatY: +(__s1.art.boat?.position.y ?? NaN).toFixed(3) }; })()`);
+      };
+      const dist = (a, b) => (a && b ? Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]) : Infinity);
+      const rh = await ropeAt('high');
+      if (!rh.sw || rh.state !== 'high' || rh.hi !== true || rh.lo !== false) throw new Error('涨潮应只显示 -rope-high ' + JSON.stringify(rh));
+      if (dist(rh.end, [4.072, 1.98, -10.95]) > 0.01 || dist(rh.end, rh.ring) > 0.01) throw new Error('涨潮船头端不对 ' + JSON.stringify(rh));
+      const rl = await ropeAt('low');
+      if (rl.state !== 'low' || rl.hi !== false || rl.lo !== true) throw new Error('退潮应只显示 -rope-low ' + JSON.stringify(rl));
+      if (Math.abs(rl.boatY + 0.24) > 0.005 || dist(rl.end, [4.072, 0.38, -10.95]) > 0.01 || dist(rl.end, rl.ring) > 0.01) throw new Error('退潮船头端 / 船高不对 ' + JSON.stringify(rl));
+      await ropeAt('high');
+      out.push(`船绳两版：涨潮 high 可见、船头端 ${rh.end.join(', ')} = 船头环；退潮 low 可见、船 y ${rl.boatY}、船头端 ${rl.end.join(', ')} = 船头环 ✓`);
       out.push(`art=1 美术件（岩石 ${art.rocks} 实例、主岛 + 灯塔熄灭）✓；GLB / KTX2 ${ls.n} 个（已完成 ${ls.n - ls.pending}，预加载中 ${ls.pending}）无失败、无占位（重试过：${ls.retried.join(", ") || "无"}）✓`);
       await cdp.goto('');
       return out.join('，');

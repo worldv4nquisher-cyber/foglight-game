@@ -215,7 +215,8 @@ export function buildS1Art(assets: AssetLoader): S1Art {
     loaded = true;
   }
 
-  // 船绳两版（等美术拆节点；layout.ts S1.boatRope 配节点名，找不到就保持现状）
+  // 船绳两版（美术 1030 已拆进 env-pier-wood-ch1.glb；-rope-low 的 extras.defaultVisible false 由 AssetLoader 通用处理；
+  // 每帧按水位切，首帧就定版；layout.ts S1.boatRope 配节点名，找不到就保持现状）
   const rope = makeTideVariantSwitch(root, S1.boatRope);
 
   const towerLods: THREE.LOD[] = [];

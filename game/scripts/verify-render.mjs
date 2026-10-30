@@ -558,6 +558,23 @@ if (hasArt) {
     const ring = w(rb, 'prop-boat-rowboat-bow-ring');
     eq(ring, S1.boat.bowRing, '船头环（涨潮）', 0.01);
     eq(ropeEnd, ring, '船绳端点 = 船头环（涨潮 1.6）', 0.01);
+    // 美术 1030：两版绳都在；退潮船头端 = 船在 y −0.24 时的船头环；桩端两版同一点 (3.566, 2.65, −11.018)
+    const lowEndName = S1.boatRope.bowEnd.low.find((n) => findVariantNode(pier, n));
+    assert.ok(lowEndName, '码头 GLB 缺退潮船头端点');
+    const lowEnd = w(pier, findVariantNode(pier, lowEndName).name);
+    eq(ropeEnd, [4.072, 1.98, -10.95], '涨潮船头端世界坐标（美术 1030）', 0.01);
+    eq(lowEnd, [4.072, 0.38, -10.95], '退潮船头端世界坐标（美术 1030）', 0.01);
+    rb.position.y = Math.max(S1.boat.groundY, 0 - S1.boat.belowWater);
+    near(rb.position.y, -0.24, 1e-9, '退潮船 y');
+    rb.updateMatrixWorld(true);
+    eq(lowEnd, w(rb, 'prop-boat-rowboat-bow-ring'), '退潮船绳端点 = 退潮船头环', 0.01);
+    rb.position.set(...S1.boat.position);
+    rb.updateMatrixWorld(true);
+    for (const k of ['high', 'low']) {
+      const e = findVariantNode(pier, S1.boatRope[k][0]).userData;
+      const from = new THREE.Vector3(...(findVariantNode(pier, e.bowEnd).userData.ropeFromLocal)).applyMatrix4(pier.matrixWorld);
+      eq(from.toArray(), [3.566, 2.65, -11.018], `${k} 桩端世界坐标`, 0.01);
+    }
     // 船体尺寸（白盒退潮挡板用）= GLB
     let ex = null;
     rb.traverse((o) => {
@@ -671,6 +688,29 @@ if (hasArt) {
     const pierNow = await loadGlb('models/env/env-pier-wood-ch1.glb');
     const now = makeTideVariantSwitch(pierNow, S1.boatRope);
     return `S1.boatRope = 美术名 ${S1.boatRope.high[0]} / ${S1.boatRope.low[0]}（船头端点 ${S1.boatRope.bowEnd.high[0]} / ${S1.boatRope.bowEnd.low[0]}，兼容旧 -rope-bow-end）；当前码头 GLB ${now ? '已拆两版、切换生效' : '未拆两版 → 保持现状'}`;
+  });
+
+  await test('extras 默认隐藏（AssetLoader 通用）：码头 GLB -rope-low extras.defaultVisible false → 加载后不可见、-rope-high 可见；visible:false / hidden:true 同义；两版切换照常', async () => {
+    const { applyExtrasVisibility, isHiddenByExtras } = await import('@/assets/extrasVisibility');
+    const { makeTideVariantSwitch } = await import('@/levels/s1/art');
+    const { S1 } = await import('@/levels/s1/layout');
+    assert.ok(isHiddenByExtras({ defaultVisible: false }) && isHiddenByExtras({ visible: false }) && isHiddenByExtras({ hidden: true }));
+    assert.ok(!isHiddenByExtras({ defaultVisible: true }) && !isHiddenByExtras({}) && !isHiddenByExtras(undefined) && !isHiddenByExtras({ hidden: false }));
+    assert.ok(readFileSync(new URL('../src/assets/AssetLoader.ts', import.meta.url), 'utf8').includes('applyExtrasVisibility(gltf.scene)'), 'AssetLoader 加载 GLB 后调 applyExtrasVisibility');
+    const pier = await loadGlb('models/env/env-pier-wood-ch1.glb');
+    const hi = pier.getObjectByName('env-pier-wood-ch1-rope-high');
+    const lo = pier.getObjectByName('env-pier-wood-ch1-rope-low');
+    assert.ok(hi && lo, '两版绳节点');
+    assert.equal(lo.userData.defaultVisible, false);
+    assert.equal(applyExtrasVisibility(pier), 1, '只隐藏 -rope-low 一个');
+    assert.ok(hi.visible && !lo.visible, '加载后默认 high 可见、low 隐藏');
+    const sw = makeTideVariantSwitch(pier, S1.boatRope);
+    assert.ok(sw, '当前码头 GLB 已拆两版 → 切换生效');
+    sw.update(0);
+    assert.ok(!hi.visible && lo.visible, '退潮 low');
+    sw.update(1.6);
+    assert.ok(hi.visible && !lo.visible, '涨潮 high');
+    return '-rope-low 默认隐藏 ✓；切换 ✓';
   });
 
   await test('021 风灯 prop-lantern-brass：原点 = 提手，hang（提手到灯底）/ -emitter 与 017 对齐值一致', async () => {

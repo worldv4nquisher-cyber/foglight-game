@@ -110,7 +110,8 @@ export const S1 = {
    * 船头端点 `-rope-bow-end-high` / `-rope-bow-end-low`）。
    * 水位 ≥ switchLevel 显示 high 列表、否则显示 low 列表；按名字在 S1 美术根下找（精确名，或 `<名>_lodN` / `<名>.001` 等）。
    * 列表里的名字是「候选」：找到几个算几个（旧配置 / 旧名字照样可用）；两个列表任一边一个都找不到 = 不切换（保持 GLB 现状）。
-   * bowEnd：船头端点（涨潮版第一个候选兼容旧名 `-rope-bow-end`，现在 GLB 里只有这一个）。
+   * bowEnd：船头端点（涨潮版第一个候选兼容旧名 `-rope-bow-end`，= high）。美术 1030 世界坐标：桩端两版都在 (3.566, 2.65, −11.018)；
+   * 船头端涨潮 (4.072, 1.98, −10.95) = boat.bowRing、退潮 (4.072, 0.38, −10.95)（船 y −0.24）。
    */
   boatRope: {
     high: ['env-pier-wood-ch1-rope-high'] as readonly string[],

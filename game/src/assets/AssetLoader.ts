@@ -8,6 +8,7 @@ import type { EventBus } from '@/core/EventBus';
 import { disposeObject3D } from '@/core/dispose';
 import { gameConfig } from '@/config/gameConfig';
 import { artEnabled } from '@/config/debug';
+import { applyExtrasVisibility } from './extrasVisibility';
 import { applyMaterialHints } from '@/render/materialHints';
 import { buildLods } from '@/render/lod';
 import { prepareOutlineNormals } from './vertexColors';
@@ -272,6 +273,8 @@ export class AssetLoader {
         }
         // 材质提示（v0.1-013：渔网 alphaHint = alphaHash）
         applyMaterialHints(gltf.scene);
+        // extras 里的默认隐藏（defaultVisible: false / visible: false / hidden: true；美术 1030 船绳 -rope-low）
+        applyExtrasVisibility(gltf.scene);
         gltf.scene.traverse((o) => {
           const m = o as THREE.Mesh;
           if (m.isMesh) {
