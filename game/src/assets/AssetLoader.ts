@@ -70,7 +70,7 @@ export class AssetLoader {
     onFailed: (key, url, err) => {
       this.missing.add(key);
       // text-ok: 只进控制台日志
-      console.info(`[assets] UI 图片缺失，退回纯色底：${key} (${url})`, err);
+      console.info(`[assets] UI 图片缺失，退回底色：${key} (${url})`, err);
     },
   });
   /** 字体加载记录（每个 URL 的 fetch 次数 / 是否成功）：smoke 断言每个字体只请求一次，QA 可在控制台查 __game.assets.fontStats */
