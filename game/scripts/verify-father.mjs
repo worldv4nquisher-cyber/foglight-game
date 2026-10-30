@@ -31,8 +31,12 @@ import { xiClipDuration } from "@/entities/xi/clips";
 import { buildLods, applyLodDistances, describeLods } from "@/render/lod";
 import { manifest as MANIFEST } from "@/assets/manifest";
 import { guessGroup } from "./lib/size-groups.mjs";
+import { MeshBVH } from "three-mesh-bvh";
 
 const out = [];
+let xiCrownRest;
+let palmPadM;
+let hairRestTop;
 const near = (a, b, tol, tag) =>
   assert.ok(Math.abs(a - b) <= tol, `${tag}：${a} vs ${b}（容差 ${tol}）`);
 const ART = new URL("../../art/models/characters/", import.meta.url);
@@ -162,6 +166,14 @@ if (existsSync(animsFile) && existsSync(modelFile)) {
   ]);
   assert.equal(al.fatherYawDegInXiSpace, FATHER_HAND_ON_HEAD.fatherYawDegInXi);
   assert.equal(al.fatherClipFrames, al.xiClipFrames);
+  assert.ok(
+    Array.isArray(al.xiCrownRest) &&
+      al.xiCrownRest.length === 3 &&
+      al.xiCrownRest.every(Number.isFinite),
+    "extras.align.handOnHead.xiCrownRest 是三维点",
+  );
+  xiCrownRest = al.xiCrownRest;
+  palmPadM = al.palmPadM ?? 0;
   out.push(
     "clip 表 ↔ char-father-anims.glb extras：名字 / 帧数 / 循环 / 步幅 / 事件帧 / handOnHead 对位一致 ✓",
   );
@@ -330,6 +342,143 @@ if (existsSync(animsFile) && existsSync(modelFile)) {
   assert.deepEqual(poses[0], ["xi-stand-gaze", 0], "汐同帧从第 0 帧起播");
   const xiHead = xiModel.getObjectByName("head");
   assert.ok(xiHead, "汐 head 骨");
+  // r3：头顶点读 char-father-anims.glb extras.align.handOnHead.xiCrownRest（汐根局部、绑定姿势），
+  // 在绑定姿势下换到 head 骨局部，之后跟骨骼走
+  const crownRest = new THREE.Vector3().fromArray(xiCrownRest);
+  const xiSkinned = [];
+  xiModel.traverse((o) => o.isSkinnedMesh && xiSkinned.push(o));
+  const hairLod0 = xiSkinned.find(
+    (o) =>
+      o.material?.name === "mat-char-xi-hair" &&
+      !/_lod[12]/.test(o.name + (o.parent?.name ?? "")),
+  );
+  assert.ok(hairLod0, "汐 LOD0 头发蒙皮网格（mat-char-xi-hair）");
+  const headIdx = hairLod0.skeleton.bones.indexOf(
+    hairLod0.skeleton.getBoneByName("head"),
+  );
+  assert.ok(headIdx >= 0, "头发网格绑了 head 骨");
+  // 绑定（静止）姿势：mixer 还没 update，骨骼在 rest
+  scene.updateMatrixWorld(true);
+  const restHead = pose(xiHead);
+  const crownInHead = xiHead.worldToLocal(
+    xiModel.localToWorld(crownRest.clone()),
+  );
+  const skinnedWorld = (i, v = new THREE.Vector3()) =>
+    hairLod0.getVertexPosition(i, v).applyMatrix4(hairLod0.matrixWorld);
+  // 绑定姿势下头发网格的最高点 ≈ xiCrownRest（美术量的是同一个头）
+  {
+    const pos = hairLod0.geometry.attributes.position;
+    let top = null;
+    const v = new THREE.Vector3();
+    for (let i = 0; i < pos.count; i++) {
+      skinnedWorld(i, v);
+      if (v.distanceTo(restHead) >= 0.35) continue;
+      const l = xiModel.worldToLocal(v.clone());
+      if (!top || l.y > top.y) top = l;
+    }
+    hairRestTop = top;
+    assert.ok(
+      Math.abs(top.y - crownRest.y) < 0.01 &&
+        Math.hypot(top.x - crownRest.x, top.z - crownRest.z) < 0.03,
+      `xiCrownRest ${crownRest.toArray().map((x) => x.toFixed(4))} 和绑定姿势头发最高点 ${top.toArray().map((x) => x.toFixed(4))} 对不上`,
+    );
+  }
+  // 掌心到头发表面：蒙皮后的 LOD0 头发三角形（head 骨 0.35 m 内）最近点；带符号（按面法线，< 0 = 掌心点在头发里）
+  const hairTris = (() => {
+    const idx = hairLod0.geometry.index;
+    const v = new THREE.Vector3();
+    const keep = [];
+    for (let t = 0; t < idx.count; t += 3)
+      if (skinnedWorld(idx.getX(t), v).distanceTo(restHead) < 0.35)
+        keep.push(idx.getX(t), idx.getX(t + 1), idx.getX(t + 2));
+    return keep;
+  })();
+  // 父亲右手皮肤顶点（LOD0 skin 网格、主权重在右手 / 右手指骨上）
+  const fatherSkin = [];
+  fatherModel.traverse(
+    (o) =>
+      o.isSkinnedMesh &&
+      o.material?.name === "mat-char-father-skin" &&
+      !/_lod[12]/.test(o.name + (o.parent?.name ?? "")) &&
+      fatherSkin.push(o),
+  );
+  assert.equal(fatherSkin.length, 1, "父亲 LOD0 皮肤蒙皮网格");
+  const handMesh = fatherSkin[0];
+  const handVerts = (() => {
+    const HAND = /^(hand_r|(thumb|index|middle|ring|pinky)_\d+_r)$/;
+    const bi = handMesh.geometry.attributes.skinIndex;
+    const bw = handMesh.geometry.attributes.skinWeight;
+    const keep = [];
+    for (let i = 0; i < bi.count; i++) {
+      let w = 0;
+      for (let k = 0; k < 4; k++)
+        if (
+          HAND.test(handMesh.skeleton.bones[bi.getComponent(i, k)]?.name ?? "")
+        )
+          w += bw.getComponent(i, k);
+      if (w > 0.5) keep.push(i);
+    }
+    return keep;
+  })();
+  assert.ok(handVerts.length > 50, `父亲右手皮肤顶点 ${handVerts.length}`);
+  const hairSurface = (p) => {
+    hairLod0.updateMatrixWorld(true);
+    handMesh.updateMatrixWorld(true);
+    const cache = new Map();
+    const vp = (i) => {
+      let w = cache.get(i);
+      if (!w) {
+        w = skinnedWorld(i);
+        cache.set(i, w);
+      }
+      return w;
+    };
+    // 只看掌心 0.15 m 内的头发三角形，每帧建一棵 BVH 求最近点
+    const near = [];
+    for (let t = 0; t < hairTris.length; t += 3)
+      if (vp(hairTris[t]).distanceTo(p) < 0.15)
+        near.push(hairTris[t], hairTris[t + 1], hairTris[t + 2]);
+    const arr = new Float32Array(near.length * 3);
+    near.forEach((i, k) => vp(i).toArray(arr, k * 3));
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.BufferAttribute(arr, 3));
+    const bvh = new MeshBVH(g);
+    const tri = new THREE.Triangle();
+    const n = new THREE.Vector3();
+    const hit = {};
+    const signedTo = (x) => {
+      bvh.closestPointToPoint(x, hit);
+      // BVH 会重排 index：faceIndex 对应 g.index 里的第 faceIndex 个三角形
+      const ix = g.index;
+      const f = hit.faceIndex * 3;
+      tri.a.fromArray(arr, ix ? ix.getX(f) * 3 : f * 3);
+      tri.b.fromArray(arr, ix ? ix.getX(f + 1) * 3 : f * 3 + 3);
+      tri.c.fromArray(arr, ix ? ix.getX(f + 2) * 3 : f * 3 + 6);
+      tri.getNormal(n);
+      return hit.distance * (n.dot(x.clone().sub(hit.point)) >= 0 ? 1 : -1);
+    };
+    // 手皮肤顶点到头发表面带符号距离的最小值（< 0 = 压进头发）
+    let skin = Infinity;
+    let skinBone = "";
+    let palmSkin = Infinity;
+    const v = new THREE.Vector3();
+    const bi = handMesh.geometry.attributes.skinIndex;
+    for (const i of handVerts) {
+      handMesh.getVertexPosition(i, v).applyMatrix4(handMesh.matrixWorld);
+      if (v.distanceTo(p) > 0.1) continue;
+      const d = signedTo(v);
+      const bn = handMesh.skeleton.bones[bi.getComponent(i, 0)]?.name ?? "";
+      if (bn === "hand_r") palmSkin = Math.min(palmSkin, d);
+      if (d < skin) {
+        skin = d;
+        skinBone = handMesh.skeleton.bones[bi.getComponent(i, 0)]?.name ?? "";
+      }
+    }
+    const r = { d: signedTo(p), skin, skinBone, palmSkin };
+    g.dispose();
+    return r;
+  };
+  const surf = new Map();
   const palm = () => {
     // 掌心 ≈ 手骨与中指根的中点
     const a = pose(handR);
@@ -356,16 +505,12 @@ if (existsSync(animsFile) && existsSync(modelFile)) {
       );
     if (actor.time < 6)
       maxSyncErr = Math.max(maxSyncErr, Math.abs(xt - actor.clipTime));
-    // 头顶：head 骨往上 ~0.13 m 的头顶点（汐局部 +Y）
-    const crown = pose(xiHead).add(
-      new THREE.Vector3(0, 0.13, 0).applyQuaternion(
-        xiModel.getWorldQuaternion(new THREE.Quaternion()),
-      ),
-    );
-    dist.push([
-      Math.round(Math.min(actor.time, 6) * 30),
-      palm().distanceTo(crown),
-    ]);
+    // 头顶：美术 extras 的 xiCrownRest（汐局部、绑定姿势）挂在 head 骨上跟着动（不再写死「head 骨 +0.13 m」）
+    const crown = xiHead.localToWorld(crownInHead.clone());
+    const fr = Math.round(Math.min(actor.time, 6) * 30);
+    dist.push([fr, palm().distanceTo(crown)]);
+    if (fr >= EVENTS.handOn && fr <= EVENTS.handOff && !surf.has(fr))
+      surf.set(fr, hairSurface(palm()));
   }
   assert.ok(maxAlignErr < 1e-5, `父亲根对位误差 ${maxAlignErr}`);
   assert.ok(maxSyncErr < 1e-9, `汐 / 父亲时间差 ${maxSyncErr}`);
@@ -386,8 +531,46 @@ if (existsSync(animsFile) && existsSync(modelFile)) {
     minOff > 0.3,
     `抬手前 / 放下后掌心离汐头顶 ≥ ${minOff.toFixed(3)} m（> 0.3）`,
   );
+  // 蒙皮网格：handOn–handOff 每帧掌心点到头发表面（带符号）；掌心点在手骨 / 中指根中点，皮肤厚度按 extras palmPadM
+  const sv = [...surf.entries()].sort((a, b) => a[0] - b[0]);
+  assert.equal(
+    sv.length,
+    EVENTS.handOff - EVENTS.handOn + 1,
+    "handOn–handOff 每帧都量了",
+  );
+  const ds = sv.map(([, r]) => r.d);
+  const sMin = Math.min(...ds);
+  const sMax = Math.max(...ds);
+  const fMin = sv.find(([, r]) => r.d === sMin)[0];
+  const fMax = sv.find(([, r]) => r.d === sMax)[0];
+  const inside = sv.filter(([, r]) => r.d < 0).length;
+  const f80 = surf.get(80)?.d;
+  const sk = sv.map(([, r]) => r.skin);
+  const skMin = Math.min(...sk);
+  const skMax = Math.max(...sk);
+  const fSkMin = sv.find(([, r]) => r.skin === skMin)[0];
+  const pk = sv.map(([, r]) => r.palmSkin);
+  const pkMin = Math.min(...pk);
+  const fPkMin = sv.find(([, r]) => r.palmSkin === pkMin)[0];
+  const gapFrames = sv.filter(([, r]) => r.skin > 0.005).map(([f]) => f);
+  assert.ok(
+    sMax < 0.08,
+    `掌心点离头发表面最远 ${sMax.toFixed(3)} m（@${fMax}）——手没贴住`,
+  );
+  assert.ok(
+    sMin > -0.02,
+    `掌心点进头发 ${(-sMin).toFixed(3)} m（@${fMin}）——穿进头里`,
+  );
   actor.hide();
   assert.deepEqual(poses.at(-1), ["clear"], "hide 放掉汐的姿势");
+  out.push(
+    `hand-on-head 蒙皮网格（汐 LOD0 头发 ${hairTris.length / 3} 面）：xiCrownRest ${xiCrownRest.join(", ")} ↔ 绑定姿势头发最高点 ${hairRestTop
+      .toArray()
+      .map((x) => x.toFixed(4))
+      .join(", ")}；` +
+      `handOn–handOff ${sv.length} 帧 掌心点→头发表面 ${sMin.toFixed(3)}（@${fMin}）…${sMax.toFixed(3)} m（@${fMax}），第 80 帧 ${f80?.toFixed(3)} m，掌心点在头发里的帧 ${inside}/${sv.length}（palmPad ${palmPadM} m）；` +
+      `右手皮肤 ${handVerts.length} 顶点→头发表面最小值 ${skMin.toFixed(3)}（@${fSkMin} ${surf.get(fSkMin).skinBone}，< 0 = 压进头发）…${skMax.toFixed(3)} m（其中手掌 hand_r 主权重顶点最深 ${pkMin.toFixed(3)} @${fPkMin}；带符号按最近三角形法线，发片交界处符号可能不准），皮肤离头发 > 5 mm 的帧 ${gapFrames.length}/${sv.length}${gapFrames.length ? "（" + gapFrames.join(",") + "）" : ""} ✓`,
+  );
   out.push(
     `hand-on-head：父亲根 = 汐根·T(0,0,0.48)·R_y(180°)（误差 ${maxAlignErr.toExponential(1)}）；汐时间 = 父亲时间；事件 ${events.map(([e, f]) => `${e}@${f}`).join(" ")}；` +
       `掌心到汐头顶 handOn–handOff 最大 ${maxOn.toFixed(3)} m / 抬手前·放下后最小 ${minOff.toFixed(3)} m ✓`,

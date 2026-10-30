@@ -3,13 +3,21 @@
 //   hand：在 strokeA–strokeB 之间（第 80 帧）定格两人（timeScale 不动，按游戏时间等到帧）拍全身侧面 + 头部特写，并量父亲掌心到汐头顶的距离。
 // 用法：npm run build && node --import ./scripts/register-ts-paths.mjs scripts/shots-031-father.mjs [gaze,walk,hand]
 import { spawn } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { preview } from 'vite';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+// 汐头顶点：char-father-anims.glb extras.align.handOnHead.xiCrownRest（汐根局部、静止姿势）——不写死，随美术资源走
+const XI_CROWN_REST = (() => {
+  const b = readFileSync(resolve(root, '../art/models/characters/char-father-anims.glb'));
+  const j = JSON.parse(b.subarray(20, 20 + b.readUInt32LE(12)).toString('utf8'));
+  const v = j.animations.find((a) => a.name === 'father-hand-on-head')?.extras?.align?.handOnHead?.xiCrownRest;
+  if (!Array.isArray(v) || v.length !== 3) throw new Error('char-father-anims.glb 没有 xiCrownRest');
+  return v;
+})();
 const OUT = resolve(root, '../docs/tasks/shots-031');
 mkdirSync(OUT, { recursive: true });
 if (!existsSync(join(root, 'dist/index.html'))) throw new Error('先 npm run build');
@@ -92,7 +100,10 @@ const PTS = `(() => { const s = __s3, f = s.father; const V = s.scene.position.c
   const xi = s.rig.animator.model; xi.updateMatrixWorld(true);
   const fwd = new V(0, 0, 1).transformDirection(r.matrixWorld).setY(0).normalize();
   const palm = wp(r, 'hand_r').add(wp(r, 'middle_01_r') ?? wp(r, 'hand_r')).multiplyScalar(0.5);
-  const crown = wp(xi, 'head').add(new V(0, 0.13, 0));
+  // 头顶点 = xiCrownRest 在静止姿势下换到 head 骨局部（取一份没播动画的新克隆），再跟当前 head 骨走
+  const rest = __game.assets.getModel('char-xi'); rest.updateMatrixWorld(true);
+  const crownInHead = rest.getObjectByName('head').worldToLocal(rest.localToWorld(new V(${XI_CROWN_REST.join(',')})));
+  const crown = xi.getObjectByName('head').localToWorld(crownInHead.clone());
   // 汐头 r2：按蒙皮后的真网格量——head 骨 0.35 m 内 LOD0 顶点的最高点（网格头顶）和离掌心最近的顶点（掌心到头发表面）
   const hb = wp(xi, 'head'); let meshCrown = null, near = Infinity; const v = new V();
   xi.traverse((o) => { if (!o.isSkinnedMesh || /_lod[12]/.test(o.name + (o.parent?.name ?? ''))) return; const n = o.geometry.attributes.position.count;
@@ -102,7 +113,7 @@ const PTS = `(() => { const s = __s3, f = s.father; const V = s.scene.position.c
   const cuffs = {}; for (const sd of ['l', 'r']) { const h = wp(r, 'hand_' + sd), e = wp(r, 'lower_arm_' + sd); if (!h || !e) continue; const c = h.clone().lerp(e, 0.18);
     const out = c.clone().sub(r.getWorldPosition(new V())).setY(0).normalize(); const toE = e.clone().sub(c).normalize();
     cuffs[sd] = { at: c.toArray(), eye: c.clone().addScaledVector(out, 0.42).addScaledVector(toE, 0.18).add(new V(0, 0.12, 0)).toArray() }; }
-  return { cuffs, meshCrown: meshCrown?.toArray(), palmMeshCrown: meshCrown ? palm.distanceTo(meshCrown) : null, palmSurface: near, crownBoneVsMesh: meshCrown ? meshCrown.y - crown.y : null, root: r.getWorldPosition(new V()).toArray(), fwd: fwd.toArray(), head: wp(r, 'head').toArray(), chest: (wp(r, 'spine_03') ?? wp(r, 'head')).toArray(), palm: palm.toArray(), crown: crown.toArray(), palmCrown: palm.distanceTo(crown),
+  return { cuffs, meshCrown: meshCrown?.toArray(), palmMeshCrown: meshCrown ? palm.distanceTo(meshCrown) : null, palmSurface: near, crownBoneVsMesh: meshCrown ? meshCrown.y - crown.y : null, root: r.getWorldPosition(new V()).toArray(), fwd: fwd.toArray(), head: wp(r, 'head').toArray(), chest: (wp(r, 'spine_03') ?? wp(r, 'head')).toArray(), palm: palm.toArray(), crown: crown.toArray(), aim: wp(xi, 'head').add(new V(0, 0.13, 0)).toArray(), palmCrown: palm.distanceTo(crown),
     xiRoot: xi.getWorldPosition(new V()).toArray(), mode: f.mode, frame: Math.round(f.clipTime * 30), visible: r.visible,
     lods: (() => { const out = []; r.traverse((o) => o.isLOD && out.push(o.levels.map((l) => l.distance))); return out; })() }; })()`;
 const camTo = (eye, at, fov) => evaluate(`(() => { const c = __s3.camera; c.position.set(${eye.join(',')}); c.fov = ${fov}; c.lookAt(${at.join(',')}); c.updateProjectionMatrix(); return 1; })()`);
@@ -116,7 +127,7 @@ async function big(name, extra) {
   const pts = await evaluate(PTS);
   const file = await shot(`${name}.png`);
   report.shots.push({ name, file, frame: pts.frame, palmCrown: +pts.palmCrown.toFixed(3), palmMeshCrown: pts.palmMeshCrown == null ? null : +pts.palmMeshCrown.toFixed(3), palmSurface: +(+pts.palmSurface).toFixed(3), crownBoneVsMesh: pts.crownBoneVsMesh == null ? null : +pts.crownBoneVsMesh.toFixed(3), ...extra });
-  console.log('  ✓', name, 'frame', pts.frame, 'palm→crown', pts.palmCrown.toFixed(3), 'palm→meshCrown', pts.palmMeshCrown?.toFixed(3), 'palm→surface', (+pts.palmSurface).toFixed(3), 'meshCrown−boneCrown', pts.crownBoneVsMesh?.toFixed(3));
+  console.log('  ✓', name, 'frame', pts.frame, 'palm→crown', pts.palmCrown.toFixed(3), 'palm→meshCrown', pts.palmMeshCrown?.toFixed(3), 'palm→surface', (+pts.palmSurface).toFixed(3), 'meshCrown−crownRest', pts.crownBoneVsMesh?.toFixed(3));
   await setView(...SMALL);
   return pts;
 }
@@ -171,7 +182,8 @@ try {
         // 全身：父亲背对海站在汐和玻璃之间、面朝灯室里（fwd 指向室内）→ 机位放室内汐身后斜 25°（正侧面会被灯室立柱挡住）
         await camTo(add(add(add(mid, p.fwd, 2.2), s, 1.0), [0, 1.5, 0]), add(mid, [0, 1.1, 0]), 50);
         await big('s3-father-hand', { mode });
-        await camTo(add(add(add(p.crown, s, 0.95), p.fwd, -0.25), [0, 0.12, 0]), add(p.crown, [0, -0.04, 0]), 40);
+        // 机位仍按 head 骨 +0.13 m（和 r2 / r3 前的特写同一构图，便于对比）
+        await camTo(add(add(add(p.aim, s, 0.95), p.fwd, -0.25), [0, 0.12, 0]), add(p.aim, [0, -0.04, 0]), 40);
         await big('s3-father-hand-closeup', { mode });
         await cuffShots(p, 'hand80');
         await evaluate(`(() => { __unfreeze(); return 1; })()`);
