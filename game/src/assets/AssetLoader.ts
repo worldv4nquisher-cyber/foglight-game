@@ -14,7 +14,7 @@ import { buildLods } from '@/render/lod';
 import { prepareOutlineNormals } from './vertexColors';
 import { pendingArtPresent } from './artPresent';
 import { fontStats, forgetFont, loadFontOnce } from './fontLoader';
-import { entriesForGroup, type AssetEntry, type AssetGroup } from './manifest';
+import { entriesForGroup, manifest, type AssetEntry, type AssetGroup } from './manifest';
 import { createPlaceholderModel, createPlaceholderTexture, createMissingTexture } from './placeholders';
 import { assetStats, createSharedKtx2, loadWithRetry, shareInflight, stripFallbackTextures } from './loadRetry';
 
@@ -57,6 +57,9 @@ export class AssetLoader {
   private audio = new Map<string, AudioBuffer>();
   private fonts = new Map<string, FontFace>();
   private fontUrls = new Map<string, string>();
+  /** 030 UI 图片：key → 已下载并解码的 URL（CSS / <img> 直接用，浏览器缓存命中） */
+  private images = new Map<string, string>();
+  private imageInflight = new Map<string, Promise<string | null>>();
   /** 字体加载记录（每个 URL 的 fetch 次数 / 是否成功）：smoke 断言每个字体只请求一次，QA 可在控制台查 __game.assets.fontStats */
   get fontStats(): { url: string; family: string; attempts: number; ok: boolean; error?: string }[] {
     return [...fontStats.values()].map((s) => ({ ...s }));
@@ -193,6 +196,7 @@ export class AssetLoader {
   async loadEntries(entries: AssetEntry[], onProgress?: (ratio: number) => void): Promise<void> {
     const todo = entries.filter((e) => {
       if (this.has(e.key)) return false;
+      if (e.lazy) return false; // 030：懒加载图片不随组下载（loadImage 用到时再取）
       if (e.art && !this.artEnabled) {
         this.missing.add(e.key); // ?art=0：当作没交付，场景用白盒
         return false;
@@ -302,6 +306,11 @@ export class AssetLoader {
         this.audio.set(entry.key, buf);
         break;
       }
+      case 'image': {
+        this.images.set(entry.key, await this.fetchImage(url));
+        onProgress(1);
+        break;
+      }
       case 'font': {
         // 字体子集（WOFF2）：注册为 FontFace，CSS 的 --ui-font / --ui-serif 里排在最前；不支持 FontFace 的环境跳过
         if (typeof FontFace === 'undefined' || typeof document === 'undefined') break;
@@ -343,7 +352,57 @@ export class AssetLoader {
   }
 
   has(key: string): boolean {
-    return this.models.has(key) || this.textures.has(key) || this.audio.has(key) || this.fonts.has(key);
+    return this.models.has(key) || this.textures.has(key) || this.audio.has(key) || this.fonts.has(key) || this.images.has(key);
+  }
+
+  /** 030 UI 图片：下载（网络失败 / 5xx 重试，同 GLB）+ 解码，成功返回 URL；之后 CSS / <img> 用同一 URL 命中缓存 */
+  private async fetchImage(url: string): Promise<string> {
+    await loadWithRetry(url, 'img', async () => {
+      const r = await fetch(url);
+      if (!r.ok) throw Object.assign(new Error(`HTTP ${r.status}`), { response: { status: r.status } });
+      await r.arrayBuffer();
+    });
+    if (typeof Image !== 'undefined') {
+      const img = new Image();
+      img.decoding = 'async';
+      img.src = url;
+      await img.decode();
+    }
+    return url;
+  }
+
+  /** 已加载的 UI 图片 URL（没有 / 没交付 / ?art=0 → null） */
+  imageUrl(key: string): string | null {
+    return this.images.get(key) ?? null;
+  }
+
+  /**
+   * 懒加载一张 UI 图片（030：阅读纸张、结尾插画、菜单兜底背景）。同 key 只下载一次（并发共享）；
+   * ?art=0 / 文件缺失 / 解码失败 → null（调用方退回纯色底），失败的下次再请求会重试。
+   */
+  loadImage(key: string): Promise<string | null> {
+    const done = this.images.get(key);
+    if (done) return Promise.resolve(done);
+    const entry = manifest.find((e) => e.key === key && e.type === 'image');
+    if (!entry || (entry.art && !this.artEnabled)) return Promise.resolve(null);
+    const inflight = this.imageInflight.get(key);
+    if (inflight) return inflight;
+    const url = entry.url.startsWith('http') ? entry.url : `${BASE}${entry.url}`;
+    const p = this.fetchImage(url)
+      .then((u) => {
+        this.images.set(key, u);
+        this.missing.delete(key);
+        return u;
+      })
+      .catch((err: unknown) => {
+        this.missing.add(key);
+        // text-ok: 只进控制台日志
+        console.info(`[assets] UI 图片缺失，退回纯色底：${key} (${entry.url})`, err);
+        return null;
+      })
+      .finally(() => this.imageInflight.delete(key));
+    this.imageInflight.set(key, p);
+    return p;
   }
 
   isMissing(key: string): boolean {
@@ -417,6 +476,7 @@ export class AssetLoader {
     this.textures.get(key)?.dispose();
     this.models.delete(key);
     this.textures.delete(key);
+    this.images.delete(key);
     if (g) this.pruneKtx2Cache();
     this.audio.delete(key);
     const face = this.fonts.get(key);

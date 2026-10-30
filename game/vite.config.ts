@@ -42,14 +42,14 @@ function threeDecodersWasmOnly(): Plugin {
  * v0.1-013：美术交付目录 ../art 直接作为运行时资源源（不复制进 git 的 public/）。
  * - URL 约定：`assets/art/<相对 art 的路径>`，如 assets/art/models/env/env-cliff-s1.glb；
  *   GLB 里外部 KTX2 写的是 `../../textures/tex-*.ktx2`，相对 GLB URL 解析后正好落在 assets/art/textures/，GLTFLoader + KTX2Loader 原样可用。
- * - dev：中间件把 /assets/art/** 映射到 ../art/**（只放行 models/ textures/ audio/ 下的 glb / ktx2 / webp / png / ogg）。
+ * - dev：中间件把 /assets/art/** 映射到 ../art/**（只放行 models/ textures/ audio/ 下的 glb / ktx2 / webp / png / ogg，以及 030 的 ui/*.webp|png|svg）。
  * - build：把 src/assets/manifest.ts 里登记的 assets/art/ 资源 + 每个 GLB 引用的外部贴图拷进 dist/assets/art/（npm run size 按实际文件统计）。
  *   ../art 不存在（只拉了 game/ 的环境）时什么也不拷，清单项都是 optional，运行时退回白盒。
  */
 const ART_DIR = fileURLToPath(new URL('../art', import.meta.url));
 const ART_PREFIX = 'assets/art/';
-const ART_OK = /^(models|textures|audio)\/[^\0]*\.(glb|ktx2|webp|png|ogg|mp3|m4a)$/;
-const MIME: Record<string, string> = { glb: 'model/gltf-binary', ktx2: 'image/ktx2', webp: 'image/webp', png: 'image/png', ogg: 'audio/ogg', mp3: 'audio/mpeg', m4a: 'audio/mp4' };
+const ART_OK = /^((models|textures|audio)\/[^\0]*\.(glb|ktx2|webp|png|ogg|mp3|m4a)|ui\/[^\0/]*\.(webp|png|svg))$/;
+const MIME: Record<string, string> = { svg: 'image/svg+xml', glb: 'model/gltf-binary', ktx2: 'image/ktx2', webp: 'image/webp', png: 'image/png', ogg: 'audio/ogg', mp3: 'audio/mpeg', m4a: 'audio/mp4' };
 
 function artFile(rel: string): string | null {
   const clean = posix.normalize(decodeURIComponent(rel));

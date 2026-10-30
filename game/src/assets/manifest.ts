@@ -14,8 +14,10 @@
  * - optional: true 表示缺失时不报错，使用占位几何体/纹理/静音兜底（美术资源未到位时先跑通）
  * - 模型优先 .glb（可 Draco / Meshopt 压缩，贴图可用 KTX2）；独立贴图优先 .ktx2，其次 .webp
  * - 字体：scripts/subset-fonts.mjs 按文本表实际用字子集化成 WOFF2（npm run fonts），以 FontFace 注册，CSS 直接用 family 名
+ * - image（030 UI）：DOM / CSS 用的位图和 SVG（不进 three）。非 lazy 的随组预下载并解码，src/ui/uiArt.ts 写成 CSS 变量；
+ *   lazy 的不随组下载，用到时（打开阅读器 / 进结尾页 / 菜单退回静态背景）才 AssetLoader.loadImage(key)，失败退回纯色底
  */
-export type AssetType = 'gltf' | 'texture' | 'ktx2' | 'audio' | 'font';
+export type AssetType = 'gltf' | 'texture' | 'ktx2' | 'audio' | 'font' | 'image';
 
 /** 加载分组（顺序 = 一般加载顺序） */
 export const ASSET_GROUPS = ['boot', 'menu', 'common', 's1', 's2', 's3'] as const;
@@ -51,12 +53,41 @@ export interface AssetEntry {
   gainDb?: number;
   /** 仅 font：CSS font-family 名（styles.css 的 --ui-font / --ui-serif 排在最前） */
   family?: string;
+  /**
+   * 仅 image：不随组预加载，用到时 AssetLoader.loadImage(key) 才下载（030：阅读纸张、章节结尾插画、主菜单静态兜底背景）。
+   * 体积仍按 group 计入分包（npm run size）。
+   */
+  lazy?: boolean;
 }
 
 export const manifest: AssetEntry[] = [
   // ---- menu：字体子集（思源黑体 / 思源宋体 = Noto Sans / Serif CJK SC，SIL OFL 1.1；npm run fonts 生成）
   { key: 'font-sans', type: 'font', url: 'assets/fonts/foglight-sans.woff2', group: 'menu', family: 'Foglight Sans' },
   { key: 'font-serif', type: 'font', url: 'assets/fonts/foglight-serif.woff2', group: 'menu', family: 'Foglight Serif' },
+  // ---- menu：030 UI 美术（art/ui/，README-030；21 个运行时文件，1,533,136 B）。主菜单 / 加载页 / 通用件随主菜单包预加载，
+  //      主菜单静态背景只在 008 实时背景不可用时懒加载（兜底）
+  { key: 'ui-title-logo', type: 'image', url: 'assets/art/ui/ui-title-logo.webp', group: 'menu', optional: true, art: true },
+  { key: 'ui-title-logo-svg', type: 'image', url: 'assets/art/ui/ui-title-logo.svg', group: 'menu', optional: true, art: true },
+  { key: 'ui-panel-frame', type: 'image', url: 'assets/art/ui/ui-panel-frame.webp', group: 'menu', optional: true, art: true },
+  { key: 'ui-panel-corner', type: 'image', url: 'assets/art/ui/ui-panel-corner.svg', group: 'menu', optional: true, art: true, lazy: true },
+  { key: 'ui-button-primary', type: 'image', url: 'assets/art/ui/ui-button-primary.webp', group: 'menu', optional: true, art: true },
+  { key: 'ui-button-secondary', type: 'image', url: 'assets/art/ui/ui-button-secondary.webp', group: 'menu', optional: true, art: true },
+  { key: 'ui-icon-interact', type: 'image', url: 'assets/art/ui/ui-icon-interact.svg', group: 'menu', optional: true, art: true },
+  { key: 'ui-icon-hint-lantern', type: 'image', url: 'assets/art/ui/ui-icon-hint-lantern.svg', group: 'menu', optional: true, art: true },
+  { key: 'ui-icon-journal', type: 'image', url: 'assets/art/ui/ui-icon-journal.svg', group: 'menu', optional: true, art: true },
+  { key: 'ui-icon-read', type: 'image', url: 'assets/art/ui/ui-icon-read.svg', group: 'menu', optional: true, art: true },
+  { key: 'ui-icon-settings', type: 'image', url: 'assets/art/ui/ui-icon-settings.svg', group: 'menu', optional: true, art: true },
+  { key: 'ui-icon-app-512', type: 'image', url: 'assets/art/ui/ui-icon-app-512.png', group: 'menu', optional: true, art: true },
+  { key: 'ui-illust-loading', type: 'image', url: 'assets/art/ui/ui-illust-loading.webp', group: 'menu', optional: true, art: true },
+  { key: 'ui-illust-menu', type: 'image', url: 'assets/art/ui/ui-illust-menu.webp', group: 'menu', optional: true, art: true, lazy: true },
+  // ---- common（懒加载）：阅读纸张 ×6（README-030 §2.2 data-doc 映射，见 src/ui/uiArt.ts PAPER_FOR_DOC）、第一章结尾插画
+  { key: 'ui-paper-journal', type: 'image', url: 'assets/art/ui/ui-paper-journal.webp', group: 'common', optional: true, art: true, lazy: true },
+  { key: 'ui-paper-letter', type: 'image', url: 'assets/art/ui/ui-paper-letter.webp', group: 'common', optional: true, art: true, lazy: true },
+  { key: 'ui-paper-note', type: 'image', url: 'assets/art/ui/ui-paper-note.webp', group: 'common', optional: true, art: true, lazy: true },
+  { key: 'ui-paper-sketch', type: 'image', url: 'assets/art/ui/ui-paper-sketch.webp', group: 'common', optional: true, art: true, lazy: true },
+  { key: 'ui-paper-notice', type: 'image', url: 'assets/art/ui/ui-paper-notice.webp', group: 'common', optional: true, art: true, lazy: true },
+  { key: 'ui-paper-logbook', type: 'image', url: 'assets/art/ui/ui-paper-logbook.webp', group: 'common', optional: true, art: true, lazy: true },
+  { key: 'ui-illust-chapter1-end', type: 'image', url: 'assets/art/ui/ui-illust-chapter1-end.webp', group: 'common', optional: true, art: true, lazy: true },
   // ---- common：主角模型（美术 016 交付前文件不存在，自动回退为胶囊占位，演示缺失回退流程）
   // v0.1-017 汐定稿：模型（73 骨，LOD 118k / 48.5k / 24.3k，外部贴图 tex-xi-*.ktx2）+ 31 个动画 clip（只有骨骼，1.44 MB，各场景都用 → common）
   { key: 'char-xi', type: 'gltf', url: 'assets/art/models/characters/char-xi.glb', group: 'common', optional: true, art: true },

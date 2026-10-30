@@ -13,7 +13,7 @@ export const ASSET_RETRY_DELAY_MS = 150;
 
 export interface AssetLoadStat {
   url: string;
-  kind: 'glb' | 'ktx2';
+  kind: 'glb' | 'ktx2' | 'img';
   /** 实际发起的请求次数（含重试） */
   attempts: number;
   ok: boolean;
