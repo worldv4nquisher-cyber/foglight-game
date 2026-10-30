@@ -16,6 +16,7 @@ import { AMBIENCE, Ambience, AMBIENCE_XFADE_SEC } from '@/levels/ambience';
 import { bindUiSfx, uiClickSfx } from '@/ui/uiSfx';
 import { bindPuzzleSfx, DIAL_GROUPS, MIRROR_FINE_MIN_SEC } from '@/systems/audio/puzzleSfx';
 import { BeamHum, PushLoop, BEAM_HUM_ID, LENS_ROTATE_ID, LENS_ROTATE_DELAY_SEC } from '@/systems/audio/loops';
+import { BellWindTimer, BELL_WIND_INTERVAL } from '@/systems/audio/bellWind';
 
 class FakeParam {
   constructor(v = 1) {
@@ -294,6 +295,46 @@ test('032 登记：79 个 ogg 全在清单（sfx 59 / ambience 20，url = assets
   for (const k of ['sfx-ignite-ready-loop', 'amb-room-clock', 'amb-waves-near', 'sfx-raft-lock']) assert.notEqual(au.find((e) => e.key === k).group, 'common', k);
 });
 
+test('制作人要求：钟风吹轻响间隔 6–14 s（按游戏时间模拟 fixedUpdate，与墙钟 / 帧率无关）', () => {
+  assert.deepEqual([...BELL_WIND_INTERVAL], [6, 14]);
+  const sim = (rng, dt, sec, inRange = () => true) => {
+    const t = new BellWindTimer(rng);
+    const at = [];
+    const n = Math.round(sec / dt);
+    for (let i = 1; i <= n; i++) if (t.update(dt, inRange(i * dt))) at.push(i * dt);
+    return at;
+  };
+  const gaps = (at) => at.slice(1).map((x, i) => x - at[i]);
+  // 端点：rng 0 → 6 s、rng → 1 → 14 s（量化到一个固定步长内）
+  for (const [r, want] of [[0, 6], [0.999999, 14]]) {
+    for (const dt of [1 / 60, 1 / 30, 0.1]) {
+      const g = gaps(sim(() => r, dt, 120));
+      assert.ok(g.length >= 7 && g.every((x) => Math.abs(x - want) <= dt + 1e-9), `rng ${r} dt ${dt.toFixed(3)} 间隔 ≈ ${want} s：${g.map((x) => x.toFixed(2))}`);
+    }
+  }
+  // 随机：固定种子 LCG，1 h 游戏时间；全部落在 [6, 14]（+ 一步量化），两端都摸得到、均值 ≈ 10
+  let seed = 12345;
+  const lcg = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 2 ** 32);
+  const dt = 1 / 60;
+  const at = sim(lcg, dt, 3600);
+  const g = gaps(at);
+  assert.equal(at[0], dt, '一进听得到的距离先响一次');
+  const min = Math.min(...g), max = Math.max(...g), mean = g.reduce((a, b) => a + b, 0) / g.length;
+  assert.ok(g.every((x) => x >= 6 - 1e-9 && x <= 14 + dt + 1e-9), `间隔越界 ${min.toFixed(3)}…${max.toFixed(3)}`);
+  assert.ok(min < 6.5 && max > 13.5 && Math.abs(mean - 10) < 0.6 && g.length > 300, `分布 ${g.length} 次 ${min.toFixed(2)}…${max.toFixed(2)} 均值 ${mean.toFixed(2)}`);
+  // 帧率无关：同种子下 dt 1/60 与 0.1（高负载一帧只走几个固定步长也一样按游戏时间）次数相近
+  seed = 12345;
+  const atSlow = sim(lcg, 0.1, 3600);
+  assert.ok(Math.abs(atSlow.length - at.length) <= 3, `dt 0.1 响 ${atSlow.length} 次 vs dt 1/60 ${at.length} 次`);
+  // 走远：倒计时压到 ≤ 1 s，回来 1 s 内响
+  const inR = (t) => t < 20 || t > 40;
+  const ats = sim(() => 0.5, dt, 60, inR);
+  assert.ok(ats.every((x) => x < 20 || x > 40), '走远时不响');
+  const back = ats.find((x) => x > 40);
+  assert.ok(back !== undefined && back - 40 <= 1 + dt, `回到 12 m 内 ${(back - 40).toFixed(2)} s 后响`);
+  console.log(`  钟风吹轻响：1 h 游戏时间 ${at.length} 次，间隔 ${min.toFixed(2)}…${max.toFixed(2)} s、均值 ${mean.toFixed(2)} s；dt 0.1 时 ${atSlow.length} 次；走远回来 ${(back - 40).toFixed(2)} s 后响 ✓`);
+});
+
 test('032 SfxBank：旧 id 别名（README 对照表）→ 032 文件；a–d 变体随机、同一 id 不连续重复、只挑已加载的；gainDb → 线性增益；全缺返回 null', () => {
   const keys = new Set(manifest.map((e) => e.key));
   for (const [id, files] of Object.entries(SFX_ALIASES)) for (const f of files) assert.ok(keys.has(f), `${id} → ${f} 不在清单`);
@@ -303,7 +344,7 @@ test('032 SfxBank：旧 id 别名（README 对照表）→ 032 文件；a–d �
   assert.equal(SFX_ALIASES['sfx-bell-wind'].length, 3);
   // S1 钟风吹轻响：README 建议 6–14 s 一次（随机间隔）
   const s1src = readFileSync(new URL('../src/levels/s1/puzzles.ts', import.meta.url), 'utf8');
-  assert.ok(/BELL_WIND_INTERVAL: readonly \[number, number\] = \[6, 14\]/.test(s1src) && s1src.includes('windTimer = nextBellWind()'), '钟风吹轻响间隔 6–14 s 随机');
+  assert.ok(s1src.includes('new BellWindTimer()') && s1src.includes('bellWind.update(dt, d < BELL_HEAR_DISTANCE)'), 'S1 钟风吹轻响用 BellWindTimer（fixedUpdate 游戏时间 dt）');
   for (const s of STEP_SURFACES) assert.equal(SFX_ALIASES[`sfx-step-${s}`].length, 4);
   const bufs = new Map([...keys].map((k) => [k, { k }]));
   let i = 0;

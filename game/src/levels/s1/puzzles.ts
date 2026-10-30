@@ -13,6 +13,7 @@ import { Entity } from '@/entities/Entity';
 import type { EntityManager } from '@/entities/EntityManager';
 import type { TextId } from '@/content/text';
 import { S1, pierPoint, s1StepLinks, v3 } from './layout';
+import { BellWindTimer } from '@/systems/audio/bellWind';
 
 /** 谜题 / 提示 / 交互 id（提示系统二级高亮、smoke 都按这些找） */
 export const S1_IDS = {
@@ -26,8 +27,7 @@ export const S1_IDS = {
 
 /** 潮汐钟「风吹轻响」的距离与间隔（sfx-bell-wind → 032 sfx-tide-bell-wind-a~c 随机；README 建议 6–14 s 一次，均匀随机） */
 const BELL_HEAR_DISTANCE = 12;
-export const BELL_WIND_INTERVAL: readonly [number, number] = [6, 14];
-const nextBellWind = (): number => BELL_WIND_INTERVAL[0] + Math.random() * (BELL_WIND_INTERVAL[1] - BELL_WIND_INTERVAL[0]);
+export { BELL_WIND_INTERVAL } from '@/systems/audio/bellWind';
 
 export interface S1PuzzleOptions {
   game: Game;
@@ -262,7 +262,7 @@ export function buildS1Puzzles(o: S1PuzzleOptions): S1Puzzles {
   let p2Solved = false;
   let firstLow = false;
   let bellHeard = false;
-  let windTimer = 0;
+  const bellWind = new BellWindTimer();
   let footprintsShown = false;
   let channelShown = false;
   let prevFloat = raft.state;
@@ -332,17 +332,11 @@ export function buildS1Puzzles(o: S1PuzzleOptions): S1Puzzles {
     fixedUpdate(dt, p) {
       // 钟：12 m 内风吹轻响；第一次听到时汐的独白
       const d = bellXZ.distanceTo(new THREE.Vector2(p.x, p.z));
-      if (d < BELL_HEAR_DISTANCE) {
-        if (!bellHeard) {
-          bellHeard = true;
-          say('ch1.s1.tide_bell.mono_seen');
-        }
-        windTimer -= dt;
-        if (windTimer <= 0) {
-          windTimer = nextBellWind();
-          events.emit('sfx:play', { id: 'sfx-bell-wind' });
-        }
-      } else windTimer = Math.min(windTimer, 1);
+      if (d < BELL_HEAR_DISTANCE && !bellHeard) {
+        bellHeard = true;
+        say('ch1.s1.tide_bell.mono_seen');
+      }
+      if (bellWind.update(dt, d < BELL_HEAR_DISTANCE)) events.emit('sfx:play', { id: 'sfx-bell-wind' });
       const low = tide.state === 'low' && !tide.transitioning;
       if (low && !footprintsShown && p.y < 1.2 && inFootprints(p)) {
         footprintsShown = true;
