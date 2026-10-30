@@ -29,7 +29,7 @@ import type { HintSystem } from '@/systems/HintSystem';
 import { createSceneHints } from './sceneHints';
 import { TideSet } from '@/systems/tide/TideController';
 import type { TideBell } from '@/systems/tide/TideBell';
-import { switchMusic } from '@/systems/audio/music';
+import { switchMusic, switchMusicLazy } from '@/systems/audio/music';
 import { bindSfxFallback, recallToSafePoint } from '@/systems/tide/tideScene';
 import { PushLoop } from '@/systems/audio/loops';
 import { bindPuzzleSfx } from '@/systems/audio/puzzleSfx';
@@ -114,6 +114,10 @@ export abstract class LevelScene extends BaseScene {
   /** 建立镜头结束后是否后台预加载下一个场景（沙盒关掉） */
   protected preloadNext = true;
   private disposed = false;
+  /** 033 改：懒加载场景曲的调试记录（冒烟读）——首帧时刻、发起请求时刻（performance.now() ms）、结果 */
+  musicFirstFrameAt: number | null = null;
+  musicRequestedAt: number | null = null;
+  musicLazyResult: string | null = null;
   private pendingExits: SceneExitOptions[] = [];
 
   constructor(game: Game, level: LevelDef) {
@@ -183,8 +187,22 @@ export abstract class LevelScene extends BaseScene {
     if (this.goalId) this.game.narrative.setGoal(this.goalId);
 
     const { events, audio, ui } = this.game;
-    // 033 / 036：场景曲（LevelDef.music）和上一首（主菜单曲 / 上一场景曲）2 s 交叉淡化；没有场景曲则上一首淡出
-    switchMusic(audio, (k) => this.game.assets.getAudio(k), this.level.music);
+    // 033 / 036：场景曲（LevelDef.music）和上一首（主菜单曲 / 上一场景曲）2 s 交叉淡化；没有场景曲则上一首淡出。
+    // 033 改（制作人 c0d81c9 反馈）：懒加载的场景曲（S1 mus-s1-ebb-shore）不随组预下载——本场景首帧真正渲染出来后
+    // 才 loadAudio，解码完再交叉淡化（上一首已停就从 0 淡入）；404 / 超时 → 上一首照常淡出、不放音乐、不报错
+    const music = this.level.music;
+    if (music !== null && manifest.some((e) => e.key === music && e.type === 'audio' && e.lazy)) {
+      const offFirst = events.on('scene:firstFrame', ({ at }) => {
+        offFirst();
+        if (this.disposed) return;
+        this.musicRequestedAt = performance.now();
+        this.musicFirstFrameAt = at;
+        void switchMusicLazy(audio, (k) => this.game.assets.loadAudio(k), music, () => !this.disposed).then((r) => {
+          this.musicLazyResult = r;
+        });
+      });
+      this.cleanups.push(offFirst);
+    } else switchMusic(audio, (k) => this.game.assets.getAudio(k), music);
     this.pushLoop = new PushLoop(events);
     this.footsteps = new Footsteps(events, this.level.id);
     const amb = AMBIENCE[this.level.id];

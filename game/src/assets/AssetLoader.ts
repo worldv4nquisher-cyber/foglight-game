@@ -14,6 +14,7 @@ import { buildLods } from '@/render/lod';
 import { prepareOutlineNormals } from './vertexColors';
 import { pendingArtPresent } from './artPresent';
 import { fontStats, forgetFont, loadFontOnce } from './fontLoader';
+import { LazyAudioCache, LAZY_AUDIO_TIMEOUT_MS } from './lazyAudio';
 import { ImageCache } from './imageCache';
 import { entriesForGroup, manifest, type AssetEntry, type AssetGroup } from './manifest';
 import { createPlaceholderModel, createPlaceholderTexture, createMissingTexture } from './placeholders';
@@ -71,6 +72,25 @@ export class AssetLoader {
       this.missing.add(key);
       // text-ok: 只进控制台日志
       console.info(`[assets] UI 图片缺失，退回底色：${key} (${url})`, err);
+    },
+  });
+  /** 懒加载音频（033 改：S1 场景曲等首帧后才请求；超时 LAZY_AUDIO_TIMEOUT_MS） */
+  private lazyAudio = new LazyAudioCache<AudioBuffer>({
+    lookup: (key) => {
+      const e = manifest.find((x) => x.key === key && x.type === 'audio' && x.lazy);
+      return e ? { url: e.url.startsWith('http') ? e.url : `${BASE}${e.url}`, art: e.art } : null;
+    },
+    artEnabled: () => this.artEnabled,
+    load: (url) => this.audioLoader.loadAsync(url),
+    timeoutMs: LAZY_AUDIO_TIMEOUT_MS,
+    onLoaded: (key, buf) => {
+      this.audio.set(key, buf);
+      this.missing.delete(key);
+    },
+    onFailed: (key, url, err) => {
+      this.missing.add(key);
+      // text-ok: 只进控制台日志
+      console.info(`[assets] lazy audio missing / timed out, no music: ${key} (${url})`, err);
     },
   });
   /** 字体加载记录（每个 URL 的 fetch 次数 / 是否成功）：smoke 断言每个字体只请求一次，QA 可在控制台查 __game.assets.fontStats */
@@ -209,7 +229,7 @@ export class AssetLoader {
   async loadEntries(entries: AssetEntry[], onProgress?: (ratio: number) => void): Promise<void> {
     const todo = entries.filter((e) => {
       if (this.has(e.key)) return false;
-      if (e.lazy) return false; // 030：懒加载图片不随组下载（loadImage 用到时再取）
+      if (e.lazy) return false; // 030：懒加载图片不随组下载（loadImage 用到时再取）；033：懒加载音频同理（loadAudio）
       if (e.art && !this.artEnabled) {
         this.missing.add(e.key); // ?art=0：当作没交付，场景用白盒
         return false;
@@ -397,6 +417,11 @@ export class AssetLoader {
     return this.images.load(key);
   }
 
+  /** 懒加载音频（manifest lazy 的 audio）：同 key 共享一次下载；没登记 / ?art=0 / 404 / 超时 → null，不抛错 */
+  loadAudio(key: string): Promise<AudioBuffer | null> {
+    return this.lazyAudio.load(key);
+  }
+
 
   isMissing(key: string): boolean {
     return this.missing.has(key);
@@ -472,6 +497,7 @@ export class AssetLoader {
     this.images.delete(key);
     if (g) this.pruneKtx2Cache();
     this.audio.delete(key);
+    this.lazyAudio.delete(key);
     const face = this.fonts.get(key);
     if (face) document.fonts.delete(face);
     const fontUrl = this.fontUrls.get(key);

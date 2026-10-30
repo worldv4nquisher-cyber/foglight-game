@@ -54,8 +54,9 @@ export interface AssetEntry {
   /** 仅 font：CSS font-family 名（styles.css 的 --ui-font / --ui-serif 排在最前） */
   family?: string;
   /**
-   * 仅 image：不随组预加载，用到时 AssetLoader.loadImage(key) 才下载（030：阅读纸张、章节结尾插画、主菜单静态兜底背景）。
-   * 体积仍按 group 计入分包（npm run size）。
+   * 不随组预加载。
+   * - image：用到时 AssetLoader.loadImage(key) 才下载（030：阅读纸张、章节结尾插画、主菜单静态兜底背景），体积仍按 group 计入分包（npm run size）。
+   * - audio（033 改）：用到时 AssetLoader.loadAudio(key) 才下载（S1 场景曲：首帧渲染后），npm run size 单列「<group> 进场后懒加载」，不计入首场景包。
    */
   lazy?: boolean;
 }
@@ -227,8 +228,9 @@ export const manifest: AssetEntry[] = [
   // 样张 art/audio/music/preview/ 不进 manifest（verify-assets / verify-audio 断言）
   // menu：主菜单曲（036「主菜单包只有 mus-menu 和 UI 音效」；1,779,931 B）
   { key: 'mus-menu', type: 'audio', url: 'assets/art/audio/music/mus-menu.ogg', group: 'menu', optional: true, art: true },
-  // s1：退潮岸场景曲（进 S1 时从主菜单曲 2 s 交叉淡化过来）
-  { key: 'mus-s1-ebb-shore', type: 'audio', url: 'assets/art/audio/music/mus-s1-ebb-shore.ogg', group: 's1', optional: true, art: true },
+  // s1：退潮岸场景曲，懒加载（制作人 c0d81c9 反馈：不随 s1 组预下载、不算首场景包）——S1 首帧渲染出来后才 loadAudio，
+  //     解码完再和主菜单曲 2 s 交叉淡化；404 / 超时 → 菜单曲淡出、不放音乐。npm run size 记在「S1 进场后懒加载」
+  { key: 'mus-s1-ebb-shore', type: 'audio', url: 'assets/art/audio/music/mus-s1-ebb-shore.ogg', group: 's1', optional: true, art: true, lazy: true },
   // s3：mus-s3-lighthouse + mus-s3-lighthouse-upper 两层要同一时刻起播、按玩家高度淡入上层，同步层逻辑未做，暂不登记
   // common：通用（日记纸声、脚步 5 地面 × a–d、落水、潮汐钟 S1/S3 共用、涨退潮、户外雾号 / 海鸟 / 轻风、光束接通 / 持续、镜架咔哒 S2/S3 共用）
   { key: 'amb-foghorn-far-a', type: 'audio', url: 'assets/art/audio/ambience/amb-foghorn-far-a.ogg', group: 'common', optional: true, art: true },

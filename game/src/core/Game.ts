@@ -42,6 +42,10 @@ export class Game {
   readonly debugStats = { resizeAfterRender: 0 };
   private pendingResize = false;
   private renderedThisTick = false;
+  /** 已发过 scene:firstFrame 的场景实例 */
+  private firstFrameScene: unknown = null;
+  /** 最近一次 scene:firstFrame（performance.now() 毫秒；冒烟对照「场景曲在首帧之后才请求 / 淡入」） */
+  lastFirstFrame: { scene: string; at: number } | null = null;
   readonly input: InputManager;
   readonly assets: AssetLoader;
   readonly audio: AudioSystem;
@@ -242,6 +246,11 @@ export class Game {
       } else {
         this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
         this.renderer.render(scene.scene, scene.camera);
+      }
+      if (this.firstFrameScene !== scene) {
+        this.firstFrameScene = scene;
+        this.lastFirstFrame = { scene: scene.name, at: performance.now() };
+        this.events.emit('scene:firstFrame', this.lastFirstFrame);
       }
     }
     this.renderedThisTick = true;

@@ -8,6 +8,8 @@ export interface GameEvents {
   'game:pause': { reason: 'user' | 'visibility' | 'pointerlock' | 'system' };
   'game:resume': undefined;
   'scene:change': { from: string | null; to: string };
+  /** 新场景第一次真正 render 完（Game.tick 里 renderer / postfx render 之后；033 改：S1 场景曲等它才开始下载） */
+  'scene:firstFrame': { scene: string; at: number };
   'assets:progress': { loaded: number; total: number; ratio: number; url?: string };
   'assets:complete': { missing: string[] };
   /** GLB / 贴图重试后仍失败、换成了占位（BUG-012） */

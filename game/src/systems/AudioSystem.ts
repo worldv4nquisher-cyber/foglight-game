@@ -23,6 +23,11 @@ export interface MusicOptions {
    * 默认 0 = 硬切。
    */
   crossfade?: number;
+  /**
+   * 没有旧曲时的淡入时长（s，默认 0 = 直接满音量）。033 改：S1 场景曲懒加载，解码完时主菜单曲可能已经停了，
+   * 这时从 0 淡入（MUSIC_XFADE_SEC），不硬切进来。有旧曲时不看这个，按 crossfade。
+   */
+  fadeIn?: number;
 }
 
 /** 音乐调试记录（冒烟读取）：每次 playMusic / stopMusic 一条，时间是 AudioContext 时钟（挂起时不走） */
@@ -35,6 +40,8 @@ export interface MusicLogEntry {
   fade: number;
   loop: boolean;
   ctxState: string;
+  /** performance.now()（ms）：和 Game.lastFirstFrame.at 对照（033 改：S1 曲在首帧之后才淡入） */
+  wall: number;
 }
 
 interface MusicVoice {
@@ -191,7 +198,7 @@ export class AudioSystem {
     if (key !== null && this.music?.key === key) return false;
     const loop = opts.loop ?? true;
     const prev = this.music;
-    const fade = prev ? Math.max(0, opts.crossfade ?? 0) : 0;
+    const fade = Math.max(0, (prev ? opts.crossfade : opts.fadeIn) ?? 0);
     const now = ctx.currentTime;
     const src = ctx.createBufferSource();
     src.buffer = buffer;
@@ -240,8 +247,8 @@ export class AudioSystem {
     }
   }
 
-  private logMusic(e: MusicLogEntry): void {
-    this.musicLog.push(e);
+  private logMusic(e: Omit<MusicLogEntry, 'wall'>): void {
+    this.musicLog.push({ ...e, wall: typeof performance === 'undefined' ? 0 : performance.now() });
     if (this.musicLog.length > 32) this.musicLog.shift();
   }
 

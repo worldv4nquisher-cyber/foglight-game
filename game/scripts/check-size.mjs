@@ -4,6 +4,7 @@
 //   menu  = index.html + 全部代码（dist/static：JS / CSS / wasm）+ boot / menu 组资源（字体子集等）  预算 ≤ 15 MB
 //   首场景包 = common + s1                                                                       预算 ≤ 150 MB
 //   首次进入 S1 的总下载 = menu + common + s1                                                       也按 150 MB 检查
+//   进场后懒加载（033 改）= 清单里 lazy 的 audio（S1 场景曲）：进了场景、首帧渲染后才下载，单列，不计入上面两项
 //   单个字体文件 ≤ 2 MB
 // 超预算 → 退出码 1（构建失败）。dist/assets 里没登记进清单的文件只警告（不会被加载，但会打进包）。
 // 另外列出 ../art 里已交付、还没登记进清单的运行时资源（glb / ktx2 / 音频）按文件名估算的分组，供 034 接入前预估（只提示，不判失败）。
@@ -14,7 +15,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, dirname, basename, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { manifest, ASSET_GROUPS } from '../src/assets/manifest.ts';
-import { guessGroup } from './lib/size-groups.mjs';
+import { guessGroup, sizeBucket } from './lib/size-groups.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const DIST = join(ROOT, 'dist');
@@ -41,6 +42,8 @@ if (!existsSync(join(DIST, 'index.html'))) {
 
 const groups = Object.fromEntries(ASSET_GROUPS.map((g) => [g, { bytes: 0, files: [], missing: [] }]));
 const counted = new Set();
+/** 进场后懒加载（lazy audio）：group → { bytes, files } */
+const lazyAfter = {};
 // 代码 + 页面 → menu（启动就要下载）
 for (const f of [join(DIST, 'index.html'), ...walk(join(DIST, 'static'))]) {
   groups.menu.bytes += size(f);
@@ -66,9 +69,15 @@ for (const e of manifest) {
     if (!e.optional) fail(`清单资源 ${e.key}（${e.url}）不在 dist 里`);
     continue;
   }
+  counted.add(p);
+  if (sizeBucket(e).lazyAfterEntry) {
+    const l = (lazyAfter[e.group] ??= { bytes: 0, files: [] });
+    l.bytes += size(p);
+    l.files.push(e.url);
+    continue;
+  }
   g.bytes += size(p);
   g.files.push(e.url);
-  counted.add(p);
   if (e.type === 'font' && size(p) > BUDGET.fontMB * MB) fail(`字体 ${e.url} ${mb(size(p))} > ${BUDGET.fontMB} MB`);
 }
 
@@ -117,7 +126,7 @@ for (const f of walk(ART)) {
 }
 
 if (json) {
-  console.log(JSON.stringify({ groups: Object.fromEntries(Object.entries(groups).map(([k, v]) => [k, v.bytes])), firstPackage: first, firstTotal, unlisted: unlisted.map((f) => relative(DIST, f)), art, budget: BUDGET }, null, 2));
+  console.log(JSON.stringify({ groups: Object.fromEntries(Object.entries(groups).map(([k, v]) => [k, v.bytes])), firstPackage: first, firstTotal, lazyAfterEntry: Object.fromEntries(Object.entries(lazyAfter).map(([k, v]) => [k, v.bytes])), unlisted: unlisted.map((f) => relative(DIST, f)), art, budget: BUDGET }, null, 2));
 } else {
   console.log('分包体积（dist/，按 src/assets/manifest.ts 分组）');
   for (const g of ASSET_GROUPS) {
@@ -128,6 +137,9 @@ if (json) {
   console.log(`  主菜单包 menu+boot          ${mb(groups.menu.bytes + groups.boot.bytes)} / ${BUDGET.menuMB} MB`);
   console.log(`  首场景包 common+s1          ${mb(first)} / ${BUDGET.firstPackageMB} MB`);
   console.log(`  首次进入 S1 总下载           ${mb(firstTotal)} / ${BUDGET.firstPackageMB} MB`);
+  for (const [g, v] of Object.entries(lazyAfter)) {
+    console.log(`  ${g} 进场后懒加载（首帧后）     ${mb(v.bytes)}  ${v.files.map((f) => basename(f)).join(', ')}（不计入上面两项）`);
+  }
   if (art.files) {
     const est = art.common + art.s1;
     console.log(

@@ -25,3 +25,40 @@ export function switchMusic(
   audio.stopMusic(crossfade);
   return key === null ? 'stop' : 'missing';
 }
+
+export type LazyMusicResult = MusicSwitch | 'stale';
+
+/**
+ * 懒加载场景曲（033 改，制作人 c0d81c9 反馈）：S1 曲不随 s1 组预下载，场景首帧渲染后才调这里。
+ * - load(key) 下载 + 解码（AssetLoader.loadAudio：404 / 超时 → null，不抛错）
+ * - 成功：和正在播的上一首（主菜单曲）交叉淡化 crossfade s；上一首已经停了 → 从 0 淡入 crossfade s
+ * - 失败 / 超时：上一首照常 crossfade s 淡出，不放音乐（'missing'），不报错
+ * - 等下载期间离开了场景（alive() = false）：什么都不做（'stale'），交给新场景处理
+ */
+export async function switchMusicLazy(
+  audio: AudioSystem,
+  load: (key: string) => Promise<AudioBuffer | null | undefined>,
+  key: string | null,
+  alive: () => boolean = () => true,
+  crossfade: number = MUSIC_XFADE_SEC,
+): Promise<LazyMusicResult> {
+  if (key === null) {
+    audio.stopMusic(crossfade);
+    return 'stop';
+  }
+  if (audio.musicKey === key) return 'same';
+  let buf: AudioBuffer | null | undefined;
+  try {
+    buf = await load(key);
+  } catch {
+    buf = null; // load 本应不抛；保险起见按缺失处理
+  }
+  if (!alive()) return 'stale';
+  if (audio.musicKey === key) return 'same';
+  if (!buf) {
+    audio.stopMusic(crossfade);
+    return 'missing';
+  }
+  audio.playMusic(buf, { key, loop: true, crossfade, fadeIn: crossfade });
+  return 'play';
+}

@@ -2872,22 +2872,76 @@ CHECKS.push({
     }
     if (lv < -90) throw new Error('mus-menu 在播但音乐总线没有电平 ' + lv);
     out.push(`首次点击后 context=running，菜单曲电平 ${lv.toFixed(1)} dBFS（音乐总线后）`);
-    // 新游戏 → S1：2 s 交叉淡化
+    // 新游戏 → S1（033 改：S1 曲懒加载——首帧渲染出来后才请求，解码完再和菜单曲 2 s 交叉淡化）
     const r = await evaluate(`(() => { const e = document.querySelector('.main-menu [data-act="new"]'); const b = e.getBoundingClientRect(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 }; })()`);
     await cdp.click(r.x, r.y);
-    if (!(await until(`__game.scenes.current?.name === 's1-ebb-shore' && ${audio}.musicKey === 'mus-s1-ebb-shore'`, 240000))) throw new Error('新游戏进 S1 后没切到 mus-s1-ebb-shore ' + JSON.stringify(await evaluate(`({ s: __game.scenes.current?.name, k: ${audio}.musicKey, log: ${audio}.musicLog })`)));
-    const x = await evaluate(`(() => { const l = ${audio}.musicLog.at(-1); const v = ${audio}.music; return { l, now: ${audio}.context.currentTime, loop: v.source.loop, g: v.gain.gain.value }; })()`);
+    // 交叉淡化一开始就读（不等别的），淡化中途新曲增益应在 0–1 之间
+    if (!(await until(`__game.scenes.current?.name === 's1-ebb-shore' && ${audio}.musicKey === 'mus-s1-ebb-shore'`, 240000))) throw new Error('新游戏进 S1 后没切到 mus-s1-ebb-shore ' + JSON.stringify(await evaluate(`({ s: __game.scenes.current?.name, k: ${audio}.musicKey, log: ${audio}.musicLog, res: __game.scenes.current?.musicLazyResult })`)));
+    const x = await evaluate(`(() => { const l = ${audio}.musicLog.at(-1); const v = ${audio}.music; const sc = __game.scenes.current; const ff = __game.lastFirstFrame;
+      const res = performance.getEntriesByType('resource').filter((e) => /mus-s1-ebb-shore\\.ogg/.test(e.name)).map((e) => ({ start: e.startTime, end: e.responseEnd }));
+      return { l, now: ${audio}.context.currentTime, loop: v.source.loop, g: v.gain.gain.value, ff, req: sc.musicRequestedAt, ffSeen: sc.musicFirstFrameAt, res, menuStillPlaying: ${audio}.musicLog.filter((e) => e.op === 'stop').length }; })()`);
     if (x.l.op !== 'play' || x.l.from !== 'mus-menu' || x.l.fade !== 2 || !x.loop) throw new Error('进 S1 应从 mus-menu 2 s 交叉淡化 ' + JSON.stringify(x));
-    // 菜单曲在加载期间一直在播（交叉淡化发生在 S1 enter 那一刻）；淡化中途新曲增益在 0–1 之间
+    // 首帧证据：S1 首帧 render 时刻 ≤ 发起请求 ≤ 资源请求开始 ≤ 淡入开始（performance.now() 同一时基）
+    if (!x.ff || x.ff.scene !== 's1-ebb-shore' || x.ffSeen !== x.ff.at) throw new Error('没有 S1 的 scene:firstFrame 记录 ' + JSON.stringify(x.ff));
+    if (x.res.length !== 1) throw new Error('mus-s1-ebb-shore.ogg 应只请求一次 ' + JSON.stringify(x.res));
+    if (!(x.req >= x.ff.at && x.res[0].start >= x.ff.at && x.l.wall >= x.res[0].end)) throw new Error('S1 曲应在首帧渲染之后才请求 / 淡入 ' + JSON.stringify(x));
+    if (x.menuStillPlaying !== 0) throw new Error('S1 曲到之前菜单曲不应被停 ' + JSON.stringify(x));
     await waitClock(`${audio}.context.currentTime`, Math.max(0, x.l.at + 2.2 - x.now));
     const y = await evaluate(`({ g: ${audio}.music.gain.gain.value, k: ${audio}.musicKey, log: ${audio}.musicLog.length })`);
     if (Math.abs(y.g - 1) > 1e-3) throw new Error('交叉淡化 2 s 后 S1 曲应满音量 ' + JSON.stringify(y));
     await waitClock(`__game.time.elapsed`, 1);
     const lv2 = await evaluate(level);
-    out.push(`进 S1：mus-menu → mus-s1-ebb-shore 交叉淡化 ${x.l.fade} s（at ${x.l.at.toFixed(2)} s，读数时 ${(x.now - x.l.at).toFixed(2)} s 处新曲增益 ${x.g.toFixed(2)}），2.2 s 后增益 ${y.g.toFixed(2)}，电平 ${lv2.toFixed(1)} dBFS`);
+    out.push(
+      `进 S1：首帧 render @${x.ff.at.toFixed(0)} ms → 发起请求 @${x.req.toFixed(0)} ms（+${(x.req - x.ff.at).toFixed(0)}）→ 下载 ${x.res[0].start.toFixed(0)}–${x.res[0].end.toFixed(0)} ms → 淡入 @${x.l.wall.toFixed(0)} ms` +
+        `；mus-menu → mus-s1-ebb-shore 交叉淡化 ${x.l.fade} s（读数时 ${(x.now - x.l.at).toFixed(2)} s 处新曲增益 ${x.g.toFixed(2)}），2.2 s 后增益 ${y.g.toFixed(2)}，电平 ${lv2.toFixed(1)} dBFS`,
+    );
     await evaluate(`localStorage.clear(); 1`);
     await cdp.goto('');
     return out.join('；');
+  },
+});
+
+// 033 改（制作人 c0d81c9 反馈 1）：S1 曲下载失败（CDP 把 mus-s1-ebb-shore.ogg 路由成 404）→ 菜单曲照常 2 s 淡出、不放音乐、游戏不报错
+CHECKS.push({
+  name: 'v0.1-033 懒加载失败：S1 曲 404 → 菜单曲 2 s 淡出、不放音乐、不报错',
+  async run({ evaluate, cdp, sleep }) {
+    const until = async (expr, ms = 60000) => {
+      const end = Date.now() + ms;
+      while (Date.now() < end) {
+        if (await evaluate(expr).catch(() => false)) return true;
+        await sleep(100);
+      }
+      return false;
+    };
+    const audio = `__game.audio`;
+    await evaluate(`localStorage.clear(); 1`);
+    const hits = await cdp.route404('*mus-s1-ebb-shore.ogg*');
+    try {
+      await cdp.gotoMenu('art=1');
+      if (!(await until(`${audio}.musicKey === 'mus-menu'`, 30000))) throw new Error('主菜单没起 mus-menu');
+      await cdp.click(100, 650);
+      if (!(await until(`${audio}.context.state === 'running'`, 10000))) throw new Error('点击后 AudioContext 没解锁');
+      const errBefore = errors.length;
+      const r = await evaluate(`(() => { const e = document.querySelector('.main-menu [data-act="new"]'); const b = e.getBoundingClientRect(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 }; })()`);
+      await cdp.click(r.x, r.y);
+      if (!(await until(`__game.scenes.current?.name === 's1-ebb-shore' && __game.scenes.current.musicLazyResult !== null`, 240000)))
+        throw new Error('S1 懒加载没有结果 ' + JSON.stringify(await evaluate(`({ s: __game.scenes.current?.name, k: ${audio}.musicKey, log: ${audio}.musicLog })`)));
+      const x = await evaluate(`(() => { const sc = __game.scenes.current; const l = ${audio}.musicLog.at(-1); return { res: sc.musicLazyResult, k: ${audio}.musicKey, l, ff: __game.lastFirstFrame, req: sc.musicRequestedAt, missing: __game.assets.isMissing('mus-s1-ebb-shore'), now: ${audio}.context.currentTime }; })()`);
+      if (x.res !== 'missing' || x.k !== null) throw new Error('404 后不应放音乐 ' + JSON.stringify(x));
+      if (x.l.op !== 'stop' || x.l.from !== 'mus-menu' || x.l.fade !== 2) throw new Error('404 后菜单曲应 2 s 淡出 ' + JSON.stringify(x.l));
+      if (!(x.req >= x.ff.at)) throw new Error('请求应在 S1 首帧之后 ' + JSON.stringify(x));
+      if (hits.length !== 1) throw new Error('应只请求一次 mus-s1-ebb-shore.ogg（被路由 404）：' + hits.length);
+      // 淡完：菜单曲 source 断开、总线无电平残留；游戏没有 console.error / 未捕获异常（Chrome 自己那条 404 网络日志除外）
+      const t0 = x.now;
+      if (!(await until(`${audio}.context.currentTime >= ${t0 + 2.3}`, 60000))) throw new Error('音频时钟没走');
+      const gameErrors = errors.slice(errBefore).filter((e) => !/^浏览器: Failed to load resource: .*404.*mus-s1-ebb-shore\.ogg/.test(e));
+      if (gameErrors.length) throw new Error('404 时游戏报错：' + gameErrors.join(' | '));
+      return `S1 首帧后请求 → 404 → musicLazyResult=${x.res}，菜单曲 stop fade ${x.l.fade} s，musicKey=null，isMissing=${x.missing}，无游戏报错`;
+    } finally {
+      await cdp.unroute();
+      await evaluate(`localStorage.clear(); 1`);
+      await cdp.goto('');
+    }
   },
 });
 
@@ -2952,8 +3006,16 @@ const { targetId } = await send('Target.createTarget', { url: 'about:blank' });
 const { sessionId } = await send('Target.attachToTarget', { targetId, flatten: true });
 const errors = [];
 const warnings = [];
+/** route404 期间预期内的 Chrome 网络 404 日志 */
+const expectedErrors = [];
+const route = { on: false, hits: [] };
 listeners.push((m) => {
   if (m.sessionId !== sessionId) return;
+  if (m.method === 'Fetch.requestPaused') {
+    route.hits.push(m.params.request.url);
+    void send('Fetch.fulfillRequest', { requestId: m.params.requestId, responseCode: 404, responseHeaders: [{ name: 'Content-Type', value: 'text/plain' }], body: '' }, sessionId).catch(() => {});
+    return;
+  }
   if (m.method === 'Runtime.exceptionThrown') {
     const d = m.params.exceptionDetails;
     errors.push(`未捕获异常: ${d.exception?.description ?? d.text}`);
@@ -3020,6 +3082,23 @@ const cdp = {
     }
     throw new Error('60 秒内主菜单没有就绪');
   },
+  /** CDP Fetch 把匹配 urlPattern 的请求直接回 404（033 改：懒加载失败路径）；返回命中的 URL 列表。只拦这个页面会话 */
+  async route404(urlPattern) {
+    route.hits = [];
+    route.on = true;
+    expectedErrors.push(/^浏览器: Failed to load resource: .*404.*mus-s1-ebb-shore\.ogg/);
+    // HTTP 缓存命中时不经过拦截：路由期间关缓存
+    await send('Network.enable', {}, sessionId);
+    await send('Network.setCacheDisabled', { cacheDisabled: true }, sessionId);
+    await send('Fetch.enable', { patterns: [{ urlPattern, requestStage: 'Request' }] }, sessionId);
+    return route.hits;
+  },
+  async unroute() {
+    route.on = false;
+    await send('Fetch.disable', {}, sessionId);
+    await send('Network.setCacheDisabled', { cacheDisabled: false }, sessionId);
+    await send('Network.disable', {}, sessionId);
+  },
   async key(code, key = code, keyCode = 0) {
     const base = { code, key, windowsVirtualKeyCode: keyCode, nativeVirtualKeyCode: keyCode };
     await send('Input.dispatchKeyEvent', { type: 'rawKeyDown', ...base }, sessionId);
@@ -3064,7 +3143,7 @@ try {
 // 预期内的噪音：无 GPU 环境的 WebGL 性能提示
 // 以及 DRACO 检查里故意喂无效数据时 worker 打出的解码错误
 const realErrors = errors.filter(
-  (e) => !/GPU stall due to ReadPixels|GL_CLOSE_PATH_NV|WebGL.*performance|DRACOLoader: Decoding failed: Unsupported geometry type/i.test(e),
+  (e) => !/GPU stall due to ReadPixels|GL_CLOSE_PATH_NV|WebGL.*performance|DRACOLoader: Decoding failed: Unsupported geometry type/i.test(e) && !expectedErrors.some((re) => re.test(e)),
 );
 for (const e of realErrors) console.log(`  ✗ ${e}`);
 if (warnings.length) console.log(`  （警告 ${warnings.length} 条，首条：${warnings[0]?.slice(0, 120)}）`);

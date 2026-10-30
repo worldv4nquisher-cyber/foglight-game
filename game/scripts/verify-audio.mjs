@@ -18,7 +18,9 @@ import { bindPuzzleSfx, DIAL_GROUPS, MIRROR_FINE_MIN_SEC } from '@/systems/audio
 import { BeamHum, PushLoop, BEAM_HUM_ID, LENS_ROTATE_ID, LENS_ROTATE_DELAY_SEC } from '@/systems/audio/loops';
 import { BellWindTimer, BELL_WIND_INTERVAL } from '@/systems/audio/bellWind';
 import { MUSIC_XFADE_SEC, MUSIC_BUS_DB, MUSIC_BUS_GAIN, MUSIC_FILE_LUFS, AMBIENCE_FILE_LUFS } from '@/systems/AudioSystem';
-import { switchMusic } from '@/systems/audio/music';
+import { switchMusic, switchMusicLazy } from '@/systems/audio/music';
+import { LazyAudioCache, LazyAudioTimeout, LAZY_AUDIO_TIMEOUT_MS } from '@/assets/lazyAudio';
+import { sizeBucket } from './lib/size-groups.mjs';
 import { LEVELS, MENU_MUSIC } from '@/scenes/levels';
 
 class FakeParam {
@@ -115,10 +117,12 @@ class FakeContext {
 }
 
 const results = [];
+const pending = [];
 function test(name, fn) {
   try {
-    fn();
-    results.push(['ok', name]);
+    const r = fn();
+    if (r && typeof r.then === 'function') pending.push(r.then(() => results.push(['ok', name]), (e) => results.push(['FAIL', name, e])));
+    else results.push(['ok', name]);
   } catch (e) {
     results.push(['FAIL', name, e]);
   }
@@ -652,6 +656,7 @@ test('033 manifest：mus-menu 在 menu 组、mus-s1-ebb-shore 在 s1 组；没�
   assert.equal(MENU_MUSIC, 'mus-menu');
   const s1 = manifest.find((e) => e.key === 'mus-s1-ebb-shore');
   assert.equal(s1?.group, 's1');
+  assert.equal(s1?.lazy, true, '033 改：S1 曲懒加载');
   assert.equal(LEVELS.s1.music, 'mus-s1-ebb-shore');
   for (const e of manifest) assert.ok(!/preview/i.test(e.url) && !/preview/i.test(e.key), `不能登记样张：${e.key} ${e.url}`);
   const menuAudio = manifest.filter((e) => e.group === 'menu' && e.type === 'audio').map((e) => e.key);
@@ -735,9 +740,149 @@ test('033 接入点：MenuScene 进 mus-menu、ChapterEndScene 淡出、LevelSce
   assert.ok(menu.includes('switchMusic(this.game.audio, (k) => this.game.assets.getAudio(k), MENU_MUSIC)'));
   assert.ok(menu.includes('switchMusic(this.game.audio, (k) => this.game.assets.getAudio(k), null)'));
   const lvl = readFileSync(new URL('../src/scenes/LevelScene.ts', import.meta.url), 'utf8');
-  assert.ok(lvl.includes('switchMusic(audio, (k) => this.game.assets.getAudio(k), this.level.music)'));
+  assert.ok(lvl.includes('switchMusic(audio, (k) => this.game.assets.getAudio(k), music)'), '非懒加载场景曲（及 null）照旧进场切换');
 });
 
+// ---- 033 改（制作人 c0d81c9 反馈 1）：S1 场景曲懒加载
+test('033 改 manifest / 体积：mus-s1-ebb-shore lazy、不随 s1 组预下载；size 记「s1 进场后懒加载」；懒加载图片仍算进所在组', () => {
+  const s1 = manifest.find((e) => e.key === 'mus-s1-ebb-shore');
+  assert.deepEqual([s1.type, s1.group, s1.lazy, s1.optional], ['audio', 's1', true, true]);
+  assert.deepEqual(sizeBucket(s1), { group: 's1', lazyAfterEntry: true });
+  const menu = manifest.find((e) => e.key === 'mus-menu');
+  assert.ok(!menu.lazy, '主菜单曲随 menu 组预加载');
+  assert.equal(sizeBucket(menu).lazyAfterEntry, false);
+  const lazyImg = manifest.find((e) => e.type === 'image' && e.lazy);
+  assert.ok(lazyImg && !sizeBucket(lazyImg).lazyAfterEntry, '030 懒加载图片体积仍按组计');
+  const loader = readFileSync(new URL('../src/assets/AssetLoader.ts', import.meta.url), 'utf8');
+  assert.ok(/if \(e\.lazy\) return false;/.test(loader), '组加载跳过 lazy');
+  assert.ok(/x\.type === 'audio' && x\.lazy/.test(loader), 'loadAudio 只认 lazy audio');
+  const size = readFileSync(new URL('./check-size.mjs', import.meta.url), 'utf8');
+  assert.ok(/sizeBucket\(e\)\.lazyAfterEntry/.test(size) && size.includes('进场后懒加载'));
+});
+
+test('033 改 LazyAudioCache：并发共享一次下载；404 → null 不抛、记缺失、下次重试；超时 → null、迟到的结果丢掉；?art=0 / 没登记不发请求', async () => {
+  assert.ok(LAZY_AUDIO_TIMEOUT_MS >= 5000 && LAZY_AUDIO_TIMEOUT_MS <= 60000);
+  const calls = [];
+  let mode = 'ok';
+  const timers = [];
+  const failed = [];
+  const loaded = [];
+  let art = true;
+  const late = [];
+  const c = new LazyAudioCache({
+    lookup: (k) => (k === 'mus-s1-ebb-shore' ? { url: '/assets/art/audio/music/mus-s1-ebb-shore.ogg', art: true } : null),
+    artEnabled: () => art,
+    load: (url) => {
+      calls.push(url);
+      if (mode === '404') return Promise.reject(new Error('HTTP 404'));
+      if (mode === 'hang') return new Promise((res) => late.push(res));
+      return Promise.resolve({ duration: 150 });
+    },
+    timeoutMs: 1000,
+    onLoaded: (k) => loaded.push(k),
+    onFailed: (k, url, err) => failed.push([k, err]),
+    setTimer: (fn, ms) => (timers.push([fn, ms]), timers.length),
+    clearTimer: () => {},
+  });
+  // 404
+  mode = '404';
+  assert.equal(await c.load('mus-s1-ebb-shore'), null);
+  assert.equal(failed.length, 1);
+  // 超时
+  mode = 'hang';
+  const p = c.load('mus-s1-ebb-shore');
+  assert.equal(c.load('mus-s1-ebb-shore'), p, '并发共享');
+  assert.equal(timers.at(-1)[1], 1000);
+  timers.at(-1)[0]();
+  assert.equal(await p, null);
+  assert.ok(failed.at(-1)[1] instanceof LazyAudioTimeout);
+  late[0]({ duration: 150 });
+  await new Promise((r) => setTimeout(r, 0));
+  assert.equal(c.get('mus-s1-ebb-shore'), undefined, '超时后迟到的结果不入缓存');
+  // 成功（失败不缓存 → 重试）
+  mode = 'ok';
+  const b = await c.load('mus-s1-ebb-shore');
+  assert.equal(b.duration, 150);
+  assert.deepEqual(loaded, ['mus-s1-ebb-shore']);
+  assert.equal(calls.length, 3);
+  assert.equal(await c.load('mus-s1-ebb-shore'), b);
+  assert.equal(calls.length, 3, '已加载不再请求');
+  // ?art=0 / 没登记：不发请求
+  c.delete('mus-s1-ebb-shore');
+  art = false;
+  assert.equal(await c.load('mus-s1-ebb-shore'), null);
+  assert.equal(await c.load('nope'), null);
+  assert.equal(calls.length, 3);
+});
+
+test('033 改 switchMusicLazy：解码完和主菜单曲 2 s 交叉淡化；菜单曲已停 → 从 0 淡入 2 s；失败 / 超时 → 菜单曲 2 s 淡出、不放、不抛；离场后丢弃', async () => {
+  const bufs = { 'mus-menu': { duration: 106.67 }, 'mus-s1-ebb-shore': { duration: 150 } };
+  const key = LEVELS.s1.music;
+  // 1) 菜单曲在播
+  {
+    const ctx = new FakeContext();
+    const a = new AudioSystem(ctx);
+    switchMusic(a, (k) => bufs[k], MENU_MUSIC);
+    ctx.currentTime = 10;
+    let release;
+    const r = switchMusicLazy(a, () => new Promise((res) => (release = res)), key);
+    assert.equal(a.musicKey, MENU_MUSIC, '下载期间菜单曲继续');
+    ctx.currentTime = 12.5;
+    release(bufs[key]);
+    assert.equal(await r, 'play');
+    const [menu, s1] = ctx.sources;
+    assert.deepEqual(lastRamp(menu.out[0].gain), ['ramp', 0, 14.5]);
+    assert.deepEqual(s1.out[0].gain.events[0], ['set', 0, 12.5]);
+    assert.deepEqual(lastRamp(s1.out[0].gain), ['ramp', 1, 14.5]);
+    assert.deepEqual(((e) => [e.from, e.fade])(a.musicLog.at(-1)), [MENU_MUSIC, 2]);
+  }
+  // 2) 菜单曲已经停了：从 0 淡入
+  {
+    const ctx = new FakeContext();
+    const a = new AudioSystem(ctx);
+    switchMusic(a, (k) => bufs[k], MENU_MUSIC);
+    a.stopMusic(2);
+    ctx.currentTime = 20;
+    assert.equal(await switchMusicLazy(a, async (k) => bufs[k], key), 'play');
+    const s1 = ctx.sources[1];
+    assert.deepEqual(s1.out[0].gain.events[0], ['set', 0, 20]);
+    assert.deepEqual(lastRamp(s1.out[0].gain), ['ramp', 1, 22]);
+    assert.deepEqual(((e) => [e.from, e.fade])(a.musicLog.at(-1)), [null, 2]);
+  }
+  // 3) 404 / 超时（load → null）与 load 抛错
+  for (const load of [async () => null, async () => { throw new Error('boom'); }]) {
+    const ctx = new FakeContext();
+    const a = new AudioSystem(ctx);
+    switchMusic(a, (k) => bufs[k], MENU_MUSIC);
+    ctx.currentTime = 5;
+    assert.equal(await switchMusicLazy(a, load, key), 'missing');
+    assert.equal(a.musicKey, null);
+    assert.equal(ctx.sources.length, 1, '不放音乐');
+    assert.equal(ctx.sources[0].stopped, 7, '菜单曲照常 2 s 淡出');
+  }
+  // 4) 离场
+  {
+    const ctx = new FakeContext();
+    const a = new AudioSystem(ctx);
+    switchMusic(a, (k) => bufs[k], MENU_MUSIC);
+    assert.equal(await switchMusicLazy(a, async (k) => bufs[k], key, () => false), 'stale');
+    assert.equal(a.musicKey, MENU_MUSIC);
+    assert.equal(ctx.sources.length, 1);
+  }
+});
+
+test('033 改 接入点：Game 在新场景第一次 render 之后发 scene:firstFrame；LevelScene 对懒加载场景曲等 scene:firstFrame 才 loadAudio', () => {
+  const game = readFileSync(new URL('../src/core/Game.ts', import.meta.url), 'utf8');
+  const iRender = game.indexOf('this.renderer.render(scene.scene, scene.camera)');
+  const iEmit = game.indexOf("this.events.emit('scene:firstFrame'");
+  assert.ok(iRender > 0 && iEmit > iRender, 'scene:firstFrame 在 render 之后');
+  const lvl = readFileSync(new URL('../src/scenes/LevelScene.ts', import.meta.url), 'utf8');
+  const iOn = lvl.indexOf("events.on('scene:firstFrame'");
+  const iLoad = lvl.indexOf('switchMusicLazy(audio, (k) => this.game.assets.loadAudio(k), music');
+  assert.ok(iOn > 0 && iLoad > iOn, 'loadAudio 在 scene:firstFrame 回调里');
+});
+
+await Promise.all(pending);
 let failed = 0;
 for (const [s, name, e] of results) {
   if (s === 'ok') console.log(`  ✓ ${name}`);

@@ -18,3 +18,13 @@ export function guessGroup(name) {
   if (/^(char-|tex-xi|prop-lantern-brass|tex-props-puzzle|tex-stone-masonry|tex-wood)/.test(name)) return 'common';
   return 's1';
 }
+
+/**
+ * 清单条目算进哪个体积桶（033 改，制作人 c0d81c9 反馈）：
+ *   lazy 的 audio（S1 场景曲 mus-s1-ebb-shore：S1 首帧渲染后才 loadAudio）→ 「<group> 进场后懒加载」，不计入首场景包 / 首次总下载
+ *   其余（包括 lazy 的 image：纸张 / 结尾插画仍按 030 计入所在组）→ 所在组
+ * 返回 { group, lazyAfterEntry }
+ */
+export function sizeBucket(entry) {
+  return { group: entry.group, lazyAfterEntry: entry.type === 'audio' && entry.lazy === true };
+}
