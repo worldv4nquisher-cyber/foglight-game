@@ -1656,9 +1656,17 @@ const CHECKS = [
       await evaluate(`__game.input.setRaw('smoke', 'KeyW', false); 1`);
       if (!walked) throw new Error('退潮后走不下台阶（游戏时间轨迹 ' + JSON.stringify(walkTrace) + '） ' + JSON.stringify(await st()));
       // 小径尽头
+      await evaluate(`(() => { window.__s1fp = []; __game.events.on('subtitle:show', (p) => __s1fp.push(p.id)); return 1; })()`);
       await tp(1.8, 0.14, 3.4);
       if (!(await until(`${S}.puzzles.p1Solved && __game.narrative.goal === 'ch1.s1.goal.cross_channel'`, 6000))) throw new Error('小径尽头没解开谜题 1 ' + JSON.stringify(await st()));
       out.push('台阶可走、小径尽头解开谜题 1 → 目标过沟 ✓');
+      // 033：「比我的脚印大。」触发区在 T2（4.61, 5.33）r 1.4——小径尽头不弹；走到 T2 才弹（等 1 s 游戏时间再判）
+      const fpTick = await evaluate(`__game.time.fixedTick`);
+      await until(`__game.time.fixedTick >= ${fpTick} + Math.round(1 / __game.time.fixedDelta)`, 60000);
+      if (await evaluate(`__s1fp.includes('ch1.s1.footprints.mono')`)) throw new Error('033：小径尽头不该弹脚印独白 ' + JSON.stringify(await evaluate('__s1fp')));
+      await tp(4.61, 0.14, 5.33);
+      if (!(await until(`__s1fp.includes('ch1.s1.footprints.mono')`, 60000))) throw new Error('033：走到 T2 没弹「比我的脚印大。」 ' + JSON.stringify({ subs: await evaluate('__s1fp'), st: await st() }));
+      out.push('033 脚印独白：小径尽头不弹、T2 弹 ✓');
 
       // 浮台：不在石槽里涨潮 → 漂回（BUG-010：「它漂回去了。」只在真的被推走又漂回时说、只说一次）
       await evaluate(`(() => { window.__s1subs = []; __game.events.on('subtitle:show', (p) => __s1subs.push(p.id)); return 1; })()`);
@@ -1785,6 +1793,14 @@ const CHECKS = [
       const ls = await evaluate(`(() => { const s = __game.assets.loadStats; return { n: s.length, ktx2: s.filter((x) => x.kind === 'ktx2').length, pending: s.filter((x) => !x.done).length, bad: s.filter((x) => (x.done && !x.ok) || x.fallback), retried: s.filter((x) => x.attempts > 1).map((x) => x.url.split('/').pop() + '×' + x.attempts), degraded: document.documentElement.classList.contains('assets-fallback') }; })()`);
       if (ls.bad.length || ls.degraded || ls.ktx2 < 1) throw new Error('S1 art=1 有加载失败 / 占位 ' + JSON.stringify(ls));
       if (art.lit || art.warm) throw new Error('点灯前远景灯塔应熄灭、无环境暖光 ' + JSON.stringify(art));
+      // 033 脚印贴花：4 块 T1–T4 挂在 json 坐标（沙面高度，不打射线）、roughness 0.65；美术模式下白盒脚印暗斑 s1-footprint-* 全部隐藏
+      const fp = await evaluate(`(() => { const d = __s1.dressing; const vis = (o) => { for (let x = o; x; x = x.parent) if (!x.visible) return false; return true; };
+        const gb = __s1.greybox.decor.filter((o) => /^s1-footprint-/.test(o.name));
+        return { n: d.decals.length, tiles: d.decals.map((m) => ({ name: m.name, p: m.position.toArray().map((v) => +v.toFixed(3)), yaw: +m.rotation.y.toFixed(4), vis: vis(m), map: !!m.material.map, rough: m.material.roughness })), gb: gb.length, gbVisible: gb.filter(vis).map((o) => o.name) }; })()`);
+      const FP_REF = [[2.914, 0.119, 4.272, 0.9482], [4.608, 0.116, 5.331, 1.0499], [6.304, 0.114, 6.389, 0.9619], [7.882, 0.112, 7.615, 0.8414]];
+      if (fp.n !== 4 || fp.tiles.some((t, i) => !t.vis || !t.map || t.rough !== 0.65 || t.name !== 's1-footprints-decal-T' + (i + 1) || t.p.some((v, k) => Math.abs(v - FP_REF[i][k]) > 1e-3) || Math.abs(t.yaw - FP_REF[i][3]) > 1e-4)) throw new Error('033 脚印贴花不对 ' + JSON.stringify(fp));
+      if (fp.gb < 10 || fp.gbVisible.length) throw new Error('art=1 下白盒脚印暗斑应全部隐藏 ' + JSON.stringify(fp));
+      out.push(`033 脚印贴花 4 块 T1–T4 在湿沙上（y ${fp.tiles.map((t) => t.p[1]).join(' / ')}，roughness 0.65）、白盒脚印暗斑 ${fp.gb} 块全隐藏 ✓`);
       // 美术 1030 船绳两版：涨潮 -rope-high 可见 / 退潮 -rope-low 可见（low 默认隐藏写在 extras.defaultVisible），船头端 = 船头环
       const ropeAt = async (st) => {
         await evaluate(`(() => { __s1.puzzles.tide.set('${st}', { instant: true }); window.__rt = __s1.game.time.fixedTick; return 1; })()`);
