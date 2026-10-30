@@ -6,9 +6,10 @@ import * as THREE from 'three';
 import { gameplay } from '@/config/gameplay';
 import { EventBus } from '@/core/EventBus';
 import { InputManager } from '@/systems/input/InputManager';
-import { PhysicsSystem } from '@/systems/PhysicsSystem';
+import { PhysicsSystem, CharacterBody } from '@/systems/PhysicsSystem';
 import { CameraFollowSystem, CameraTrack, collectIndoorVolumes, cameraHeightCeiling, expandHeightCaps } from '@/systems/CameraFollowSystem';
 import { s2CameraHeightCaps, slopeY } from '@/levels/s2/layout';
+import { buildS2Greybox } from '@/levels/s2/greybox';
 import { ViewpointTarget, viewAlignment } from '@/entities/components/ViewpointTarget';
 import { buildTestCourse } from '@/world/testCourse';
 
@@ -510,7 +511,7 @@ await test('BUG-019 西窗外限高带：走入 / 侧入 / 退出相机位置逐
   const c = caps[0];
   const hl = Math.hypot(c.dir.x, c.dir.z);
   const P = (s, lat) => ({ x: c.origin.x + (c.dir.x / hl) * s - (c.dir.z / hl) * lat, z: c.origin.z + (c.dir.z / hl) * s + (c.dir.x / hl) * lat });
-  // 单帧上限：进带 0.25 m（过渡区限速 8 m/s = 0.134 m/帧 + 跑步 0.053 m/帧 + 余量）；退出走 0.25 s smoothstep 恢复（峰值 ≈ 1.5 × 5.1 m / 0.25 s / 60 ≈ 0.51 m/帧），全程上限 0.6 m
+  // 单帧上限：进带 0.25 m（过渡区限速 8 m/s = 0.134 m/帧 + 跑步 0.053 m/帧 + 余量）；退出走 0.25 s smoothstep 恢复、每帧再限 recoverMaxSpeed（21 m/s = 0.35 m/帧），全程上限 0.6 m
   const ENTER_MAX = 0.25, ANY_MAX = 0.6;
   const yawPlusX = Math.PI / 2; // 相机在玩家 +x 侧（朝房子看）
   const paths = [
@@ -560,6 +561,125 @@ await test('BUG-019 西窗外限高带：走入 / 侧入 / 退出相机位置逐
   // 外扩带限高处处 ≤ 原带（过渡区只会更早收，不会放高）
   const lead = expandHeightCaps(caps, gameplay.camera.heightCapLeadPad);
   for (let x = -2; x <= 26; x += 0.25) for (let z = -8; z <= 10; z += 0.25) assert.ok(cameraHeightCeiling(lead, x, z) <= cameraHeightCeiling(caps, x, z) + 1e-9, `外扩带在 (${x}, ${z}) 比原带高`);
+  return lines.join('\n   ');
+});
+
+await test('BUG-019 batch13 真实路径：S2 白盒碰撞 + 角色胶囊 + 相机碰撞 + 限高带，8 路径 × 8 yaw × 俯仰 −15/−30/−40 × 走 / 跑 × 60 / 30 Hz：非物理前拉单帧 ≤ 0.6 m（按帧率换算）、不来回弹、不高过真实限高', () => {
+  // 复现制作人 batch13 的 384 组（qa t13-cam19b/c）：这里跟随目标是真的 CharacterBody（半径 / 身高同玩家、贴坡、撞墙），相机挂同一个 PhysicsSystem
+  const gb = buildS2Greybox();
+  const ph = new PhysicsSystem();
+  for (const m of gb.colliders) ph.addMesh(m);
+  for (const m of gb.walls) ph.addMesh(m, { kind: 'wall' });
+  const indoor = collectIndoorVolumes(gb.root);
+  const eye = { x: 0.95, y: 4.35, z: 1 };
+  const caps = s2CameraHeightCaps(eye, { x: eye.x + 0.9543876579245467 * 20, y: eye.y - 0.2985702570605802 * 20, z: 1 });
+  const c = caps[0], hl = Math.hypot(c.dir.x, c.dir.z);
+  const P = (s, lat) => [c.origin.x + (c.dir.x / hl) * s - (c.dir.z / hl) * lat, c.origin.z + (c.dir.z / hl) * s + (c.dir.x / hl) * lat];
+  const paths = [
+    ['沿视线出 s 3→14', [3, 0], [14, 0]], ['沿视线入 s 14→3', [14, 0], [3, 0]],
+    ['横入 +lat 6→0 @s5.5', [5.5, 6], [5.5, 0]], ['横出 lat 0→+6 @s5.5', [5.5, 0], [5.5, 6]],
+    ['横入 −lat 6→0 @s8', [8, -6], [8, 0]], ['横出 lat 0→−6 @s8', [8, 0], [8, -6]],
+    ['斜入 s12 lat5 → s4', [12, 5], [4, 0]], ['斜出 s4 → s12 lat5', [4, 0], [12, 5]],
+  ];
+  const run = (path, yawDeg, pitchDeg, speed, dt) => {
+    let t = 0;
+    const events = new EventBus();
+    const input = new InputManager(events, () => t);
+    const camera = new THREE.PerspectiveCamera(cfg.fov, 16 / 9, 0.1, 500);
+    const cam = new CameraFollowSystem(camera, input, { physics: ph, events });
+    cam.indoorVolumes = indoor;
+    cam.heightCaps = caps;
+    cam.yaw = yawDeg * DEG;
+    cam.pitch = pitchDeg * DEG;
+    cam.distance = cfg.maxDistance;
+    const target = new THREE.Object3D();
+    cam.target = target;
+    const body = new CharacterBody();
+    ph.addBody(body);
+    const a = P(...path[1]), b = P(...path[2]);
+    body.teleport(new THREE.Vector3(a[0], slopeY(a[0]) + 0.05, a[1]));
+    const frame = () => {
+      t += dt;
+      ph.step(dt);
+      target.position.copy(body.position);
+      input.beginFrame();
+      cam.update(dt);
+      input.endFrame();
+    };
+    for (let i = 0; i < Math.round(0.7 / dt); i++) frame();
+    const rows = [];
+    let last = camera.position.clone(), lastD = cam.currentDistance, moving = true, after = 0;
+    for (let k = 1; k < 2400 && after < 1 / dt; k++) {
+      if (moving) {
+        const v = new THREE.Vector3(b[0] - body.position.x, 0, b[1] - body.position.z);
+        if (v.length() < 0.1) moving = false;
+        else v.normalize().multiplyScalar(speed);
+        if (!moving) v.set(0, 0, 0);
+        body.velocity.x = v.x;
+        body.velocity.z = v.z;
+      } else after++;
+      frame();
+      const d = cam.currentDistance;
+      const ceil = Math.max(body.position.y + cfg.pivotHeight + 0.5, cameraHeightCeiling(caps, camera.position.x, camera.position.z));
+      // 纯物理遮挡的立即前拉（没压限高、距离正好落到本帧目标）是普通碰撞相机行为，不算（制作人 batch13 同口径）
+      const phys = d < lastD - 1e-3 && !cam.heightCapped && Math.abs(d - cam.targetDistance) < 1e-3;
+      rows.push({ k, st: camera.position.distanceTo(last), dd: d - lastD, phys, capped: cam.heightCapped, over: camera.position.y - ceil });
+      last = camera.position.clone();
+      lastD = d;
+    }
+    ph.removeBody(body);
+    return rows;
+  };
+  /** 来回弹：一段（非物理）外推 ≥ 0.3 m 后 1 s 内紧跟一段（非物理）内收 ≥ 0.3 m */
+  const bounces = (rows, dt) => {
+    const runs = [];
+    for (const r of rows) {
+      if (Math.abs(r.dd) < 1e-4) continue;
+      const sg = Math.sign(r.dd), cur = runs[runs.length - 1];
+      if (cur && cur.sg === sg && r.k - cur.end <= 2) {
+        cur.amt += Math.abs(r.dd);
+        cur.end = r.k;
+        cur.phys ||= r.phys;
+      } else runs.push({ sg, amt: Math.abs(r.dd), start: r.k, end: r.k, phys: r.phys });
+    }
+    let n = 0;
+    for (let i = 1; i < runs.length; i++) {
+      const p = runs[i - 1], q = runs[i];
+      if (p.sg > 0 && q.sg < 0 && p.amt >= 0.3 && q.amt >= 0.3 && !q.phys && (q.start - p.end) * dt <= 1) n++;
+    }
+    return n;
+  };
+  const lines = [];
+  const watch = new Map([
+    ['沿视线出 s 3→14|270|-15', '制作人 1：yaw 270 −15 外走（原 2.63 m）'],
+    ['沿视线出 s 3→14|315|-15', '制作人 2：yaw 315 −15 外走（原 1.89 / 1.48 回弹）'],
+    ['横出 lat 0→−6 @s8|90|-30', '制作人 3：横出 yaw 90 −30（原 0.90）'],
+    ['横出 lat 0→−6 @s8|90|-40', '制作人 3：横出 yaw 90 −40（原 0.85）'],
+    ['沿视线出 s 3→14|180|-40', '制作人 3：沿视线出 yaw 180 −40（原 0.70）'],
+  ]);
+  for (const hz of [60, 30]) {
+    const dt = 1 / hz, limit = 0.6 * (60 / hz);
+    let worst = 0, worstAt = '', overMax = -Infinity, nBounce = 0, groups = 0, capGroups = 0;
+    const bad = [];
+    for (const path of paths) for (let yaw = 0; yaw < 360; yaw += 45) for (const pitch of [-15, -30, -40]) for (const speed of [gameplay.player.walkSpeed, gameplay.player.runSpeed]) {
+      const rows = run(path, yaw, pitch, speed, dt);
+      groups++;
+      if (rows.some((r) => r.capped)) capGroups++;
+      let m = 0;
+      for (const r of rows) if (!r.phys && r.st > m) m = r.st;
+      const bn = bounces(rows, dt);
+      const over = Math.max(...rows.map((r) => r.over));
+      overMax = Math.max(overMax, over);
+      nBounce += bn;
+      if (m > worst) [worst, worstAt] = [m, `${path[0]} yaw ${yaw} ${pitch}° ${speed} m/s`];
+      if (m > limit || bn || over > 0.02) bad.push(`${path[0]} yaw ${yaw} ${pitch}° ${speed} m/s：单帧 ${m.toFixed(3)} m、回弹 ${bn}、高过限高 ${over.toFixed(3)} m`);
+      const w = watch.get(`${path[0]}|${yaw}|${pitch}`);
+      if (w && hz === 60 && speed === gameplay.player.walkSpeed) lines.push(`${w} → ${m.toFixed(3)} m/帧、回弹 ${bn}`);
+    }
+    assert.ok(capGroups >= 100, `${hz} Hz：测试前提——碰到限高的组太少（${capGroups}）`);
+    assert.ok(!bad.length, `${hz} Hz 超限 ${bad.length} 组（上限 ${limit.toFixed(2)} m/帧）：\n     ${bad.slice(0, 8).join('\n     ')}`);
+    lines.push(`${hz} Hz ${groups} 组（碰限高 ${capGroups}）：非物理前拉单帧最大 ${worst.toFixed(3)} m（${worstAt}；上限 ${limit.toFixed(2)}），回弹 ${nBounce}，高过真实限高最多 ${overMax.toFixed(3)} m`);
+  }
   return lines.join('\n   ');
 });
 

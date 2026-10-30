@@ -342,7 +342,7 @@ export class CameraFollowSystem {
     if (!this.indoor && this.heightCaps.length) {
       if (this.leadCapsOf !== this.heightCaps) {
         this.leadCapsOf = this.heightCaps;
-        this.leadCaps = expandHeightCaps(this.heightCaps, cfg.heightCapLeadPad);
+        this.leadCaps = expandHeightCaps(this.heightCaps, cfg.heightCapLeadPad, cfg.heightCapLeadDrop);
       }
       const floor = Math.min(physD, cfg.minCollisionDistance);
       const capD = cameraHeightCapDistance(this.heightCaps, pivot, back, physD);
@@ -352,19 +352,30 @@ export class CameraFollowSystem {
     } else this.heightCapped = false;
     this.targetDistance = maxD;
 
-    // 被挡（物理 / 真实限高带）立即前拉；过渡区限速前拉；解除后 0.25 s 恢复（缓入缓出）
+    // 物理遮挡立即前拉（普通碰撞相机）；限高（真实带 / 过渡区）限速往里收——BUG-019 batch13：真实带的「沿后退射线第一次碰限高」
+    // 距离随支点移动会突变（视线擦过斜天花板时 4.5 → 1.9 m），硬上限一帧到位就是 2.6 m 的跳；改成真实带比当前近时按
+    // heightCapHardPullSpeed、只在过渡区时按 heightCapPullSpeed 收。解除后 0.25 s 恢复（缓入缓出），每帧再限 recoverMaxSpeed：
+    // 恢复途中目标距离变大不会按旧起点一下跳过去（原 1.9 m 回弹），远距离恢复也不超速（原 0.6–0.9 m/帧）。全按 m/s，帧率换算一致。
+    const eps = 1e-4;
     if (!this.initialized) {
       this.currentDistance = leadD;
       this.recover = null;
-    } else if (leadD < this.currentDistance - 1e-4) {
-      this.currentDistance = Math.min(maxD, Math.max(leadD, this.currentDistance - cfg.heightCapPullSpeed * dt));
+    } else if (leadD < this.currentDistance - eps) {
+      let d = Math.min(this.currentDistance, physD);
+      if (leadD < d - eps) {
+        const speed = maxD < d - eps ? cfg.heightCapHardPullSpeed : cfg.heightCapPullSpeed;
+        d = Math.max(leadD, d - speed * dt);
+      }
+      this.currentDistance = d;
       this.recover = null;
-    } else if (leadD > this.currentDistance + 1e-4) {
+    } else if (leadD > this.currentDistance + eps) {
       this.recover ??= { from: this.currentDistance, t: 0 };
       this.recover.t += dt;
       const k = smoothstep01(this.recover.t / cfg.recoverTime);
-      this.currentDistance = k >= 1 ? leadD : this.recover.from + (leadD - this.recover.from) * k;
-      if (k >= 1) this.recover = null;
+      const want = k >= 1 ? leadD : this.recover.from + (leadD - this.recover.from) * k;
+      const step = THREE.MathUtils.clamp(want - this.currentDistance, 0, cfg.recoverMaxSpeed * dt);
+      this.currentDistance = Math.min(leadD, this.currentDistance + step);
+      if (this.currentDistance >= leadD - eps) this.recover = null;
     } else {
       this.currentDistance = leadD;
       this.recover = null;
@@ -513,9 +524,12 @@ export function cameraHeightCeiling(caps: readonly CameraHeightCap[], x: number,
   return out;
 }
 
-/** BUG-019：限高带外扩 pad（沿视线两端、横向各加 pad，fade 不变）做进入过渡区；带内限高不变，外扩带的限高处处 ≤ 原带 */
-export function expandHeightCaps(caps: readonly CameraHeightCap[], pad: number): CameraHeightCap[] {
-  return caps.map((c) => ({ ...c, from: c.from - pad, to: c.to + pad, halfWidth: c.halfWidth + pad }));
+/**
+ * BUG-019：限高带外扩 pad（沿视线两端、横向各加 pad，fade 不变）做进入过渡区，过渡区天花板再低 drop 米
+ * （batch13：只外扩不压低时，视线擦过天花板的情形过渡区和真实带同时突变，提前量为 0）；外扩带的限高处处 ≤ 原带
+ */
+export function expandHeightCaps(caps: readonly CameraHeightCap[], pad: number, drop = 0): CameraHeightCap[] {
+  return caps.map((c) => ({ ...c, from: c.from - pad, to: c.to + pad, halfWidth: c.halfWidth + pad, margin: c.margin + drop }));
 }
 
 /** 从支点沿后退方向走，返回不超过限高的最大距离（≤ maxD；限高不低于支点 + 0.5 m） */

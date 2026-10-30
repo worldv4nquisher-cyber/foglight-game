@@ -85,11 +85,18 @@ export const gameplay = {
     recoverTime: 0.25,
     /**
      * BUG-019 室外限高带（裁定 19）进入过渡：带外扩 heightCapLeadPad（m）一圈做过渡区，进过渡区就按 heightCapPullSpeed（m/s）
-     * 限速往里收；真实带仍是硬上限（任何一帧都不高过它，sample-317 B 簇 = 0 不变）。8 m/s → 60 Hz 单帧 ≤ 0.134 m；
+     * 限速往里收；真实带比当前近时按 heightCapHardPullSpeed 收（batch13 起不再一帧到位；过渡区天花板压低 heightCapLeadDrop 后，
+     * verify-camera 真实路径 768 组里相机从没高过真实带 0.02 m 以上；sample-317 是静态几何，B 簇 = 0 不变）。8 m/s → 60 Hz 单帧 ≤ 0.134 m；
      * 2.5 m 过渡区跑步（3.2 m/s）0.78 s 可收 6.25 m > 最大收距 5.65 m，所以走 / 跑进带时硬上限不起作用。
      */
     heightCapPullSpeed: 8,
     heightCapLeadPad: 2.5,
+    /** BUG-019 batch13：过渡区天花板比真实带再低这么多（m），视线擦过斜天花板时过渡区先收 */
+    heightCapLeadDrop: 0.8,
+    /** BUG-019 batch13：真实带比当前相机近时的往里收速度（m/s；60 Hz 单帧 0.4 m，30 Hz 0.8 m）——不再一帧到位 */
+    heightCapHardPullSpeed: 24,
+    /** BUG-019 batch13：遮挡 / 限高解除后恢复的速度上限（m/s；60 Hz 单帧 0.35 m）。3 m 以内的恢复仍是 0.25 s smoothstep（峰值 ≤ 18 m/s 不受限） */
+    recoverMaxSpeed: 21,
     /** 相机离墙 / 地面的最小距离（m，被挡时最近也不贴到角色身上） */
     minCollisionDistance: 0.35,
     /** -indoor 触发体内的最大距离（m） */
