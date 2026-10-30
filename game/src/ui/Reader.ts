@@ -2,6 +2,7 @@ import { t, type TextId } from '@/content/text';
 import type { EventBus } from '@/core/EventBus';
 import type { InputManager } from '@/systems/input/InputManager';
 import { docTitleId, type NarrativeState } from '@/systems/NarrativeState';
+import { PAPER_TABLES, READER_BODY_LEFT, BODY_LINE, CELL_PAD, layoutTable } from './paperTable';
 import { cssUrl, paperForDoc } from './uiArt';
 
 export interface ReaderDeps {
@@ -168,7 +169,12 @@ export class Reader {
   }
 
   private render(): void {
-    this.bodyEl.textContent = this.pages[this._page] ?? '';
+    const text = this.pages[this._page] ?? '';
+    const key = this._docId ? paperForDoc(this._docId) : null;
+    const table = key ? PAPER_TABLES[key] : undefined;
+    this.bodyEl.classList.toggle('reader-body--table', !!table);
+    if (table) this.renderTable(text, table);
+    else this.bodyEl.textContent = text;
     this.bodyEl.scrollTop = 0;
     const multi = this.pages.length > 1;
     this.pageEl.textContent = multi ? `${this._page + 1} / ${this.pages.length}` : '';
@@ -176,6 +182,34 @@ export class Reader {
     this.nextBtn.hidden = !multi;
     this.prevBtn.disabled = this._page === 0;
     this.nextBtn.disabled = this._page >= this.pages.length - 1;
+  }
+
+  /** BUG-021：印表格的纸按列排（paperTable.ts）；纸张没到 / 兜底纯色时也按列排，版式不随加载状态跳 */
+  private renderTable(text: string, spec: (typeof PAPER_TABLES)[string]): void {
+    const title = this.titleEl.hidden ? null : this.titleEl.textContent;
+    this.bodyEl.textContent = '';
+    for (const row of layoutTable(text, title, spec)) {
+      const r = document.createElement('div');
+      r.className = 'reader-row';
+      r.style.height = `${BODY_LINE}px`;
+      if (row.kind === 'free') r.textContent = row.text;
+      row.cells.forEach((c, i) => {
+        const cell = document.createElement('span');
+        cell.className = 'reader-cell';
+        cell.dataset.col = String(i);
+        cell.style.left = `${spec.edges[i]! - READER_BODY_LEFT + CELL_PAD}px`;
+        cell.style.width = `${spec.edges[i + 1]! - spec.edges[i]! - 2 * CELL_PAD}px`;
+        cell.style.textAlign = spec.align[i] === 'center' ? 'center' : 'left';
+        if (c.font !== 17) cell.style.fontSize = `${c.font}px`;
+        if (c.lines === 2) cell.classList.add('reader-cell--2');
+        const t = document.createElement('span');
+        t.className = 'reader-cell-text';
+        t.textContent = c.text;
+        cell.appendChild(t);
+        r.appendChild(cell);
+      });
+      this.bodyEl.appendChild(r);
+    }
   }
 
   dispose(): void {

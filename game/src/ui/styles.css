@@ -854,6 +854,34 @@ body {
   line-height: 1.9;
 }
 
+/* BUG-021：印了表格的纸（值班簿）按纸面列排，每行一格 32.3 px（= 17 × 1.9），单元格绝对定位到纸上的列（paperTable.ts） */
+.reader-body--table {
+  white-space: normal;
+  overflow-x: hidden;
+}
+
+.reader-row {
+  position: relative;
+  line-height: 32.3px;
+}
+
+.reader-cell {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  white-space: nowrap;
+  overflow: visible;
+}
+
+.reader-cell--2 {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  white-space: normal;
+  line-height: 1.1;
+  word-break: break-all;
+}
+
 .reader-nav {
   font-family: var(--ui-font-num);
   display: flex;

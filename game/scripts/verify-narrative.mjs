@@ -14,6 +14,8 @@ import { SaveSystem } from '@/systems/save/SaveSystem';
 import { NarrativeState, docTitleId, isJournalDoc, FATHER_JOURNAL_ID, OUTRO_JOURNAL_ENTRY_ID } from '@/systems/NarrativeState';
 import { SubtitleTrack, subtitleDuration, SPEAKER_COLORS, SUBTITLE_SIZES } from '@/ui/Subtitles';
 import { t, textMeta, textPages, isTextId } from '@/content/text';
+import { PAPER_TABLES, layoutTable, fitCell, CELL_PAD } from '@/ui/paperTable';
+import { PAPER_FOR_DOC } from '@/ui/uiArt';
 
 const results = [];
 function test(name, fn) {
@@ -365,6 +367,41 @@ test('BUG-005 操作提示从文本表生成：按键框 + 说明，转义', () 
   assert.ok((html.match(/<kbd>/g) ?? []).length >= 9, html);
   for (const id of ['ch1.s1.location.title', 'ch1.s2.location.title', 'ch1.s3.location.title']) assert.ok(isTextId(id) && t(id).length >= 3, id);
   assert.deepEqual([t('ch1.s1.location.title'), t('ch1.s2.location.title'), t('ch1.s3.location.title')], ['落潮滩', '守灯人小屋', '初望灯塔']);
+});
+
+test('BUG-021 值班簿按纸面 4 列排：标题不重复、表头行留空、每格放得下、列在纸上的竖线之间', () => {
+  const spec = PAPER_TABLES[PAPER_FOR_DOC['ch1.s3.logbook.doc']];
+  assert.ok(spec, 'logbook 纸有表格规格');
+  // 纸图实测竖线（ui-paper-logbook.webp 1088 宽，x = 59 / 292 / 356 / 464 / 1030 → ÷2）
+  assert.deepEqual(spec.edges, [29.5, 146, 178, 232, 515]);
+  const pages = textPages('ch1.s3.logbook.doc');
+  const title = t('ui.doc_title.logbook');
+  for (const page of pages) {
+    const rows = layoutTable(page, title, spec);
+    assert.equal(rows[0].kind, 'blank', '第 0 行（原来重复的标题「值班簿」）不再画');
+    assert.equal(rows[spec.headerRow].kind, 'blank', '表头印在第 1 行，正文这行空着');
+    assert.ok(!rows.some((r) => r.text.includes(title) && r.text.trim() === title), '正文里没有单独一行标题');
+    const data = rows.filter((r) => r.kind === 'cells');
+    assert.equal(data.length, 4, '4 条记录');
+    assert.ok(!rows.some((r) => r.kind === 'free'), '没有按流水写的行');
+    for (const r of data) {
+      assert.equal(r.cells.length, 4);
+      assert.deepEqual(r.cells.map((c) => c.text).join('\u3000'), r.text, '字段按 U+3000 切开、不丢字');
+      r.cells.forEach((c, i) => {
+        const w = spec.edges[i + 1] - spec.edges[i] - 2 * CELL_PAD;
+        const perLine = Math.ceil([...c.text].length / c.lines);
+        assert.ok(perLine * c.font <= w + 0.01, `「${c.text}」${c.font}px×${perLine} 字 ≤ 列宽 ${w}`);
+        assert.ok(c.lines * c.font * 1.1 <= 32.3, '一格行高内');
+        assert.ok(c.font >= 13, '字不小于 13 px');
+      });
+    }
+    assert.deepEqual(data.map((r) => r.cells[1].text), ['夜', '夜', '夜', '夜']);
+    assert.deepEqual(data.map((r) => r.cells[2].text), ['雾', '雾', '大雾', '雾']);
+    assert.equal(data[2].cells[0].lines, 2, '「（水渍，日期看不清）」在日期栏折两行');
+  }
+  // 标题不同 / 没有分隔符的行照旧整行写
+  assert.equal(layoutTable('别的\n\n一行没有分隔', '值班簿', spec)[0].kind, 'free');
+  assert.deepEqual(fitCell('夜', 32), { text: '夜', font: 17, lines: 1 });
 });
 
 // ---------------------------------------------------------------- 汇总
