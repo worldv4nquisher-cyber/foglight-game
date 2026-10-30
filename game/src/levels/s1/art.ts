@@ -22,12 +22,24 @@ export interface TideVariantSwitch {
   update(tideLevel: number): void;
 }
 
+/** 按名字找节点：精确名优先；没有就找 `<名>_lodN` / `<名>.001` 这类变体（同名只取第一个） */
+export function findVariantNode(root: THREE.Object3D, name: string): THREE.Object3D | null {
+  const exact = root.getObjectByName(name);
+  if (exact) return exact;
+  let hit: THREE.Object3D | null = null;
+  const re = new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(_lod\\d+|\\.\\d+)$`);
+  root.traverse((o) => {
+    if (!hit && re.test(o.name)) hit = o;
+  });
+  return hit;
+}
+
 export function makeTideVariantSwitch(root: THREE.Object3D, cfg: { high: readonly string[]; low: readonly string[]; switchLevel: number }): TideVariantSwitch | null {
   const find = (names: readonly string[]): THREE.Object3D[] => {
     const out: THREE.Object3D[] = [];
     for (const n of names) {
-      const o = root.getObjectByName(n);
-      if (o) out.push(o);
+      const o = findVariantNode(root, n);
+      if (o && !out.includes(o)) out.push(o);
     }
     return out;
   };

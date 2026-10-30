@@ -106,11 +106,18 @@ export const S1 = {
     maxFootY: 0.3,
   },
   /**
-   * 船绳涨 / 退潮两版（制作人 1029：美术会把 env-pier-wood-ch1 的船绳拆成两个可切换节点，**节点名待美术交付**）。
-   * 水位 ≥ switchLevel 显示 high 列表、否则显示 low 列表；按名字在 S1 美术根下找（精确名或 `<名>_lodN` 等子节点前缀都可）。
-   * 两个列表任一边找不到节点 = 不切换（保持 GLB 现状：现在只有一根涨潮版绳）。美术给了节点名后只改这里。
+   * 船绳涨 / 退潮两版（制作人 1029；美术 1030 定名：`env-pier-wood-ch1-rope-high` / `-rope-low` 同父，默认 high 可见；
+   * 船头端点 `-rope-bow-end-high` / `-rope-bow-end-low`）。
+   * 水位 ≥ switchLevel 显示 high 列表、否则显示 low 列表；按名字在 S1 美术根下找（精确名，或 `<名>_lodN` / `<名>.001` 等）。
+   * 列表里的名字是「候选」：找到几个算几个（旧配置 / 旧名字照样可用）；两个列表任一边一个都找不到 = 不切换（保持 GLB 现状）。
+   * bowEnd：船头端点（涨潮版第一个候选兼容旧名 `-rope-bow-end`，现在 GLB 里只有这一个）。
    */
-  boatRope: { high: [] as readonly string[], low: [] as readonly string[], switchLevel: 0.8 },
+  boatRope: {
+    high: ['env-pier-wood-ch1-rope-high'] as readonly string[],
+    low: ['env-pier-wood-ch1-rope-low'] as readonly string[],
+    switchLevel: 0.8,
+    bowEnd: { high: ['env-pier-wood-ch1-rope-bow-end-high', 'env-pier-wood-ch1-rope-bow-end'] as readonly string[], low: ['env-pier-wood-ch1-rope-bow-end-low'] as readonly string[] },
+  },
   sunkenBoat: { position: [10.2, -1.15, -17] as V3, rotationY: 0.6, rotationXDeg: 9, rotationZDeg: -21 },
   /** 美术节点摆放（GLB 根的平移 / 绕 Y 旋转；与 s1-layout.json nodes 一致） */
   artNodes: {

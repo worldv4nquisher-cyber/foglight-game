@@ -334,7 +334,11 @@ if (hasArt) {
     };
     eq(w(pier, 'env-pier-wood-ch1-boat-mooring'), S1.boat.mooring, '系船点 boat-mooring', 0.01);
     assert.ok(pier.getObjectByName('env-pier-wood-ch1-bollard'), '旧系船点改名 -bollard');
-    const ropeEnd = w(pier, 'env-pier-wood-ch1-rope-bow-end');
+    // 船头端点：美术拆两版后叫 -rope-bow-end-high（S1.boatRope.bowEnd.high 候选，兼容旧名 -rope-bow-end）
+    const { findVariantNode } = await import('@/levels/s1/art');
+    const ropeEndName = S1.boatRope.bowEnd.high.find((n) => findVariantNode(pier, n));
+    assert.ok(ropeEndName, '码头 GLB 缺船绳船头端点 ' + S1.boatRope.bowEnd.high.join(' / '));
+    const ropeEnd = w(pier, findVariantNode(pier, ropeEndName).name);
     const rb = await loadGlb('models/props/prop-boat-rowboat.glb');
     rb.position.set(...S1.boat.position);
     rb.rotation.y = S1.boat.rotationY;
@@ -416,7 +420,7 @@ if (hasArt) {
     return `区内 ${nIn} 点 ${((deepIn / nIn) * 100).toFixed(1)}% < −0.3、最高 ${worst.toFixed(2)}；区外北段 ${nOut} 点深水 ${((deepOut / nOut) * 100).toFixed(1)}%`;
   });
 
-  await test('船绳涨 / 退潮两版切换（等美术节点）：两版都找到才切换、按 switchLevel 切可见性；找不到 = null 保持现状；当前配置为空', async () => {
+  await test('船绳涨 / 退潮两版切换：两版都找到才切换、按 switchLevel 切可见性；找不到 = null 保持现状；美术定名 -rope-high / -rope-low（_lodN 变体也认）', async () => {
     const { makeTideVariantSwitch } = await import('@/levels/s1/art');
     const { S1 } = await import('@/levels/s1/layout');
     const root = new THREE.Group();
@@ -436,8 +440,25 @@ if (hasArt) {
     sw.update(0.8);
     assert.equal(sw.state, 'high');
     assert.equal(makeTideVariantSwitch(root, { high: ['rope-high'], low: ['nope'], switchLevel: 0.8 }), null, '缺一版 = 不切换');
-    assert.equal(makeTideVariantSwitch(root, S1.boatRope), null, '当前未配节点名 = 保持现状');
-    return `节点名待美术（S1.boatRope high ${S1.boatRope.high.length} / low ${S1.boatRope.low.length}）`;
+    // 美术 1030 定名：env-pier-wood-ch1-rope-high / -rope-low 同父（含 _lod0 变体）；旧写法（任意名字列表）照样可用
+    const pierLike = new THREE.Group();
+    const parent = new THREE.Group();
+    const rh = new THREE.Object3D();
+    rh.name = 'env-pier-wood-ch1-rope-high';
+    const rl = new THREE.Object3D();
+    rl.name = 'env-pier-wood-ch1-rope-low_lod0';
+    parent.add(rh, rl);
+    pierLike.add(parent);
+    const sw2 = makeTideVariantSwitch(pierLike, S1.boatRope);
+    assert.ok(sw2, '按美术节点名能切');
+    sw2.update(1.6);
+    assert.ok(rh.visible && !rl.visible, '涨潮 high');
+    sw2.update(0.2);
+    assert.ok(!rh.visible && rl.visible, '退潮 low');
+    // 现在的码头 GLB 还没拆两版 = 不切换（保持现状）
+    const pierNow = await loadGlb('models/env/env-pier-wood-ch1.glb');
+    const now = makeTideVariantSwitch(pierNow, S1.boatRope);
+    return `S1.boatRope = 美术名 ${S1.boatRope.high[0]} / ${S1.boatRope.low[0]}（船头端点 ${S1.boatRope.bowEnd.high[0]} / ${S1.boatRope.bowEnd.low[0]}，兼容旧 -rope-bow-end）；当前码头 GLB ${now ? '已拆两版、切换生效' : '未拆两版 → 保持现状'}`;
   });
 
   await test('021 风灯 prop-lantern-brass：原点 = 提手，hang（提手到灯底）/ -emitter 与 017 对齐值一致', async () => {
