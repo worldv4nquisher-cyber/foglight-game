@@ -92,6 +92,8 @@ export class S2Scene extends LevelScene {
     this.artSlots = mountArtSlots(this.game.assets, this.scene, S2_ART_SLOTS, { showGreybox: greyboxVisible });
     // 1030b：拨盘铁门站位改读美术 -interact（门南 0.485 m，+Z 朝门）；白盒是门南 0.9 m
     snapToArt(this.artSlots, 'prop-dial-gate-s2', 'prop-dial-gate-s2-interact', this.puzzles.gateInteractable.interactPoint);
+    // 拨盘铁门开角：美术 gate-door extras.openDeg 优先（1030 定稿 78°），缺省 layout openAngle
+    this.puzzles.setDialGateArt(this.artSlots.mounted.find((m) => m.id === 'prop-dial-gate-s2')?.model ?? null);
     // 制作人裁定 15：美术白石在 → 关七段「317」贴片、对准度改白石加亮 / 描边；不在 → 保留贴片（同屏只一个 317）
     this.puzzles.setWhiteStonesArt(this.artSlots.mounted.find((m) => m.id === 'prop-white-stones-s2')?.model ?? null);
     // 1030c 光感锁：透镜按受光进度提亮、指针扫、解锁滑门闩（外观；受光逻辑仍是白盒接收器）

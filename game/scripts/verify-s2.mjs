@@ -332,7 +332,11 @@ out.push('动线：二层观察点 / 书桌 / 地窖（门开才进得去）/ �
       }
       return worst;
     };
-    const openDeg = THREE.MathUtils.radToDeg(dg.openAngle);
+    // 开角：程序优先读美术 gate-door extras.openDeg（缺省 layout openAngle 78°），这里按生效值验
+    const artOpen = door.userData.openDeg;
+    const openDeg = typeof artOpen === 'number' ? artOpen : THREE.MathUtils.radToDeg(dg.openAngle);
+    if (typeof artOpen === 'number') assert.ok(Math.abs(artOpen - 78) < 1e-6, `美术 extras.openDeg ${artOpen} = 定稿 78°`);
+    assert.ok(Math.abs(THREE.MathUtils.radToDeg(dg.openAngle) - 78) < 1e-6, 'layout 缺省开角 78°');
     const p95 = pen(95);
     const p90 = pen(90);
     const pOpen = pen(openDeg);

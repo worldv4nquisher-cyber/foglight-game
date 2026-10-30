@@ -23,6 +23,7 @@ import { ART_LANTERN_HANG, artLanternFrame, GB_LANTERN_LIGHT_Y } from './lantern
 import { S2_LAMP_STAND_KEY } from './art';
 import { greyboxVisible } from '@/config/debug';
 import { BeamHum } from '@/systems/audio/loops';
+import { findNode } from '../artSlots';
 
 /** BUG-014：书桌上「看看而已」的物体的瞄准半径（屏幕 NDC），见 Interactable.aimCone */
 export const S2_DESK_AIM = { chart: 0.13, note: 0.3 } as const;
@@ -109,6 +110,10 @@ export interface S2Puzzles {
   viewpointPrompt(): string | null;
   /** 裁定 15：美术白石挂上时传进来（关七段贴片、对准度改白石加亮）；null = 回退七段贴片 */
   setWhiteStonesArt(model: THREE.Object3D | null): void;
+  /** 美术拨盘铁门挂上：开角改读 gate-door extras.openDeg（缺省 / 没美术 = layout openAngle 78°）；返回生效开角（度） */
+  setDialGateArt(model: THREE.Object3D | null): number;
+  /** 拨盘铁门当前生效开角（rad） */
+  readonly gateOpenAngle: number;
   readonly whiteStonesArtActive: boolean;
   /** 美术白石挂上时的眼位 / FOV / 对准点（测试读）；null = 白盒 layout */
   whiteStonesAim(): { eye: THREE.Vector3; fov: number; target: THREE.Vector3 } | null;
@@ -554,6 +559,8 @@ export function buildS2Puzzles(d: S2PuzzleDeps): S2Puzzles {
   interaction.add(gateIx);
   let gateInspectSaid = false;
   let gateT = -1;
+  // 开角：缺省 layout openAngle（78°）；美术 GLB gate-door extras.openDeg 存在时优先（setDialGateArt）
+  let gateOpenAngle = dg.openAngle;
   const GATE_SEC = 1.6;
   const code = (): number[] => dials.map((p) => dialDigit(p.angles[0] ?? 0));
   offs.push(
@@ -610,6 +617,18 @@ export function buildS2Puzzles(d: S2PuzzleDeps): S2Puzzles {
     state,
     props,
     viewpointPrompt: () => (onViewpoint() ? t('ch1.s2.viewpoint.prompt') : null),
+    get gateOpenAngle(): number {
+      return gateOpenAngle;
+    },
+    setDialGateArt(model: THREE.Object3D | null): number {
+      gateOpenAngle = dg.openAngle;
+      const door = model ? findNode(model, 'gate-door') : null;
+      const v: unknown = (door?.userData as Record<string, unknown> | undefined)?.openDeg;
+      if (typeof v === 'number' && Number.isFinite(v) && v > 0 && v < 180) gateOpenAngle = THREE.MathUtils.degToRad(v);
+      // 门已开着（读档 / 重挂）时同步到新开角
+      if (state.gateOpen && gateT >= GATE_SEC) greybox.dialGate.rotation.y = gateOpenAngle;
+      return THREE.MathUtils.radToDeg(gateOpenAngle);
+    },
     setWhiteStonesArt(model: THREE.Object3D | null): void {
       whiteStonesArt?.setGlow(0);
       whiteStonesArt = model ? new WhiteStonesGlow(model) : null;
@@ -674,7 +693,7 @@ export function buildS2Puzzles(d: S2PuzzleDeps): S2Puzzles {
       // 拨盘铁门
       if (gateT >= 0 && gateT < GATE_SEC) {
         gateT = Math.min(GATE_SEC, gateT + dt);
-        greybox.dialGate.rotation.y = dg.openAngle * smooth(gateT / GATE_SEC);
+        greybox.dialGate.rotation.y = gateOpenAngle * smooth(gateT / GATE_SEC);
       }
     },
     update(dt: number): void {

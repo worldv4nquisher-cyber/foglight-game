@@ -1870,7 +1870,7 @@ const CHECKS = [
         if (g.missing.length || g.parent !== `env-courtyard-wall-s2-mirror-${k}-socket` || g.st.some((x) => x.deg > 0.05 || x.q > 0.05 || x.d > 0.005)) throw new Error(`art=1 立镜 ${k} 不对 ` + JSON.stringify(g));
       }
       out.push('art=1 立镜 a / b 挂院墙 socket、初始 / 正解镜面与 pivot = 白盒 ✓');
-      // 1030b 拨盘铁门：挂崖顶 gate-socket；站位 = 美术 -interact；拨盘转到 317 美术 dial rotation.z = −36k°；门扇跟白盒开到 openAngle
+      // 1030b 拨盘铁门：挂崖顶 gate-socket；站位 = 美术 -interact；拨盘转到 317 美术 dial rotation.z = −36k°；门扇跟白盒开到生效开角（美术 extras.openDeg 优先，应为 78°）
       const gt = await evaluate(`(() => {
         const s = __s2; const V = s.scene.position.constructor; const Q = s.scene.quaternion.constructor; const E = s.scene.rotation.constructor;
         const m = (s.artSlots?.mounted ?? []).find((x) => x.id === 'prop-dial-gate-s2');
@@ -1883,7 +1883,7 @@ const CHECKS = [
         s.artSlots.update();
         ['dial-0', 'dial-1', 'dial-2'].forEach((n, i) => { const d = find(m.model, n); dz.push((d.quaternion.angleTo(new Q().setFromEuler(new E(0, 0, (-36 * code[i] * Math.PI) / 180))) * 180) / Math.PI); });
         s.puzzles.dials.forEach((p) => p.setAngle(0, 0));
-        const g = s.greybox.dialGate; const open = 78;
+        const g = s.greybox.dialGate; const open = (s.puzzles.gateOpenAngle * 180) / Math.PI; // 生效开角 = 美术 gate-door extras.openDeg（78）
         g.rotation.y = (open * Math.PI) / 180; s.artSlots.update(); s.scene.updateMatrixWorld(true);
         const door = find(m.model, 'gate-door'); const yaw = (new E().setFromQuaternion(door.getWorldQuaternion(new Q()), 'YXZ').y * 180) / Math.PI;
         g.rotation.y = 0; s.artSlots.update();
