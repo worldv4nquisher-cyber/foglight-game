@@ -1,7 +1,7 @@
 // v0.1-029 截图：光照贴图前后对比（?lightmap=0 = 烘焙前，照旧半球光；默认 = 烘焙后），机位照美术预览页
 //   art/tools/preview/lightmap029.html（S1）/ lightmap029-s23.html（S2 / S3），1600×900 → ../docs/tasks/shots-029/
 //   另：地窖钥匙从入口看（cellarentry：下楼梯第 9 级眼高，钥匙描边 + 点光开着）、S3 塔门关着的塔底（门角压暗 ×0.6）。
-// 用法：npm run build && node --import ./scripts/register-ts-paths.mjs scripts/shots-029.mjs [s1,s2,s3] [lm0,lm1]
+// 用法：npm run build && node --import ./scripts/register-ts-paths.mjs scripts/shots-029.mjs [s1,s2,s3] [lm0,lm1] [机位,…]
 // 每个场景 × 模式只进一次场景，机位挨个摆（盒子上 SwiftShader 很慢）；单张失败只记进 shots-029.json。
 import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -59,6 +59,8 @@ const SCENES = {
 };
 const onlyScenes = process.argv[2]?.split(',').filter(Boolean) ?? Object.keys(SCENES);
 const onlyModes = process.argv[3]?.split(',').filter(Boolean) ?? ['lm0', 'lm1'];
+// 可选第 4 个参数：只截这些机位（逗号分隔，如 floor,room,islet）；有依赖的机位（room 开门、cellar 开地窖门）在自己那张里做，单截也成立
+const onlyViews = process.argv[4]?.split(',').filter(Boolean) ?? null;
 
 const server = await preview({ root, preview: { host: '127.0.0.1', port: 0, strictPort: false, open: false }, logLevel: 'silent' });
 const base = `http://127.0.0.1:${server.httpServer.address().port}/?smoke=1&art=1&quality=high`;
@@ -146,6 +148,7 @@ for (const sc of onlyScenes) {
       console.log('   光照贴图', lmInfo || '（无）');
       for (const [view, [eye, at, fov]] of Object.entries(S.views)) {
         const name = `${sc}-${view}-${mode}`;
+        if (onlyViews && !onlyViews.includes(view)) continue;
         try {
           if (sc === 's2' && view === 'cellar') {
             // 开地窖门（光感锁受光 → 门转 1.4 s）
