@@ -152,7 +152,11 @@ export function buildS1Greybox(mats: GreyboxMaterials = defaultGreyboxMaterials(
     if (!r) throw new Error(`S1.foregroundRocks: rocks.ts has no instance ${idx}`);
     const k = S1.rockColliderShrink;
     const bottom = -0.6;
-    const box = new THREE.Mesh(new THREE.BoxGeometry(hx * 2 * k, topY - bottom, hz * 2 * k), mats.reef);
+    // 椭圆柱（S1.foregroundRockEllipse）：半轴 = 收缩后的盒半宽，去掉盒角（#157 盒角伸进深水区）
+    const geo = S1.foregroundRockEllipse.includes(idx)
+      ? new THREE.CylinderGeometry(1, 1, topY - bottom, 24).scale(hx * k, 1, hz * k)
+      : new THREE.BoxGeometry(hx * 2 * k, topY - bottom, hz * 2 * k);
+    const box = new THREE.Mesh(geo, mats.reef);
     box.name = `s1-fg-rock-${idx}-collider`;
     box.position.set(r.translation[0], (topY + bottom) / 2, r.translation[2]);
     box.rotation.y = r.rotationY;

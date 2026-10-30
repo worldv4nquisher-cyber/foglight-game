@@ -10,6 +10,7 @@ import { TraversalLink, pickTraversalLink } from '@/entities/components/Traversa
 import { buildS1Greybox } from '@/levels/s1/greybox';
 import { S1, pierPoint, s1StepLinks } from '@/levels/s1/layout';
 import { S1_ROCKS } from '@/levels/s1/rocks';
+import { polygonRegion } from '@/systems/tide/TideController';
 import { readFileSync } from 'node:fs';
 import { buildS2Greybox } from '@/levels/s2/greybox';
 import { S2 } from '@/levels/s2/layout';
@@ -684,6 +685,89 @@ test('018 打磨 S1 新碰撞（码头桩 38 根 + 前景礁石 9 块）：不�
   const dr = block([rk.translation[0], 0.2, rk.translation[2] + 4.5], rk.translation, '前景大礁盘 #155', fr[2] * S1.rockColliderShrink + gameplay.player.radius - 0.1);
   notes.push(`桩挡在 ${dp.toFixed(2)} m、礁盘挡在 ${dr.toFixed(2)} m`);
   console.log(`  （018 新碰撞：${notes.join('；')}）`);
+});
+
+test('batch15 #157 礁石：9 块前景礁石挡人体与深水区边界之间要么留 ≥ 胶囊直径 + 余量的缝、要么和深水墙连上；带碰撞胶囊沿 #157 南侧多方向走不进深水区（不触发送回）', () => {
+  const gb = buildS1Greybox();
+  const poly = S1.deepWater.polygon;
+  const deep = polygonRegion(poly);
+  const D = gameplay.player.radius * 2 + S1.rockDeepGapMargin;
+  const segD = (p, a, b) => {
+    const dx = b[0] - a[0], dz = b[1] - a[1];
+    const t = Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dz) / (dx * dx + dz * dz)));
+    return Math.hypot(p[0] - a[0] - t * dx, p[1] - a[1] - t * dz);
+  };
+  /** 点到深水边界的有符号距离（区内为负） */
+  const sd = (x, z) => {
+    let d = Infinity;
+    for (let i = 0; i < poly.length; i++) d = Math.min(d, segD([x, z], poly[i], poly[(i + 1) % poly.length]));
+    return deep(new THREE.Vector3(x, 0, z)) ? -d : d;
+  };
+  const notes = [];
+  for (const [idx] of S1.foregroundRocks) {
+    const m = gb.colliders.find((c) => c.name === `s1-fg-rock-${idx}-collider`);
+    assert.ok(m, `缺 #${idx} 挡人体`);
+    m.updateMatrixWorld(true);
+    // 挡人体水平轮廓：顶点（世界 XZ）+ 相邻顶点连线细分采样
+    const pos = m.geometry.getAttribute('position');
+    const pts = [];
+    const v = new THREE.Vector3();
+    for (let i = 0; i < pos.count; i++) {
+      v.fromBufferAttribute(pos, i).applyMatrix4(m.matrixWorld);
+      pts.push([v.x, v.z]);
+    }
+    const idxA = m.geometry.index;
+    let gap = Infinity;
+    const tri = idxA ? idxA.count : pos.count;
+    for (let t = 0; t < tri; t++) {
+      const a = pts[idxA ? idxA.getX(t) : t], b = pts[idxA ? idxA.getX(t - (t % 3) + ((t + 1) % 3)) : t - (t % 3) + ((t + 1) % 3)];
+      for (let k = 0; k <= 8; k++) gap = Math.min(gap, sd(a[0] + ((b[0] - a[0]) * k) / 8, a[1] + ((b[1] - a[1]) * k) / 8));
+    }
+    // 连上 = 挡人体伸进深水区至少一个「直径 + 余量」（中间没有能挤进去的楔形缝）
+    assert.ok(gap >= D || gap <= -D, `#${idx} 挡人体离深水边界 ${gap.toFixed(2)} m：既不够 ${D.toFixed(2)} m 宽的缝，也没和深水墙连上`);
+    notes.push(`#${idx} ${gap.toFixed(2)}`);
+  }
+  // 真路径：退潮（台阶等 walkableWhen low 的墙关掉）带碰撞胶囊，沿 #157 南侧（离深水边界 0.3–0.6 m）多个方向走
+  const ph = new PhysicsSystem();
+  for (const m of gb.colliders) ph.addMesh(m);
+  for (const m of gb.walls) {
+    const c = ph.addMesh(m, { kind: 'wall' });
+    if (m.userData.walkableWhen === 'low') c.enabled = false;
+  }
+  const r = S1_ROCKS[157];
+  const z0 = S1.deepWater.polygon.find(([x]) => x === 12.5)[1]; // −8.95：#157 一带深水边界
+  const runs = [
+    // [起点 x, z, 方向 x, z, 秒]
+    [8.6, z0 + 0.35, 1, 0, 3.5], // 西 → 东，贴着边界
+    [8.6, z0 + 0.6, 1, 0, 3.5],
+    [8.6, z0 + 0.35, 1, 0.25, 3.5], // 东偏北：往礁石上压着走
+    [8.6, z0 + 0.5, 1, 0.5, 3.5],
+    [14.2, z0 + 0.35, -1, 0, 3.5], // 东 → 西
+    [14.2, z0 + 0.6, -1, 0.25, 3.5], // 西偏北
+    [13.6, z0 + 0.4, -1, 0.5, 3.5],
+    [r.translation[0], z0 + 0.4, 0, 1, 2], // 正南侧往北顶礁石
+    [r.translation[0] - 1, z0 + 0.4, 0.7, 0.7, 2.5],
+    [r.translation[0] + 1, z0 + 0.4, -0.7, 0.7, 2.5],
+  ];
+  let minSd = Infinity;
+  for (const [x, z, dx, dz, sec] of runs) {
+    const b = new CharacterBody();
+    ph.addBody(b);
+    b.teleport(new THREE.Vector3(x, 0.2, z));
+    for (let i = 0; i < 20; i++) ph.step(DT);
+    assert.ok(!deep(b.position), `起点 (${x}, ${z}) 已在深水区`);
+    const len = Math.hypot(dx, dz);
+    for (let i = 0; i < sec / DT; i++) {
+      b.velocity.x = (dx / len) * WALK;
+      b.velocity.z = (dz / len) * WALK;
+      ph.step(DT);
+      const inDeep = deep(b.position) && b.position.y <= S1.deepWater.maxFootY;
+      assert.ok(!inDeep, `从 (${x}, ${z.toFixed(2)}) 朝 (${dx}, ${dz}) 走 ${(i * DT).toFixed(2)} s 进了深水区（会送回）：${b.position.toArray().map((q) => q.toFixed(2))}`);
+      minSd = Math.min(minSd, sd(b.position.x, b.position.z));
+    }
+    ph.removeBody(b);
+  }
+  console.log(`  （前景礁石挡人体离深水边界：${notes.join('、')} m（要求 ≥ ${D.toFixed(2)}）；#157 南侧 ${runs.length} 条路径最近离边界 ${minSd.toFixed(2)} m）`);
 });
 
 for (const [name, err] of results) {
