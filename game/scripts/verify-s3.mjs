@@ -534,9 +534,9 @@ const art3 = await (async () => {
     const g = await new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).setKTX2Loader(ktx2Stub).parseAsync(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength), '');
     return g.scene;
   };
-  const { mountArtSlots, findNode, snapToArt } = await import('@/levels/artSlots');
+  const { mountArtSlots, findNode, snapToArt, snapObjectTo } = await import('@/levels/artSlots');
   const { S3_ART_SLOTS } = await import('@/levels/s3/artSlots');
-  return { load, mountArtSlots, findNode, snapToArt, S3_ART_SLOTS, interior: await load('env/env-lighthouse-ch1-interior.glb') };
+  return { load, mountArtSlots, findNode, snapToArt, snapObjectTo, S3_ART_SLOTS, interior: await load('env/env-lighthouse-ch1-interior.glb') };
 })();
 const art3Mount = (key, model, extra) => {
   const loc = new THREE.Group();
@@ -755,6 +755,58 @@ const wz = (o) => new THREE.Vector3(0, 0, 1).transformDirection(o.matrixWorld);
     const fwd = new THREE.Vector3(0, 0, 1).applyQuaternion(ixN.getWorldQuaternion(new THREE.Quaternion()));
     assert.ok(dStand < 0.01 && fwd.angleTo(new THREE.Vector3(...L.facing)) < 0.01, `点火口 -interact 离白盒站位 ${dStand.toFixed(3)} m、朝 −X`);
     out.push(`点火口 + 拉杆：挂 ignition-port-s3-socket、-receiver 对齐白盒受光点（差 ${(dRecv * 1000).toFixed(2)} mm）；拉杆枢轴 / 握点 = 白盒，逐帧握点差 ≤ ${(dMax * 1000).toFixed(2)} mm，第 34 帧转 ${turnDeg.toFixed(1)}° 到底；透镜 + 观察窗共用克隆材质，四态（关 / 红 0.6 / 冷白 0.15–0.35 + 脉冲 / 暖 2.0）跟白盒透镜；白盒透镜球 / 拉杆隐藏；-interact = 白盒站位（站位读美术） ✓`);
+  }
+}
+
+// 4c-4 塔门 prop-lighthouse-door-s3：buildS3Art 优先它、挂白盒合页；door-leaf 原点 = 合页；-interact 跟门转 → 关门时缓存给 doorStand = 白盒站位；开 −100° 后缓存不动
+{
+  const key = 'prop-lighthouse-door-s3';
+  const model = await art3.load(`props/${key}.glb`);
+  if (!model) out.push('塔门美术未交付');
+  else {
+    const { buildS3Art, S3_DOOR_KEYS } = await import('@/levels/s3/art');
+    assert.equal(S3_DOOR_KEYS[0], key, '塔门美术 key 优先');
+    const art = buildS3Art({ has: (k) => k === key, getModel: () => model });
+    assert.ok(art.door && art.door.name === key, 'buildS3Art 用 prop-lighthouse-door-s3');
+    gb.door.add(art.door);
+    frameRoot.updateMatrixWorld(true);
+    const leaf = art3.findNode(art.door, 'door-leaf');
+    const dHinge = wp(leaf).distanceTo(toWorld(S3.door.hinge));
+    assert.ok(dHinge < 1e-3, `door-leaf 原点 = 合页 ${dHinge}`);
+    const ixN = art3.findNode(art.door, 'prop-lighthouse-door-s3-interact');
+    const stand = new THREE.Object3D();
+    gb.root.add(stand);
+    assert.ok(art3.snapObjectTo(ixN, stand), '关门时缓存 -interact');
+    const dStand = wp(stand).distanceTo(toWorld(alongDoor(4.7, 0, S3.door.y0)));
+    assert.ok(dStand < 0.02, `塔门 -interact 离白盒站位 ${dStand.toFixed(3)} m`);
+    const fwd = new THREE.Vector3(0, 0, 1).applyQuaternion(stand.getWorldQuaternion(new THREE.Quaternion()));
+    const toDoor = toWorld(alongDoor(3.5, 0, S3.door.y0)).sub(wp(stand)).setY(0).normalize();
+    assert.ok(fwd.angleTo(toDoor) < 0.02, '塔门站位 +Z 朝门');
+    const cached = wp(stand);
+    const kh0 = wp(art3.findNode(art.door, 'door-keyhole'));
+    // 开门 −100°（白盒 puzzles 同式）
+    gb.door.rotation.y = S3.door.hingeRotY + S3.door.openDeg * (Math.PI / 180);
+    frameRoot.updateMatrixWorld(true);
+    const moved = wp(ixN).distanceTo(cached);
+    assert.ok(moved > 1, `开门后美术 -interact 跟门转走 ${moved.toFixed(2)} m`);
+    assert.ok(wp(stand).distanceTo(cached) < 1e-9, '缓存的站位不动');
+    const yawOf = (o) => new THREE.Euler().setFromQuaternion(o.getWorldQuaternion(new THREE.Quaternion()), 'YXZ').y;
+    gb.door.rotation.y = S3.door.hingeRotY;
+    frameRoot.updateMatrixWorld(true);
+    const y0 = yawOf(leaf);
+    gb.door.rotation.y = S3.door.hingeRotY + S3.door.openDeg * (Math.PI / 180);
+    frameRoot.updateMatrixWorld(true);
+    const openDeg = THREE.MathUtils.radToDeg(Math.atan2(Math.sin(yawOf(leaf) - y0), Math.cos(yawOf(leaf) - y0)));
+    assert.ok(Math.abs(openDeg - -100) < 0.01 && leaf.userData.openDeg === -100, `门扇开 ${openDeg.toFixed(2)}°（美术 openDeg ${leaf.userData.openDeg}）`);
+    // 向内开：开门后门扇中心在塔内一侧（离塔心更近）
+    const c0 = toLocal(kh0);
+    const c1 = toLocal(wp(art3.findNode(art.door, 'door-keyhole')));
+    assert.ok(Math.hypot(c1.x, c1.z) < Math.hypot(c0.x, c0.z), '门向内开');
+    gb.door.rotation.y = S3.door.hingeRotY;
+    art.door.removeFromParent();
+    stand.removeFromParent();
+    frameRoot.updateMatrixWorld(true);
+    out.push(`塔门：buildS3Art 优先 prop-lighthouse-door-s3、door-leaf 原点 = 合页（差 ${(dHinge * 1000).toFixed(2)} mm）；关门时缓存 -interact → doorStand（离白盒站位 ${(dStand * 100).toFixed(1)} cm、朝门），开门后美术点跟门走 ${moved.toFixed(2)} m、缓存不动；门扇向内开 ${openDeg.toFixed(1)}° ✓`);
   }
 }
 

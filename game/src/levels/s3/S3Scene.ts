@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { applyArtClapperHitRad } from '@/systems/tide/TideBell';
-import { missingGreyboxNodes, mountArtSlots, snapToArt, type ArtSlots } from '../artSlots';
+import { findNode, missingGreyboxNodes, mountArtSlots, snapObjectTo, snapToArt, type ArtSlots } from '../artSlots';
 import { S3_ART_SLOTS } from './artSlots';
 import type { Game } from '@/core/Game';
 import { gameplay } from '@/config/gameplay';
@@ -13,7 +13,7 @@ import type { TextId } from '@/content/text';
 import type { Collider } from '@/systems/PhysicsSystem';
 import { S3, S3_FRAME, alongDoor, cameraYawFacing, toWorld } from './layout';
 import { buildS3Greybox, defaultS3GreyboxMaterials, type S3Greybox } from './greybox';
-import { buildS3Art, type S3Art } from './art';
+import { buildS3Art, S3_DOOR_PROP_KEY, type S3Art } from './art';
 import { buildS3Puzzles, OUTRO_CUT_SEC, type S3Puzzles } from './puzzles';
 
 /** 点灯后多久进章节结束页（s）。结尾演出（035）做好后由演出结束触发 */
@@ -105,6 +105,8 @@ export class S3Scene extends LevelScene {
     snapToArt(this.artSlots, 'prop-guide-mirror-window-s3', 'prop-guide-mirror-window-s3-interact', this.puzzles.mirrorIx.window.interactPoint);
     // 1030c 点火口 + 拉杆：站位读美术 prop-ignition-port-s3-interact（= env ignite-lever-interact S3 (1.45, 22, −0.15)，+Z 朝 −X）
     snapToArt(this.artSlots, 'prop-ignition-port-s3', 'prop-ignition-port-s3-interact', this.puzzles.leverIx.interactPoint);
+    // 1030c 塔门 prop-lighthouse-door-s3：-interact 在门扇下、跟门转 —— 门还关着（建场景时）缓存它的世界位置给 doorStand，之后不再跟
+    if (this.art.door?.name === S3_DOOR_PROP_KEY) snapObjectTo(findNode(this.art.door, 'prop-lighthouse-door-s3-interact'), this.puzzles.doorIx.interactPoint);
     // 钟锤碰壁阈值：美术根 extras.clapperHitRad 优先（1030b 方案 A，缺省 0.055；1030c 重建钟根 0.0537）
     applyArtClapperHitRad(this.puzzles.bell, this.artSlots?.mounted.find((m) => m.id === 'prop-tide-bell-s3')?.model);
     this.artSlotGreyboxMissing = missingGreyboxNodes(this.scene, S3_ART_SLOTS);

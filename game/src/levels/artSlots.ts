@@ -217,7 +217,11 @@ export function mountArtSlots(assets: ArtSlotModelSource, scene: THREE.Object3D,
  */
 export function snapToArt(slots: ArtSlots | null | undefined, slotId: string, artNode: string, target: THREE.Object3D | null | undefined): boolean {
   const m = slots?.mounted.find((x) => x.id === slotId);
-  const a = m ? findNode(m.model, artNode) : null;
+  return snapObjectTo(m ? findNode(m.model, artNode) : null, target);
+}
+
+/** 把 target 的世界位置 + 朝向设成美术节点 a 当前的（a 会动时只在它还在初始位时调一次 = 缓存，如塔门 -interact 开门前） */
+export function snapObjectTo(a: THREE.Object3D | null | undefined, target: THREE.Object3D | null | undefined): boolean {
   if (!a || !target) return false;
   a.updateWorldMatrix(true, false);
   const pos = a.getWorldPosition(new THREE.Vector3());
