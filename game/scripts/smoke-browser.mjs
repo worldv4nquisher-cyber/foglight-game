@@ -2232,6 +2232,8 @@ const CHECKS = [
       // 美术钥匙（prop-key-lighthouse 优先，回退 prop-key-cellar-s2）：根节点就在架上 socket（无偏移），白盒钥匙隐藏
       const rest = await evaluate(`(() => { const k = __s2.art.cellarKey; if (!k) return null; const s = __s2.art.root.getObjectByName('env-cellar-s2-key-socket'); const p = k.getWorldPosition(new k.position.constructor()); const q = s.getWorldPosition(new k.position.constructor()); return { parent: k.parent?.name, d: p.distanceTo(q), p: p.toArray() }; })()`);
       if (!rest) throw new Error('art=1 没加载美术钥匙 prop-key-lighthouse / prop-key-cellar-s2');
+      // 1030c：灯塔钥匙交付后优先入口生效
+      if ((await evaluate(`__s2.art.cellarKey.name`)) !== 'prop-key-lighthouse') throw new Error('art=1 钥匙应优先用 prop-key-lighthouse：' + (await evaluate(`__s2.art.cellarKey.name`)));
       if (rest.parent !== 'env-cellar-s2-key-socket' || rest.d > 1e-4) throw new Error('钥匙不在 socket 上 ' + JSON.stringify(rest));
       if ((await trig('cellar-key-s2')) !== 'ok') throw new Error('没有 cellar-key-s2');
       const clip = await until(`__s2.interaction.animState?.clip`, 2000);
