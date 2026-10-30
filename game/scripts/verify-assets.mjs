@@ -493,6 +493,12 @@ try {
   assert.equal(guessGroup('prop-lens-s3.glb'), 's3');
   assert.equal(guessGroup('tex-wood-planks.ktx2'), 'common');
   assert.equal(guessGroup('env-pier.glb'), 's1');
+  // 033 配乐：主菜单曲算 menu，不进 common / s1；场景曲按 -s1 / -s3 归组
+  assert.equal(guessGroup('mus-menu.ogg'), 'menu', 'mus-menu 属主菜单包');
+  assert.equal(guessGroup('mus-menuet.ogg'), 's1', 'mus-menu 前缀要整段匹配');
+  assert.equal(guessGroup('mus-s1-ebb-shore.ogg'), 's1');
+  assert.equal(guessGroup('mus-s3-lighthouse.ogg'), 's3');
+  assert.equal(guessGroup('mus-s3-lighthouse-upper.ogg'), 's3');
   // 031 美术交付父亲（README-031）：两个 GLB + 三张贴图都算 s3，不进 common / s1
   const father = ['char-father.glb', 'char-father-anims.glb', 'tex-father-albedo.ktx2', 'tex-father-normal.ktx2', 'tex-father-orm.ktx2'];
   for (const f of father) assert.equal(guessGroup(f), 's3', `${f} 应算 s3`);

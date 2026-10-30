@@ -1,5 +1,48 @@
 import { gameplay } from '@/config/gameplay';
 
+/**
+ * 036 音乐混音（art/audio/README.md、art/audio/music/README.md 实测响度）：
+ * 配乐文件统一 −20 LUFS，环境音 ≈ −24 LUFS（走 sfx 总线、增益 1）。要求音乐比环境音低 12 dB →
+ * 音乐总线基准增益 = (−24 − 12) − (−20) = −16 dB（≈ 0.158），再乘设置里的音乐音量。
+ */
+export const MUSIC_FILE_LUFS = -20;
+export const AMBIENCE_FILE_LUFS = -24;
+export const MUSIC_BELOW_AMBIENCE_DB = 12;
+export const MUSIC_BUS_DB = AMBIENCE_FILE_LUFS - MUSIC_BELOW_AMBIENCE_DB - MUSIC_FILE_LUFS;
+export const MUSIC_BUS_GAIN = Math.pow(10, MUSIC_BUS_DB / 20);
+/** 036：场景之间（含主菜单 → S1）音乐交叉淡化时长（s） */
+export const MUSIC_XFADE_SEC = 2;
+
+export interface MusicOptions {
+  /** 曲目 key（manifest）：同一首已在播 → 不重开（返回 false） */
+  key?: string;
+  /** 默认 true：整文件循环（033：循环点 = 整个文件，不设 loopStart / loopEnd） */
+  loop?: boolean;
+  /**
+   * 交叉淡化时长（s）：有旧曲时旧曲线性淡出、新曲从 0 淡入，时长相同；没有旧曲时新曲直接满音量起播（033：不加淡入）。
+   * 默认 0 = 硬切。
+   */
+  crossfade?: number;
+}
+
+/** 音乐调试记录（冒烟读取）：每次 playMusic / stopMusic 一条，时间是 AudioContext 时钟（挂起时不走） */
+export interface MusicLogEntry {
+  op: 'play' | 'stop';
+  key: string | null;
+  /** 被替换 / 停掉的曲目 */
+  from: string | null;
+  at: number;
+  fade: number;
+  loop: boolean;
+  ctxState: string;
+}
+
+interface MusicVoice {
+  key: string | null;
+  source: AudioBufferSourceNode;
+  gain: GainNode;
+}
+
 /** 循环音：按名字启停。source 是 buffer 循环或合成占位振荡器；gain 做淡入淡出 */
 interface LoopVoice {
   source: AudioScheduledSourceNode;
@@ -30,7 +73,9 @@ export class AudioSystem {
   private master: GainNode | null = null;
   private sfxGain: GainNode | null = null;
   private musicGain: GainNode | null = null;
-  private music: AudioBufferSourceNode | null = null;
+  private music: MusicVoice | null = null;
+  /** 音乐调试记录（最多 32 条） */
+  readonly musicLog: MusicLogEntry[] = [];
   private _muted = false;
   /** 0–1，来自玩家设置（主音量 / 音乐 / 音效） */
   private levels = { master: 1, music: 1, sfx: 1 };
@@ -53,7 +98,7 @@ export class AudioSystem {
       this.sfxGain = this.context.createGain();
       this.sfxGain.connect(this.master);
       this.musicGain = this.context.createGain();
-      this.musicGain.gain.value = 0.5;
+      this.musicGain.gain.value = MUSIC_BUS_GAIN;
       this.musicGain.connect(this.master);
       if (typeof window !== 'undefined') for (const ev of this.unlockEvents) window.addEventListener(ev, this.unlock, { once: false });
     }
@@ -87,7 +132,7 @@ export class AudioSystem {
 
   private applyLevels(): void {
     if (this.master) this.master.gain.value = this._muted ? 0 : this.levels.master;
-    if (this.musicGain) this.musicGain.gain.value = 0.5 * this.levels.music;
+    if (this.musicGain) this.musicGain.gain.value = MUSIC_BUS_GAIN * this.levels.music;
     if (this.sfxGain) this.sfxGain.gain.value = this.levels.sfx;
   }
 
@@ -123,21 +168,81 @@ export class AudioSystem {
     osc.stop(ctx.currentTime + duration);
   }
 
-  playMusic(buffer: AudioBuffer): void {
-    if (!this.context || !this.musicGain) return;
-    this.stopMusic();
-    const src = this.context.createBufferSource();
-    src.buffer = buffer;
-    src.loop = true;
-    src.connect(this.musicGain);
-    src.start();
-    this.music = src;
+  /** 当前在播的曲目 key（没有 / 未命名为 null） */
+  get musicKey(): string | null {
+    return this.music?.key ?? null;
   }
 
-  stopMusic(): void {
-    this.music?.stop();
-    this.music?.disconnect();
+  /** 当前曲目的 loop 标志（冒烟 / 单测） */
+  get musicLoop(): boolean | null {
+    return this.music ? this.music.source.loop : null;
+  }
+
+  /**
+   * 播放背景音乐（走 music 总线，−16 dB 基准，见 MUSIC_BUS_DB）。默认整文件循环。
+   * 自动播放限制：context 还没被用户手势解锁（suspended）时照常排程、不报错，第一次交互 resume 后从头开始响。
+   * crossfade > 0 且有旧曲：旧曲从当前音量线性淡到 0 后停止，新曲同时从 0 淡到 1。
+   * 返回 false = 没有 context 或同一首已在播。
+   */
+  playMusic(buffer: AudioBuffer, opts: MusicOptions = {}): boolean {
+    const ctx = this.context;
+    if (!ctx || !this.musicGain || ctx.state === 'closed') return false;
+    const key = opts.key ?? null;
+    if (key !== null && this.music?.key === key) return false;
+    const loop = opts.loop ?? true;
+    const prev = this.music;
+    const fade = prev ? Math.max(0, opts.crossfade ?? 0) : 0;
+    const now = ctx.currentTime;
+    const src = ctx.createBufferSource();
+    src.buffer = buffer;
+    src.loop = loop;
+    const gain = ctx.createGain();
+    if (fade > 0) {
+      gain.gain.setValueAtTime(0, now);
+      gain.gain.linearRampToValueAtTime(1, now + fade);
+    } else gain.gain.setValueAtTime(1, now);
+    src.connect(gain).connect(this.musicGain);
+    src.start(now);
+    this.music = { key, source: src, gain };
+    if (prev) this.releaseMusic(prev, fade);
+    this.logMusic({ op: 'play', key, from: prev?.key ?? null, at: now, fade, loop, ctxState: ctx.state });
+    return true;
+  }
+
+  /** 停止背景音乐（fadeOut s 线性淡出，默认立即） */
+  stopMusic(fadeOut = 0): void {
+    const prev = this.music;
+    if (!prev || !this.context) return;
     this.music = null;
+    const fade = Math.max(0, fadeOut);
+    this.releaseMusic(prev, fade);
+    this.logMusic({ op: 'stop', key: null, from: prev.key, at: this.context.currentTime, fade, loop: false, ctxState: this.context.state });
+  }
+
+  private releaseMusic(v: MusicVoice, fade: number): void {
+    const ctx = this.context;
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    const p = v.gain.gain;
+    const cur = p.value;
+    p.cancelScheduledValues(now);
+    p.setValueAtTime(cur, now);
+    if (fade > 0) p.linearRampToValueAtTime(0, now + fade);
+    else p.setValueAtTime(0, now);
+    v.source.onended = () => {
+      v.source.disconnect();
+      v.gain.disconnect();
+    };
+    try {
+      v.source.stop(now + fade);
+    } catch {
+      // 已经停过
+    }
+  }
+
+  private logMusic(e: MusicLogEntry): void {
+    this.musicLog.push(e);
+    if (this.musicLog.length > 32) this.musicLog.shift();
   }
 
   /** 当前在播（不含正在淡出）的循环音名字 */

@@ -2828,6 +2828,69 @@ CHECKS.push({
   },
 });
 
+// 033 / 036 配乐：主菜单 art=1 → mus-menu 整文件循环（未交互时 context 挂起不报错，第一次点击后真正出声）→ 新游戏进 S1 → 和 mus-s1-ebb-shore 2 s 交叉淡化。
+// 用 AnalyserNode 挂在音乐总线上量电平证明在播；等待按 AudioContext 时钟 / 游戏时间（__game.time.elapsed），不按墙钟
+CHECKS.push({
+  name: 'v0.1-033 配乐：主菜单 mus-menu 循环 + 首次交互后出声、新游戏进 S1 与 mus-s1-ebb-shore 2 s 交叉淡化、menu 组无 preview',
+  async run({ evaluate, cdp, sleep }) {
+    const out = [];
+    const until = async (expr, ms = 60000) => {
+      const end = Date.now() + ms;
+      while (Date.now() < end) {
+        if (await evaluate(expr).catch(() => false)) return true;
+        await sleep(100);
+      }
+      return false;
+    };
+    /** 等游戏时间 / 音频时钟走过 sec 秒（机器负载高时墙钟不可靠） */
+    const waitClock = async (clockExpr, sec, ms = 120000) => {
+      const t0 = await evaluate(clockExpr);
+      if (!(await until(`(${clockExpr}) >= ${t0 + sec}`, ms))) throw new Error(`${clockExpr} 在 ${ms / 1000}s 墙钟内没走过 ${sec}s`);
+    };
+    const audio = `__game.audio`;
+    const level = `(() => { const a = __game.audio; if (!window.__musAn) { window.__musAn = a.context.createAnalyser(); window.__musAn.fftSize = 2048; a.musicGain.connect(window.__musAn); }
+      const d = new Float32Array(2048); window.__musAn.getFloatTimeDomainData(d); let s = 0; for (const v of d) s += v * v; const rms = Math.sqrt(s / d.length); return rms > 0 ? 20 * Math.log10(rms) : -999; })()`;
+    await evaluate(`localStorage.clear(); 1`);
+    await cdp.gotoMenu('art=1');
+    if (!(await until(`${audio}.musicKey === 'mus-menu'`, 30000))) throw new Error('主菜单没起 mus-menu ' + JSON.stringify(await evaluate(`({ k: ${audio}.musicKey, log: ${audio}.musicLog, has: !!__game.assets.getAudio('mus-menu') })`)));
+    const m0 = await evaluate(`({ loop: ${audio}.musicLoop, log: ${audio}.musicLog.slice(), state: ${audio}.context.state, bus: ${audio}.musicGain.gain.value,
+      menuAudio: performance.getEntriesByType('resource').filter((e) => /\\/audio\\/music\\//.test(e.name)).map((e) => e.name.split('/').pop()),
+      src: (() => { const v = ${audio}.music; return { loop: v.source.loop, ls: v.source.loopStart, le: v.source.loopEnd, dur: v.source.buffer.duration, ch: v.source.buffer.numberOfChannels }; })() })`);
+    if (m0.loop !== true || m0.src.ls !== 0 || m0.src.le !== 0) throw new Error('mus-menu 应整文件 loop、不设循环点 ' + JSON.stringify(m0.src));
+    if (Math.abs(m0.src.dur - 106.667) > 0.05 || m0.src.ch !== 2) throw new Error('mus-menu 时长 / 声道不对 ' + JSON.stringify(m0.src));
+    if (m0.log.length !== 1 || m0.log[0].fade !== 0) throw new Error('主菜单第一首不应淡入 ' + JSON.stringify(m0.log));
+    if (m0.menuAudio.some((n) => /preview/.test(n)) || m0.menuAudio.join() !== 'mus-menu.ogg') throw new Error('主菜单阶段只应下载 mus-menu.ogg：' + m0.menuAudio.join());
+    out.push(`主菜单 mus-menu（${m0.src.dur.toFixed(2)} s / ${m0.src.ch} 声道，loop=true，循环点 0/0）起播时 context=${m0.log[0].ctxState}，总线 ${(20 * Math.log10(m0.bus)).toFixed(1)} dB`);
+    // 第一次用户交互：点画面 → context running → 音乐总线有电平
+    await cdp.click(100, 650);
+    if (!(await until(`${audio}.context.state === 'running'`, 10000))) throw new Error('点击后 AudioContext 没解锁：' + (await evaluate(`${audio}.context.state`)));
+    await waitClock(`${audio}.context.currentTime`, 1.5);
+    let lv = -999;
+    for (let i = 0; i < 20 && lv < -90; i++) {
+      lv = Math.max(lv, await evaluate(level));
+      if (lv < -90) await waitClock(`${audio}.context.currentTime`, 0.2);
+    }
+    if (lv < -90) throw new Error('mus-menu 在播但音乐总线没有电平 ' + lv);
+    out.push(`首次点击后 context=running，菜单曲电平 ${lv.toFixed(1)} dBFS（音乐总线后）`);
+    // 新游戏 → S1：2 s 交叉淡化
+    const r = await evaluate(`(() => { const e = document.querySelector('.main-menu [data-act="new"]'); const b = e.getBoundingClientRect(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 }; })()`);
+    await cdp.click(r.x, r.y);
+    if (!(await until(`__game.scenes.current?.name === 's1-ebb-shore' && ${audio}.musicKey === 'mus-s1-ebb-shore'`, 240000))) throw new Error('新游戏进 S1 后没切到 mus-s1-ebb-shore ' + JSON.stringify(await evaluate(`({ s: __game.scenes.current?.name, k: ${audio}.musicKey, log: ${audio}.musicLog })`)));
+    const x = await evaluate(`(() => { const l = ${audio}.musicLog.at(-1); const v = ${audio}.music; return { l, now: ${audio}.context.currentTime, loop: v.source.loop, g: v.gain.gain.value }; })()`);
+    if (x.l.op !== 'play' || x.l.from !== 'mus-menu' || x.l.fade !== 2 || !x.loop) throw new Error('进 S1 应从 mus-menu 2 s 交叉淡化 ' + JSON.stringify(x));
+    // 菜单曲在加载期间一直在播（交叉淡化发生在 S1 enter 那一刻）；淡化中途新曲增益在 0–1 之间
+    await waitClock(`${audio}.context.currentTime`, Math.max(0, x.l.at + 2.2 - x.now));
+    const y = await evaluate(`({ g: ${audio}.music.gain.gain.value, k: ${audio}.musicKey, log: ${audio}.musicLog.length })`);
+    if (Math.abs(y.g - 1) > 1e-3) throw new Error('交叉淡化 2 s 后 S1 曲应满音量 ' + JSON.stringify(y));
+    await waitClock(`__game.time.elapsed`, 1);
+    const lv2 = await evaluate(level);
+    out.push(`进 S1：mus-menu → mus-s1-ebb-shore 交叉淡化 ${x.l.fade} s（at ${x.l.at.toFixed(2)} s，读数时 ${(x.now - x.l.at).toFixed(2)} s 处新曲增益 ${x.g.toFixed(2)}），2.2 s 后增益 ${y.g.toFixed(2)}，电平 ${lv2.toFixed(1)} dBFS`);
+    await evaluate(`localStorage.clear(); 1`);
+    await cdp.goto('');
+    return out.join('；');
+  },
+});
+
 const extra = process.env.SMOKE_ONLY ? CHECKS.filter((c) => process.env.SMOKE_ONLY.split('|').some((k) => c.name.includes(k))) : CHECKS;
 
 // ---------------------------------------------------------------- 起服务 + 浏览器
@@ -2947,8 +3010,8 @@ const cdp = {
     throw new Error('换地址后 60 秒内 ' + scene + ' 场景没有就绪');
   },
   /** 不带 autostart 打开（默认流程：启动 → 主菜单，v0.1-008），等主菜单就绪 */
-  async gotoMenu() {
-    await send('Page.navigate', { url: url.replace('&autostart=1', '') }, sessionId);
+  async gotoMenu(query = '') {
+    await send('Page.navigate', { url: url.replace('&autostart=1', '') + (query ? '&' + query : '') }, sessionId);
     await new Promise((r) => setTimeout(r, 300));
     const end = Date.now() + 60000;
     while (Date.now() < end) {

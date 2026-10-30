@@ -223,6 +223,13 @@ export const manifest: AssetEntry[] = [
   { key: 'sfx-ui-back', type: 'audio', url: 'assets/art/audio/sfx/sfx-ui-back.ogg', group: 'menu', optional: true, art: true, gainDb: 1.2 },
   { key: 'sfx-ui-confirm', type: 'audio', url: 'assets/art/audio/sfx/sfx-ui-confirm.ogg', group: 'menu', optional: true, art: true, gainDb: 1.2 },
   { key: 'sfx-ui-journal', type: 'audio', url: 'assets/art/audio/sfx/sfx-ui-journal.ogg', group: 'menu', optional: true, art: true },
+  // ---- 033 配乐（art/audio/music/README.md；−20 LUFS、整文件循环 loop = true，不设循环点、不加淡入淡出；036 混音：音乐总线 −16 dB = 比环境音低 12 dB，场景间 2 s 交叉淡化）
+  // 样张 art/audio/music/preview/ 不进 manifest（verify-assets / verify-audio 断言）
+  // menu：主菜单曲（036「主菜单包只有 mus-menu 和 UI 音效」；1,779,931 B）
+  { key: 'mus-menu', type: 'audio', url: 'assets/art/audio/music/mus-menu.ogg', group: 'menu', optional: true, art: true },
+  // s1：退潮岸场景曲（进 S1 时从主菜单曲 2 s 交叉淡化过来）
+  { key: 'mus-s1-ebb-shore', type: 'audio', url: 'assets/art/audio/music/mus-s1-ebb-shore.ogg', group: 's1', optional: true, art: true },
+  // s3：mus-s3-lighthouse + mus-s3-lighthouse-upper 两层要同一时刻起播、按玩家高度淡入上层，同步层逻辑未做，暂不登记
   // common：通用（日记纸声、脚步 5 地面 × a–d、落水、潮汐钟 S1/S3 共用、涨退潮、户外雾号 / 海鸟 / 轻风、光束接通 / 持续、镜架咔哒 S2/S3 共用）
   { key: 'amb-foghorn-far-a', type: 'audio', url: 'assets/art/audio/ambience/amb-foghorn-far-a.ogg', group: 'common', optional: true, art: true },
   { key: 'amb-foghorn-far-b', type: 'audio', url: 'assets/art/audio/ambience/amb-foghorn-far-b.ogg', group: 'common', optional: true, art: true },

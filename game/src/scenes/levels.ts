@@ -18,13 +18,18 @@ export interface LevelDef {
   next: LevelId | null;
   /** 默认入口点 id（模型 / 白盒里的 `<名>-spawn-<id>` 节点） */
   defaultEntry: string;
+  /** 场景曲（manifest 音频 key，033）：进场时从上一首 2 s 交叉淡化；null = 没有场景曲（进场时上一首 2 s 淡出） */
+  music: string | null;
 }
 
 export const LEVELS: Record<LevelId, LevelDef> = {
-  s1: { id: 's1', scene: 's1-ebb-shore', group: 's1', next: 's2', defaultEntry: 'start' },
-  s2: { id: 's2', scene: 's2-keeper-house', group: 's2', next: 's3', defaultEntry: 'from-s1' },
-  s3: { id: 's3', scene: 's3-lighthouse', group: 's3', next: null, defaultEntry: 'from-s2' },
+  s1: { id: 's1', scene: 's1-ebb-shore', group: 's1', next: 's2', defaultEntry: 'start', music: 'mus-s1-ebb-shore' },
+  s2: { id: 's2', scene: 's2-keeper-house', group: 's2', next: 's3', defaultEntry: 'from-s1', music: null },
+  s3: { id: 's3', scene: 's3-lighthouse', group: 's3', next: null, defaultEntry: 'from-s2', music: null },
 };
+
+/** 主菜单曲（033 定稿，menu 组） */
+export const MENU_MUSIC = 'mus-menu';
 
 export const LEVEL_LIST: readonly LevelDef[] = [LEVELS.s1, LEVELS.s2, LEVELS.s3];
 

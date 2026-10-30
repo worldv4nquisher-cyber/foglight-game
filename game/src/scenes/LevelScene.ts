@@ -29,6 +29,7 @@ import type { HintSystem } from '@/systems/HintSystem';
 import { createSceneHints } from './sceneHints';
 import { TideSet } from '@/systems/tide/TideController';
 import type { TideBell } from '@/systems/tide/TideBell';
+import { switchMusic } from '@/systems/audio/music';
 import { bindSfxFallback, recallToSafePoint } from '@/systems/tide/tideScene';
 import { PushLoop } from '@/systems/audio/loops';
 import { bindPuzzleSfx } from '@/systems/audio/puzzleSfx';
@@ -182,6 +183,8 @@ export abstract class LevelScene extends BaseScene {
     if (this.goalId) this.game.narrative.setGoal(this.goalId);
 
     const { events, audio, ui } = this.game;
+    // 033 / 036：场景曲（LevelDef.music）和上一首（主菜单曲 / 上一场景曲）2 s 交叉淡化；没有场景曲则上一首淡出
+    switchMusic(audio, (k) => this.game.assets.getAudio(k), this.level.music);
     this.pushLoop = new PushLoop(events);
     this.footsteps = new Footsteps(events, this.level.id);
     const amb = AMBIENCE[this.level.id];

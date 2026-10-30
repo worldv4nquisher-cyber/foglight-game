@@ -107,7 +107,7 @@ const json = process.argv.includes('--json');
 
 // ../art 里已交付、未进清单的运行时资源（估算；规则见 scripts/lib/size-groups.mjs）
 const listedNames = new Set([...manifest.map((e) => basename(e.url)), ...externalNames]);
-const art = { common: 0, s1: 0, s2: 0, s3: 0, files: 0 };
+const art = { menu: 0, common: 0, s1: 0, s2: 0, s3: 0, files: 0 };
 for (const f of walk(ART)) {
   const rel = relative(ART, f);
   if (/^(source|style|tools|ui)\//.test(rel) || rel.includes('/preview/')) continue;
@@ -131,7 +131,7 @@ if (json) {
   if (art.files) {
     const est = art.common + art.s1;
     console.log(
-      `  [预估] ../art 已交付未登记 ${art.files} 个文件：common ${mb(art.common)}、s1 ${mb(art.s1)}、s2 ${mb(art.s2)}、s3 ${mb(art.s3)}` +
+      `  [预估] ../art 已交付未登记 ${art.files} 个文件：menu ${mb(art.menu)}、common ${mb(art.common)}、s1 ${mb(art.s1)}、s2 ${mb(art.s2)}、s3 ${mb(art.s3)}` +
         `\n         全部接入后首场景包 ≈ ${mb(first + est)}，首次总下载 ≈ ${mb(firstTotal + est)}（按文件名猜的分组，034 接入后以上面为准）`,
     );
   }

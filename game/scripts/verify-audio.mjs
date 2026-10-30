@@ -17,6 +17,9 @@ import { bindUiSfx, uiClickSfx } from '@/ui/uiSfx';
 import { bindPuzzleSfx, DIAL_GROUPS, MIRROR_FINE_MIN_SEC } from '@/systems/audio/puzzleSfx';
 import { BeamHum, PushLoop, BEAM_HUM_ID, LENS_ROTATE_ID, LENS_ROTATE_DELAY_SEC } from '@/systems/audio/loops';
 import { BellWindTimer, BELL_WIND_INTERVAL } from '@/systems/audio/bellWind';
+import { MUSIC_XFADE_SEC, MUSIC_BUS_DB, MUSIC_BUS_GAIN, MUSIC_FILE_LUFS, AMBIENCE_FILE_LUFS } from '@/systems/AudioSystem';
+import { switchMusic } from '@/systems/audio/music';
+import { LEVELS, MENU_MUSIC } from '@/scenes/levels';
 
 class FakeParam {
   constructor(v = 1) {
@@ -281,7 +284,8 @@ test('sfx:play optional（032 补音，如钟锤 sfx-tide-bell-clapper）：有�
 });
 
 test('032 登记：79 个 ogg 全在清单（sfx 59 / ambience 20，url = assets/art/audio/<类>/<名>.ogg，art 可缺省）；../art 在时文件都存在；分组 menu 只放 UI、common 不放场景专属', () => {
-  const au = manifest.filter((e) => e.type === 'audio');
+  // 033 配乐（/audio/music/）另有测试，这里只数 032 的音效 / 环境音
+  const au = manifest.filter((e) => e.type === 'audio' && !e.url.includes('/audio/music/'));
   assert.equal(au.length, 79);
   assert.equal(au.filter((e) => e.url.includes('/audio/sfx/')).length, 59);
   assert.equal(au.filter((e) => e.url.includes('/audio/ambience/')).length, 20);
@@ -636,6 +640,102 @@ test('Game：scene:change 时调 audio.stopAllLoops；暂停菜单走 audio.susp
   const i = src.indexOf("this.events.on('scene:change'");
   assert.ok(i > 0 && src.slice(i, i + 200).includes('this.audio.stopAllLoops()'), 'Game scene:change 里应 stopAllLoops');
   assert.ok(/pause\([^)]*\)[^{]*\{[\s\S]*?this\.audio\.suspend\(\)/.test(src), 'Game.pause 应 audio.suspend');
+});
+
+// ---- 033 / 036 配乐
+test('033 manifest：mus-menu 在 menu 组、mus-s1-ebb-shore 在 s1 组；没有任何 preview 路径；menu 组音频只有 mus-menu + UI 音效', () => {
+  const m = manifest.find((e) => e.key === 'mus-menu');
+  assert.ok(m, 'manifest 应有 mus-menu');
+  assert.equal(m.url, 'assets/art/audio/music/mus-menu.ogg');
+  assert.equal(m.group, 'menu');
+  assert.equal(m.type, 'audio');
+  assert.equal(MENU_MUSIC, 'mus-menu');
+  const s1 = manifest.find((e) => e.key === 'mus-s1-ebb-shore');
+  assert.equal(s1?.group, 's1');
+  assert.equal(LEVELS.s1.music, 'mus-s1-ebb-shore');
+  for (const e of manifest) assert.ok(!/preview/i.test(e.url) && !/preview/i.test(e.key), `不能登记样张：${e.key} ${e.url}`);
+  const menuAudio = manifest.filter((e) => e.group === 'menu' && e.type === 'audio').map((e) => e.key);
+  assert.ok(menuAudio.every((k) => k === 'mus-menu' || k.startsWith('sfx-ui-')), `menu 组音频：${menuAudio}`);
+  assert.equal(manifest.filter((e) => e.url.includes('/music/') && (e.group === 'common')).length, 0, '配乐不进 common');
+  const f = new URL('../../art/audio/music/mus-menu.ogg', import.meta.url);
+  if (existsSync(f)) assert.equal(readFileSync(f).length, 1779931, 'mus-menu.ogg 应为美术交付的 1,779,931 B');
+});
+
+test('036 音乐总线：比环境音低 12 dB（文件 −20 LUFS、环境音 −24 LUFS → 总线 −16 dB），乘设置音乐音量', () => {
+  assert.equal(MUSIC_FILE_LUFS - (AMBIENCE_FILE_LUFS) + MUSIC_BUS_DB, -12);
+  assert.ok(Math.abs(MUSIC_BUS_DB + 16) < 1e-9);
+  assert.ok(Math.abs(20 * Math.log10(MUSIC_BUS_GAIN) - MUSIC_BUS_DB) < 1e-9);
+  const ctx = new FakeContext();
+  const a = new AudioSystem(ctx);
+  a.playMusic({ duration: 106.67 }, { key: 'mus-menu' });
+  const bus = ctx.sources[0].out[0].out[0]; // source → 曲目 gain → music 总线
+  assert.ok(Math.abs(bus.gain.value - MUSIC_BUS_GAIN) < 1e-9, `总线 ${bus.gain.value}`);
+  a.setVolumes({ master: 1, music: 0.5, sfx: 1 });
+  assert.ok(Math.abs(bus.gain.value - MUSIC_BUS_GAIN * 0.5) < 1e-9);
+});
+
+test('033 playMusic：整文件 loop = true、不设循环点、第一首不淡入；同一首不重开', () => {
+  const ctx = new FakeContext();
+  const a = new AudioSystem(ctx);
+  ctx.currentTime = 1;
+  assert.equal(a.playMusic({ duration: 106.67 }, { key: 'mus-menu' }), true);
+  const src = ctx.sources[0];
+  assert.equal(src.loop, true);
+  assert.equal(src.loopStart, undefined, '不设 loopStart');
+  assert.equal(src.loopEnd, undefined, '不设 loopEnd');
+  assert.equal(src.started, 1);
+  const g = src.out[0].gain;
+  assert.equal(g.value, 1);
+  assert.equal(g.events.filter((e) => e[0] === 'ramp').length, 0, '不加淡入');
+  assert.equal(a.musicKey, 'mus-menu');
+  assert.equal(a.musicLoop, true);
+  assert.equal(a.playMusic({ duration: 106.67 }, { key: 'mus-menu' }), false, '同一首不重开');
+  assert.equal(ctx.sources.length, 1);
+});
+
+test('036 交叉淡化：菜单 → S1 时长 2 s，旧曲淡出到 0 后 stop、新曲 0 → 1；log 记录', () => {
+  assert.equal(MUSIC_XFADE_SEC, 2);
+  const ctx = new FakeContext();
+  const a = new AudioSystem(ctx);
+  const bufs = { 'mus-menu': { duration: 106.67 }, 'mus-s1-ebb-shore': { duration: 150 } };
+  assert.equal(switchMusic(a, (k) => bufs[k], MENU_MUSIC), 'play');
+  ctx.currentTime = 30;
+  assert.equal(switchMusic(a, (k) => bufs[k], LEVELS.s1.music), 'play');
+  const [menu, s1] = ctx.sources;
+  assert.equal(menu.stopped, 32, '菜单曲在 2 s 后停');
+  assert.deepEqual(lastRamp(menu.out[0].gain), ['ramp', 0, 32]);
+  assert.deepEqual(lastRamp(s1.out[0].gain), ['ramp', 1, 32]);
+  assert.deepEqual(s1.out[0].gain.events[0], ['set', 0, 30]);
+  assert.equal(s1.loop, true);
+  assert.equal(a.musicKey, 'mus-s1-ebb-shore');
+  const last = a.musicLog.at(-1);
+  assert.deepEqual([last.op, last.key, last.from, last.fade], ['play', 'mus-s1-ebb-shore', 'mus-menu', 2]);
+  ctx.advance(3);
+  assert.equal(menu.disconnected, true, '淡出完断开');
+  assert.equal(switchMusic(a, (k) => bufs[k], LEVELS.s1.music), 'same');
+  // S2 没有场景曲：上一首 2 s 淡出
+  assert.equal(switchMusic(a, (k) => bufs[k], LEVELS.s2.music), 'stop');
+  assert.equal(s1.stopped, 35);
+  assert.equal(a.musicKey, null);
+  // 资源缺失（?art=0）：不报错，返回 missing
+  assert.equal(switchMusic(a, () => undefined, MENU_MUSIC), 'missing');
+});
+
+test('033 自动播放限制：context 未解锁（suspended）时 playMusic 照常排程不抛错，第一次交互 resume', () => {
+  const ctx = new FakeContext();
+  ctx.state = 'suspended';
+  const a = new AudioSystem(ctx);
+  assert.doesNotThrow(() => a.playMusic({ duration: 106.67 }, { key: 'mus-menu' }));
+  assert.equal(ctx.sources[0].started, 0);
+  assert.equal(a.musicLog.at(-1).ctxState, 'suspended');
+});
+
+test('033 接入点：MenuScene 进 mus-menu、ChapterEndScene 淡出、LevelScene 按 LevelDef.music 切换', () => {
+  const menu = readFileSync(new URL('../src/scenes/MenuScene.ts', import.meta.url), 'utf8');
+  assert.ok(menu.includes('switchMusic(this.game.audio, (k) => this.game.assets.getAudio(k), MENU_MUSIC)'));
+  assert.ok(menu.includes('switchMusic(this.game.audio, (k) => this.game.assets.getAudio(k), null)'));
+  const lvl = readFileSync(new URL('../src/scenes/LevelScene.ts', import.meta.url), 'utf8');
+  assert.ok(lvl.includes('switchMusic(audio, (k) => this.game.assets.getAudio(k), this.level.music)'));
 });
 
 let failed = 0;

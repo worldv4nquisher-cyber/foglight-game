@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import type { Game } from '@/core/Game';
 import { Rain } from '@/world/Rain';
 import { BaseScene } from './BaseScene';
+import { MENU_MUSIC } from './levels';
+import { switchMusic } from '@/systems/audio/music';
 
 /** 主菜单背景的雨丝数量（远少于游戏内，主菜单要轻） */
 const MENU_RAIN_DROPS = 4000;
@@ -61,10 +63,16 @@ export class MenuScene extends BaseScene {
     this.scene.add(this.rain);
     this.placeCamera(0);
     this.showUi();
+    this.startMusic();
     this.cleanups.push(
       this.game.events.on('ui:back', () => this.onBack()),
       () => this.fogTex.dispose(),
     );
+  }
+
+  /** 033：主菜单曲 mus-menu 整文件循环；从场景回菜单时和场景曲 2 s 交叉淡化 */
+  protected startMusic(): void {
+    switchMusic(this.game.audio, (k) => this.game.assets.getAudio(k), MENU_MUSIC);
   }
 
   protected showUi(): void {
@@ -178,6 +186,11 @@ export class ChapterEndScene extends MenuScene {
   }
 
   protected override onBack(): void {}
+
+  /** 结尾曲（033 / 035）还没交付：进章节结束页时把上一首 2 s 淡出，不放主菜单曲 */
+  protected override startMusic(): void {
+    switchMusic(this.game.audio, (k) => this.game.assets.getAudio(k), null);
+  }
 
   override exit(): void {
     this.game.ui.chapterEnd.hide();
