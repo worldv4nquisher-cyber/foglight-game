@@ -2,12 +2,12 @@
 // 独立成模块：check-size.mjs 在没有 dist 时导入即退出，单元测试（verify-assets）从这里直接测规则。
 //
 // 规则（先匹配先用）：
-//   1. char-father*            → s3（父亲只在 S3 灯室出现，031 接入；不能被下面的 char-* 吞进常驻包）
+//   1. char-father* / tex-father-* → s3（父亲只在 S3 灯室出现，031 接入；模型不能被下面的 char-* 吞进常驻包，贴图不能落进 s1）
 //   2. 文件名带 -s2 / -s3      → s2 / s3
 //   3. char-*（默认）、tex-xi、提灯、机关 / 石墙 / 木纹通用贴图 → common（角色默认常驻）
 //   4. 其余                    → s1
 /** 只出现在某一场景的角色：前缀 → 分组 */
-export const CHAR_SCENE = Object.freeze({ 'char-father': 's3' });
+export const CHAR_SCENE = Object.freeze({ 'char-father': 's3', 'tex-father': 's3' });
 
 export function guessGroup(name) {
   for (const [prefix, g] of Object.entries(CHAR_SCENE)) if (name === prefix || name.startsWith(`${prefix}-`) || name.startsWith(`${prefix}.`)) return g;

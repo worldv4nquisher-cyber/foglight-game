@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
@@ -493,7 +493,13 @@ try {
   assert.equal(guessGroup('prop-lens-s3.glb'), 's3');
   assert.equal(guessGroup('tex-wood-planks.ktx2'), 'common');
   assert.equal(guessGroup('env-pier.glb'), 's1');
-  ok('check-size 分组估算：char-* 默认 common，char-father → s3，-s2/-s3 后缀按场景，其余 s1');
+  // 031 美术交付父亲（README-031）：两个 GLB + 三张贴图都算 s3，不进 common / s1
+  const father = ['char-father.glb', 'char-father-anims.glb', 'tex-father-albedo.ktx2', 'tex-father-normal.ktx2', 'tex-father-orm.ktx2'];
+  for (const f of father) assert.equal(guessGroup(f), 's3', `${f} 应算 s3`);
+  assert.equal(guessGroup('tex-fatherland.ktx2'), 's1', 'tex-father 前缀也要整段匹配');
+  const fatherFiles = [resolve(root, '../art/models/characters/char-father.glb'), resolve(root, '../art/models/characters/char-father-anims.glb'), ...['albedo', 'normal', 'orm'].map((k) => resolve(root, `../art/textures/tex-father-${k}.ktx2`))];
+  if (fatherFiles.every((f) => existsSync(f))) for (const f of fatherFiles) assert.equal(guessGroup(basename(f)), 's3', f);
+  ok('check-size 分组估算：char-* 默认 common，char-father / tex-father → s3，-s2/-s3 后缀按场景，其余 s1');
 }
 
 // ---- 030 UI：art/ui 的 21 个运行时文件全部登记；懒加载 / 分组 / 纸张映射
