@@ -27,6 +27,6 @@ export function s1SubtitleZones(): { id: TextId; shape: S1ZoneShape }[] {
 /** 取一个圆形字幕触发区（puzzles.ts 用） */
 export function s1SubtitleCircle(id: TextId): { x: number; z: number; r: number } {
   const z = s1SubtitleZones().find((e) => e.id === id)?.shape;
-  if (!z || z.kind !== 'circle') throw new Error('没有圆形字幕触发区 ' + id);
+  if (!z || z.kind !== 'circle') throw new Error('s1SubtitleCircle: no circle zone ' + id);
   return { x: z.x, z: z.z, r: z.r };
 }

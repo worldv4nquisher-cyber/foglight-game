@@ -35,6 +35,6 @@ export const FOOTPRINT_TILES: readonly FootprintTile[] = (PATH.tiles as RawTile[
 export const FOOTPRINTS_MONO_RADIUS = 1.4;
 export function footprintsMonoZone(): { x: number; z: number; r: number } {
   const t2 = FOOTPRINT_TILES[1];
-  if (!t2) throw new Error('033-footprints-path.json 少于 2 块贴花');
+  if (!t2) throw new Error('033-footprints-path.json: tiles < 2');
   return { x: t2.center[0], z: t2.center[2], r: FOOTPRINTS_MONO_RADIUS };
 }
