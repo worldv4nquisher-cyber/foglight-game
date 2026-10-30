@@ -1832,8 +1832,10 @@ const CHECKS = [
       if (s.entry !== 'from-s1' || Math.abs(s.pos[0]) > 0.3 || Math.abs(s.pos[2] + 12.5) > 0.3 || Math.abs(s.pos[1]) > 0.1) throw new Error('S2 入口不对 ' + JSON.stringify(s));
       if (s.water !== -16 || s.indoor !== 2 || s.target !== 's3' || JSON.stringify(s.exit) !== '[5,0,23]') throw new Error('S2 海面 / 室内 / 出口不对 ' + JSON.stringify(s));
       if (s.warm || s.glow) throw new Error('S2 环境不应有暖光 / 自发光（暖光只属于风灯）' + JSON.stringify(s));
-      if (s.far !== 's2-far-s3-placeholder' || !s.farSky || !s.gb) throw new Error('白盒 S2 远景占位 / 白盒显示不对 ' + JSON.stringify(s));
-      out.push('白盒：入口 (0, 0, −12.5)、海面 −16、室内触发体 ×2、出口 → s3、无暖光、远景占位 ✓');
+      // SMOKE_QUERY=art=1 时页面地址里全局 art=1 在前（URLSearchParams 取第一个），这一段实际也是美术版：远景 / 白盒显示的断言留给下面 art=1 段
+      const globalArt = /(^|&)art=1/.test(process.env.SMOKE_QUERY ?? '');
+      if (!globalArt && (s.far !== 's2-far-s3-placeholder' || !s.farSky || !s.gb)) throw new Error('白盒 S2 远景占位 / 白盒显示不对 ' + JSON.stringify(s));
+      out.push(`白盒：入口 (0, 0, −12.5)、海面 −16、室内触发体 ×2、出口 → s3、无暖光、${globalArt ? '（全局 art=1，远景占位不测）' : '远景占位'} ✓`);
       await cdp.goto('debug=1&scene=s2&art=1', 's2-keeper-house');
       if (!(await until(`!!window.__s2?.rig`, 60000))) throw new Error('art=1 没进 S2');
       s = await evaluate(probe);
