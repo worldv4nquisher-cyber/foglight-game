@@ -1245,7 +1245,9 @@ const CHECKS = [
       s = await st();
       const slog = await evaluate(`window.__fadeLog`);
       const withBar = slog.filter((l) => l[2] !== null);
-      if (!s.tr.waitedForLoad || !s.tr.progressShown || withBar.length < 3) throw new Error('慢加载没显示进度线 ' + JSON.stringify(s.tr));
+      // 高负载时无头一帧可达 2 s（maxFrameMs），5 s 黑场里 rAF 只采到 1–2 帧：此时只要求采到过进度线；正常帧率仍要 ≥ 3 帧
+      const minBar = s.tr.maxFrameMs > 500 ? 1 : 3;
+      if (!s.tr.waitedForLoad || !s.tr.progressShown || withBar.length < minBar) throw new Error(`慢加载没显示进度线（采到 ${withBar.length}/${slog.length} 帧，要 ≥ ${minBar}）` + JSON.stringify(s.tr));
       // 进度线只在全黑时出现；没加载满（< 1）时一定还是旧场景（加载完才换场景，满格的线保留到淡入前）
       if (withBar.some((l) => l[1] < 1 || (l[2] < 1 && l[0] !== 's2-keeper-house')))
         throw new Error('进度线应在全黑、旧场景还没换的时候显示 ' + JSON.stringify(withBar));
@@ -2462,7 +2464,8 @@ const CHECKS = [
       // 拉杆：光路直接解开 → 可点灯 → startIgnite（锁输入 → 走位 → xi-ignite-lever 第 34 帧点燃）
       await evaluate(`(() => { const b = __s3.puzzles.beam; b.solve(); for (let i = 0; i < 50; i++) __s3.puzzles.fixedUpdate(0.05); return 1; })()`);
       if (!(await until(`__s3.puzzles.leverIx.enabled && __s3.puzzles.canIgnite()`, 4000))) throw new Error('开阀 + 光路解开后拉杆没开放 ' + (await evaluate(`__s3.puzzles.beam.igniter.state`)));
-      await sleep(300);
+      // 发光在 update()（渲染帧）里跟状态：高负载 1 帧可达 2 s，固定 sleep 300 ms 会读到还没刷新的 0；按游戏时间等到刷新（≤ 1.5 s 游戏时间）
+      await until(`(() => { const g = ${glowOf}; return g.hex !== 0 && g.k > 0; })()`, 1500);
       const gReady = await evaluate(glowOf);
       if (gReady.st !== 'ready' || gReady.hex !== 0xdce6ee || gReady.lhex !== gReady.hex || Math.abs(gReady.k - gReady.lk) > 1e-6 || gReady.k < 0.14) throw new Error('art=1 可点灯时点火口美术发光应跟白盒冷白 ' + JSON.stringify(gReady));
       await evaluate(standAt('__s3', '__s3.puzzles.leverIx'));
