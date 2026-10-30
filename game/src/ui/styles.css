@@ -43,6 +43,15 @@
   box-sizing: border-box;
 }
 
+/* BUG-022：表单控件默认不继承字体（Chrome 回落 Arial / 13.33px），全局统一继承；各控件的字体 / 字号由自己的类再定。
+   scripts/check-css.mjs 断言这条规则在源码和产物里都在。 */
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
 html,
 body {
   margin: 0;

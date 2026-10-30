@@ -5,10 +5,11 @@
 // 不给 targets 也一样）；Chrome / Firefox 只认无前缀写法，于是背景模糊整个失效。mask-image 等属性不受影响，
 // 但手写前缀本来就多余：lightningcss 会按 build.target（es2020 → Safari 14 等）自动补 -webkit-。
 //
-// 检查两件事（任一不满足 → 退出码 1）：
+// 检查三件事（任一不满足 → 退出码 1）：
 //   1. 源码 src/**/*.css 不手写 -webkit- / -moz- 前缀的 backdrop-filter、mask*（交给 lightningcss 补）
 //   2. 源码里每条带「必须保留属性」的规则，在 dist/static/*.css 里同一选择器下仍有无前缀写法；
 //      backdrop-filter 另外要求带 -webkit- 版本（Safari 14–17 只认前缀）
+//   3. BUG-022：button / input / select / textarea 有全局 font: inherit（源码 + 产物），源码没有别的 font 简写把它盖掉
 //
 //   npm run css   （需要先 npm run build）
 import { readFileSync, readdirSync, statSync } from 'node:fs';
@@ -99,8 +100,34 @@ for (const r of srcRules) {
   }
 }
 
+// 3. BUG-022：button / input / select（/ textarea）全局 font: inherit（源码和产物都要有；产物里选择器可能被合并 / 重排，按集合比）
+const CONTROLS = ['button', 'input', 'select', 'textarea'];
+/** 只取最内层「选择器 { 声明 }」：按 } 切开，每段最后一个 { 前是选择器（at 规则头自然落在更前面） */
+const flatRules = (css) =>
+  css
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .split('}')
+    .map((chunk) => {
+      const k = chunk.lastIndexOf('{');
+      if (k < 0) return null;
+      const head = chunk.slice(0, k);
+      const sel = head.slice(Math.max(head.lastIndexOf(';'), head.lastIndexOf('{')) + 1).trim();
+      return { sels: sel.split(',').map((x) => x.trim()), body: chunk.slice(k + 1).trim(), sel };
+    })
+    .filter((r) => r && r.sel && !r.sel.startsWith('@'));
+const fontInherit = (css) => flatRules(css).some((r) => CONTROLS.every((c) => r.sels.includes(c)) && /(^|;)\s*font\s*:\s*inherit\s*(;|$)/.test(r.body));
+if (!srcFiles.some((f) => fontInherit(readFileSync(f, 'utf8')))) errors.push(`源码 CSS 缺全局规则 ${CONTROLS.join(', ')} { font: inherit }（BUG-022：控件会回落 Arial）`);
+if (!distCss.some((n) => fontInherit(readFileSync(join(distDir, n), 'utf8')))) errors.push(`产物 CSS 缺全局规则 ${CONTROLS.join(',')}{font:inherit}（BUG-022）`);
+// 源码里不许再给控件写别的 font 简写把继承盖掉（font-family / font-size 单项可以）
+for (const f of srcFiles) {
+  for (const r of flatRules(readFileSync(f, 'utf8'))) {
+    const short = /(^|;)\s*font\s*:\s*([^;]+)/.exec(r.body);
+    if (r.sels.some((x) => CONTROLS.includes(x)) && short && short[2].trim() !== 'inherit') errors.push(`${relative(root, f)}：${r.sel} 用 font: ${short[2].trim()} 盖掉了继承（BUG-022）`);
+  }
+}
+
 if (errors.length) {
   for (const e of errors) console.error('✗ ' + e);
   process.exit(1);
 }
-console.log(`✓ 构建 CSS：${checked} 处必须保留的属性（${MUST_KEEP.join(' / ')}）都在，源码无手写前缀`);
+console.log(`✓ 构建 CSS：${checked} 处必须保留的属性（${MUST_KEEP.join(' / ')}）都在，源码无手写前缀；${CONTROLS.join(' / ')} 全局 font: inherit（BUG-022）`);
