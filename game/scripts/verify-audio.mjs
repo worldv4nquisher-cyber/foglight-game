@@ -11,6 +11,8 @@ import { SfxBank, SFX_ALIASES, sfxGain, STEP_SURFACES } from '@/systems/audio/sf
 import { manifest } from '@/assets/manifest';
 import { existsSync } from 'node:fs';
 import { IgniterHum } from '@/levels/s3/igniterHum';
+import { Footsteps, surfaceOf, STEP_M, SCENE_SURFACES } from '@/systems/audio/footsteps';
+import { AMBIENCE, Ambience, AMBIENCE_XFADE_SEC } from '@/levels/ambience';
 import { bindPuzzleSfx, DIAL_GROUPS, MIRROR_FINE_MIN_SEC } from '@/systems/audio/puzzleSfx';
 import { BeamHum, PushLoop, BEAM_HUM_ID, LENS_ROTATE_ID, LENS_ROTATE_DELAY_SEC } from '@/systems/audio/loops';
 
@@ -450,6 +452,77 @@ test('032 谜题件：拨盘 / 镜子 / 微调限频 60 ms / 提灯拿放 / 木�
   assert.ok(/doorT = 0;\n\s*events\.emit\('sfx:play', \{ id: 'sfx-cellar-door-open' \}\)/.test(s2), '地窖门开始转同帧');
   assert.ok(/sfx\('sfx-ignite-lever'\);[^\n]*\n\s*void actions\.play\(/.test(s3), '拉杆音与动画第 0 帧同播');
   assert.ok(readFileSync(new URL('../src/scenes/LevelScene.ts', import.meta.url), 'utf8').includes('bindPuzzleSfx(events)'));
+});
+
+test('032 脚步：着地按距离每半个动画周期一步（走 0.64 m / 小跑 0.96 m，起步半步就响）；离地 / busy / 停下不响；材质按碰撞体名 / 室内 / 场景默认', () => {
+  assert.equal(STEP_M.walk, 0.64);
+  assert.equal(STEP_M.jog, 0.96);
+  const ev = new EventBus();
+  const got = [];
+  ev.on('sfx:play', ({ id }) => got.push(id));
+  const f = new Footsteps(ev, 's1');
+  const walk = (m, o = {}) => { for (let d = 0; d < m - 1e-9; d += 0.04) f.update({ dist: 0.04, onGround: true, running: false, busy: false, ground: 's1-pier-deck-collider', indoor: false, ...o }); };
+  walk(0.32);
+  assert.deepEqual(got, ['sfx-step-wood'], '起步半步就响');
+  walk(0.64 * 3);
+  assert.equal(got.length, 4);
+  walk(1.0, { onGround: false });
+  walk(1.0, { busy: true });
+  assert.equal(got.length, 4, '空中 / 动作中不走脚步');
+  got.length = 0;
+  walk(0.96 * 2 + 0.48, { running: true, ground: 'ground-collider' });
+  assert.deepEqual(got, ['sfx-step-sand', 'sfx-step-sand', 'sfx-step-sand'], 'S1 默认沙地，小跑 0.96 m 一步');
+  const s2 = SCENE_SURFACES.s2;
+  const s3 = SCENE_SURFACES.s3;
+  assert.equal(surfaceOf('room-floor-collider', true, s2), 'indoor');
+  assert.equal(surfaceOf('s2-bed-collider', true, s2), 'wood');
+  assert.equal(surfaceOf('s2-west-slope-collider', false, s2), 'stone');
+  assert.equal(surfaceOf('spiral-column-collider', true, s3), 'stone');
+  assert.equal(surfaceOf('tide-sandbar-collider', false, SCENE_SURFACES.s1), 'wet');
+  assert.equal(surfaceOf('tide-reef-collider', false, SCENE_SURFACES.s1), 'stone');
+  assert.equal(surfaceOf('x-surface-wet-collider', true, s2), 'wet', '显式 -surface- 优先');
+  assert.equal(surfaceOf(null, false, s3), 'stone');
+});
+
+test('032 环境音：进场按区域起循环（默认淡入），进出室内 1 s 交叉淡化；S2 西窗 < 2 m 叠雨打玻璃，S3 塔底叠积水；单发按间隔随机、室内不响雾号 / 海鸥；全部 id 已登记、细雨进 common', () => {
+  const ev = new EventBus();
+  const log = [];
+  ev.on('sfx:loop', (e) => log.push(['loop', e.id, e.fadeIn]));
+  ev.on('sfx:loopStop', (e) => log.push(['stop', e.id, e.fadeOut]));
+  ev.on('sfx:play', (e) => log.push(['play', e.id]));
+  const a = new Ambience(ev, AMBIENCE.s2, () => 0);
+  const out = { indoor: false, pos: { x: 8, y: 0, z: 5 } };
+  a.update(0.1, out);
+  assert.deepEqual(log.splice(0), [['loop', 'amb-rain-light', undefined], ['loop', 'amb-eaves-drip', undefined], ['loop', 'amb-waves-far', undefined], ['loop', 'amb-wind-soft', undefined]]);
+  a.update(0.1, { indoor: true, pos: { x: -3, y: 0, z: 1 } });
+  const x = log.splice(0);
+  assert.equal(x.filter((e) => e[0] === 'stop').length, 4);
+  assert.ok(x.every((e) => e[2] === AMBIENCE_XFADE_SEC));
+  assert.deepEqual(x.filter((e) => e[0] === 'loop').map((e) => e[1]), ['amb-rain-on-roof', 'amb-room-clock']);
+  a.update(0.1, { indoor: true, pos: { x: 0.95, y: 3.05, z: 1.0 } });
+  assert.deepEqual(log.splice(0), [['loop', 'amb-rain-on-glass', 1]]);
+  // 单发：rng 0 → 间隔取 min（雾号 40 s、海鸥 60 s）；室内到点不响，出门才响
+  for (let t = 0; t < 45; t += 0.5) a.update(0.5, { indoor: true, pos: { x: -3, y: 0, z: 1 } });
+  assert.ok(!log.some((e) => e[0] === 'play'), '室内不响雾号');
+  log.length = 0;
+  a.update(0.5, out);
+  assert.ok(log.some((e) => e[0] === 'play' && e[1] === 'amb-foghorn-far'));
+  const b = new Ambience(ev, AMBIENCE.s3, () => 0.5);
+  log.length = 0;
+  b.update(0.1, { indoor: true, pos: { x: 0, y: -100, z: 0 } });
+  assert.ok(log.some((e) => e[1] === 'amb-water-in-tower'), 'S3 塔底积水');
+  b.stop(0);
+  assert.equal(b.playing.size, 0);
+  const keys = new Set(manifest.filter((e) => e.type === 'audio').map((e) => e.key));
+  const ids = new Set();
+  for (const spec of Object.values(AMBIENCE)) {
+    for (const c of [{ indoor: false, pos: { x: 0, y: 0, z: 0 } }, { indoor: true, pos: { x: 0.95, y: 3.05, z: 1 } }, { indoor: true, pos: { x: 0, y: -100, z: 0 } }]) for (const id of spec.loops(c)) ids.add(id);
+    for (const o of spec.oneShots) ids.add(o.id);
+  }
+  for (const id of ids) assert.ok(keys.has(id) || SFX_ALIASES[id]?.every((k) => keys.has(k)), id);
+  assert.equal(manifest.find((e) => e.key === 'amb-rain-light').group, 'common', 'S1 / S2 都用细雨');
+  const lv = readFileSync(new URL('../src/scenes/LevelScene.ts', import.meta.url), 'utf8');
+  assert.ok(lv.includes('this.footsteps?.update(') && lv.includes('this.ambience?.update(dt'));
 });
 
 test('Game：scene:change 时调 audio.stopAllLoops；暂停菜单走 audio.suspend（循环音同一 context，一起挂起）', () => {

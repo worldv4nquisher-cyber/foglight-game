@@ -26,6 +26,8 @@ import type { TideBell } from '@/systems/tide/TideBell';
 import { bindSfxFallback, recallToSafePoint } from '@/systems/tide/tideScene';
 import { PushLoop } from '@/systems/audio/loops';
 import { bindPuzzleSfx } from '@/systems/audio/puzzleSfx';
+import { Footsteps } from '@/systems/audio/footsteps';
+import { AMBIENCE, Ambience } from '@/levels/ambience';
 
 /** 建立镜头迟迟不结束时（慢机器上画质检测拖住），进场多久后无论如何开始预加载下一个场景 */
 const PRELOAD_FALLBACK_MS = 8000;
@@ -69,6 +71,9 @@ export abstract class LevelScene extends BaseScene {
   protected readonly bells: TideBell[] = [];
   /** 032 推动循环音（木筏 sfx-raft-push-loop） */
   protected pushLoop: PushLoop | null = null;
+  /** 032 脚步（按距离 + 地面材质）与环境音（按场景 / 室内外交叉淡化） */
+  protected footsteps: Footsteps | null = null;
+  protected ambience: Ambience | null = null;
 
   /** 入口点（buildLevel 里登记；也可以从模型 collectSceneMarkers 收集） */
   readonly spawns = new Map<string, SpawnPoint>();
@@ -152,6 +157,9 @@ export abstract class LevelScene extends BaseScene {
 
     const { events, audio, ui } = this.game;
     this.pushLoop = new PushLoop(events);
+    this.footsteps = new Footsteps(events, this.level.id);
+    const amb = AMBIENCE[this.level.id];
+    this.ambience = amb ? new Ambience(events, amb) : null;
     this.cleanups.push(
       events.on('quality:changed', () => this.applyQuality()),
       events.on('player:land', ({ impactSpeed }) => {
@@ -351,6 +359,10 @@ export abstract class LevelScene extends BaseScene {
     this.physics.step(dt);
     this.rig.body.afterPhysics();
     this.clampPlayer(this.rig.body.position);
+    const pb = this.rig.body.body;
+    const indoor = this.cameraFollow.indoor;
+    this.footsteps?.update({ dist: Math.hypot(pb.actualVelocity.x, pb.actualVelocity.z) * dt, onGround: pb.onGround, running: this.rig.controller.running, busy: this.rig.controller.busy, ground: pb.ground?.name, indoor });
+    this.ambience?.update(dt, { indoor, pos: this.rig.body.position });
     this.tides.checkRecall({ position: this.rig.body.position, onGround: this.rig.body.body.onGround, busy: this.rig.controller.busy });
     this.hints.fixedUpdate(dt, this.rig.body.position);
   }

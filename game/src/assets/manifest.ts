@@ -181,7 +181,7 @@ export const manifest: AssetEntry[] = [
   { key: 'amb-pier-creak-a', type: 'audio', url: 'assets/art/audio/ambience/amb-pier-creak-a.ogg', group: 's1', optional: true, art: true },
   { key: 'amb-pier-creak-b', type: 'audio', url: 'assets/art/audio/ambience/amb-pier-creak-b.ogg', group: 's1', optional: true, art: true },
   { key: 'amb-pier-creak-c', type: 'audio', url: 'assets/art/audio/ambience/amb-pier-creak-c.ogg', group: 's1', optional: true, art: true },
-  { key: 'amb-rain-light', type: 'audio', url: 'assets/art/audio/ambience/amb-rain-light.ogg', group: 's1', optional: true, art: true },
+  { key: 'amb-rain-light', type: 'audio', url: 'assets/art/audio/ambience/amb-rain-light.ogg', group: 'common', optional: true, art: true },
   { key: 'amb-waves-near', type: 'audio', url: 'assets/art/audio/ambience/amb-waves-near.ogg', group: 's1', optional: true, art: true },
   { key: 'sfx-raft-float', type: 'audio', url: 'assets/art/audio/sfx/sfx-raft-float.ogg', group: 's1', optional: true, art: true },
   { key: 'sfx-raft-lock', type: 'audio', url: 'assets/art/audio/sfx/sfx-raft-lock.ogg', group: 's1', optional: true, art: true, gainDb: 2.4 },
