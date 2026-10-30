@@ -248,7 +248,7 @@ const beam = buildS3Beam(ph, frameRoot);
     camLines.push(`${rig.key} fov ${cs.fov}`);
   }
   beam.solve();
-  out.push(`光路：正解 窗口镜 ${sol.windowYaw}/${sol.windowPitch}、导光镜 1 ${sol.a}、导光镜 2 ${sol.b} → 点火口（光线离口心 ${miss.toFixed(3)} m）；法线 窗 ${nw.yaw.toFixed(1)}/${nw.pitch.toFixed(1)}、A ${na.yaw.toFixed(2)}、B ${nb.yaw.toFixed(2)}（美术 −19.777 / 160.755）；7.5° 穷举唯一解 ✓；离楼梯内沿余量 ${minR.toFixed(2)} m；机位 ${camLines.join(' / ')} 框得住目标 ✓`);
+  out.push(`光路：正解 窗口镜 ${sol.windowYaw}/${sol.windowPitch}、导光镜 1 ${sol.a}、导光镜 2 ${sol.b} → 点火口（光线离口心 ${miss.toFixed(4)} m）；法线 窗 ${nw.yaw.toFixed(1)}/${nw.pitch.toFixed(1)}、A ${na.yaw.toFixed(2)}、B ${nb.yaw.toFixed(2)}（美术 −19.777 / 160.755）；7.5° 穷举唯一解 ✓；离楼梯内沿余量 ${minR.toFixed(2)} m；机位 ${camLines.join(' / ')} 框得住目标 ✓`);
   // 塔外冷光预告：停在礁石挡光块上
   const pv = tr.paths.find((q) => q.emitter.id === 'sky-preview-s3');
   const pt = toLocal(pv.endPoint);
@@ -280,6 +280,36 @@ const beam = buildS3Beam(ph, frameRoot);
     const buf = readFileSync(f);
     const g = await new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).setKTX2Loader(ktx2Stub).parseAsync(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength), '');
     const rootX = g.scene.children.find((o) => o.userData.name === key).userData;
+    // 1030 重交：打包工具曾把名字带 -wall 的渲染网格当碰撞网格（LOD0 法线 / UV 错位）→ 碰撞只许 -collider 一个，渲染网格都要有法线 + UV、不带 collider 标记
+    {
+      const render = [], cols = [];
+      g.scene.traverse((o) => {
+        if (!o.isMesh) return;
+        if (o.userData.collider || /-collider$/.test(o.name)) cols.push(o.name);
+        else render.push(o);
+      });
+      assert.deepEqual(cols, [`${key}-collider`], `${k} 碰撞网格只有 ${key}-collider（实际 ${cols.join('、')}）`);
+      assert.ok(render.some((o) => /_lod0$/.test(o.name)), `${k} 有渲染 ${key}_lod0`);
+      for (const o of render) {
+        const geo = o.geometry, P = geo.attributes.position, N = geo.attributes.normal, idx = geo.index;
+        assert.ok(N && geo.attributes.uv, `${k} 渲染网格 ${o.name} 有法线 + UV`);
+        // 顶点法线（三点平均）与面法线夹角 > 60° 的三角形比例：旧版错位 LOD0 = 62.4%，重交版 0%
+        const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3(), fn = new THREE.Vector3(), vn = new THREE.Vector3(), tn = new THREE.Vector3();
+        let tri = 0, bad = 0;
+        for (let t = 0, n = idx ? idx.count : P.count; t < n; t += 3) {
+          const ii = [0, 1, 2].map((q) => (idx ? idx.getX(t + q) : t + q));
+          a.fromBufferAttribute(P, ii[0]); b.fromBufferAttribute(P, ii[1]); c.fromBufferAttribute(P, ii[2]);
+          fn.subVectors(c, b).cross(tn.subVectors(a, b));
+          if (fn.lengthSq() < 1e-14) continue;
+          fn.normalize();
+          vn.set(0, 0, 0);
+          for (const q of ii) vn.add(tn.fromBufferAttribute(N, q));
+          tri++;
+          if (fn.dot(vn.normalize()) < 0.5) bad++;
+        }
+        assert.ok(bad / tri < 0.02, `${k} ${o.name} 法线与面不一致 ${((bad / tri) * 100).toFixed(1)}%（旧版打包错位）`);
+      }
+    }
     const rig = beam.mirrors[k];
     const L = S3.mirrors[k];
     // 015 白盒：正解 sol[k]（15° 档的整数倍，初始 0 = 正解往回 sol 度）、固定俯仰、ψ = 白盒 yaw.rotation.y（正解时）
