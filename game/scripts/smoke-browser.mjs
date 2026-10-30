@@ -2680,7 +2680,8 @@ const CHECKS = [
       if (!(await untilG(`__s3.puzzles.beam.igniter.state === 'ready' && __s3.puzzles.leverIx.enabled && __s3.puzzles.state.readyCount >= 1`, 3))) throw new Error('开阀后点火口没进可点灯 / 拉杆没开放 ' + JSON.stringify(await evaluate(`__s3.puzzles.beam.igniter.state`)));
       if (await evaluate(`__s3.puzzles.state.ignited || __s3.puzzles.beam.igniter.activated`)) throw new Error('可点灯不应自动点燃');
       // 可点灯嗡鸣：进入可点灯开始循环（AudioSystem 按名字只一个实例）
-      const humSt = `(() => { const h = __s3.puzzles.hum, a = __s3.game.audio; return { on: h.on, starts: h.starts, stops: h.stops, loops: a.loopNames }; })()`;
+      // 只看点火口嗡鸣：?art=1 下塔内环境声（amb-wind-tower / amb-water-in-tower）和导光镜连通的 sfx-beam-hum-loop 也在 loopNames 里，与嗡鸣无关
+      const humSt = `(() => { const h = __s3.puzzles.hum, a = __s3.game.audio; return { on: h.on, starts: h.starts, stops: h.stops, loops: a.loopNames.filter((n) => n === 'sfx-ignite-ready-loop'), others: a.loopNames.filter((n) => n !== 'sfx-ignite-ready-loop') }; })()`;
       let hum = await evaluate(humSt);
       if (!hum.on || hum.starts !== 1 || hum.loops.join() !== 'sfx-ignite-ready-loop') throw new Error('进入可点灯应开始嗡鸣循环（一个实例） ' + JSON.stringify(hum));
       const steps = await evaluate(`[...__s3.hints.puzzles.get('p5').doneSteps]`);
