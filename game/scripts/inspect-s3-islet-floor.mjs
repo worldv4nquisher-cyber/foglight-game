@@ -56,8 +56,9 @@ console.log('礁岛高于室内地板的格点（0.25 m）', grid.length, JSON.s
 const lods = {};
 islet.traverse((o) => { if (o.isMesh && !COLL.test(o.name)) { const m = /_lod(\d)/i.exec(o.name + ' ' + (o.parent?.name ?? '')); const k = m ? m[1] : '0'; (lods[k] ??= []).push(o); } });
 for (const [k, ms] of Object.entries(lods)) {
-  let tot = 0, cov = 0, maxD = 0; const hs = {};
-  for (let x = -3; x <= 3; x += 0.1) for (let z = -3; z <= 3; z += 0.1) { if (Math.hypot(x, z) > S3.tower.rIn - 0.05) continue; tot++; const y = hitY(ms, x, z); if (y !== null && y > S3.groundFloorY + 0.01) { cov++; maxD = Math.max(maxD, y - S3.groundFloorY); hs[y.toFixed(2)] = (hs[y.toFixed(2)] ?? 0) + 1; } }
+  let tot = 0, cov = 0, maxD = 0, zf = 0, below = 0, none = 0; const hs = {};
+  for (let x = -3; x <= 3; x += 0.1) for (let z = -3; z <= 3; z += 0.1) { if (Math.hypot(x, z) > S3.tower.rIn - 0.05) continue; tot++; const y = hitY(ms, x, z); if (y === null) none++; else if (y <= S3.groundFloorY - 0.03) below++; else if (y <= S3.groundFloorY + 0.01) zf++; if (y !== null && y > S3.groundFloorY + 0.01) { cov++; maxD = Math.max(maxD, y - S3.groundFloorY); hs[y.toFixed(2)] = (hs[y.toFixed(2)] ?? 0) + 1; } }
+  console.log(`LOD${k}（节点平移 ${JSON.stringify(ms[0].parent.position.toArray().map((v) => +v.toFixed(3)))} 缩放 ${ms[0].parent.scale.x.toFixed(3)}）：贴近地板 ±（0.168–0.208，z-fight 风险）${zf} 格、低于 0.168 ${below} 格、无礁岛 ${none} 格；`);
   console.log(`LOD${k}：塔内 ${tot} 格（0.1 m）中礁岛高过 0.2 地板 ${cov} 格 = ${(100 * cov / tot).toFixed(1)}%（≈${(cov * 0.01).toFixed(1)} m²），最大高出 ${maxD.toFixed(2)} m；高度分布 ${JSON.stringify(Object.entries(hs).sort((a, b) => b[1] - a[1]).slice(0, 5))}`);
 }
 // ASCII 图（0.25 m，S3 局部 x 横、z 纵）：# 礁岛高过地板，. 地板，S 楼梯起点，D 门口
