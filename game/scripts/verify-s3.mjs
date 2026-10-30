@@ -602,6 +602,71 @@ const wz = (o) => new THREE.Vector3(0, 0, 1).transformDirection(o.matrixWorld);
   }
 }
 
+// 4c-2 窗口镜 prop-guide-mirror-window-s3：挂白盒组 guide-mirror-s3-window，-mirror-plane 对齐、mirror-yaw / mirror-pitch 拷白盒；正解 / 逐档法线 = 白盒；-interact = 白盒站位 (1.45, 0.2, 0)
+{
+  const key = 'prop-guide-mirror-window-s3';
+  const model = await art3.load(`props/${key}.glb`);
+  if (!model) out.push('窗口镜美术未交付');
+  else {
+    const spec = art3.S3_ART_SLOTS.find((x) => x.key === key);
+    const rig = beam.mirrors.window;
+    const rootX = model.children.find((o) => o.userData.puzzle)?.userData ?? {};
+    beam.solve();
+    frameRoot.updateMatrixWorld(true);
+    const slots = art3.mountArtSlots({ has: (x) => x === key, getModel: () => model }, frameRoot, [spec]);
+    assert.equal(slots.mounted.length, 1, '窗口镜挂上');
+    assert.deepEqual(slots.mounted[0].missingNodes, [], '窗口镜约定节点齐');
+    assert.equal(model.parent, rig.root, '窗口镜挂白盒组');
+    const plane = art3.findNode(model, 'mirror-plane');
+    const yawGb = art3.findNode(rig.root, 'guide-mirror-s3-window-yaw');
+    const pitchGb = art3.findNode(rig.root, 'guide-mirror-s3-window-pitch');
+    const check = (tag) => {
+      slots.update();
+      frameRoot.updateMatrixWorld(true);
+      const d = wp(plane).distanceTo(wp(rig.plane));
+      assert.ok(d < 1e-3, `窗口镜 ${tag} 镜心对齐 ${d}`);
+      const a = (wz(plane).angleTo(wz(rig.plane)) * 180) / Math.PI;
+      assert.ok(a < 0.01, `窗口镜 ${tag} 镜面法线 = 白盒（差 ${a.toFixed(4)}°）`);
+      return { d, a };
+    };
+    const sol = check('正解');
+    const yawDeg = (yawGb.rotation.y * 180) / Math.PI;
+    const pitchDeg = (pitchGb.rotation.x * 180) / Math.PI;
+    const ay = art3.findNode(model, 'mirror-yaw');
+    const ap = art3.findNode(model, 'mirror-pitch');
+    assert.ok(ay.quaternion.angleTo(yawGb.quaternion) < 1e-6 && ap.quaternion.angleTo(pitchGb.quaternion) < 1e-6, '窗口镜 yaw / pitch 直接拷白盒');
+    near3(toLocal(wp(plane)).toArray(), rootX.mirrorCenterS3, 1e-3, '窗口镜镜心 = 美术 mirrorCenterS3');
+    // 正解光路：L0 → 美术镜面反射 → A
+    const at = wp(plane);
+    const inDir = at.clone().sub(toWorld(S3.lightPath[0])).normalize();
+    const n = wz(plane);
+    const outDir = inDir.clone().sub(n.clone().multiplyScalar(2 * inDir.dot(n)));
+    const miss = rayPointDist(at, outDir, toWorld(S3.lightPath[2]));
+    let steps = 0;
+    for (let y = 0; y < 360; y += 15) {
+      for (const pd of [S3_BEAM.windowPitchRange[0], 0, S3_BEAM.windowPitchRange[1]]) {
+        rig.part.setAngle(0, y);
+        rig.part.setAngle(1, pd);
+        check(`${y}° / ${pd}°`);
+        steps++;
+      }
+    }
+    beam.reset();
+    check('初始');
+    const ix = wp(art3.findNode(model, 'interact'));
+    const dStand = ix.distanceTo(toWorld([1.45, S3.groundFloorY, 0]));
+    assert.ok(dStand < 0.02, `窗口镜 -interact 离白盒站位 ${dStand.toFixed(3)} m`);
+    const ixF = new THREE.Vector3(0, 0, 1).applyQuaternion(art3.findNode(model, 'interact').getWorldQuaternion(new THREE.Quaternion()));
+    const toMirror = toWorld(rig.center.toArray()).sub(ix).setY(0).normalize();
+    assert.ok(ixF.angleTo(toMirror) < 0.05, '窗口镜 -interact +Z 朝镜子');
+    beam.solve();
+    slots.update();
+    model.removeFromParent();
+    for (const m of rig.root.children) m.traverse((o) => o.isMesh && (o.visible = true));
+    out.push(`窗口镜：挂白盒组、yaw / pitch 直接拷白盒（美术计划法线 ${ay.userData.plannedYawDeg}° / ${ap.userData.plannedPitchDeg}° = 白盒正解法线；节点角 yaw ${yawDeg.toFixed(2)}° / pitch ${pitchDeg.toFixed(2)}°）、正解 + ${steps} 个档位组合美术法线 = 白盒（镜心差 ${(sol.d * 1000).toFixed(2)} mm）、正解美术镜面反射离 A ${(miss * 1000).toFixed(1)} mm、-interact 离白盒站位 ${(dStand * 100).toFixed(1)} cm 且朝镜（站位读美术） ✓`);
+  }
+}
+
 // 017 收尾：塔内不淋湿（s3-tower-indoor，y 0–24.5）
 {
   const vols = collectIndoorVolumes(gb.root);
