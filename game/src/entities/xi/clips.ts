@@ -1,5 +1,5 @@
 /**
- * 汐的动画 clip 表（v0.1-017，char-xi-anims.glb：31 个 clip（需求单 30 + 2026-10-29 加的 xi-pickup-shelf），30 fps，原地动画，朝向 +Z）。
+ * 汐的动画 clip 表（v0.1-017，char-xi-anims.glb：31 个 clip（需求单 28 + 需求单外 3 个，见 XI_CLIP_OFF_TICKET），30 fps，原地动画，朝向 +Z）。
  * 数值抄自 art/models/characters/README.md 与 GLB 的 animations[].extras；scripts/verify-xi.mjs 逐项比对 GLB，
  * 不一致时以 GLB 为准（改这里）。运行时 clip 名以 anims.glb 实际名字为准：美术统一命名前的旧名放在 XI_CLIP_ALIASES。
  * 本文件不依赖 three / DOM，Node 单测直接导入。
@@ -63,6 +63,18 @@ export const XI_CLIP_SPECS = {
 
 export type XiClipName = keyof typeof XI_CLIP_SPECS;
 export const XI_CLIP_NAMES = Object.keys(XI_CLIP_SPECS) as XiClipName[];
+
+/**
+ * 需求单（art/tools/verify-xi-anims.mjs 的 TICKET，batch 1–3 共 28 个）以外、美术另交的 clip 清单（batch15 D 核对）。
+ * status：used = 游戏代码在用（uses 写调用处）；unused-keep = 没用到、保留不删。scripts/verify-xi.mjs 扫 src 核对 status 与实际引用一致。
+ * 注：verify-xi-anims.mjs 默认 --batch=1，EXTRA_OK 登记在 batch 2，所以不带参数跑会把这 3 个报成「工单里没有的 clip」；
+ * 带 --batch=3 跑全部通过（美术工具，不改）。
+ */
+export const XI_CLIP_OFF_TICKET = {
+  'xi-pickup-table': { status: 'used', uses: ['s2/puzzles.ts 书桌上拿提灯（onDesk 时代替 xi-pickup）', 'xi-pickup-shelf 缺失时的 fallback'] },
+  'xi-place-table': { status: 'used', uses: ['s2/puzzles.ts 书桌放提灯 desk-lantern-s2（release 第 34 帧放下）'] },
+  'xi-pickup-shelf': { status: 'used', uses: ['s2/puzzles.ts 地窖架子拿钥匙（env-cellar-s2-shelf-interact，grab 第 22 帧挂钥匙骨）'] },
+} as const satisfies Partial<Record<string, { status: 'used' | 'unused-keep'; uses: readonly string[] }>>;
 
 /**
  * 运行时 clip 缺失时的代替（旧版 anims.glb 没有 xi-pickup-shelf → 用 pickup-table，grab 帧 20 vs 22）。

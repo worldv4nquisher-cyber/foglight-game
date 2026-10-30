@@ -43,6 +43,9 @@ const VIEWS = [
   ['s1-xi-cuff-r', 'high', null, null, 35, true, 'cuff-r'],
   ['s1-xi-cuff-l', 'high', null, null, 35, true, 'cuff-l'],
   ['s1-xi-cuff-side', 'high', null, null, 35, true, 'cuff-side'],
+  // 汐头部精修 r2：正脸 / 侧脸近景（对照 art/models/characters/preview/char-xi-head-r2-*-compare.png）
+  ['s1-xi-face-front', 'high', null, null, 30, true, 'face-front'],
+  ['s1-xi-face-side', 'high', null, null, 30, true, 'face-side'],
 ];
 
 const server = await preview({ root, preview: { host: '127.0.0.1', port: 0, strictPort: false, open: false }, logLevel: 'silent' });
@@ -192,10 +195,22 @@ const xiCam = (kind, fov) => `(() => { const s = __s1; const o = s.rig.entity.ob
   f.normalize(); const frontVsRootDeg = +(Math.acos(Math.max(-1, Math.min(1, f.dot(rootF)))) * 180 / Math.PI).toFixed(1);
   const up = new V(0, 1, 0); const c = s.camera; let eye, at;
   const cuff = (sd) => { const hand = o.getObjectByName('hand_' + sd), el = o.getObjectByName('lower_arm_' + sd); const w = hand.getWorldPosition(new V()); return w.lerp(el.getWorldPosition(new V()), 0.18); };
-  if ('${kind}' === 'hem') { at = new V(p.x, p.y + 0.85, p.z); eye = at.clone().addScaledVector(f, 1.0).add(new V(0, 0.08, 0)); }
+  let headFwd = null, headVsBodyDeg = null;
+  if ('${kind}' === 'face-front' || '${kind}' === 'face-side') {
+    // 脸朝向按 head 骨现在的世界旋转算（idle 时头会偏转 / 低头，脚尖方向不准）：bind 时模型面朝 +Z → head 骨局部的「前」= inv(bind 旋转)·+Z
+    let sm = null; o.traverse((m) => { if (!sm && m.isSkinnedMesh && m.skeleton.bones.some((b) => b.name === 'head')) sm = m; });
+    const Q = c.quaternion.constructor; const hb = sm.skeleton.bones.find((b) => b.name === 'head');
+    const bindQ = new Q(); { const M = sm.skeleton.boneInverses[sm.skeleton.bones.indexOf(hb)].clone().invert(); const pp = new V(), ss = new V(); M.decompose(pp, bindQ, ss); }
+    headFwd = new V(0, 0, 1).applyQuaternion(bindQ.clone().invert()).applyQuaternion(hb.getWorldQuaternion(new Q())).setY(0).normalize();
+    headVsBodyDeg = +(Math.acos(Math.max(-1, Math.min(1, headFwd.dot(f)))) * 180 / Math.PI).toFixed(1);
+    const hs = new V().crossVectors(up, headFwd).normalize();
+    const hd = hb.getWorldPosition(new V()); at = hd.clone().add(new V(0, 0.07, 0)).addScaledVector(headFwd, 0.05);
+    eye = at.clone().addScaledVector('${kind}' === 'face-front' ? headFwd : hs, 0.75).add(new V(0, 0.02, 0));
+  }
+  else if ('${kind}' === 'hem') { at = new V(p.x, p.y + 0.85, p.z); eye = at.clone().addScaledVector(f, 1.0).add(new V(0, 0.08, 0)); }
   else if ('${kind}' === 'cuff-side') { at = cuff('r'); const out = at.clone().sub(p).setY(0).normalize(); eye = at.clone().addScaledVector(out, 0.55).add(new V(0, 0.05, 0)); }
   else { const sd = '${kind}'.slice(-1); at = cuff(sd); const out = at.clone().sub(p).setY(0).normalize(); eye = at.clone().addScaledVector(f, 0.55).addScaledVector(out, 0.18).add(new V(0, 0.06, 0)); }
-  c.position.copy(eye); c.fov = ${fov}; c.lookAt(at); c.updateProjectionMatrix(); return { eye: eye.toArray().map((v) => +v.toFixed(3)), at: at.toArray().map((v) => +v.toFixed(3)), front: f.toArray().map((v) => +v.toFixed(3)), frontVsRootDeg }; })()`;
+  c.position.copy(eye); c.fov = ${fov}; c.lookAt(at); c.updateProjectionMatrix(); return { eye: eye.toArray().map((v) => +v.toFixed(3)), at: at.toArray().map((v) => +v.toFixed(3)), front: f.toArray().map((v) => +v.toFixed(3)), frontVsRootDeg, headFwd: headFwd?.toArray().map((v) => +v.toFixed(3)) ?? null, headVsBodyDeg }; })()`;
 
 try {
   await setView(...SMALL);

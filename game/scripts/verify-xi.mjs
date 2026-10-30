@@ -4,13 +4,16 @@
 //     step-across 根运动实测 + 抵消、turn 第 34 帧 root 转满 ±90°、尾段抵消后偏航 ≈ 0；
 //  3. 播放率 ↔ 速度：走 / 跑混合的脚下速度 = 实际速度（0.5–4 m/s），楼梯 / 推的播放率。
 import assert from 'node:assert/strict';
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, readdirSync } from 'node:fs';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import * as THREE from 'three';
 import {
   XI_CLIP_SPECS,
   XI_CLIP_NAMES,
   XI_FPS,
   XI_CLIP_FALLBACK,
+  XI_CLIP_OFF_TICKET,
   xiClipDuration,
   xiEventSec,
   locoBlend,
@@ -55,7 +58,20 @@ const glbJson = (file) => {
 
 // ---- 3. 纯数学（不依赖美术文件）
 {
-  assert.equal(XI_CLIP_NAMES.length, 31, 'clip 表 31 条（30 + xi-pickup-shelf）');
+  assert.equal(XI_CLIP_NAMES.length, 31, 'clip 表 31 条（需求单 28 + 需求单外 3）');
+  // batch15 D：需求单外 clip 清单——都在 clip 表里，status 与 src 实际引用一致（clips.ts 自身不算）
+  {
+    const srcFiles = [];
+    const walk = (d) => { for (const e of readdirSync(d, { withFileTypes: true })) { const f = join(d, e.name); if (e.isDirectory()) walk(f); else if (/\.ts$/.test(e.name) && !f.endsWith(join('xi', 'clips.ts'))) srcFiles.push(readFileSync(f, 'utf8')); } };
+    walk(fileURLToPath(new URL('../src', import.meta.url)));
+    const off = Object.entries(XI_CLIP_OFF_TICKET);
+    assert.equal(off.length, 3, '需求单外 3 个');
+    for (const [name, v] of off) {
+      assert.ok(XI_CLIP_NAMES.includes(name), `${name} 在 clip 表里`);
+      const used = srcFiles.some((t) => t.includes(`'${name}'`));
+      assert.equal(v.status, used ? 'used' : 'unused-keep', `${name} 清单 status=${v.status}，src 实际${used ? '有' : '没有'}引用`);
+    }
+  }
   for (let s = 0.5; s <= 4.0001; s += 0.05) {
     const b = locoBlend(s);
     near(b.idle + b.walk + b.jog, 1, 1e-9, `速度 ${s.toFixed(2)} 权重和`);
