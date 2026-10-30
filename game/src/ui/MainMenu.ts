@@ -3,6 +3,7 @@ import { t } from '@/content/text';
 import type { ConfirmDialog } from './ConfirmDialog';
 import type { Credits } from './Credits';
 import type { SettingsPanel } from './SettingsPanel';
+import { cssUrl } from './uiArt';
 
 /**
  * 主菜单（v0.1-008，GDD §10）：标题字（开发期文字占位，正式标题图 030）、继续（无存档时隐藏）、新游戏
@@ -54,6 +55,25 @@ export class MainMenu {
     btn('new', 'ui.menu.new_game', () => void this.onNewGame());
     btn('settings', 'ui.menu.settings', () => this.openSettings());
     btn('credits', 'ui.menu.credits', () => this.openCredits());
+    // 030 R4：主菜单背景是 008 的实时场景（程序生成、不加载文件）；静态插画只是兜底——
+    // ?menuBg=illust 强制用，或 WebGL 上下文丢了（实时背景画不出来）时自动换上
+    if (typeof location !== 'undefined' && new URLSearchParams(location.search).get('menuBg') === 'illust') this.illustWanted = true;
+    this.game.renderer.domElement.addEventListener('webglcontextlost', () => {
+      this.illustWanted = true;
+      if (this.isOpen) this.applyIllust();
+    });
+  }
+
+  private illustWanted = false;
+
+  /** 静态兜底插画 ui-illust-menu.webp（menu 包登记、lazy）：懒加载后铺满 .main-menu；失败维持纯色 + 渐变 */
+  private applyIllust(): void {
+    if (this.el.dataset.bg) return;
+    this.el.dataset.bg = 'loading';
+    void this.game.assets.loadImage('ui-illust-menu').then((url) => {
+      if (url) this.el.style.setProperty('--menu-illust', cssUrl(url));
+      this.el.dataset.bg = url ? 'illust' : 'fallback';
+    });
   }
 
   get isOpen(): boolean {
@@ -70,6 +90,7 @@ export class MainMenu {
 
   show(): void {
     this.applyLogo();
+    if (this.illustWanted) this.applyIllust();
     this.busy = false;
     this.refresh();
     this.backToHome();

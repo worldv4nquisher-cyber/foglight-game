@@ -116,7 +116,11 @@ body {
   align-items: center;
   justify-content: center;
   gap: 14px;
-  background: radial-gradient(ellipse at 50% 60%, #1f2830 0%, #0b0e12 70%);
+  /* 030 R4：#0b0e12 底 + 雾中灯塔插画（menu 包预加载）+ 中间一层很淡的暗色径向渐变托住文字；插画没到时退回原来的径向渐变 */
+  background:
+    radial-gradient(ellipse 34% 30% at 50% 50%, rgba(11, 14, 18, 0.5), rgba(11, 14, 18, 0)),
+    var(--ui-img-illust-loading, radial-gradient(ellipse at 50% 60%, #1f2830 0%, #0b0e12 70%)) center / cover no-repeat,
+    #0b0e12;
   z-index: 40;
   transition: opacity 0.4s ease;
 }
@@ -1018,6 +1022,14 @@ body {
   background: linear-gradient(90deg, rgba(10, 13, 16, 0.55), rgba(10, 13, 16, 0) 60%);
 }
 
+/* 静态兜底背景（?menuBg=illust / WebGL 上下文丢失）：塔在右三分之一，左侧留给标题和按钮 */
+.main-menu[data-bg] {
+  background:
+    linear-gradient(90deg, rgba(10, 13, 16, 0.55), rgba(10, 13, 16, 0) 60%),
+    var(--menu-illust, none) center / cover no-repeat,
+    #1d252c;
+}
+
 .main-menu > .settings-panel {
   margin: 0 auto;
   transform: translateX(-5vw);
@@ -1189,21 +1201,19 @@ body {
 }
 
 .chapter-end-art {
-  width: min(420px, 80vw);
+  /* 030 R4：框宽 840 px（18:31 定），2x 图 1920×1080；进结尾时懒加载 --end-art，没到 / 失败时是渐变占位 */
+  width: min(840px, 70vw);
   aspect-ratio: 16 / 9;
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  padding: 8px;
-  border: 1px solid var(--ui-border);
+  border: 1px solid var(--ui-stroke-soft);
   background:
-    radial-gradient(circle at 60% 30%, rgba(255, 176, 102, 0.55), rgba(255, 176, 102, 0) 18%),
+    var(--end-art, radial-gradient(circle at 60% 30%, rgba(232, 162, 74, 0.45), rgba(232, 162, 74, 0) 18%)) center / cover no-repeat,
     linear-gradient(#1d252c, #10151a);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
 }
 
+/* 文字标签只做视觉占位，图到了不显示（role=img 的 aria-label 保留给读屏） */
 .chapter-end-art-label {
-  font-size: 11px;
-  color: var(--ui-dim);
+  display: none;
 }
 
 .chapter-end-stat {
