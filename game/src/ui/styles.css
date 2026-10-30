@@ -776,7 +776,7 @@ body {
   display: none;
 }
 
-/* 阅读界面：背景模糊 + 纸张（030 ui-paper-* 到位前纯色占位） */
+/* 阅读界面：背景模糊 + 纸张（030 R3 ui-paper-*，Reader 打开时懒加载写 --paper；没到 / 失败是纯色纸底） */
 .reader,
 .journal {
   position: absolute;
@@ -808,7 +808,9 @@ body {
   display: flex;
   flex-direction: column;
   padding: 2.2em 2.4em 1.2em;
-  background: #ddd5c3;
+  /* README-030 §2.2：100% auto + 顶对齐。纸张按 544×672 css 的 2x 出图，横格线画在每行下沿
+     (y = 71.2 + 32.3·(k+1) − 1.5)；窗口矮时纸框变矮只裁底部，格线不会和文字错位（cover / 100% 100% 会错位） */
+  background: #ddd5c3 var(--paper, none) center top / 100% auto no-repeat;
   color: #2c2a26;
   border-radius: 0;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
@@ -817,10 +819,18 @@ body {
 
 .reader-title {
   margin: 0 0 1em;
+  /* 标题行高钉死 21 px（y 35–56），正文第一行就落在 y 71.2，对上纸张第一条格线；没标题也占位，不让正文上移 */
+  height: 21px;
+  line-height: 21px;
   font-size: 15px;
   font-weight: normal;
   color: #6b655a;
   letter-spacing: 0.1em;
+}
+
+.reader-title[hidden] {
+  display: block;
+  visibility: hidden;
 }
 
 .reader-body {

@@ -76,7 +76,7 @@ export class UIManager {
     this.toastLeft = new Toast(root);
     this.hints = new HintPanel(root, { input: game.input, events: game.events });
     const freeze = (): (() => void) => game.freeze();
-    this.reader = new Reader(root, { input: game.input, narrative: game.narrative, events: game.events, freeze });
+    this.reader = new Reader(root, { input: game.input, narrative: game.narrative, events: game.events, freeze, loadImage: (k) => game.assets.loadImage(k) });
     this.journal = new Journal(root, { input: game.input, narrative: game.narrative, events: game.events, reader: this.reader, freeze });
     this.subtitles.setSize(game.settings.get('subtitleSize'));
     this.settings = new SettingsPanel(game);

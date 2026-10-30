@@ -2,6 +2,7 @@ import { t, type TextId } from '@/content/text';
 import type { EventBus } from '@/core/EventBus';
 import type { InputManager } from '@/systems/input/InputManager';
 import { docTitleId, type NarrativeState } from '@/systems/NarrativeState';
+import { cssUrl, paperForDoc } from './uiArt';
 
 export interface ReaderDeps {
   input: InputManager;
@@ -9,13 +10,16 @@ export interface ReaderDeps {
   events: EventBus;
   /** 冻结游戏逻辑（fixedUpdate / scene.update 不跑），返回解冻函数 */
   freeze: () => () => void;
+  /** 030：懒加载纸张图（AssetLoader.loadImage）；不给 / 返回 null → 纯色纸底 */
+  loadImage?: (key: string) => Promise<string | null>;
 }
 
 /**
  * 阅读界面（v0.1-005，GDD §10）：纸张特写 + 文字版叠加；多页左右翻页（A/D、←/→ 或点箭头）；右键 / Tab 关闭。
  * 打开时压 reading 上下文（显示光标、没有移动轴）并冻结游戏逻辑，背景模糊。首次阅读的文档写入日志。
  *
- * 纸张贴图来自 030（ui-paper-*），开发期用纯色占位：`.reader-paper` 的背景色。
+ * 纸张贴图（030 R3 ui-paper-*，README-030 §2.2）：打开文档时才懒加载对应纸张（PAPER_FOR_DOC），到了写进 `--paper`；
+ * 加载中 / 失败 / 没有对应纸张时是 `.reader-paper` 的纯色纸底（#ddd5c3）。状态在 `data-paper`：none / loading / ready / fallback。
  */
 export class Reader {
   readonly el: HTMLDivElement;
@@ -29,6 +33,7 @@ export class Reader {
   private pages: string[] = [];
   private _page = 0;
   private popContext: (() => void) | null = null;
+  private paperReq = 0;
   private unfreeze: (() => void) | null = null;
   /** 关闭时回调（日志里打开的文档关掉后回到日志） */
   onClose: (() => void) | null = null;
@@ -91,12 +96,36 @@ export class Reader {
     this.titleEl.textContent = title ? t(title) : '';
     this.titleEl.hidden = !title;
     this.paper.dataset.doc = docId;
+    this.applyPaper(docId);
     this.popContext = this.deps.input.pushContext('reading');
     this.unfreeze = this.deps.freeze();
     this.render();
     this.el.hidden = false;
     this.deps.events.emit('reader:open', { docId, pages: this.pages.length });
     return this.deps.narrative.markRead(docId);
+  }
+
+  /** 030：换纸。旧请求晚到（期间换了文档 / 关了）就丢掉 */
+  private applyPaper(docId: TextId): void {
+    const key = paperForDoc(docId);
+    const req = ++this.paperReq;
+    this.paper.style.removeProperty('--paper');
+    this.paper.dataset.paperKey = key ?? '';
+    if (!key) {
+      this.paper.dataset.paper = 'none';
+      return;
+    }
+    const load = this.deps.loadImage;
+    if (!load) {
+      this.paper.dataset.paper = 'fallback';
+      return;
+    }
+    this.paper.dataset.paper = 'loading';
+    void load(key).then((url) => {
+      if (req !== this.paperReq || this._docId !== docId) return;
+      if (url) this.paper.style.setProperty('--paper', cssUrl(url));
+      this.paper.dataset.paper = url ? 'ready' : 'fallback';
+    });
   }
 
   close(notify = true): void {
