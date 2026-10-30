@@ -2779,6 +2779,25 @@ const CHECKS = [
     },
   },
 ];
+// 裁定 19（制作人）：观察模式外 317 可读机位按簇判定——Node 跑 sample-317.mjs（不走浏览器，约 8–12 min），
+// B 簇（西窗外室外）须 0、A 簇（二层观察点身后，接受）只报数量；脚本退出码 ≠ 0 即失败。SMOKE_ONLY='v0.1-019' 单跑
+CHECKS.push({
+  name: 'v0.1-019 裁定 19 sample-317：西窗外室外第三人称机位读不出 317（B 簇 = 0），二层 A 簇报数量',
+  async run() {
+    const { status, text } = await new Promise((res) => {
+      const ch = spawn(process.execPath, ['--import', './scripts/register-ts-paths.mjs', 'scripts/sample-317.mjs'], { cwd: fileURLToPath(new URL('..', import.meta.url)) });
+      let text = '';
+      ch.stdout.on('data', (d) => (text += d));
+      ch.stderr.on('data', (d) => (text += d));
+      ch.on('close', (status) => res({ status, text }));
+    });
+    const m = /SAMPLE317 A=(\d+) B=(\d+)/.exec(text);
+    if (/白石组美术不在/.test(text)) return '白石组美术不在（../art），跳过';
+    if (status !== 0 || !m) throw new Error(`sample-317 退出码 ${status}：${text.split('\n').filter((l) => /SAMPLE317|✗|Error/.test(l)).join(' / ').slice(0, 600)}`);
+    return `A 簇 ${m[1]} 个（接受）、B 簇 ${m[2]} 个 ✓`;
+  },
+});
+
 const extra = process.env.SMOKE_ONLY ? CHECKS.filter((c) => process.env.SMOKE_ONLY.split('|').some((k) => c.name.includes(k))) : CHECKS;
 
 // ---------------------------------------------------------------- 起服务 + 浏览器

@@ -5,6 +5,8 @@
 // 可读 = 误差 < READ_ERR 且字高 ≥ MIN_PX（1080p）。可到达位置 = S2 白盒碰撞体顶面（法线朝上、不含屋顶）1 m 网格，
 // 相机 = 与 CameraFollowSystem 同约定：头部支点 + 肩后右偏、Euler(pitch, yaw, 'YXZ')、第三人称距离 [min, 默认, max]、俯仰 min..max 8 档、
 // 偏航 = 正对字组 ±0/10/20°；字组须全部在画面内（出画 / 在相机后面 = 读不出）。
+// 裁定 19：分簇判定——A 簇（站立面 s2-floor2-*，二层观察点身后）接受、只报数量；B 簇（其余室外站立面，西窗外地面 / 坡地）必须 0，否则退出码 1。
+// 相机限高（S2Scene.heightCaps = s2CameraHeightCaps()）与游戏同一函数；SAMPLE_CAM_NO_CAP=1 = 不加限高对照。
 // 运行：node --import ./scripts/register-ts-paths.mjs scripts/sample-317.mjs（约 8 min；SAMPLE_CAM_NO_INDOOR=1 = 假设室外时相机不许进室内触发体）
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
@@ -12,7 +14,8 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { gameplay } from '@/config/gameplay';
-import { S2 } from '@/levels/s2/layout';
+import { S2, s2CameraHeightCaps } from '@/levels/s2/layout';
+import { cameraHeightCapDistance } from '@/systems/CameraFollowSystem';
 import { buildS2Greybox } from '@/levels/s2/greybox';
 import { whiteStonesAim, WHITE_STONES_DIGIT_NODES } from '@/levels/s2/whiteStonesGlow';
 
@@ -177,6 +180,7 @@ const gameCam = new THREE.PerspectiveCamera(cam.fov, 16 / 9, 0.05, 500);
 const indoorBoxes = g2.indoor.map((m) => new THREE.Box3().setFromObject(m));
 const euler = new THREE.Euler(0, 0, 0, 'YXZ');
 const NO_INDOOR = process.env.SAMPLE_CAM_NO_INDOOR === '1';
+const CAPS = process.env.SAMPLE_CAM_NO_CAP === '1' ? [] : s2CameraHeightCaps(aim.eye, aim.eye.clone().addScaledVector(aim.center, 20));
 const tmpHit = new THREE.Vector3();
 let n = 0, occluded = 0, best = { err: Infinity };
 const readable = [];
@@ -208,6 +212,7 @@ for (const p of stand) {
             if (hp) d = Math.min(d, Math.max(cam.minCollisionDistance, hp.distanceTo(pivot) - cam.collisionRadius));
           }
         }
+        if (!isIndoor && CAPS.length) d = Math.max(Math.min(d, cam.minCollisionDistance), cameraHeightCapDistance(CAPS, pivot, back, d));
         const eye = pivot.clone().addScaledVector(back, d);
         gameCam.position.copy(eye);
         const a = projectCam(gameCam);
@@ -260,7 +265,16 @@ if (readable.length) {
   const byOn = {};
   for (const r of readable) byOn[r.on] = (byOn[r.on] ?? 0) + 1;
   console.log('  按站立面：' + JSON.stringify(byOn));
-  console.log(`✗ 裁定 17：${readable.length} 个机位读得出 317，例：${JSON.stringify(readable.slice(0, 5))}`);
-  process.exit(1);
+  const isA = (r) => /^s2-floor2-/.test(r.on);
+  const A = readable.filter(isA), B = readable.filter((r) => !isA(r));
+  console.log(`裁定 19 分簇：A 簇（二层 s2-floor2-*，接受）${A.length} 个；B 簇（室外西窗外，须 0）${B.length} 个` + (B.length ? '，例：' + JSON.stringify(B.slice(0, 5)) : ''));
+  console.log(`SAMPLE317 A=${A.length} B=${B.length}`);
+  if (B.length) {
+    console.log(`✗ 裁定 19：B 簇 ${B.length} 个机位读得出 317`);
+    process.exit(1);
+  }
+  console.log(`✓ 裁定 19：B 簇 0（A 簇 ${A.length} 个按裁定接受）`);
+  process.exit(0);
 }
+console.log('SAMPLE317 A=0 B=0');
 console.log('✓ 裁定 17：观察模式外没有机位读得出 317');
