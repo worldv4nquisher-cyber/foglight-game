@@ -16,6 +16,7 @@ import { TideBell } from '@/systems/tide/TideBell';
 import { S3, alongDoor, toLocal, v3 } from './layout';
 import { buildS3Beam, type S3Beam, type S3MirrorKey } from './beam';
 import type { S3Greybox } from './greybox';
+import { IgniterHum } from './igniterHum';
 
 /**
  * S3 谜题 5「灯塔光路」+ 点灯（v0.1-015，白盒）。流程自下而上、只爬一趟：
@@ -114,6 +115,8 @@ export interface S3Puzzles {
   lensIx: Interactable;
   /** 「E 点灯」当前能不能生效（阀已开 + 可点灯状态，含 0.3 s 断光容差） */
   canIgnite(): boolean;
+  /** 可点灯嗡鸣循环（on = 正在播 / 淡入；smoke 读） */
+  hum: IgniterHum;
   /** 按 E 生效：锁输入 → 走到拉杆交互点 → xi-ignite-lever → 第 34 帧点燃。返回是否生效 */
   startIgnite(): boolean;
   /** 立即点燃（ignite 帧；smoke / 测试也可直接调）。全局只生效一次 */
@@ -477,6 +480,7 @@ export function buildS3Puzzles(d: S3PuzzleDeps): S3Puzzles {
   interaction.add(leverIx);
   const igniter = beam.igniter;
   const canIgnite = (): boolean => state.valveOpen && igniter.ready && !state.igniting && !state.ignited;
+  const hum = new IgniterHum(events, igniter, () => state.igniting);
 
   // ---- 点灯演出：锁输入（cutscene 上下文）→ 走到 -interact（017 walk 1.6 m/s）→ xi-ignite-lever（第 34 帧点燃）
   let actions: XiActionPlayer | null = null;
@@ -576,8 +580,10 @@ export function buildS3Puzzles(d: S3PuzzleDeps): S3Puzzles {
     events.on('receiver:ready', ({ id }) => {
       if (id !== igniter.id || state.igniting) return;
       state.readyCount++;
-      sfx('sfx-ignite-ready-loop');
     }),
+    // 可点灯嗡鸣：进入可点灯淡入循环，退出（断光超过 0.3 s 宽限）/ 点燃后淡出（igniterHum.ts）
+    hum.bind(),
+    () => hum.stop(0),
     events.on('ignition:reminder', ({ id }) => {
       if (id !== igniter.id || state.igniting) return;
       state.reminders++;
@@ -645,6 +651,7 @@ export function buildS3Puzzles(d: S3PuzzleDeps): S3Puzzles {
     leverIx,
     lensIx,
     canIgnite,
+    hum,
     startIgnite,
     igniteNow,
     doorIx,
@@ -718,6 +725,7 @@ export function buildS3Puzzles(d: S3PuzzleDeps): S3Puzzles {
     update(dt: number): void {
       renderer.update(dt, tracer);
       lamp.update(dt);
+      hum.update();
     },
     dispose(): void {
       for (const off of offs) off();

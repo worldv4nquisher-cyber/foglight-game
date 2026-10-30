@@ -14,6 +14,9 @@ import { BeamTracer } from '@/systems/light/BeamTracer';
 import { WhiteboxBeamRenderer } from '@/systems/light/BeamRenderer';
 import { buildBeamTestArea, BEAM_Y } from '@/world/beamTestArea';
 import { S2 } from '@/levels/s2/layout';
+import { IgniterHum, IGNITER_HUM_ID } from '@/levels/s3/igniterHum';
+import { AudioSystem } from '@/systems/AudioSystem';
+import { bindSfxFallback } from '@/systems/tide/tideScene';
 
 const DT = 1 / 60;
 const cfg = gameplay.beam;
@@ -246,6 +249,71 @@ test('点火口断光容差：≤ 0.3 s 不算断（可点灯保持、累计阶�
   run(tr, 0.1);
   assert.equal(r.state, 'ready');
   assert.equal(ev.filter((n) => n === 'receiver:ready').length, 2);
+});
+
+test('015 可点灯嗡鸣循环：进入可点灯淡入 1 次（不叠加），0.3 s 宽限内不断，超过淡出 0.3 s；重新可点灯再起；点灯演出中断光不停、点燃后停；重置兜底停', () => {
+  const { events, tr, r, aim } = manualRig();
+  const loops = [];
+  events.on('sfx:loop', (p) => loops.push(['loop', p.id, p.fadeIn]));
+  events.on('sfx:loopStop', (p) => loops.push(['stop', p.id, p.fadeOut]));
+  // 接到 AudioSystem（假 context 只记节点数）：同名不叠加
+  const ctx = { currentTime: 0, state: 'running', destination: {}, n: 0,
+    createGain() { return { gain: { value: 1, setValueAtTime() {}, linearRampToValueAtTime() {}, cancelScheduledValues() {} }, connect: (x) => x, disconnect() {} }; },
+    createOscillator() { ctx.n++; return { frequency: { value: 0 }, connect: (x) => x, disconnect() {}, start() {}, stop() {} }; },
+    createBufferSource() { ctx.n++; return { connect: (x) => x, disconnect() {}, start() {}, stop() {} }; } };
+  const audio = new AudioSystem(ctx);
+  bindSfxFallback(events, audio);
+  const flags = { igniting: false };
+  const hum = new IgniterHum(events, r, () => flags.igniting);
+  hum.bind();
+  const step = (sec) => {
+    for (let i = 0; i < Math.round(sec / DT); i++) {
+      tr.fixedUpdate(DT);
+      hum.update();
+    }
+  };
+  step(1.05);
+  assert.equal(r.state, 'ready');
+  assert.deepEqual(loops, [['loop', IGNITER_HUM_ID, cfg.igniterHumFadeInSec]]);
+  assert.ok(hum.on && audio.isLooping(IGNITER_HUM_ID));
+  hum.start();
+  events.emit('sfx:loop', { id: IGNITER_HUM_ID });
+  assert.equal(ctx.n, 1, '同名循环不叠加');
+  // 宽限内断光 0.3 s：不断
+  aim(false);
+  step(0.3);
+  assert.equal(r.state, 'ready');
+  assert.ok(hum.on && !loops.some((x) => x[0] === 'stop') && audio.isLooping(IGNITER_HUM_ID), '0.3 s 宽限内嗡鸣不该停');
+  aim(true);
+  step(DT);
+  // 断光 > 0.3 s：退出可点灯 → 淡出
+  aim(false);
+  step(0.35);
+  assert.equal(r.state, 'idle');
+  assert.deepEqual(loops.at(-1), ['stop', IGNITER_HUM_ID, cfg.igniterHumFadeOutSec]);
+  assert.ok(!hum.on && !audio.isLooping(IGNITER_HUM_ID));
+  // 重新连续受光 1.0 s → 再起
+  aim(true);
+  step(1.05);
+  assert.equal(hum.starts, 2);
+  assert.ok(audio.isLooping(IGNITER_HUM_ID));
+  // 按 E（igniting）后断光超过宽限也不停，点燃（lighthouse:ignited）才淡出
+  flags.igniting = true;
+  aim(false);
+  step(0.5);
+  assert.ok(hum.on, '点灯演出中断光不应停嗡鸣');
+  events.emit('lighthouse:ignited');
+  assert.ok(!hum.on && !audio.isLooping(IGNITER_HUM_ID));
+  assert.equal(hum.stops, 2);
+  // 重置兜底：ready 时 resetState（不发 lost）→ update 停
+  flags.igniting = false;
+  aim(true);
+  step(1.05);
+  assert.ok(hum.on);
+  r.resetState();
+  hum.update();
+  assert.ok(!hum.on);
+  assert.equal(cfg.igniterHumFadeOutSec, 0.3);
 });
 
 test('点火口未开阀：只红光（blocked）+ receiver:blocked，不进可点灯；开阀后从开阀那一刻起 1.0 s', () => {

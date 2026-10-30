@@ -2398,6 +2398,10 @@ const CHECKS = [
       // 015 C：开阀那一刻起连续受光 1.0 s → 可点灯（ready，冷白微光），不会自己点燃
       if (!(await until(`__s3.puzzles.beam.igniter.state === 'ready' && __s3.puzzles.leverIx.enabled && __s3.puzzles.state.readyCount >= 1`, 3000))) throw new Error('开阀后点火口没进可点灯 / 拉杆没开放 ' + JSON.stringify(await evaluate(`__s3.puzzles.beam.igniter.state`)));
       if (await evaluate(`__s3.puzzles.state.ignited || __s3.puzzles.beam.igniter.activated`)) throw new Error('可点灯不应自动点燃');
+      // 可点灯嗡鸣：进入可点灯开始循环（AudioSystem 按名字只一个实例）
+      const humSt = `(() => { const h = __s3.puzzles.hum, a = __s3.game.audio; return { on: h.on, starts: h.starts, stops: h.stops, loops: a.loopNames }; })()`;
+      let hum = await evaluate(humSt);
+      if (!hum.on || hum.starts !== 1 || hum.loops.join() !== 'sfx-ignite-ready-loop') throw new Error('进入可点灯应开始嗡鸣循环（一个实例） ' + JSON.stringify(hum));
       const steps = await evaluate(`[...__s3.hints.puzzles.get('p5').doneSteps]`);
       if (['valve', 'window_mirror', 'mid_a', 'mid_b'].some((k) => !steps.includes(k))) throw new Error('提示步骤没全部完成 ' + JSON.stringify(steps));
       // 可点灯 + 提示已解锁：H 只显示 ignite.l3
@@ -2411,7 +2415,9 @@ const CHECKS = [
       if (st.rem !== 1 || st.ig !== 'ready' || st.lit) throw new Error('20 s 提醒不对 ' + JSON.stringify(st));
       await ff(25);
       if ((await evaluate(`__s3.puzzles.state.reminders`)) !== 1) throw new Error('每次进入可点灯最多提醒一次');
-      out.push('可点灯 20 s 未按 E：ignition:reminder 一次、不自动点灯 ✓');
+      hum = await evaluate(humSt);
+      if (!hum.on || hum.starts !== 1 || hum.stops !== 0 || hum.loops.join() !== 'sfx-ignite-ready-loop') throw new Error('可点灯期间嗡鸣应一直循环、不重开不叠加 ' + JSON.stringify(hum));
+      out.push('可点灯 20 s 未按 E：ignition:reminder 一次、不自动点灯；嗡鸣循环 45 s 不断不叠加 ✓');
       // 提示范围：拉杆 1.8 m、±60° 内才出「E 点灯」
       const prompt = `((p) => (p && !p.hidden ? p.textContent : ''))(document.querySelector('.hud-prompt'))`;
       const stand = (dx, yawOff) => `(() => { const s = __s3; const sp = s.puzzles.leverIx.standPoint(s.rig.body.position.clone()); s.rig.body.position.set(sp.position.x + ${dx} * Math.sin(sp.facing), sp.position.y + 0.02, sp.position.z + ${dx} * Math.cos(sp.facing)); s.rig.body.velocity.set(0, 0, 0); s.rig.controller.facing = sp.facing + ${yawOff}; return 1; })()`;
@@ -2450,14 +2456,18 @@ const CHECKS = [
       await evaluate(`__s3.game.events.emit('interact:used', { id: 'ignite-lever-s3', kind: 'use' }), 1`);
       await ff(1.0);
       if (await evaluate(`__s3.puzzles.state.ignited`)) throw new Error('走位 + 1.0 s 内不该点燃（第 34 帧 = 1.133 s）');
+      hum = await evaluate(humSt);
+      if (!hum.on || hum.loops.join() !== 'sfx-ignite-ready-loop') throw new Error('点灯演出中（点燃前）嗡鸣不该停 ' + JSON.stringify(hum));
       await ff(1.2);
       if (!(await until(`__s3.lighthouseOn && __s3.puzzles.state.ignited && !__s3.puzzles.leverIx.enabled && __s3.puzzles.beam.igniter.activated`, 5000))) throw new Error('点灯没生效');
       const leverRot = await evaluate(`__s3.puzzles.leverSwing.rotation.x * 180 / Math.PI`);
       if (Math.abs(leverRot + 60) > 0.5) throw new Error('拉杆没转到 −60° ' + leverRot);
+      hum = await evaluate(humSt);
+      if (hum.on || hum.stops !== 1 || hum.loops.length) throw new Error('点燃后嗡鸣应淡出停止 ' + JSON.stringify(hum));
       await evaluate(`__s3.game.events.emit('interact:used', { id: 'ignite-lever-s3', kind: 'use' }), 1`);
       await ff(0.5);
       if ((await evaluate(`window.__lit`)) !== 1) throw new Error('lighthouse:ignited 应只发一次 ' + (await evaluate(`window.__lit`)));
-      out.push('按 E：锁输入 → 走位 → 拉杆逐帧转到 −60° → 第 34 帧点燃，lighthouse:ignited 只一次 ✓');
+      out.push('按 E：锁输入 → 走位 → 拉杆逐帧转到 −60° → 第 34 帧点燃，lighthouse:ignited 只一次；嗡鸣点燃前一直在、点燃后停 ✓');
       // 点灯独白 ch1.s3.ignite.mono：ignited 后 0.5 s 起 3.0 s、锁定不可点掉、只一次；0:04 切远景（章节结束）前消失
       const ffTo = async (T) => {
         const now = await evaluate(`__s3.puzzles.outroTime`);

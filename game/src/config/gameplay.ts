@@ -159,6 +159,9 @@ export const gameplay = {
     igniterGraceSec: 0.3,
     /** 可点灯状态持续多久没按 E 提醒一次（s） */
     igniterReminderSec: 20,
+    /** 可点灯嗡鸣循环淡入 / 淡出（s；036：退出可点灯或点燃后 0.3 s 淡出） */
+    igniterHumFadeInSec: 0.6,
+    igniterHumFadeOutSec: 0.3,
     /**
      * 点火口四态（美术 022 / README-s3-layout「点火口四态」）：off 不发光；没油 = 红常亮 ~0.6；
      * 可点灯 = 冷白 0.15–0.35 呼吸（4 s 一周期），提醒脉冲升到 ~1.0；点燃 = 暖 ~2.0（只在按 E 点燃之后）
