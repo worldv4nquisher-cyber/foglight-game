@@ -732,6 +732,98 @@ if (hasArt) {
     return `码头桩 ${S1.pierPiles.length} 根 = GLB（断桩 ${stumps.length} 根在深水区不加）；前景礁石 ${S1.foregroundRocks.length} 块 = GLB 包围盒`;
   });
 
+  await test('裁定 21 S1 前景大礁石放南沿外：9 块新礁石的 LOD0 网格和挡人盒都在避让区（x 0.5–12、z −3…8.5）外；开场 / 小径尽头机位 → 脚印 T1–T4（中心 + 4 角）、小径尽头 → 浮台路线（地面 / 身体）、开场 → 远景灯塔塔身的视线都不被 9 块挡', async () => {
+    const { S1 } = await import('@/levels/s1/layout');
+    const { S1_ROCKS } = await import('@/levels/s1/rocks');
+    const { S3_WORLD_FRAME } = await import('@/levels/s1/layout');
+    const { placementMatrix } = await import('@/render/instancedLod');
+    const { FOOTPRINT_TILES } = await import('@/levels/s1/footprints');
+    const ZONE = { x0: 0.5, x1: 12, z0: -3, z1: 8.5 };
+    const inZone = (x, z) => x > ZONE.x0 && x < ZONE.x1 && z > ZONE.z0 && z < ZONE.z1;
+    const idxs = S1.foregroundRocks.map((r) => r[0]);
+    assert.deepEqual(idxs, [...Array(9).keys()].map((k) => 155 + k), '前景礁石 = rocks.ts 第 155–163 个');
+    const meshes = [];
+    const geoCache = {};
+    let maxZ = -Infinity;
+    for (const [i, hx, hz] of S1.foregroundRocks) {
+      const r = S1_ROCKS[i];
+      if (!geoCache[r.rock]) {
+        const model = await loadGlb(`models/env/env-rock-shore-${r.rock}.glb`);
+        model.updateMatrixWorld(true);
+        let lod0 = null;
+        model.traverse((o) => {
+          if (!lod0 && o.isMesh && /_lod0/.test(`${o.name}|${o.parent?.name ?? ''}`)) lod0 = o;
+        });
+        // 量化（int16 normalized）位置不能直接 applyMatrix4：先展开成 float
+        const src = lod0.geometry.getAttribute('position');
+        const f = new Float32Array(src.count * 3);
+        const v3 = new THREE.Vector3();
+        for (let k = 0; k < src.count; k++) v3.fromBufferAttribute(src, k).applyMatrix4(lod0.matrixWorld).toArray(f, k * 3);
+        const g0 = new THREE.BufferGeometry();
+        g0.setAttribute('position', new THREE.BufferAttribute(f, 3));
+        if (lod0.geometry.index) g0.setIndex(lod0.geometry.index.clone());
+        geoCache[r.rock] = g0;
+      }
+      const g = geoCache[r.rock].clone().applyMatrix4(placementMatrix(r));
+      const pos = g.getAttribute('position');
+      let inside = 0;
+      for (let k = 0; k < pos.count; k++) {
+        if (inZone(pos.getX(k), pos.getZ(k))) inside++;
+        maxZ = Math.max(maxZ, pos.getZ(k));
+      }
+      assert.equal(inside, 0, `#${i} 网格有 ${inside} 个顶点在避让区内`);
+      // 挡人盒（白盒按 rockColliderShrink 收缩、绕 Y）四角
+      const c = Math.cos(r.rotationY), sn = Math.sin(r.rotationY), k = S1.rockColliderShrink;
+      for (const a of [-1, 1]) for (const b of [-1, 1]) {
+        const lx = a * hx * k, lz = b * hz * k;
+        const x = r.translation[0] + lx * c + lz * sn, z = r.translation[2] - lx * sn + lz * c;
+        assert.ok(!inZone(x, z), `#${i} 挡人盒角 (${x.toFixed(2)}, ${z.toFixed(2)}) 在避让区内`);
+      }
+      const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }));
+      m.name = `rock#${i}`;
+      m.updateMatrixWorld(true);
+      meshes.push(m);
+    }
+    // 视线
+    const targets = [];
+    for (const t of FOOTPRINT_TILES) {
+      const [cx, cy, cz] = t.center;
+      targets.push([`${t.id} 中心`, new THREE.Vector3(cx, cy, cz)]);
+      const ux = Math.sin(t.yaw), uz = Math.cos(t.yaw); // 走向（贴花长 2 m）
+      for (const a of [-1, 1]) for (const b of [-1, 1]) targets.push([`${t.id} 角`, new THREE.Vector3(cx + a * uz * 0.5 + b * ux * 1.0, cy, cz - a * ux * 0.5 + b * uz * 1.0)]);
+    }
+    const A = S1.reefPathEnd, B = S1.raft.home;
+    for (let k = 0; k <= 10; k++) {
+      const p = new THREE.Vector3(...A).lerp(new THREE.Vector3(...B), k / 10);
+      targets.push([`路线 ${k}/10 地面`, p.clone().setY(p.y + 0.15)], [`路线 ${k}/10 身体`, p.clone().setY(p.y + 1.0)]);
+    }
+    const tower = [6.6, 12, 18, 24].map((y) => ['远景塔身 y ' + y, new THREE.Vector3(S3_WORLD_FRAME.towerCenter[0], y, S3_WORLD_FRAME.towerCenter[2])]);
+    const cams = { 开场: [[-0.9, 4.2, 9.5], [...targets, ...tower]], 小径尽头: [[1.2, 2.3, 2.2], targets] };
+    const rc = new THREE.Raycaster();
+    const blocked = [];
+    for (const [name, [eye, list]] of Object.entries(cams)) {
+      const o = new THREE.Vector3(...eye);
+      for (const [label, p] of list) {
+        const d = p.clone().sub(o);
+        const L = d.length();
+        rc.set(o, d.normalize());
+        rc.far = L - 0.05;
+        const hit = rc.intersectObjects(meshes, false)[0];
+        if (hit) blocked.push(`${name} → ${label} 被 ${hit.object.name} 挡（${hit.distance.toFixed(2)} m）`);
+      }
+    }
+    assert.equal(blocked.length, 0, blocked.slice(0, 5).join('；'));
+    // 自检：射线确实打得到这些网格（开场相机 → #155 块心下方 0.3 m 必须先撞到 #155）
+    {
+      const o = new THREE.Vector3(-0.9, 4.2, 9.5);
+      const p = new THREE.Vector3(...S1_ROCKS[155].translation);
+      rc.set(o, p.clone().sub(o).normalize());
+      rc.far = Infinity;
+      assert.equal(rc.intersectObjects(meshes, false)[0]?.object.name, 'rock#155', '射线自检：应撞到 #155');
+    }
+    return `9 块网格 / 挡人盒都在避让区外（网格最北 z ${maxZ.toFixed(2)} < −3）；开场 ${targets.length + tower.length} 条、小径尽头 ${targets.length} 条视线（脚印 20 点、路线 22 点、塔身 4 点）无遮挡`;
+  });
+
   await test('S1 深水区 = 美术海床（env-tidal-flat-s1 LOD0）：区内海床 < −0.3（送回水深），区外滩地北段 / 合法路线不在区内', async () => {
     const { S1 } = await import('@/levels/s1/layout');
     const { polygonRegion } = await import('@/systems/tide/TideController');
