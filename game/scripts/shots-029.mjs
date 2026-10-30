@@ -48,6 +48,8 @@ const SCENES = {
       bridge: [[-22.6, 4.6, -22.6], [0, 9, 0], 50],
       islet: [[-12, 6, 12], [2, 1, -2], 55],
       'room-doorclosed': [[-2, 3.8, -1.6], [2, 2.6, 1.6], 80],
+      // 礁岛石面（y 0.5）盖过塔内地板（y 0.2）：角色站在楼梯起点旁，看脚
+      floor: [[0.6, 1.5, -0.6], [-1.6, 0.4, 0.9], 70],
       // 以下开塔门之后
       room: [[-2, 3.8, -1.6], [2, 2.6, 1.6], 80],
       mid: [[-2.4, 11.6, 0.3], [2, 10.4, 0], 80],
@@ -157,7 +159,13 @@ for (const sc of onlyScenes) {
             await waitGame(2);
             await until(`__s3.puzzles.state.doorOpen >= 1`, 200000);
           }
-          await evaluate(`(() => { const c = ${g}.camera; c.position.set(${eye}); c.fov = ${fov}; c.lookAt(${at}); c.updateProjectionMatrix(); return 1; })()`);
+          if (sc === 's3' && view === 'floor') {
+            await evaluate(`(() => { const s = __s3; const b = s.rig.body; b.teleport(s.frame.localToWorld(b.position.clone().set(-1.6, 0.25, 0.9))); s.rig.entity.object3D.visible = true; return 1; })()`);
+            await waitGame(1);
+          }
+          // S3 是世界坐标摆的（s3-frame = S3_FRAME 平移 + 转 135°），机位 / 站位按 S3 局部给，进 frame 换算
+          await evaluate(`(() => { const s = ${g}; const c = s.camera; const V = c.position.constructor; const W = (x, y, z) => (s.frame ? s.frame.localToWorld(new V(x, y, z)) : new V(x, y, z));
+            c.position.copy(W(${eye})); c.fov = ${fov}; c.lookAt(W(${at})); c.updateProjectionMatrix(); return 1; })()`);
           await waitGame(0.6);
           await setView(W, H);
           await until(`innerWidth === ${W}`, 60000);
@@ -165,6 +173,7 @@ for (const sc of onlyScenes) {
           const info = await evaluate(`(() => { const s = ${g}; const o = { lm: s.lightmaps.map((h) => (h.root.userData.name ?? h.root.name) + '×' + h.scale.toFixed(2)).join(' '), hemi: s.hemi.intensity };
             if (s.puzzles?.keyLight) { o.keyLight = s.puzzles.keyLight.light.intensity; o.keyHL = s.puzzles.keyHighlighted; }
             if (s.puzzles?.state && 'doorOpen' in s.puzzles.state) o.door = s.puzzles.state.doorOpen;
+            if (s.rig) o.player = (s.frame ? s.frame.worldToLocal(s.rig.body.position.clone()) : s.rig.body.position).toArray().map((v) => +v.toFixed(3));
             if (s.puzzles?.mirrorHighlighted) o.mirrorHL = s.puzzles.mirrorHighlighted;
             return o; })()`);
           const file = await shot(`${name}.png`);
@@ -172,6 +181,7 @@ for (const sc of onlyScenes) {
           report.shots.push({ name, scene: sc, view, mode, eye, at, fov, file, info });
           console.log('  ✓', name, JSON.stringify(info));
           await setView(...SMALL);
+          if (view === 'floor') await evaluate(`${g}.rig.entity.object3D.visible = false`);
         } catch (e) {
           report.failed.push({ name, error: String(e?.message ?? e) });
           console.log('  ✗', name, e?.message ?? e);
