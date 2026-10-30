@@ -36,6 +36,9 @@ function walk(dir, out = []) {
   return out;
 }
 
+/** 不上屏的数据副本：里面的中文（节点名 / note）不进字体子集 */
+const NOT_ON_SCREEN = ['src/config/atmosphere028.ts'];
+
 /** 当前用字（排序后的字符串） */
 export function collectCharset() {
   const chars = new Set();
@@ -47,6 +50,7 @@ export function collectCharset() {
   add('，。、：；！？「」『』（）《》〈〉【】—…·“”‘’～　％＋－×÷°');
   add(readFileSync(join(ROOT, 'src/content/text/zh-CN.ts'), 'utf8'));
   for (const f of walk(join(ROOT, 'src'))) {
+    if (NOT_ON_SCREEN.some((n) => f.endsWith(n))) continue;
     // 只收非 ASCII（中文、标点）；ASCII 已全部包含
     const src = stripComments(readFileSync(f, 'utf8'));
     for (const ch of src) if (ch.codePointAt(0) > 0x7f) chars.add(ch);
