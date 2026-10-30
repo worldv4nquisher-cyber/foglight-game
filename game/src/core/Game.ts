@@ -131,6 +131,8 @@ export class Game {
       }),
       // 场景切换：为使用后处理的场景重建管线，其他场景（启动/加载）直接渲染
       this.events.on('scene:change', () => {
+        // 切场景：上一场景的循环音立即停（新场景 enter 之后才会再开）
+        this.audio.stopAllLoops();
         const s = this.scenes.current;
         // 自动存档：进入带存档点的场景（GDD §11：进入 S1 / 每个新场景 / 章节结束页）
         if (s?.savePoint) this.save.save(s.savePoint);

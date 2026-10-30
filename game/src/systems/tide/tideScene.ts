@@ -42,10 +42,27 @@ const FALLBACK: Record<string, { freq: number; duration: number; type: Oscillato
   'sfx-ignite': { freq: 262, duration: 1.8, type: 'triangle' },
 };
 
-/** `sfx:play` → 有资源播资源，否则合成占位音。返回取消订阅 */
+/** `sfx:play` → 有资源播资源，否则合成占位音；`sfx:loop` / `sfx:loopStop` → AudioSystem 循环音（缺资源用 FALLBACK 的频率持续振荡）。返回取消订阅 */
 export function bindSfxFallback(events: EventBus, audio: AudioSystem, getBuffer?: (id: string) => AudioBuffer | undefined): () => void {
-  return events.on('sfx:play', ({ id }) => {
-    const fb = FALLBACK[id] ?? { freq: 440, duration: 0.15, type: 'sine' as OscillatorType };
-    audio.playSfx(getBuffer?.(id), fb);
-  });
+  const offs = [
+    events.on('sfx:play', ({ id }) => {
+      const fb = FALLBACK[id] ?? { freq: 440, duration: 0.15, type: 'sine' as OscillatorType };
+      audio.playSfx(getBuffer?.(id), fb);
+    }),
+    events.on('sfx:loop', ({ id, fadeIn, volume }) => {
+      const fb = FALLBACK[id] ?? { freq: 220, duration: 0, type: 'sine' as OscillatorType };
+      audio.startLoop(id, {
+        buffer: getBuffer?.(id),
+        fallback: { freq: fb.freq, type: fb.type },
+        ...(fadeIn !== undefined ? { fadeIn } : {}),
+        ...(volume !== undefined ? { volume } : {}),
+      });
+    }),
+    events.on('sfx:loopStop', ({ id, fadeOut }) => {
+      audio.stopLoop(id, fadeOut !== undefined ? { fadeOut } : {});
+    }),
+  ];
+  return () => {
+    for (const off of offs) off();
+  };
 }

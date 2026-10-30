@@ -76,6 +76,9 @@ export interface GameEvents {
   'float:state': { id: string; state: 'grounded' | 'floating' | 'drifting' };
   /** 音效请求（id = manifest 音频 key；没有资源时场景用合成音兜底，见 systems/tide/tideScene.ts bindSfxFallback） */
   'sfx:play': { id: string };
+  /** 循环音按名字启停（id 同 sfx:play；同名重复 loop 不叠加；fade 缺省用 gameplay.audio；切场景自动停） */
+  'sfx:loop': { id: string; fadeIn?: number; volume?: number };
+  'sfx:loopStop': { id: string; fadeOut?: number };
   /** 012 光路：重算完成（ms = 本次耗时）；接收器触发 / 前置条件未满足（红光）/ 光离开后进度归零 */
   'beam:traced': { ms: number; paths: number };
   'receiver:activated': { id: string; emitter: string };

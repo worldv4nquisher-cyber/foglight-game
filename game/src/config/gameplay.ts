@@ -246,6 +246,12 @@ export const gameplay = {
     keyRepeatDelay: 0.35,
     keyRepeatInterval: 0.15,
   },
+  /** 音频（AudioSystem）：循环音默认淡入 / 淡出时长（s），缺资源时合成占位循环音的音量 */
+  audio: {
+    loopFadeInSec: 0.5,
+    loopFadeOutSec: 0.3,
+    loopFallbackVolume: 0.04,
+  },
 } as const;
 
 export type GameplayConfig = typeof gameplay;
