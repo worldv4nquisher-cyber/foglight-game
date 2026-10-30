@@ -17,6 +17,8 @@ import { S3, S3_FRAME, alongDoor, cameraYawFacing, toWorld } from './layout';
 import { buildS3Greybox, defaultS3GreyboxMaterials, type S3Greybox } from './greybox';
 import { buildS3Art, S3_DOOR_PROP_KEY, type S3Art } from './art';
 import { buildS3Puzzles, OUTRO_CUT_SEC, type S3Puzzles } from './puzzles';
+import { doorLightmapScale } from '@/render/lightmap';
+import { S3_TOWER_CLOSED_LM } from '@/levels/lightmaps';
 
 /** 点灯后多久进章节结束页（s）。结尾演出（035）做好后由演出结束触发 */
 
@@ -151,6 +153,10 @@ export class S3Scene extends LevelScene {
     super.update(dt, alpha);
     if (!this.rig) return;
     this.puzzles.update(dt);
+    // 029：塔内按门开 −100° 烘的；门关着按门角把塔内光照贴图压到 S3_TOWER_CLOSED_LM
+    const towerLm = doorLightmapScale(this.puzzles.state.doorOpen, S3_TOWER_CLOSED_LM);
+    this.setLightmapScale('env-lighthouse-ch1-interior', towerLm);
+    this.setLightmapScale('env-lamp-room-ch1', towerLm);
     this.artSlots?.update();
     if (this.game.ui.debug.visible) {
       const b = this.puzzles.beam;

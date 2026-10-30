@@ -17,6 +17,8 @@ import { S2, S2_FAR, s2CameraHeightCaps, v3 } from './layout';
 import { buildS2Greybox, defaultS2GreyboxMaterials, type S2Greybox } from './greybox';
 import { buildS2Art, type S2Art } from './art';
 import { buildS2Puzzles, type S2Puzzles } from './puzzles';
+import { doorLightmapScale } from '@/render/lightmap';
+import { S2_CELLAR_CLOSED_LM } from '@/levels/lightmaps';
 import { beamDebugEnabled } from '@/config/debug';
 import type { Collider } from '@/systems/PhysicsSystem';
 
@@ -132,6 +134,8 @@ export class S2Scene extends LevelScene {
     super.update(dt, alpha);
     if (!this.rig) return;
     this.puzzles.update(dt);
+    // 029：地窖按门开 −100° 烘的（README-029 S2 偏差 1）；门关着把地窖段光照贴图压到 S2_CELLAR_CLOSED_LM，屋里不变
+    this.setLightmapScale('env-cellar-s2', doorLightmapScale(this.puzzles.state.doorOpen, S2_CELLAR_CLOSED_LM));
     this.syncCameraHeightCaps();
     this.artSlots?.update();
     this.lightLockArt?.update(dt);

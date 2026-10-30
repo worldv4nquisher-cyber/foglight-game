@@ -16,6 +16,9 @@ import { Water, WATER_NORMAL_KEY, RAIN_RIPPLE_KEY } from '@/world/Water';
 import { ATMO028, type Atmo028Tier } from '@/config/atmosphere028';
 import { Rain, RAIN_STREAK_KEY, RAIN_SPLASH_KEY } from '@/world/Rain';
 import { applyLodDistances } from '@/render/lod';
+import { applySceneLightmaps, presetLightmapScale, type LightmapHandle } from '@/render/lightmap';
+import { lightmapEnabled } from '@/config/debug';
+import { manifest } from '@/assets/manifest';
 import { applySkyLayerAtmosphere, type SkyLayerHandle } from '@/render/skyLayer';
 import type { ObjectFogHandle } from '@/render/objectFog';
 import { xiWetTarget } from '@/entities/xi/XiLook';
@@ -70,6 +73,11 @@ export abstract class LevelScene extends BaseScene {
   protected readonly farSilhouettes: Array<{ handle: SkyLayerHandle; fog: 'none' | 'mid' }> = [];
   /** 028 主岛 / 灯塔（fogLayer 'mid'）的按物体雾：密度按预设 fogDensityHint 覆盖 GLB extras */
   protected readonly midFogs: ObjectFogHandle[] = [];
+  /** v0.1-029 本场景挂上的光照贴图（每个 GLB 根一个）；倍率 = 预设（雨夜 ×0.35）× doorScale（开门角等，子类设） */
+  protected readonly lightmaps: LightmapHandle[] = [];
+  /** 每个光照贴图根的附加倍率（S3 塔门 / S2 地窖门，key = 根上 userData.name） */
+  protected readonly lightmapExtraScale = new Map<string, number>();
+  private lightmapPresetScale = 1;
   private readonly viewSize = new THREE.Vector2();
   private qualityTier: Atmo028Tier = 'high';
   /** 028 镜头水滴：ultra + 下雨 + 过场（cutsceneOnly）才开，fadeIn 0.6 s；?lens=1 强制（截图 / 调试） */
@@ -147,6 +155,7 @@ export abstract class LevelScene extends BaseScene {
     const a = this.atmosphere!;
     this.buildEnvironment(a);
     this.buildLevel();
+    this.attachLightmaps();
     const spawn = this.pickSpawn();
     this.buildPlayer(spawn);
     this.buildInteraction();
@@ -346,6 +355,8 @@ export abstract class LevelScene extends BaseScene {
     this.hemi.color.set(a.hemiSky);
     this.hemi.groundColor.set(a.hemiGround);
     this.hemi.intensity = a.hemiIntensity;
+    this.lightmapPresetScale = presetLightmapScale(a.hemiIntensity);
+    this.updateLightmapScales();
     this.sun.color.set(a.sunColor);
     this.sun.intensity = a.sunIntensity;
     this.sun.position.set(...a.sunDirection);
@@ -354,6 +365,32 @@ export abstract class LevelScene extends BaseScene {
     for (const f of this.midFogs) f.density = a.midFogDensity;
     for (const s of this.farSilhouettes) applySkyLayerAtmosphere(s.handle, a, s.fog === 'mid' ? a.midFogDensity : 0);
     this.game.postfx.applyAtmosphere(a);
+  }
+
+  /**
+   * v0.1-029：按 GLB 根 extras.lightmap 挂光照贴图。只用本场景资源组登记的贴图
+   * （S1 的中景塔 / S2 远景塔同一个 GLB 根上也写着 tex-s3-tower，不挂，照旧半球光 + 雾）。
+   */
+  private attachLightmaps(): void {
+    if (!lightmapEnabled) return;
+    const own = new Set(manifest.filter((m) => m.group === this.level.group && m.type === 'ktx2').map((m) => m.key));
+    const assets = this.game.assets;
+    const handles = applySceneLightmaps(this.scene, (k) => (own.has(k) && assets.has(k) ? assets.getTexture(k) : null));
+    this.lightmaps.push(...handles);
+  }
+
+  /** 关卡逻辑改了附加倍率（开门角）后调用 */
+  protected setLightmapScale(rootName: string, k: number): void {
+    if (this.lightmapExtraScale.get(rootName) === k) return;
+    this.lightmapExtraScale.set(rootName, k);
+    this.updateLightmapScales();
+  }
+
+  private updateLightmapScales(): void {
+    for (const h of this.lightmaps) {
+      const name = (h.root.userData.name as string | undefined) ?? h.root.name;
+      h.setScale(this.lightmapPresetScale * (this.lightmapExtraScale.get(name) ?? 1));
+    }
   }
 
   protected applyQuality(): void {

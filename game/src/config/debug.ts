@@ -31,3 +31,8 @@ export const artEnabled: boolean = (() => {
 })();
 
 export const greyboxVisible: boolean = typeof location !== 'undefined' && ['1', 'true', ''].includes(new URLSearchParams(location.search).get('greybox') ?? 'x');
+
+/**
+ * v0.1-029 光照贴图开关：`?lightmap=0` 不挂（对比截图 / 排查用，走原来的半球光）。默认开。
+ */
+export const lightmapEnabled: boolean = typeof location === 'undefined' || !['0', 'false'].includes(new URLSearchParams(location.search).get('lightmap') ?? 'x');
