@@ -129,6 +129,8 @@ export interface S3Puzzles {
   doorIx: Interactable;
   valveIx: Interactable;
   mirrorIx: Record<S3MirrorKey, Interactable>;
+  /** 029：导光镜交互高亮当前是否亮着 */
+  readonly mirrorHighlighted: Record<S3MirrorKey, boolean>;
   readonly state: S3State;
   /** 当前光路到达的目标数（每步重算） */
   traceReached(): number;
@@ -414,6 +416,24 @@ export function buildS3Puzzles(d: S3PuzzleDeps): S3Puzzles {
     interaction.add(ix);
     mirrorIx[key] = ix;
   }
+  // 029：导光镜交互高亮（与地窖钥匙同一套 'key' 描边；塔内镜面发黑，靠铜框辨认）。
+  // 在该镜站立层（mirrorIx.enabled）且是当前候选或水平距离 ≤ 图标距离时亮
+  const mirrorHL: Record<S3MirrorKey, boolean> = { window: false, a: false, b: false };
+  const mirrorWorld = new THREE.Vector3();
+  const updateMirrorHighlights = (p: THREE.Vector3): void => {
+    for (const key of ['window', 'a', 'b'] as const) {
+      const ix = mirrorIx[key];
+      let on = false;
+      if (ix.enabled) {
+        beam.mirrors[key].root.getWorldPosition(mirrorWorld);
+        on = interaction.current === ix || Math.hypot(mirrorWorld.x - p.x, mirrorWorld.z - p.z) <= gameplay.interaction.iconDistance;
+      }
+      if (on === mirrorHL[key]) continue;
+      mirrorHL[key] = on;
+      if (on) interaction.highlighter.add(`key:${S3_IDS.mirror[key]}`, beam.mirrors[key].root, 'key');
+      else interaction.highlighter.remove(`key:${S3_IDS.mirror[key]}`);
+    }
+  };
 
   // ---- 光斑落到下一个目标（上升沿）：镜子冷白亮一下 + 玻璃共鸣；步骤完成
   const traceReached = (): number => {
@@ -667,6 +687,9 @@ export function buildS3Puzzles(d: S3PuzzleDeps): S3Puzzles {
     doorIx,
     valveIx,
     mirrorIx,
+    get mirrorHighlighted() {
+      return { ...mirrorHL };
+    },
     state,
     traceReached,
     get outroTime(): number {
@@ -720,6 +743,7 @@ export function buildS3Puzzles(d: S3PuzzleDeps): S3Puzzles {
       const r = Math.hypot(local.x, local.z);
       // 镜子：只在各自站立面上开放（楼梯从上下经过时不出提示）
       for (const key of ['window', 'a', 'b'] as const) mirrorIx[key].enabled = Math.abs(local.y - MIRROR_FLOOR[key]) < 0.6;
+      updateMirrorHighlights(player);
       valveIx.enabled = !state.valveOpen && local.y < 1.2;
       // 独白
       const s = -(local.x + local.z) / Math.SQRT2;
@@ -741,6 +765,7 @@ export function buildS3Puzzles(d: S3PuzzleDeps): S3Puzzles {
     },
     dispose(): void {
       for (const off of offs) off();
+      for (const key of ['window', 'a', 'b'] as const) interaction.highlighter.remove(`key:${S3_IDS.mirror[key]}`);
       renderer.dispose();
       scene.remove(renderer.root);
     },

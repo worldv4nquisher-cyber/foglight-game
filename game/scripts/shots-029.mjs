@@ -165,6 +165,7 @@ for (const sc of onlyScenes) {
           const info = await evaluate(`(() => { const s = ${g}; const o = { lm: s.lightmaps.map((h) => (h.root.userData.name ?? h.root.name) + '×' + h.scale.toFixed(2)).join(' '), hemi: s.hemi.intensity };
             if (s.puzzles?.keyLight) { o.keyLight = s.puzzles.keyLight.light.intensity; o.keyHL = s.puzzles.keyHighlighted; }
             if (s.puzzles?.state && 'doorOpen' in s.puzzles.state) o.door = s.puzzles.state.doorOpen;
+            if (s.puzzles?.mirrorHighlighted) o.mirrorHL = s.puzzles.mirrorHighlighted;
             return o; })()`);
           const file = await shot(`${name}.png`);
           keep(name);
