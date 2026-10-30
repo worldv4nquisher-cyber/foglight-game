@@ -75,7 +75,8 @@ export interface GameEvents {
   'tide:recall': { zone: string };
   'float:state': { id: string; state: 'grounded' | 'floating' | 'drifting' };
   /** 音效请求（id = manifest 音频 key；没有资源时场景用合成音兜底，见 systems/tide/tideScene.ts bindSfxFallback） */
-  'sfx:play': { id: string };
+  /** optional：文件缺失时静默（不播合成占位音），如 032 补音 sfx-tide-bell-clapper */
+  'sfx:play': { id: string; optional?: boolean };
   /** 循环音按名字启停（id 同 sfx:play；同名重复 loop 不叠加；fade 缺省用 gameplay.audio；切场景自动停） */
   'sfx:loop': { id: string; fadeIn?: number; volume?: number };
   'sfx:loopStop': { id: string; fadeOut?: number };

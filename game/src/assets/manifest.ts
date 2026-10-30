@@ -102,6 +102,8 @@ export const manifest: AssetEntry[] = [
   { key: 'prop-white-stones-s2', type: 'gltf', url: 'assets/art/models/props/prop-white-stones-s2.glb', group: 's2', optional: true, art: true, pending: true },
   { key: 'prop-dial-gate-s2', type: 'gltf', url: 'assets/art/models/props/prop-dial-gate-s2.glb', group: 's2', optional: true, art: true, pending: true },
   // 017 收尾：地窖钥匙（架上放 env-cellar-s2-key-socket；xi-pickup-shelf grab 帧挂 middle_03_r，extras.attach）
+  // 022 灯塔钥匙正式文件（美术回复 1030：节点 / extras.attach 同地窖钥匙）：到了优先用它，缺失回退 prop-key-cellar-s2（S2_KEY_KEYS）
+  { key: 'prop-key-lighthouse', type: 'gltf', url: 'assets/art/models/props/prop-key-lighthouse.glb', group: 's2', optional: true, art: true, pending: true },
   { key: 'prop-key-cellar-s2', type: 'gltf', url: 'assets/art/models/props/prop-key-cellar-s2.glb', group: 's2', optional: true, art: true },
   { key: 'env-cellar-door-s2', type: 'gltf', url: 'assets/art/models/env/env-cellar-door-s2.glb', group: 's2', optional: true, art: true },
   { key: 'env-courtyard-wall-s2', type: 'gltf', url: 'assets/art/models/env/env-courtyard-wall-s2.glb', group: 's2', optional: true, art: true },
@@ -112,6 +114,8 @@ export const manifest: AssetEntry[] = [
   // ---- s3（015）：美术 020 rework-1029，摆位见 levels/s3/art.ts（塔本体另登记 -s3 key，与 s1 组的远景分开释放）
   { key: 'env-lighthouse-ch1-s3', type: 'gltf', url: 'assets/art/models/env/env-lighthouse-ch1.glb', group: 's3', optional: true, art: true },
   { key: 'env-lighthouse-ch1-interior', type: 'gltf', url: 'assets/art/models/env/env-lighthouse-ch1-interior.glb', group: 's3', optional: true, art: true },
+  // 022 塔门单独文件（美术回复 1030：door-leaf 原点在铰链、-interact、-collider、锁孔，puzzleCritical 无 LOD）：到了优先用它，缺失用 020 门扇（S3_DOOR_KEYS）
+  { key: 'prop-lighthouse-door-s3', type: 'gltf', url: 'assets/art/models/props/prop-lighthouse-door-s3.glb', group: 's3', optional: true, art: true, pending: true },
   { key: 'env-lighthouse-ch1-door', type: 'gltf', url: 'assets/art/models/env/env-lighthouse-ch1-door.glb', group: 's3', optional: true, art: true },
   { key: 'env-lamp-room-ch1', type: 'gltf', url: 'assets/art/models/env/env-lamp-room-ch1.glb', group: 's3', optional: true, art: true },
   { key: 'prop-fresnel-lens-ch1', type: 'gltf', url: 'assets/art/models/props/prop-fresnel-lens-ch1.glb', group: 's3', optional: true, art: true },
@@ -123,6 +127,11 @@ export const manifest: AssetEntry[] = [
   { key: 'prop-guide-mirror-window-s3', type: 'gltf', url: 'assets/art/models/props/prop-guide-mirror-window-s3.glb', group: 's3', optional: true, art: true, pending: true },
   { key: 'prop-guide-mirror-wall-s3', type: 'gltf', url: 'assets/art/models/props/prop-guide-mirror-wall-s3.glb', group: 's3', optional: true, art: true, pending: true },
   { key: 'prop-ignition-port-s3', type: 'gltf', url: 'assets/art/models/props/prop-ignition-port-s3.glb', group: 's3', optional: true, art: true, pending: true },
+  // ---- 032 音效（未交付，pending；到了自动加载，sfx:play / sfx:loop 按 key 取 buffer）
+  // 钟锤碰壁补音（美术回复 1030）：TideBell 钟锤相对角到 clapperHitRad 时 sfx:play optional（缺失静默，可叠主钟声）
+  { key: 'sfx-tide-bell-clapper', type: 'audio', url: 'assets/art/audio/sfx/sfx-tide-bell-clapper.ogg', group: 'common', optional: true, art: true, pending: true },
+  // 015 可点灯嗡鸣循环（IgniterHum，sfx:loop）
+  { key: 'sfx-ignite-ready-loop', type: 'audio', url: 'assets/art/audio/sfx/sfx-ignite-ready-loop.ogg', group: 's3', optional: true, art: true, pending: true },
   // ---- 更多示例（取消注释即可登记）----
   // { key: 'ground-diffuse', type: 'ktx2', url: 'assets/textures/ground-diffuse.ktx2', group: 's1', optional: true },
   // { key: 'sfx-footstep', type: 'audio', url: 'assets/audio/sfx-footstep.ogg', group: 'common', optional: true },

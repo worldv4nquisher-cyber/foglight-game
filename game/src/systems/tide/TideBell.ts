@@ -6,6 +6,9 @@ import type { TextId } from '@/content/text';
 import { Interactable, type InteractableOptions } from '@/systems/interaction/Interactable';
 import type { TideController } from './TideController';
 
+/** 钟锤碰壁补音（032 批次；manifest pending，缺失静默） */
+export const CLAPPER_SFX = 'sfx-tide-bell-clapper';
+
 export interface TideBellOptions {
   /** Interactable id（提示系统高亮、谜题脚本都用它） */
   id: string;
@@ -48,6 +51,9 @@ export class TideBell {
   angle = 0;
   /** 钟锤相对钟体的角度（rad，同号约定）（测试读） */
   clapperAngle = 0;
+  /** 钟锤碰壁次数（测试读）；|相对角| 上升沿到 clapperHitRad 记一次并补 sfx-tide-bell-clapper（文件缺失静默，可叠主钟声） */
+  clapperHits = 0;
+  private clapperTouching = false;
   private readonly swing: THREE.Object3D | null;
   private readonly clapper: THREE.Object3D | null;
   private readonly animSource: TideBellOptions['animSource'] | null;
@@ -135,7 +141,15 @@ export class TideBell {
       const [h0, h1] = [this.hist[0]!, this.hist[1] ?? this.hist[0]!];
       const lag = h1[0] > h0[0] ? h0[1] + ((h1[1] - h0[1]) * Math.min(1, Math.max(0, (tl - h0[0]) / (h1[0] - h0[0])))) : h0[1];
       // 钟锤吊在钟体里：世界上滞后于钟体，相对钟体 = θ(t − lag) − θ(t)，到 ±0.41 碰内壁
-      this.clapperAngle = Math.max(-b.clapperHitRad, Math.min(b.clapperHitRad, lag - this.angle));
+      const rel = lag - this.angle;
+      this.clapperAngle = Math.max(-b.clapperHitRad, Math.min(b.clapperHitRad, rel));
+      // 美术回复 1030：碰内壁（|相对角| ≥ 0.41）那一刻补一声钟锤；离开碰壁角（回滞 10 %）才能再响
+      const touching = Math.abs(rel) >= b.clapperHitRad || (this.clapperTouching && Math.abs(rel) >= b.clapperHitRad * 0.9);
+      if (touching && !this.clapperTouching) {
+        this.clapperHits++;
+        this.events.emit('sfx:play', { id: CLAPPER_SFX, optional: true });
+      }
+      this.clapperTouching = touching;
       this.clapper.rotation.z = this.clapperBaseZ - this.clapperAngle;
     }
   }

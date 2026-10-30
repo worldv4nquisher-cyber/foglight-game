@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { AssetLoader } from '@/assets/AssetLoader';
 import { applyMaterialHints } from '@/render/materialHints';
+import { findNode } from '../artSlots';
 
 const COLLIDER_NAME = /-(collider|wall)(\.\d+)?$/i;
 
@@ -18,10 +19,17 @@ export const S3_ART_NODES = {
 } as const satisfies Record<string, { translation: readonly [number, number, number]; rotationY: number }>;
 /** 门扇 GLB：合页在原点，场景挂到白盒合页节点下（json 摆位 (−2.6304, 2.4, −1.8668) rotY −5.497787 = 白盒合页） */
 export const S3_DOOR_KEY = 'env-lighthouse-ch1-door';
+/**
+ * 022 塔门单独文件（美术回复 1030）：prop-lighthouse-door-s3.glb，`door-leaf` 原点在铰链、`-interact`、`-collider`、锁孔；puzzleCritical 无 LOD。
+ * 到了优先用它（挂白盒合页、`door-leaf` 原点对到合页原点），缺失回退 020 门扇 S3_DOOR_KEY。
+ */
+export const S3_DOOR_PROP_KEY = 'prop-lighthouse-door-s3';
+export const S3_DOOR_KEYS = [S3_DOOR_PROP_KEY, S3_DOOR_KEY] as const;
 
 export interface S3Art {
   root: THREE.Group;
   readonly loaded: boolean;
+  /** 塔门（S3_DOOR_KEYS 里第一个已加载的；name = 用的那个 key）：挂白盒合页 greybox.door 下 */
   door: THREE.Object3D | null;
   lens: THREE.Object3D | null;
 }
@@ -76,9 +84,19 @@ export function buildS3Art(assets: AssetLoader): S3Art {
     loaded = true;
   }
   let door: THREE.Object3D | null = null;
-  if (assets.has(S3_DOOR_KEY)) {
-    door = prepare(assets.getModel(S3_DOOR_KEY));
-    door.name = S3_DOOR_KEY;
+  const doorKey = S3_DOOR_KEYS.find((k) => assets.has(k));
+  if (doorKey) {
+    door = prepare(assets.getModel(doorKey));
+    door.name = doorKey;
+    if (doorKey === S3_DOOR_PROP_KEY) {
+      // 整个文件（门框 / 锁孔跟着）平移到 door-leaf 原点 = 白盒合页原点；没有 door-leaf 就按根原点 = 合页
+      door.position.set(0, 0, 0);
+      door.quaternion.identity();
+      door.updateMatrixWorld(true);
+      const leaf = findNode(door, 'door-leaf');
+      if (leaf && leaf !== door) door.position.copy(leaf.getWorldPosition(new THREE.Vector3()).negate());
+      else if (!leaf) console.warn(`[art] ${doorKey} 缺 door-leaf 节点：按根原点挂`);
+    }
     loaded = true;
   }
   return { root, loaded, door, lens };

@@ -135,6 +135,218 @@ await test('021 / 022 替换入口（合成）：没交付不挂；交付后挂�
   return `合成门：挂点回退 / 对齐 / 世界增量跟转 / 隐藏 ✓；表里 ${keys} 处摆放全部登记进清单`;
 });
 
+await test('美术回复 1030 立镜挂院墙 socket（合成）：env-courtyard-wall-s2-mirror-a-socket 优先、镜面对齐白盒、mirror-pivot 世界旋转 = 白盒 yaw（socket 朝向不同也对）；缺 socket 回退白盒立镜根（与旧 copy 一致）', () => {
+  const spec = S2_ART_SLOTS.filter((x) => x.id === 'prop-mirror-stand-s2-a');
+  assert.equal(spec.length, 1);
+  assert.deepEqual(spec[0].at, ['env-courtyard-wall-s2-mirror-a-socket', 'mirror-stand-s2-a']);
+  const mkScene = (withSocket) => {
+    const scene = new THREE.Group();
+    const stand = new THREE.Group();
+    stand.name = 'mirror-stand-s2-a';
+    stand.position.set(3, 0, 4);
+    stand.rotation.y = 0.4;
+    const yaw = new THREE.Group();
+    yaw.name = 'mirror-stand-s2-a-yaw';
+    yaw.rotation.y = 0.7;
+    const plane = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 0.9));
+    plane.name = 'mirror-stand-s2-a-mirror-plane';
+    plane.position.set(0, 1.2, 0);
+    yaw.add(plane);
+    stand.add(yaw);
+    scene.add(stand);
+    if (withSocket) {
+      const sock = new THREE.Object3D();
+      sock.name = 'env-courtyard-wall-s2-mirror-a-socket';
+      sock.position.set(3.1, 0.02, 4.05);
+      sock.rotation.y = 1.3;
+      scene.add(sock);
+    }
+    scene.updateMatrixWorld(true);
+    return { scene, yaw, plane };
+  };
+  const mkArt = () => {
+    const r = new THREE.Group();
+    const pivot = new THREE.Group();
+    pivot.name = 'prop-mirror-stand-s2-mirror-pivot';
+    pivot.position.set(0, 0.1, 0);
+    const mp = new THREE.Object3D();
+    mp.name = 'prop-mirror-stand-s2-mirror-plane';
+    mp.position.set(0, 1.1, 0.02);
+    pivot.add(mp);
+    r.add(pivot);
+    return r;
+  };
+  const wq = (o) => o.getWorldQuaternion(new THREE.Quaternion());
+  const out = [];
+  for (const withSocket of [true, false]) {
+    const { scene, yaw, plane } = mkScene(withSocket);
+    const slots = mountArtSlots({ has: () => true, getModel: mkArt }, scene, spec);
+    const art = slots.mounted[0].model;
+    assert.equal(art.parent.name, withSocket ? 'env-courtyard-wall-s2-mirror-a-socket' : 'mirror-stand-s2-a');
+    const pivot = art.getObjectByName('prop-mirror-stand-s2-mirror-pivot');
+    for (const y of [0.7, -1.1, 2.4]) {
+      yaw.rotation.y = y;
+      slots.update();
+      scene.updateMatrixWorld(true);
+      near(wq(pivot).angleTo(wq(yaw)), 0, 1e-6, `pivot 世界旋转 = 白盒 yaw（yaw ${y}，socket ${withSocket}）`);
+      if (!withSocket) near(pivot.quaternion.angleTo(yaw.quaternion), 0, 1e-6, '回退白盒根：= 旧 copy 局部旋转');
+    }
+    yaw.rotation.y = 0.7;
+    slots.update();
+    scene.updateMatrixWorld(true);
+    const d = art.getObjectByName('prop-mirror-stand-s2-mirror-plane').getWorldPosition(new THREE.Vector3()).distanceTo(plane.getWorldPosition(new THREE.Vector3()));
+    near(d, 0, 1e-6, `镜面中心对齐白盒（socket ${withSocket}）`);
+    out.push(withSocket ? '挂 socket ✓' : '缺 socket 回退白盒根 ✓');
+  }
+  return out.join('、') + '；镜面对齐 + 世界旋转跟白盒 yaw';
+});
+
+await test('美术回复 1030 船绳端点挂在各自绳节点下（合成）：-rope-bow-end-high / -low 作为 -rope-high / -rope-low（含 _lodN 组）的子节点照样找到、世界坐标不变；两版切换可见性不影响取点', async () => {
+  const { findVariantNode, makeTideVariantSwitch } = await import('@/levels/s1/art');
+  const { S1 } = await import('@/levels/s1/layout');
+  const pier = new THREE.Group();
+  pier.position.set(-10, 0.5, 3);
+  pier.rotation.y = 0.8;
+  const hi = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, 2));
+  hi.name = 'env-pier-wood-ch1-rope-high';
+  hi.position.set(2, 1, 0);
+  hi.rotation.y = 0.5;
+  const endHi = new THREE.Object3D();
+  endHi.name = S1.boatRope.bowEnd.high[0];
+  endHi.position.set(0.3, 0.2, 1.4);
+  hi.add(endHi);
+  const lo = new THREE.Group();
+  lo.name = 'env-pier-wood-ch1-rope-low';
+  lo.position.set(2, 0.2, 0);
+  const lo0 = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, 2.4));
+  lo0.name = 'env-pier-wood-ch1-rope-low_lod0';
+  lo0.position.set(0, 0.1, 0.2);
+  const lo1 = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, 2.4));
+  lo1.name = 'env-pier-wood-ch1-rope-low_lod1';
+  lo1.position.set(0, 0.1, 0.2);
+  const endLo = new THREE.Object3D();
+  endLo.name = S1.boatRope.bowEnd.low[0];
+  endLo.position.set(-0.2, -0.6, 1.5);
+  lo0.add(endLo);
+  lo.add(lo0, lo1);
+  pier.add(hi, lo);
+  pier.updateMatrixWorld(true);
+  const want = { high: endHi.getWorldPosition(new THREE.Vector3()), low: endLo.getWorldPosition(new THREE.Vector3()) };
+  buildLods(pier, () => {});
+  pier.updateMatrixWorld(true);
+  const sw = makeTideVariantSwitch(pier, S1.boatRope);
+  assert.ok(sw, '两版绳都在 → 切换');
+  for (const level of [1.6, 0]) {
+    sw.update(level);
+    pier.updateMatrixWorld(true);
+    for (const k of ['high', 'low']) {
+      const name = S1.boatRope.bowEnd[k].find((n) => findVariantNode(pier, n));
+      assert.ok(name, `找到 ${k} 端点`);
+      const o = findVariantNode(pier, name);
+      assert.ok(o.parent && o.parent !== pier, `${k} 端点在绳节点下`);
+      near(o.getWorldPosition(new THREE.Vector3()).distanceTo(want[k]), 0, 1e-6, `${k} 端点世界坐标（水位 ${level}）`);
+    }
+  }
+  return '端点在绳节点 / _lod0 下：查找（遍历子树）+ 世界坐标 ✓（S1 运行时只用绳两版切换，端点只在 verify 里取点对船头环）';
+});
+
+await test('美术回复 1030 塔门 prop-lighthouse-door-s3（合成）：到了优先用、door-leaf 原点对白盒合页、-collider 隐藏、门框锁孔跟着；缺失回退 020 env-lighthouse-ch1-door；都没有 = 白盒', async () => {
+  const { buildS3Art, S3_DOOR_KEYS, S3_DOOR_PROP_KEY, S3_DOOR_KEY } = await import('@/levels/s3/art');
+  assert.deepEqual([...S3_DOOR_KEYS], ['prop-lighthouse-door-s3', 'env-lighthouse-ch1-door']);
+  for (const k of S3_DOOR_KEYS) {
+    const e = manifest.find((x) => x.key === k);
+    assert.ok(e && e.optional && e.art && e.group === 's3', `${k} 在 manifest s3 组`);
+  }
+  assert.ok(manifest.find((x) => x.key === S3_DOOR_PROP_KEY).pending, '塔门单独文件未交付 = pending');
+  const mkProp = () => {
+    const r = new THREE.Group();
+    const frame = new THREE.Mesh(new THREE.BoxGeometry(1.3, 2.4, 0.2), new THREE.MeshStandardMaterial());
+    frame.name = 'prop-lighthouse-door-s3-frame';
+    const leaf = new THREE.Group();
+    leaf.name = 'prop-lighthouse-door-s3-door-leaf';
+    leaf.position.set(-0.55, 0.05, 0.08);
+    const hole = new THREE.Object3D();
+    hole.name = 'prop-lighthouse-door-s3-keyhole';
+    hole.position.set(0.95, 1.0, 0.03);
+    leaf.add(new THREE.Mesh(new THREE.BoxGeometry(1.1, 2.2, 0.08), new THREE.MeshStandardMaterial()), hole);
+    const col = new THREE.Mesh(new THREE.BoxGeometry(1.1, 2.2, 0.08));
+    col.name = 'prop-lighthouse-door-s3-collider';
+    const ix = new THREE.Object3D();
+    ix.name = 'prop-lighthouse-door-s3-interact';
+    r.add(frame, leaf, col, ix);
+    return r;
+  };
+  const mkEnv = () => {
+    const r = new THREE.Group();
+    r.add(new THREE.Mesh(new THREE.BoxGeometry(1, 2, 0.1), new THREE.MeshStandardMaterial()));
+    return r;
+  };
+  const src = (keys) => ({ has: (k) => keys.includes(k), getModel: (k) => (k === S3_DOOR_PROP_KEY ? mkProp() : mkEnv()) });
+  const hinge = new THREE.Group();
+  hinge.position.set(-2.6304, 2.4, -1.8668);
+  hinge.rotation.y = -5.497787;
+  const a = buildS3Art(src([S3_DOOR_PROP_KEY, S3_DOOR_KEY]));
+  assert.equal(a.door?.name, S3_DOOR_PROP_KEY, '两个都在 → 用塔门单独文件');
+  hinge.add(a.door);
+  hinge.updateMatrixWorld(true);
+  const leaf = a.door.getObjectByName('prop-lighthouse-door-s3-door-leaf');
+  near(leaf.getWorldPosition(new THREE.Vector3()).distanceTo(hinge.position), 0, 1e-6, 'door-leaf 原点 = 白盒合页');
+  near(leaf.getWorldQuaternion(new THREE.Quaternion()).angleTo(hinge.quaternion), 0, 1e-6, 'door-leaf 朝向 = 白盒合页');
+  assert.equal(a.door.getObjectByName('prop-lighthouse-door-s3-collider').visible, false, '-collider 隐藏');
+  const hole = a.door.getObjectByName('prop-lighthouse-door-s3-keyhole').getWorldPosition(new THREE.Vector3());
+  near(hole.distanceTo(new THREE.Vector3(0.95, 1.0, 0.03).applyQuaternion(hinge.quaternion).add(hinge.position)), 0, 1e-6, '锁孔跟门扇');
+  hinge.remove(a.door);
+  const b = buildS3Art(src([S3_DOOR_KEY]));
+  assert.equal(b.door?.name, S3_DOOR_KEY, '缺单独文件 → 020 门扇');
+  near(b.door.position.length(), 0, 1e-9, '020 门扇合页在原点，不平移');
+  assert.equal(buildS3Art(src([])).door, null, '都没有 = 白盒门扇');
+  return '塔门单独文件优先 / door-leaf 对合页 / -collider 隐藏 / 回退 020 / 白盒 ✓（-interact 暂未接：白盒站位不变）';
+});
+
+await test('美术回复 1030 钟锤补音 sfx-tide-bell-clapper：|相对角| 上升沿到 clapperHitRad（0.41）记一次、emit sfx:play optional（缺文件静默、可叠主钟声）、碰壁期间不连发；manifest 登记 pending', async () => {
+  const { TideBell, CLAPPER_SFX } = await import('@/systems/tide/TideBell');
+  assert.equal(CLAPPER_SFX, 'sfx-tide-bell-clapper');
+  const e = manifest.find((x) => x.key === CLAPPER_SFX);
+  assert.ok(e && e.type === 'audio' && e.optional && e.pending && e.url.endsWith('audio/sfx/sfx-tide-bell-clapper.ogg'), 'manifest 登记钟锤补音（pending）');
+  const run = () => {
+    const emits = [];
+    const gb = new THREE.Group();
+    const sw = new THREE.Group();
+    const cl = new THREE.Object3D();
+    sw.add(cl);
+    gb.add(sw);
+    const tide = { id: 'z', state: 'low', transitioning: false, toggle: () => true };
+    const bell = new TideBell({ id: 'b', tide, object: gb, swing: sw, clapper: cl, events: { on: () => () => {}, emit: (n, p) => emits.push([n, p]) } });
+    const dt = 1 / 60;
+    for (let t = 0; t < 1; t += dt) bell.update(dt);
+    assert.ok(bell.ring());
+    let maxRel = 0;
+    let prev = 0;
+    for (let t = 0; t < 4; t += dt) {
+      bell.update(dt);
+      maxRel = Math.max(maxRel, Math.abs(bell.clapperAngle));
+      prev = bell.clapperHits;
+    }
+    const clap = emits.filter(([n, p]) => n === 'sfx:play' && p.id === CLAPPER_SFX);
+    clap.forEach(([, p]) => assert.equal(p.optional, true, 'optional = 缺文件静默'));
+    assert.equal(clap.length, bell.clapperHits);
+    assert.ok(emits.some(([n, p]) => n === 'sfx:play' && p.id === 'sfx-tide-bell'), '主钟声照常（补音叠在上面）');
+    return { hits: prev, maxRel };
+  };
+  const b = gameplay.tide.bell;
+  const now = run();
+  const amp0 = b.freeAmp;
+  let big;
+  try {
+    b.freeAmp = 0.8; // 合成：大摆幅才碰得到壁
+    big = run();
+  } finally {
+    b.freeAmp = amp0;
+  }
+  assert.ok(big.hits >= 1 && big.hits <= 8, `大摆幅碰壁次数 ${big.hits}`);
+  return `现参数（freeAmp ${amp0}、滞后 ${b.clapperLagSec} s）钟锤最大相对角 ${now.maxRel.toFixed(3)} rad < ${b.clapperHitRad} → 碰壁 ${now.hits} 次（补音不会响，见汇报）；合成 freeAmp 0.8 → 碰壁 ${big.hits} 次，每次一声`;
+});
+
 await test('岩石实例化（合成）：实例矩阵乘上 _lodN 节点矩阵，顶面 = 摆放 y + 节点平移 + 半高', () => {
   const model = syntheticRock();
   const lv = lodLevelsOf(model);

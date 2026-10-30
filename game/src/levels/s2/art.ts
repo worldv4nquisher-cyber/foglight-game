@@ -8,7 +8,9 @@ const COLLIDER_NAME = /-(collider|wall)(\.\d+)?$/i;
 /** S2 远景用的 S3 岛 / 塔（与 s1 组同一文件，另登记一份 key 在 s2 组：离开 S1 释放 s1 组时不受影响） */
 export const S2_FAR_KEYS = { island: 'env-lighthouse-island-main-s3tower-s2far', tower: 'env-lighthouse-ch1-s2far' } as const;
 
-/** 地窖钥匙模型 key / 架上 socket 节点（env-cellar-s2.glb） */
+/** 地窖钥匙模型 key（按顺序取第一个已加载的：022 灯塔钥匙正式文件优先，缺失回退 017 地窖钥匙）/ 架上 socket 节点（env-cellar-s2.glb） */
+export const S2_KEY_KEYS = ['prop-key-lighthouse', 'prop-key-cellar-s2'] as const;
+/** 旧名（回退文件）；运行时以 S2_KEY_KEYS 为准 */
 export const S2_KEY_KEY = 'prop-key-cellar-s2';
 export const S2_KEY_SOCKET = 'env-cellar-s2-key-socket';
 /** 021 黄铜风灯（原点 = 提手；`-emitter` = 光源中心；发光材质 mat-prop-lantern-glow 由程序控制，是全章唯一常驻暖光） */
@@ -24,7 +26,7 @@ export interface S2Art {
   cellarDoor: THREE.Object3D | null;
   far: THREE.Group | null;
   farLayer: SkyLayerHandle | null;
-  /** 地窖钥匙（prop-key-cellar-s2）：根节点精确放在 env-cellar-s2-key-socket（无偏移）；没交付 / 没 socket = null，用白盒钥匙 */
+  /** 地窖钥匙（prop-key-lighthouse，缺失回退 prop-key-cellar-s2；name = 用的那个 key）：根节点精确放在 env-cellar-s2-key-socket（无偏移）；没交付 / 没 socket = null，用白盒钥匙 */
   cellarKey: THREE.Object3D | null;
   /**
    * 021 黄铜风灯（prop-lantern-brass）：不放进场景，交给 puzzles 挂进风灯手持物（替换白盒灯）。
@@ -98,9 +100,10 @@ export function buildS2Art(assets: AssetLoader): S2Art {
 
   let cellarKey: THREE.Object3D | null = null;
   const keySocket = root.getObjectByName(S2_KEY_SOCKET);
-  if (assets.has(S2_KEY_KEY) && keySocket) {
-    cellarKey = prepare(assets.getModel(S2_KEY_KEY));
-    cellarKey.name = S2_KEY_KEY;
+  const keyKey = S2_KEY_KEYS.find((k) => assets.has(k));
+  if (keyKey && keySocket) {
+    cellarKey = prepare(assets.getModel(keyKey));
+    cellarKey.name = keyKey;
     cellarKey.position.set(0, 0, 0);
     cellarKey.quaternion.identity();
     cellarKey.scale.setScalar(1);

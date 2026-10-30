@@ -2,7 +2,7 @@ import type { ArtSlotSpec } from '../artSlots';
 
 /**
  * S2 解谜道具（021）替换入口：文件到了（manifest pending 自动加载）就按这里挂上，白盒继续承担碰撞 / 交互 / 光路 / 谜题逻辑。
- * - 立镜 prop-mirror-stand-s2 ×2：`-mirror-plane` 对齐白盒镜面中心；`mirror-pivot` 直接拷白盒 yaw 的旋转（美术 0° = 镜面朝 +Z）。
+ * - 立镜 prop-mirror-stand-s2 ×2：挂院墙 `env-courtyard-wall-s2-mirror-a/b-socket`（缺失挂白盒立镜根）；`-mirror-plane` 对齐白盒镜面中心；`mirror-pivot` 世界旋转 = 白盒 yaw 的世界旋转（美术 0° = 镜面朝 +Z；socket 朝向与白盒不同也对）。
  * - 光感锁 prop-light-lock-s2：挂小屋 env-keeper-house-ch1-light-lock-socket，`-receiver` 对齐白盒受光点；白盒透镜保留（受光提亮反馈）。
  * - 白漆石块组 prop-white-stones-s2：挂 env-clifftop-s2 根（石块按崖顶局部坐标摆，与 extras.stonesArea 同一坐标系）；白盒石块隐藏，「3 1 7」渐显仍由程序做。
  * - 拨盘铁门 prop-dial-gate-s2：挂 env-clifftop-s2-gate-socket，`gate-door` 对齐白盒合页；门扇 / 三个拨盘按白盒增量转。
@@ -10,9 +10,10 @@ import type { ArtSlotSpec } from '../artSlots';
 const mirror = (k: 'a' | 'b'): ArtSlotSpec => ({
   key: 'prop-mirror-stand-s2',
   id: `prop-mirror-stand-s2-${k}`,
-  at: [`mirror-stand-s2-${k}`],
+  // 美术回复 1030：院墙 GLB 给安装位 env-courtyard-wall-s2-mirror-a/b-socket，优先挂它；缺失用白盒立镜根（= courtyard extras.mirrorsPlaceholder 坐标）
+  at: [`env-courtyard-wall-s2-mirror-${k}-socket`, `mirror-stand-s2-${k}`],
   align: { art: 'mirror-plane', logic: `mirror-stand-s2-${k}-mirror-plane` },
-  drive: [{ art: 'mirror-pivot', logic: `mirror-stand-s2-${k}-yaw`, mode: 'copy' }],
+  drive: [{ art: 'mirror-pivot', logic: `mirror-stand-s2-${k}-yaw`, mode: 'world' }],
   hide: [`mirror-stand-s2-${k}`],
 });
 

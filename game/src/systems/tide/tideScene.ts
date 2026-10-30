@@ -45,9 +45,11 @@ const FALLBACK: Record<string, { freq: number; duration: number; type: Oscillato
 /** `sfx:play` → 有资源播资源，否则合成占位音；`sfx:loop` / `sfx:loopStop` → AudioSystem 循环音（缺资源用 FALLBACK 的频率持续振荡）。返回取消订阅 */
 export function bindSfxFallback(events: EventBus, audio: AudioSystem, getBuffer?: (id: string) => AudioBuffer | undefined): () => void {
   const offs = [
-    events.on('sfx:play', ({ id }) => {
+    events.on('sfx:play', ({ id, optional }) => {
+      const buf = getBuffer?.(id);
+      if (!buf && optional) return;
       const fb = FALLBACK[id] ?? { freq: 440, duration: 0.15, type: 'sine' as OscillatorType };
-      audio.playSfx(getBuffer?.(id), fb);
+      audio.playSfx(buf, fb);
     }),
     events.on('sfx:loop', ({ id, fadeIn, volume }) => {
       const fb = FALLBACK[id] ?? { freq: 220, duration: 0, type: 'sine' as OscillatorType };

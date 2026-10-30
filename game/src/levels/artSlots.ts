@@ -12,7 +12,8 @@ import { applyMaterialHints } from '@/render/materialHints';
  * - `drive`：每帧把白盒逻辑节点的旋转同步到美术子节点。`copy` = 直接拷局部旋转（美术根与白盒父节点同一朝向时用，如镜子偏航）；
  *   `delta`（默认）= 白盒节点相对初始的**世界空间**旋转增量套到美术节点上（钟摆、手轮、拉杆、拨盘、门扇）：
  *   与美术 / 白盒各自的局部轴向无关（如 S1 白盒钟绕局部 Z 摆、美术 bell-swing 绕局部 X 摆，挂点又转了 90°，结果一致）；
- *   `sign: -1` 反向。
+ *   `sign: -1` 反向。`world` = 美术节点世界旋转直接等于白盒节点世界旋转（挂点与白盒父节点朝向可能不同时用，如立镜挂院墙 socket；
+ *   挂点就是白盒根时与 `copy` 结果一致）。
  * - `hide`：隐藏这些白盒节点下的网格（不含挂进去的美术；只改 visible，物理不受影响；`?greybox=1` 时不隐藏）；
  *   `keep` 里的白盒网格保留（如透镜：受光反馈仍由白盒材质做，美术透镜材质接入前不丢反馈）。
  * - 美术材质的自发光一律清零（环境不留暖光；透镜 / 点火口四态的发光等交付后再接程序控制）。
@@ -21,7 +22,7 @@ import { applyMaterialHints } from '@/render/materialHints';
 export interface ArtSlotDrive {
   art: string;
   logic: string;
-  mode?: 'copy' | 'delta';
+  mode?: 'copy' | 'delta' | 'world';
   sign?: 1 | -1;
 }
 export interface ArtSlotSpec {
@@ -105,10 +106,15 @@ function hideGreybox(node: THREE.Object3D, keep: readonly string[]): void {
 /** 按表挂入已交付的道具；没交付（assets 里没有 key）的跳过 */
 export function mountArtSlots(assets: ArtSlotModelSource, scene: THREE.Object3D, specs: readonly ArtSlotSpec[], opts: { showGreybox?: boolean } = {}): ArtSlots {
   const mounted: MountedArtSlot[] = [];
-  const drives: { art: THREE.Object3D; logic: THREE.Object3D; mode: 'copy' | 'delta'; sign: number; artRestW: THREE.Quaternion; logicRestWInv: THREE.Quaternion }[] = [];
+  const drives: { art: THREE.Object3D; logic: THREE.Object3D; mode: 'copy' | 'delta' | 'world'; sign: number; artRestW: THREE.Quaternion; logicRestWInv: THREE.Quaternion }[] = [];
   const worldQ = (o: THREE.Object3D, out: THREE.Quaternion): THREE.Quaternion => {
     o.updateWorldMatrix(true, false);
     return o.getWorldQuaternion(out);
+  };
+  /** 把 o 的世界旋转设为 w（换回父节点局部；w 会被改写） */
+  const setWorldQ = (o: THREE.Object3D, w: THREE.Quaternion): void => {
+    if (o.parent) w.premultiply(worldQ(o.parent, new THREE.Quaternion()).invert());
+    o.quaternion.copy(w);
   };
   for (const spec of specs) {
     if (!assets.has(spec.key)) continue;
@@ -133,6 +139,7 @@ export function mountArtSlots(assets: ArtSlotModelSource, scene: THREE.Object3D,
       if (!art || !logic) continue;
       const mode = d.mode ?? 'delta';
       if (mode === 'copy') art.quaternion.copy(logic.quaternion);
+      if (mode === 'world') setWorldQ(art, worldQ(logic, new THREE.Quaternion()));
       drives.push({ art, logic, mode, sign: d.sign ?? 1, artRestW: worldQ(art, new THREE.Quaternion()), logicRestWInv: worldQ(logic, new THREE.Quaternion()).invert() });
     }
     if (spec.align) {
@@ -161,6 +168,10 @@ export function mountArtSlots(assets: ArtSlotModelSource, scene: THREE.Object3D,
       for (const d of drives) {
         if (d.mode === 'copy') {
           d.art.quaternion.copy(d.logic.quaternion);
+          continue;
+        }
+        if (d.mode === 'world') {
+          setWorldQ(d.art, worldQ(d.logic, q));
           continue;
         }
         // 世界增量 Δ = L · L0⁻¹；美术世界旋转 = Δ · A0；再换回美术父节点局部（父节点可能也被 drive，先更新它的世界矩阵）

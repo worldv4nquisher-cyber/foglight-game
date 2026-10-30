@@ -40,6 +40,7 @@ import { xiActionTiming, XiActions } from '@/entities/xiActions';
 import { applyXiMaterials, xiFaceSdfParams, xiFaceLit, xiWetColor, xiWetRoughness, xiMaterialKind, XI_SHADOW_TINT } from '@/render/xiMaterials';
 import { stepLocomotion } from '@/systems/locomotion';
 import { stepWetness, xiWetTarget, isIndoor } from '@/entities/xi/XiLook';
+import { S2_KEY_KEYS } from '@/levels/s2/art';
 
 const out = [];
 const near = (a, b, tol, tag) => assert.ok(Math.abs(a - b) <= tol, `${tag}：${a} vs ${b}（容差 ${tol}）`);
@@ -473,14 +474,15 @@ if (existsSync(animsFile) && existsSync(modelFile)) {
     sample(tail, tail.duration);
     near(rootYaw() - y0, 0, 1.5, `${n} 尾段终点抵消`);
   }
-  // 地窖钥匙 prop-key-cellar-s2：extras.attach ↔ 缺省值；grab 帧 22 的 middle_03_r × attach 正好落在架上 socket（不跳）；拿在手里强制 LOD0
-  {
-    const keyFile = new URL('../../art/models/props/prop-key-cellar-s2.glb', import.meta.url);
+  // 地窖钥匙 S2_KEY_KEYS（022 灯塔钥匙 prop-key-lighthouse 优先，回退 prop-key-cellar-s2；节点 / attach 约定相同，交付了哪个验哪个）：
+  // extras.attach ↔ 缺省值；grab 帧 22 的 middle_03_r × attach 正好落在架上 socket（不跳）；拿在手里强制 LOD0
+  for (const keyName of S2_KEY_KEYS) {
+    const keyFile = new URL(`../../art/models/props/${keyName}.glb`, import.meta.url);
     const cellarFile = new URL('../../art/models/env/env-cellar-s2.glb', import.meta.url);
     if (existsSync(keyFile) && existsSync(cellarFile)) {
       const [keyG, cellar] = await Promise.all([parse(keyFile), parse(cellarFile)]);
-      const keyRoot = keyG.scene.children.find((o) => o.userData.name === 'prop-key-cellar-s2');
-      assert.ok(keyRoot?.userData.attach, '钥匙根节点 prop-key-cellar-s2 带 extras.attach');
+      const keyRoot = keyG.scene.children.find((o) => o.userData.name === keyName);
+      assert.ok(keyRoot?.userData.attach, `钥匙根节点 ${keyName} 带 extras.attach`);
       const a = readKeyAttach(keyG.scene);
       assert.ok(a.fromGlb, 'extras.attach 读到');
       a.translation.forEach((v, i) => near(v, XI_KEY_ATTACH.translation[i], 1e-5, `attach.T[${i}]`));
@@ -488,7 +490,7 @@ if (existsSync(animsFile) && existsSync(modelFile)) {
       assert.equal(keyRoot.userData.attach.bone, XI_KEY_BONE, 'attach.bone');
       near(keyRoot.userData.attach.atFrame, xiEventSec('xi-pickup-shelf', 'grab') * XI_FPS, 1e-6, 'attach.atFrame = grab 帧');
       assert.ok(!readKeyAttach({}).fromGlb && readKeyAttach({ attach: { translation: [1, 2] } }).translation === XI_KEY_ATTACH.translation, '缺 / 坏 extras → 缺省');
-      assert.ok(keyG.scene.getObjectByName('prop-key-cellar-s2-collider'), '碰撞体');
+      assert.ok(keyG.scene.getObjectByName(`${keyName}-collider`), `${keyName} 碰撞体`);
       // LOD：三级组装成 THREE.LOD；setForceLod0 强制 0 级、放下恢复
       const st = buildLods(keyG.scene);
       assert.equal(st.lodGroups, 1, '钥匙 LOD 组');
@@ -525,7 +527,7 @@ if (existsSync(animsFile) && existsSync(modelFile)) {
       const jump = p0.distanceTo(p1);
       const ang = (q0.angleTo(q1) * 180) / Math.PI;
       assert.ok(jump <= 0.02 && ang <= 5, `grab 帧钥匙跳动 ${(jump * 100).toFixed(1)} cm / ${ang.toFixed(1)}°`);
-      out.push(`地窖钥匙：extras.attach = 缺省 T/Q ✓；grab 帧 22 middle_03_r × attach 对 socket 偏差 ${(jump * 1000).toFixed(1)} mm / ${ang.toFixed(2)}°；LOD 3 级，forceLod0 开 / 关 ✓`);
+      out.push(`钥匙 ${keyName}：extras.attach = 缺省 T/Q ✓；grab 帧 22 middle_03_r × attach 对 socket 偏差 ${(jump * 1000).toFixed(1)} mm / ${ang.toFixed(2)}°；LOD 3 级，forceLod0 开 / 关 ✓`);
     }
   }
 

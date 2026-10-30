@@ -252,6 +252,24 @@ test('sfx:loop / sfx:loopStop 事件桥接（有资源用 buffer，没有用 FAL
   assert.equal(a.isLooping('has-file'), true);
 });
 
+test('sfx:play optional（032 补音，如钟锤 sfx-tide-bell-clapper）：有文件照播、可叠；文件缺失静默（不播合成占位）；不带 optional 仍走合成占位', () => {
+  const ctx = new FakeContext();
+  const a = new AudioSystem(ctx);
+  const ev = new EventBus();
+  const buf = { duration: 1 };
+  const off = bindSfxFallback(ev, a, (id) => (id === 'has-file' ? buf : undefined));
+  ev.emit('sfx:play', { id: 'sfx-tide-bell-clapper', optional: true });
+  assert.equal(ctx.sources.length, 0, '缺文件 + optional = 静默');
+  ev.emit('sfx:play', { id: 'has-file', optional: true });
+  ev.emit('sfx:play', { id: 'has-file', optional: true });
+  assert.equal(ctx.sources.length, 2, '有文件照播，单发可叠');
+  assert.equal(ctx.sources[0].buffer, buf);
+  ev.emit('sfx:play', { id: 'sfx-tide-bell' });
+  assert.equal(ctx.sources.length, 3, '不带 optional 缺文件仍播合成占位');
+  assert.equal(ctx.sources[2].kind, 'osc');
+  off();
+});
+
 test('Game：scene:change 时调 audio.stopAllLoops；暂停菜单走 audio.suspend（循环音同一 context，一起挂起）', () => {
   const src = readFileSync(new URL('../src/core/Game.ts', import.meta.url), 'utf8');
   const i = src.indexOf("this.events.on('scene:change'");
