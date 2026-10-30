@@ -1,0 +1,341 @@
+// v0.1-029 光照贴图接入校验（Node，无 GPU）：
+//   1. RGBM8 解码 / 编码往返（编码定案公式），着色器替换能对上 three 的 chunk 原文（RGBM 解码 + 去半球光）
+//   2. 9 张 KTX2：UASTC、线性（DFD transfer = linear，不标 sRGB）、带 alpha、2048²、有 mip；manifest 登记 srgb:false、组 = 场景
+//   3. 15 个 GLB：根 extras.lightmap（RGBM8 / TEXCOORD_1 / intensity 1 / rect = 需求单），各 LOD 网格都有 uv1 且落在 rect 内
+//      （rect 已烤进 UV2 → 程序不设 offset / repeat），applySceneLightmaps 只挂可见网格（-collider / -wall 不挂），贴图 channel 1 / NoColorSpace / flipY false
+//   4. 运行时倍率：雨夜 ×0.35、开门角 −100° = 1、关门 = closed 且单调；天空分界点 0.18 / 0.7 与 028 json 一致
+// 运行：npm run test:lightmap
+import assert from 'node:assert/strict';
+import { existsSync, readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import * as THREE from 'three';
+import {
+  RGBM_RANGE,
+  decodeRgbm,
+  decodeRgbm8,
+  encodeRgbm,
+  patchLightmapChunks,
+  patchLightmapShader,
+  readLightmapExtras,
+  applySceneLightmaps,
+  lightmapKey,
+  presetLightmapScale,
+  doorLightmapScale,
+  LIGHTMAP_SAMPLE_RGBM,
+} from '@/render/lightmap';
+import { manifest } from '@/assets/manifest';
+import { ATMOSPHERE_PRESETS, RAIN_NIGHT_LIGHT_MUL } from '@/config/atmosphere';
+import { ATMO028 } from '@/config/atmosphere028';
+import { S3_TOWER_CLOSED_LM, S2_CELLAR_CLOSED_LM } from '@/levels/lightmaps';
+
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const ART = resolve(ROOT, '../art');
+const hasArt = existsSync(resolve(ART, 'textures/README-029.md'));
+const results = [];
+async function test(name, fn) {
+  try {
+    const out = await fn();
+    results.push([name, null, out]);
+  } catch (e) {
+    results.push([name, e]);
+  }
+}
+
+/** 需求单 / README-029 的对应表：GLB → [贴图, rect] */
+const EXPECT = {
+  'env-tidal-flat-s1': ['s1', 'tex-s1-tidal-flat-lightmap', [0, 0, 1, 1]],
+  'env-cliff-s1': ['s1', 'tex-s1-cliff-lightmap', [0, 0, 1, 1]],
+  'env-shore-ledge-s1': ['s1', 'tex-s1-shore-lightmap', [0, 0, 0.5, 0.5]],
+  'env-pier-wood-ch1': ['s1', 'tex-s1-shore-lightmap', [0.5, 0, 0.5, 0.5]],
+  'env-fish-shed-ruin': ['s1', 'tex-s1-shore-lightmap', [0, 0.5, 0.375, 0.375]],
+  'env-net-rack-a': ['s1', 'tex-s1-shore-lightmap', [0.375, 0.5, 0.1875, 0.1875]],
+  'env-net-rack-b': ['s1', 'tex-s1-shore-lightmap', [0.5625, 0.5, 0.1875, 0.1875]],
+  'env-clifftop-s2': ['s2', 'tex-s2-clifftop-lightmap', [0, 0, 1, 1]],
+  'env-keeper-house-ch1': ['s2', 'tex-s2-exterior-lightmap', [0, 0, 0.5625, 0.5625]],
+  'env-courtyard-wall-s2': ['s2', 'tex-s2-exterior-lightmap', [0.5625, 0, 0.4375, 0.4375]],
+  'env-laundry-rack': ['s2', 'tex-s2-exterior-lightmap', [0.5625, 0.4375, 0.0625, 0.0625]],
+  'env-keeper-house-ch1-interior': ['s2', 'tex-s2-interior-lightmap', [0, 0, 0.6875, 0.6875]],
+  'env-cellar-s2': ['s2', 'tex-s2-interior-lightmap', [0.6875, 0, 0.3125, 0.3125]],
+  'env-lighthouse-ch1': ['s3', 'tex-s3-tower-lightmap', [0, 0, 1, 1]],
+  'env-rock-islet-a': ['s3', 'tex-s3-islet-lightmap', [0, 0, 0.625, 0.625]],
+  'env-stone-bridge-s3': ['s3', 'tex-s3-islet-lightmap', [0.625, 0, 0.375, 0.375]],
+  'env-lighthouse-ch1-interior': ['s3', 'tex-s3-interior-lightmap', [0, 0, 0.75, 0.75]],
+  'env-lamp-room-ch1': ['s3', 'tex-s3-interior-lightmap', [0.75, 0, 0.25, 0.25]],
+};
+/** 不挂光照贴图的（门 / 透镜 / 钥匙等）：GLB 根上不应该有 extras.lightmap.texture */
+const NOT_BAKED = ['env/env-lighthouse-ch1-door', 'env/env-cellar-door-s2', 'props/prop-fresnel-lens-ch1', 'props/prop-key-cellar-s2', 'props/prop-key-lighthouse', 'props/prop-sketch-window', 'props/prop-journal-father', 'props/prop-cup-tin'];
+
+// ---------------------------------------------------------------- 1. 解码
+await test('RGBM8 解码 = rgb·a·8，编码往返误差 ≤ 1 个量化级', () => {
+  assert.equal(RGBM_RANGE, 8);
+  assert.deepEqual(decodeRgbm(1, 0.5, 0.25, 1), [8, 4, 2]);
+  assert.deepEqual(decodeRgbm(0.5, 0.5, 0.5, 0.5), [2, 2, 2]);
+  assert.deepEqual(decodeRgbm(1, 1, 1, 0), [0, 0, 0]);
+  assert.deepEqual(decodeRgbm8([255, 255, 255, 255]), [8, 8, 8]);
+  const [r] = decodeRgbm8([128, 0, 0, 16]);
+  assert.ok(Math.abs(r - (128 / 255) * (16 / 255) * 8) < 1e-12);
+  let worst = 0;
+  for (const E of [0.001, 0.01, 0.03, 0.1, 0.16, 0.382, 0.654, 0.7, 1, 2.5, 7.9]) {
+    for (const tint of [[1, 1, 1], [0.86, 0.94, 1], [0.6, 0.7, 1]]) {
+      const L = tint.map((t) => t * E);
+      const enc = encodeRgbm(L[0], L[1], L[2]);
+      // 8 位量化（RGB 四舍五入；A 编码时已向上取到 1/255）
+      const q = enc.map((v) => Math.round(v * 255) / 255);
+      const dec = decodeRgbm(q[0], q[1], q[2], q[3]);
+      for (let c = 0; c < 3; c++) {
+        // RGB 量化误差 ≤ 0.5/255 × 8M
+        const tol = (0.5 / 255) * 8 * q[3] + 1e-9;
+        assert.ok(Math.abs(dec[c] - L[c]) <= tol, `E=${E} c=${c} ${dec[c]} vs ${L[c]}`);
+        worst = Math.max(worst, Math.abs(dec[c] - L[c]) / Math.max(L[c], 1e-6));
+      }
+    }
+  }
+  // 截断：> 8 的截到 8
+  const big = encodeRgbm(12, 1, 1);
+  assert.equal(big[3], 1);
+  assert.ok(decodeRgbm(...big)[0] <= 8 + 1e-9);
+  return `往返最大相对误差 ${(worst * 100).toFixed(2)}%（暗部 E=0.001）`;
+});
+
+await test('着色器替换：lights_fragment_maps → RGBM 解码，lights_fragment_begin 去半球光（three 原文变了会抛错）', () => {
+  const p = patchLightmapChunks(THREE.ShaderChunk.lights_fragment_maps, THREE.ShaderChunk.lights_fragment_begin);
+  assert.ok(p.maps.includes(LIGHTMAP_SAMPLE_RGBM) && p.maps.includes('lightMapTexel.a * 8.0'));
+  assert.ok(!p.maps.includes('lightMapTexel.rgb * lightMapIntensity;'));
+  assert.ok(!p.begin.includes('getHemisphereLightIrradiance('), '去掉半球光');
+  // 其余间接光（环境光 / 探针）原样保留
+  assert.ok(p.begin.includes('getAmbientLightIrradiance') && p.begin.includes('getLightProbeIrradiance'));
+  // 实际片元着色器：standard 的 include 都被展开成改过的版本
+  const frag = patchLightmapShader(THREE.ShaderLib.standard.fragmentShader);
+  assert.ok(!frag.includes('#include <lights_fragment_maps>') && !frag.includes('#include <lights_fragment_begin>'));
+  assert.ok(frag.includes(LIGHTMAP_SAMPLE_RGBM));
+  assert.throws(() => patchLightmapChunks('x', p.begin));
+  assert.throws(() => patchLightmapChunks(THREE.ShaderChunk.lights_fragment_maps, 'x'));
+  return 'standard 片元着色器两处都替换';
+});
+
+await test('运行时倍率：雨夜 ×0.35、开门角', () => {
+  assert.equal(presetLightmapScale(ATMOSPHERE_PRESETS['overcast-dusk'].hemiIntensity), 1);
+  assert.equal(presetLightmapScale(ATMOSPHERE_PRESETS['overcast-after-rain'].hemiIntensity), 1);
+  assert.ok(Math.abs(presetLightmapScale(ATMOSPHERE_PRESETS['rain-night'].hemiIntensity) - RAIN_NIGHT_LIGHT_MUL) < 1e-12);
+  for (const closed of [S3_TOWER_CLOSED_LM, S2_CELLAR_CLOSED_LM]) {
+    assert.ok(closed > 0 && closed < 1);
+    assert.equal(doorLightmapScale(1, closed), 1);
+    assert.equal(doorLightmapScale(0, closed), closed);
+    let prev = -1;
+    for (let i = 0; i <= 50; i++) {
+      const k = doorLightmapScale(i / 50, closed);
+      assert.ok(k >= prev);
+      prev = k;
+    }
+    // 两端导数 0（平滑）
+    assert.ok(doorLightmapScale(0.02, closed) - closed < 0.002 && 1 - doorLightmapScale(0.98, closed) < 0.002);
+  }
+  return `塔门关 ×${S3_TOWER_CLOSED_LM}，地窖门关 ×${S2_CELLAR_CLOSED_LM}`;
+});
+
+await test('天空分界点 0.18 / 0.7（烘焙用的三个预设）与 028 json 一致', () => {
+  for (const id of ['overcast-dusk', 'overcast-after-rain', 'after-lit']) {
+    assert.equal(ATMO028.presets[id].sky.midElev, 0.18, id);
+    assert.equal(ATMO028.presets[id].sky.topElev, 0.7, id);
+  }
+  const jf = resolve(ART, 'source/atmosphere/atmosphere-028.json');
+  if (existsSync(jf)) {
+    const j = JSON.parse(readFileSync(jf, 'utf8'));
+    for (const [id, p] of Object.entries(ATMO028.presets)) {
+      assert.equal(p.sky.midElev, j.presets[id].sky.midElev, id);
+      assert.equal(p.sky.topElev, j.presets[id].sky.topElev, id);
+    }
+  }
+  const rn = ATMO028.presets['rain-night'].sky;
+  return `dusk / after-rain / after-lit = 0.18 / 0.7；rain-night ${rn.midElev} / ${rn.topElev}（028 原样，非烘焙预设）`;
+});
+
+// ---------------------------------------------------------------- 2. manifest + KTX2
+await test('manifest：9 张光照贴图 srgb:false、组 = 场景；GLB 所在组有对应贴图', () => {
+  const texKeys = [...new Set(Object.values(EXPECT).map((e) => e[1]))];
+  assert.equal(texKeys.length, 9);
+  for (const k of texKeys) {
+    const e = manifest.find((m) => m.key === k);
+    assert.ok(e, `manifest 缺 ${k}`);
+    assert.equal(e.type, 'ktx2');
+    assert.equal(e.srgb, false, `${k} 要 srgb:false`);
+    assert.equal(e.url, `assets/art/textures/${k}.ktx2`);
+    const scene = Object.values(EXPECT).find((x) => x[1] === k)[0];
+    assert.equal(e.group, scene, `${k} 组`);
+  }
+  for (const [glb, [g]] of Object.entries(EXPECT)) {
+    const e = manifest.find((m) => m.url.endsWith(`/${glb}.glb`) && m.group === g);
+    assert.ok(e, `${glb} 不在 ${g} 组`);
+  }
+  return '9 张';
+});
+
+function ktx2Info(buf) {
+  const id = [0xab, 0x4b, 0x54, 0x58, 0x20, 0x32, 0x30, 0xbb, 0x0d, 0x0a, 0x1a, 0x0a];
+  assert.ok(id.every((b, i) => buf[i] === b), '不是 KTX2');
+  const vkFormat = buf.readUInt32LE(12);
+  const width = buf.readUInt32LE(20);
+  const height = buf.readUInt32LE(24);
+  const levels = buf.readUInt32LE(40);
+  const scheme = buf.readUInt32LE(44);
+  const dfd = buf.readUInt32LE(48);
+  const blk = dfd + 4;
+  const colorModel = buf[blk + 8];
+  const transfer = buf[blk + 10];
+  const blockSize = buf.readUInt16LE(blk + 6);
+  const nSamples = (blockSize - 24) / 16;
+  const channels = [];
+  for (let i = 0; i < nSamples; i++) channels.push(buf[blk + 24 + i * 16 + 3] & 0x0f);
+  return { vkFormat, width, height, levels, scheme, colorModel, transfer, channels };
+}
+
+await test('9 张 KTX2：UASTC、线性、RGBA、2048²、完整 mip', () => {
+  if (!hasArt) return '跳过（没有 ../art）';
+  const out = [];
+  let total = 0;
+  for (const k of new Set(Object.values(EXPECT).map((e) => e[1]))) {
+    const f = resolve(ART, `textures/${k}.ktx2`);
+    assert.ok(existsSync(f), `缺 ${k}.ktx2`);
+    const b = readFileSync(f);
+    total += b.length;
+    const i = ktx2Info(b);
+    assert.equal(i.vkFormat, 0, `${k} 应为 basis（vkFormat 0）`);
+    assert.equal(i.colorModel, 166, `${k} 应为 UASTC（DFD colorModel 166），实际 ${i.colorModel}`);
+    assert.equal(i.transfer, 1, `${k} 应为线性（DFD transfer 1），实际 ${i.transfer}`);
+    assert.ok(i.channels.includes(3), `${k} 要 RGBA（RGBM 的 M 在 alpha）`);
+    assert.equal(i.width, 2048);
+    assert.equal(i.height, 2048);
+    assert.equal(i.levels, 12, `${k} mip 层数 ${i.levels}`);
+    out.push(`${k.replace(/^tex-|-lightmap$/g, '')} ${(b.length / 1e6).toFixed(2)}`);
+  }
+  return `${out.join('，')}；合计 ${(total / 1e6).toFixed(2)} MB`;
+});
+
+// ---------------------------------------------------------------- 3. GLB
+globalThis.self ??= globalThis;
+const { GLTFLoader } = await import('three/examples/jsm/loaders/GLTFLoader.js');
+const { MeshoptDecoder } = await import('three/examples/jsm/libs/meshopt_decoder.module.js');
+const ktx2Stub = { load: (_u, onLoad) => onLoad(new THREE.CompressedTexture([], 1, 1)) };
+async function loadGlb(rel) {
+  const f = resolve(ART, `models/${rel}.glb`);
+  if (!existsSync(f)) return null;
+  const buf = readFileSync(f);
+  const g = await new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).setKTX2Loader(ktx2Stub).parseAsync(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength), '');
+  return g.scene;
+}
+
+await test('18 个 GLB：根 extras.lightmap 与需求单一致，uv1 落在 rect 内，挂图只挂可见网格', async () => {
+  if (!hasArt) return '跳过（没有 ../art）';
+  const lines = [];
+  const notes = [];
+  for (const [name, [, texKey, rect]] of Object.entries(EXPECT)) {
+    const scene = await loadGlb(`env/${name}`);
+    assert.ok(scene, `缺 ${name}.glb`);
+    // GLTFLoader 会把与场景同名的根节点改名成 name_1，按 extras 找（原名在 userData.name）
+    const roots = [];
+    scene.traverse((o) => {
+      if (readLightmapExtras(o)) roots.push(o);
+    });
+    assert.equal(roots.length, 1, `${name} 应只有 1 个带 extras.lightmap.texture 的根，实际 ${roots.length}`);
+    const root = roots[0];
+    assert.equal(root.userData.name ?? root.name, name);
+    const ex = readLightmapExtras(root);
+    assert.equal(lightmapKey(ex.texture), texKey, name);
+    assert.equal(ex.encoding, 'RGBM8');
+    assert.equal(ex.uv, 'TEXCOORD_1');
+    assert.equal(ex.lightMapIntensity, 1, `${name} intensity`);
+    assert.deepEqual(ex.rect, rect, `${name} rect`);
+    // _lodN 节点上的 extras（统计信息）不算挂图入口
+    // uv1 范围
+    const pad = 2 / 2048;
+    let lodMeshes = 0;
+    const noUv1 = [];
+    const outside = [];
+    const extra = [];
+    root.traverse((o) => {
+      if (!o.isMesh || /-(collider|wall)$/.test(o.name) || /-(collider|wall)$/.test(o.parent?.name ?? '')) return;
+      const a = o.geometry.getAttribute('uv1');
+      if (!a) {
+        // LOD 网格必须有；其它（挂件等）没有就不挂，列出来
+        assert.ok(!/_lod\d/.test(o.name), `${name}/${o.name} 没有 uv1（TEXCOORD_1）`);
+        noUv1.push(o.name);
+        return;
+      }
+      // LOD 网格在 rect 内；非 LOD 的挂件（码头船绳 = uv2-report extra）由美术排在图集空位，只要求在 [0,1]
+      const isLod = /_lod\d/.test(o.name) || /_lod\d/.test(o.parent?.name ?? '');
+      const r = isLod ? rect : [0, 0, 1, 1];
+      let out = 0, worst = 0;
+      for (let i = 0; i < a.count; i++) {
+        const u = a.getX(i), v = a.getY(i);
+        const d = Math.max(r[0] - u, u - r[0] - r[2], r[1] - v, v - r[1] - r[3]);
+        if (d > pad) {
+          out++;
+          worst = Math.max(worst, d);
+        }
+      }
+      // LOD1/2 减面后有少量顶点落在分块外（uv2-report vertsOutsideChart），允许 ≤ 5% 且出界 ≤ 0.05（clifftop 材质 2 有 4% 出 [0,1] 约 65px，贴图 ClampToEdge 兜底，已报美术）
+      assert.ok(out <= a.count * 0.05 && worst <= 0.05, `${name}/${o.name} uv1 有 ${out}/${a.count} 个顶点出 rect，最远 ${worst.toFixed(4)}`);
+      if (out) outside.push(`${o.name.replace(name, '')} ${out}/${a.count}(${(worst * 2048).toFixed(0)}px)`);
+      if (!isLod) extra.push(o.name.replace(name, ''));
+      lodMeshes++;
+    });
+    if (noUv1.length) notes.push(`${name} 无 uv1 不挂：${noUv1.join(' ')}`);
+    if (outside.length) notes.push(`${name} 少量顶点出 rect：${outside.join(' ')}`);
+    if (extra.length) notes.push(`${name} 挂件也挂（图集空位）：${extra.join(' ')}`);
+    assert.ok(lodMeshes > 0, `${name} 没有 LOD 网格`);
+    // 挂图
+    const tex = new THREE.Texture();
+    const hs = applySceneLightmaps(scene, (k) => (k === texKey ? tex : null));
+    assert.equal(hs.length, 1, `${name} 应挂 1 个根`);
+    const h = hs[0];
+    assert.equal(h.meshes, lodMeshes, `${name} 挂了 ${h.meshes} 个网格，带 uv1 的可见网格 ${lodMeshes}`);
+    assert.equal(tex.channel, 1);
+    assert.equal(tex.flipY, false);
+    assert.equal(tex.colorSpace, THREE.NoColorSpace);
+    assert.equal(tex.wrapS, THREE.ClampToEdgeWrapping);
+    scene.traverse((o) => {
+      if (!o.isMesh) return;
+      const ms = [].concat(o.material);
+      const hidden = /-(collider|wall)$/.test(o.name) || /-(collider|wall)$/.test(o.parent?.name ?? '');
+      for (const m of ms) {
+        if (!o.geometry.getAttribute('uv1')) assert.ok(!m.lightMap);
+        else if (hidden) assert.ok(!m.lightMap, `${name}/${o.name} 碰撞 / 空气墙不该挂`);
+        else if (m.isMeshStandardMaterial) {
+          assert.equal(m.lightMap, tex, `${name}/${o.name}`);
+          assert.equal(m.lightMapIntensity, 1);
+          assert.ok(m.customProgramCacheKey().includes('rgbm8lm'));
+          const sh = { fragmentShader: THREE.ShaderLib.standard.fragmentShader, vertexShader: '', uniforms: {} };
+          m.onBeforeCompile(sh, null);
+          assert.ok(sh.fragmentShader.includes('lightMapTexel.a * 8.0') && !sh.fragmentShader.includes('getHemisphereLightIrradiance('));
+        }
+      }
+    });
+    h.setScale(0.5);
+    assert.ok(h.materials.every((m) => m.lightMapIntensity === 0.5));
+    lines.push(`${name}(${h.meshes} 网格 / ${h.materials.length} 材质)`);
+  }
+  for (const rel of NOT_BAKED) {
+    const scene = await loadGlb(rel);
+    if (!scene) continue;
+    let bad = null;
+    scene.traverse((o) => {
+      if (readLightmapExtras(o)) bad = o.name;
+    });
+    assert.equal(bad, null, `${rel} 不该有 extras.lightmap.texture（${bad}）`);
+    assert.equal(applySceneLightmaps(scene, () => new THREE.Texture()).length, 0, `${rel} 不该被挂`);
+  }
+  return `${lines.join('，')}\n   ${notes.join('\n   ')}\n   门 / 透镜 / 钥匙 / 草图 / 日记 / 锡杯 不挂；${Object.keys(EXPECT).length} 个 GLB 一致`;
+
+});
+
+// ---------------------------------------------------------------- 汇总
+let failed = 0;
+for (const [name, err, out] of results) {
+  if (err) {
+    failed++;
+    console.log(`✗ ${name}\n   ${err.stack ?? err}`);
+  } else console.log(`✓ ${name}${out ? `\n   ${out}` : ''}`);
+}
+console.log(failed ? `\n${failed} 项失败` : `\n全部 ${results.length} 项通过`);
+process.exit(failed ? 1 : 0);

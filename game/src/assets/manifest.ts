@@ -117,6 +117,10 @@ export const manifest: AssetEntry[] = [
   { key: 'prop-crate-a', type: 'gltf', url: 'assets/art/models/props/prop-crate-a.glb', group: 's1', optional: true, art: true },
   { key: 'env-grass-coastal-a', type: 'gltf', url: 'assets/art/models/env/env-grass-coastal-a.glb', group: 's1', optional: true, art: true },
   { key: 'env-seaweed-a', type: 'gltf', url: 'assets/art/models/env/env-seaweed-a.glb', group: 's1', optional: true, art: true },
+  // 029 光照贴图（RGBM8 线性 KTX2，按 GLB 根 extras.lightmap 挂；src/render/lightmap.ts，README-029 §1）
+  { key: 'tex-s1-tidal-flat-lightmap', type: 'ktx2', url: 'assets/art/textures/tex-s1-tidal-flat-lightmap.ktx2', group: 's1', optional: true, art: true, srgb: false },
+  { key: 'tex-s1-cliff-lightmap', type: 'ktx2', url: 'assets/art/textures/tex-s1-cliff-lightmap.ktx2', group: 's1', optional: true, art: true, srgb: false },
+  { key: 'tex-s1-shore-lightmap', type: 'ktx2', url: 'assets/art/textures/tex-s1-shore-lightmap.ktx2', group: 's1', optional: true, art: true, srgb: false },
   // ---- s2：美术 019 交付（v0.1-014 接入，摆放以 src/levels/s2/layout.ts 为准）
   { key: 'env-clifftop-s2', type: 'gltf', url: 'assets/art/models/env/env-clifftop-s2.glb', group: 's2', optional: true, art: true },
   { key: 'env-keeper-house-ch1', type: 'gltf', url: 'assets/art/models/env/env-keeper-house-ch1.glb', group: 's2', optional: true, art: true },
@@ -141,6 +145,10 @@ export const manifest: AssetEntry[] = [
   // S2 远景 S3 岛 + 灯塔（与 s1 同一文件，s2 组另登记一份：S1→S2 释放 s1 组后仍可用）
   { key: 'env-lighthouse-island-main-s3tower-s2far', type: 'gltf', url: 'assets/art/models/env/env-lighthouse-island-main-s3tower.glb', group: 's2', optional: true, art: true },
   { key: 'env-lighthouse-ch1-s2far', type: 'gltf', url: 'assets/art/models/env/env-lighthouse-ch1.glb', group: 's2', optional: true, art: true },
+  // 029 光照贴图（README-029 §2；室内单独一张，补光已烘进去，室内不加实时补光）
+  { key: 'tex-s2-clifftop-lightmap', type: 'ktx2', url: 'assets/art/textures/tex-s2-clifftop-lightmap.ktx2', group: 's2', optional: true, art: true, srgb: false },
+  { key: 'tex-s2-exterior-lightmap', type: 'ktx2', url: 'assets/art/textures/tex-s2-exterior-lightmap.ktx2', group: 's2', optional: true, art: true, srgb: false },
+  { key: 'tex-s2-interior-lightmap', type: 'ktx2', url: 'assets/art/textures/tex-s2-interior-lightmap.ktx2', group: 's2', optional: true, art: true, srgb: false },
   // 027 剧情物件（摆位见 src/levels/s2/dressing.ts：env socket 优先，桌面实测落点）
   { key: 'prop-journal-father', type: 'gltf', url: 'assets/art/models/props/prop-journal-father.glb', group: 's2', optional: true, art: true },
   { key: 'prop-letter-c', type: 'gltf', url: 'assets/art/models/props/prop-letter-c.glb', group: 's2', optional: true, art: true },
@@ -158,6 +166,10 @@ export const manifest: AssetEntry[] = [
   { key: 'prop-fresnel-lens-ch1', type: 'gltf', url: 'assets/art/models/props/prop-fresnel-lens-ch1.glb', group: 's3', optional: true, art: true },
   { key: 'env-rock-islet-a', type: 'gltf', url: 'assets/art/models/env/env-rock-islet-a.glb', group: 's3', optional: true, art: true },
   { key: 'env-stone-bridge-s3', type: 'gltf', url: 'assets/art/models/env/env-stone-bridge-s3.glb', group: 's3', optional: true, art: true },
+  // 029 光照贴图（README-029 §3；塔本体只在 s3 挂，s1 / s2 远景不挂）
+  { key: 'tex-s3-tower-lightmap', type: 'ktx2', url: 'assets/art/textures/tex-s3-tower-lightmap.ktx2', group: 's3', optional: true, art: true, srgb: false },
+  { key: 'tex-s3-islet-lightmap', type: 'ktx2', url: 'assets/art/textures/tex-s3-islet-lightmap.ktx2', group: 's3', optional: true, art: true, srgb: false },
+  { key: 'tex-s3-interior-lightmap', type: 'ktx2', url: 'assets/art/textures/tex-s3-interior-lightmap.ktx2', group: 's3', optional: true, art: true, srgb: false },
   // 022 解谜道具（未交付的标 pending；挂点 / 节点见 src/levels/s3/artSlots.ts）。潮汐钟（已交付）与 S1 同一文件，s3 组另登记一个 key（同 s2far 做法）
   // 027 剧情物件（摆位见 src/levels/s3/dressing.ts；日志与 S2 同一文件，s3 组另登记 key）
   { key: 'prop-logbook-s3', type: 'gltf', url: 'assets/art/models/props/prop-logbook-s3.glb', group: 's3', optional: true, art: true },

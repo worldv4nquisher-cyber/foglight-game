@@ -13,7 +13,7 @@
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "assets:test-lod": "node --import ./scripts/register-ts-paths.mjs scripts/gen-lod-test-asset.mjs",
-    "test": "node --import ./scripts/register-ts-paths.mjs scripts/verify-lod.mjs && npm run test:assets && npm run test:input && npm run test:save && npm run test:physics && npm run test:camera && npm run test:quality && npm run test:text && npm run test:interaction && npm run test:narrative && npm run test:hint && npm run test:tide && npm run test:audio && npm run test:beam && npm run test:render && npm run test:atmo && npm run test:dressing && npm run test:flow && npm run test:s2 && npm run test:s3 && npm run test:xi && npm run test:fonts",
+    "test": "node --import ./scripts/register-ts-paths.mjs scripts/verify-lod.mjs && npm run test:assets && npm run test:input && npm run test:save && npm run test:physics && npm run test:camera && npm run test:quality && npm run test:text && npm run test:interaction && npm run test:narrative && npm run test:hint && npm run test:tide && npm run test:audio && npm run test:beam && npm run test:render && npm run test:atmo && npm run test:lightmap && npm run test:dressing && npm run test:flow && npm run test:s2 && npm run test:s3 && npm run test:xi && npm run test:fonts",
     "test:assets": "node --import ./scripts/register-ts-paths.mjs scripts/verify-assets.mjs",
     "test:camera": "node --import ./scripts/register-ts-paths.mjs scripts/verify-camera.mjs",
     "test:physics": "node --import ./scripts/register-ts-paths.mjs scripts/verify-physics.mjs",
@@ -44,7 +44,8 @@
     "test:render": "node --import ./scripts/register-ts-paths.mjs scripts/verify-render.mjs",
     "export:blockout-s2": "node --import ./scripts/register-ts-paths.mjs scripts/export-blockout-s2.mjs",
     "export:blockout-s3": "node --import ./scripts/register-ts-paths.mjs scripts/export-blockout-s3.mjs",
-    "test:atmo": "node --import ./scripts/register-ts-paths.mjs scripts/verify-atmo028.mjs"
+    "test:atmo": "node --import ./scripts/register-ts-paths.mjs scripts/verify-atmo028.mjs",
+    "test:lightmap": "node --import ./scripts/register-ts-paths.mjs scripts/verify-lightmap.mjs"
   },
   "dependencies": {
     "n8ao": "^2.0.1",
