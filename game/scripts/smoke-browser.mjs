@@ -1999,7 +1999,17 @@ const CHECKS = [
           glow: p.windowGlow.visible, A: b.mirrorA.part.angles[0], B: b.mirrorB.part.angles[0], lock: b.lock.state,
           paths: b.tracer.paths.map((q) => ({ id: q.emitter.id, lit: q.emitter.lit, end: q.end, mirrors: q.mirrors, rx: q.receiver?.id ?? null, z: +q.endPoint.z.toFixed(2) })),
           doorCol: s.colliderOf.get(s.greybox.cellarDoorLeaf).enabled, gateCol: s.colliderOf.get(s.greybox.dialGateLeaf).enabled,
-          align: p.viewpoint.alignment, digits: p.digits.visible, dials: p.dials.map((d) => d.angles[0]), pos: s.rig.body.position.toArray().map((v) => +v.toFixed(2)) }; })()`);
+          align: p.viewpoint.alignment, digits: p.digits.visible || (p.whiteStonesArtActive && (s.scene.getObjectByName('white-stone-d7-b')?.material.emissiveIntensity ?? 0) > 0.3), dials: p.dials.map((d) => d.angles[0]), pos: s.rig.body.position.toArray().map((v) => +v.toFixed(2)) }; })()`);
+      // BUG-017：交互后等动作播完（art=1 要播 xi-pickup-table / xi-place-* 到 grab 帧才算拿到 / 放下），不固定等时间
+      const idle = `!__s2.rig.controller.busy && !__s2.interaction.animState`;
+      const trigDone = async (id, expr, what, ms = 8000) => {
+        if ((await trig(id)) !== 'ok') throw new Error('没有 ' + id);
+        await gsleep(0, 2);
+        if (!(await until(`(${expr}) && ${idle}`, ms))) throw new Error(what + '（等动作播完）' + JSON.stringify(await st()));
+      };
+      /** 传送到交互件的站位（standPoint，跟模型 / 交互点走）并朝向它 */
+      const tpStand = (id) => evaluate(`(() => { const s = __s2; const st = s.interaction.get('${id}').standPoint(new s.rig.body.position.constructor()); const p = st.position;
+        s.rig.body.teleport(p.clone().setY(p.y + 0.05)); s.rig.controller.facing = st.facing; return p.toArray().map((v) => +v.toFixed(2)); })()`);
       await evaluate(`localStorage.removeItem('foglight.save.v1'); 1`);
       await cdp.goto('debug=1&scene=s2&art=0', 's2-keeper-house');
       if (!(await until(`!!window.__s2?.puzzles`, 30000))) throw new Error('?scene=s2 没进 S2');
@@ -2035,12 +2045,15 @@ const CHECKS = [
       await gsleep(300);
       if ((await trig('journal-s2')) !== 'ok') throw new Error('没有 journal-s2');
       if (!(await until(`__game.ui.reader.isOpen`, 5000))) throw new Error('日志没打开 ' + JSON.stringify(await st()));
+      // BUG-017：灯底高度从模型读（可见网格世界包围盒底）：美术风灯原点在提手、socket 抬高 hang，白盒灯原点在灯底，两者灯底都应 = 桌面 3.75
       const desk = await evaluate(`(() => { const s = __s2; const l = s.puzzles.lantern; const w = l.getWorldPosition(l.position.clone()); const b = s.rig.body.position;
-        const f = s.rig.controller.facing; return { lp: l.parent?.name, w: w.toArray().map((v) => +v.toFixed(3)), b: b.toArray().map((v) => +v.toFixed(3)), f: +f.toFixed(3) }; })()`);
+        l.updateMatrixWorld(true); let base = Infinity;
+        l.traverseVisible((o) => { if (!o.isMesh || !o.geometry || /collider|glow|cone|halo/i.test(o.name)) return; o.geometry.computeBoundingBox(); const bb = o.geometry.boundingBox.clone().applyMatrix4(o.matrixWorld); if (bb.min.y < base) base = bb.min.y; });
+        const f = s.rig.controller.facing; return { lp: l.parent?.name, w: w.toArray().map((v) => +v.toFixed(3)), base: +base.toFixed(3), b: b.toArray().map((v) => +v.toFixed(3)), f: +f.toFixed(3) }; })()`);
       // 站位朝 −X：前 0.45、右（−Z）0.10（a9b3403 起 socket z 用美术 019 值 −0.35，制作人 1029），桌面 0.75
       const fwd = desk.b[0] - desk.w[0];
       const right = desk.b[2] - desk.w[2];
-      if (desk.lp !== 'desk-lantern-s2-socket' || Math.abs(fwd - 0.45) > 0.03 || Math.abs(right - 0.1) > 0.03 || Math.abs(desk.w[1] - 3.75) > 0.01) throw new Error('风灯应放在书桌 socket（站位前 0.45、右 0.10、桌面 3.75）' + JSON.stringify(desk));
+      if (desk.lp !== 'desk-lantern-s2-socket' || Math.abs(fwd - 0.45) > 0.03 || Math.abs(right - 0.1) > 0.03 || Math.abs(desk.base - 3.75) > 0.015) throw new Error('风灯应放在书桌 socket（站位前 0.45、右 0.10、灯底 = 桌面 3.75）' + JSON.stringify(desk));
       await gsleep(800);
       s = await st();
       if (!s.glow || s.holding) throw new Error('风灯放书桌后窗口应透暖光 ' + JSON.stringify(s));
@@ -2048,7 +2061,7 @@ const CHECKS = [
       await gsleep(900);
       s = await st();
       if (!s.journalRead || s.goal !== 'ch1.s2.goal.cellar') throw new Error('读完日志目标应为 cellar ' + JSON.stringify(s));
-      out.push(`日志：走到站位 + 占位动作后风灯在书桌 socket（前 ${fwd.toFixed(3)} / 右 ${right.toFixed(3)} m）、窗口暖光、目标 → cellar ✓`);
+      out.push(`日志：走到站位 + 占位动作后风灯在书桌 socket（前 ${fwd.toFixed(3)} / 右 ${right.toFixed(3)} m，灯底 ${desk.base} / socket ${desk.w[1]}）、窗口暖光、目标 → cellar ✓`);
       // BUG-014：读完日志、风灯在书桌上，站位默认视角 E 选风灯
       dv = await deskView(0, DEF_PITCH);
       if (dv.cur !== 'lantern-s2') throw new Error('读完日志后书桌站位默认视角应选中风灯 ' + JSON.stringify(dv));
@@ -2056,16 +2069,13 @@ const CHECKS = [
       out.push(`BUG-014：读完日志后默认视角选风灯（NDC ${dv.lantern}，海图 ${dv.chart} 让位）✓，抬头仍选海图 ✓`);
 
       // ---- 拿起风灯 → 西灯台（被晾衣架挡，5 s 后独白一次）
-      await trig('lantern-s2');
-      await gsleep(200);
-      s = await st();
-      if (s.holding !== 'lantern') throw new Error('没拿起风灯 ' + JSON.stringify(s));
+      await trigDone('lantern-s2', `__s2.interaction.held.current?.id === 'lantern'`, '没拿起风灯');
       await gsleep(1200);
       if ((await st()).glow) throw new Error('风灯拿走后窗口还亮');
-      await tp(-8, 0.05, -6.2);
+      const westStand = await tpStand('lamp-stand-west-s2');
       await gsleep(200);
-      await trig('lamp-stand-west-s2');
-      await gsleep(900);
+      await trigDone('lamp-stand-west-s2', `!__s2.interaction.held.current`, '西灯台没放下风灯 站位 ' + JSON.stringify(westStand));
+      await gsleep(300);
       s = await st();
       const west = s.paths.find((q) => q.id === 'lamp-west-s2');
       if (!west?.lit || west.end !== 'blocker' || Math.abs(west.z + 2.95) > 0.06) throw new Error('西灯台应亮且被晾衣架挡在 z −2.95 ' + JSON.stringify(s));
@@ -2073,12 +2083,11 @@ const CHECKS = [
       out.push('西灯台：光停在晾衣架 z −2.95、5 s 后独白 ✓');
 
       // ---- 东灯台 + 转镜（机位同时看到两面镜子和光感锁）
-      await trig('lantern-s2');
+      await trigDone('lantern-s2', `__s2.interaction.held.current?.id === 'lantern'`, '没从西灯台拿回风灯');
+      const eastStand = await tpStand('lamp-stand-east-s2');
       await gsleep(200);
-      await tp(-13.2, 0.05, -6.2);
-      await gsleep(200);
-      await trig('lamp-stand-east-s2');
-      await gsleep(900);
+      await trigDone('lamp-stand-east-s2', `!__s2.interaction.held.current`, '东灯台没放下风灯 站位 ' + JSON.stringify(eastStand));
+      await gsleep(300);
       s = await st();
       const east = s.paths.find((q) => q.id === 'lamp-east-s2');
       if (!east?.lit || east.mirrors[0] !== 'mirror-stand-s2-a' || east.rx) throw new Error('东灯台应照到镜 A、初始不开锁 ' + JSON.stringify(s));
@@ -2112,10 +2121,9 @@ const CHECKS = [
       out.push(`镜子：机位看得到 A / B / 锁（NDC ${JSON.stringify(cam.map((p) => p.slice(0, 2)))}）、D/E/A 转到 30° / 315°、R 重置、受光 1.5 s 开锁、地窖门转开 ✓`);
 
       // ---- 地窖：钥匙 + 草图
-      await tp(-1.6, -2.35, 1.6);
+      await tpStand('cellar-key-s2');
       await gsleep(300);
-      await trig('cellar-key-s2');
-      await gsleep(700);
+      await trigDone('cellar-key-s2', `__s2.puzzles.state.hasKey`, '拿钥匙', 12000);
       s = await st();
       if (!s.hasKey || s.goal !== 'ch1.s2.goal.gate') throw new Error('拿到钥匙后目标应为 gate ' + JSON.stringify(s));
       await trig('sketch-s2');
@@ -2139,7 +2147,7 @@ const CHECKS = [
       const eyeSt = () => evaluate(`(() => { const s = __s2, c = s.camera, p = c.getWorldPosition(c.position.clone()), f = c.getWorldDirection(p.clone());
         const t = p.clone().set(18, 0.2, 1).sub(p).normalize();
         return { eye: p.distanceTo(p.clone().set(0.95, 4.35, 1.0)), fov: c.fov, eyeActive: s.cameraFollow.eyeActive, xi: s.rig.visual.visible,
-          off: f.angleTo(t) * 180 / Math.PI, fx: f.x, align: s.puzzles.viewpoint.alignment, digits: s.puzzles.digits.visible }; })()`);
+          off: f.angleTo(t) * 180 / Math.PI, fx: f.x, align: s.puzzles.viewpoint.alignment, digits: s.puzzles.digits.visible || (s.puzzles.whiteStonesArtActive && (s.scene.getObjectByName('white-stone-d7-b')?.material.emissiveIntensity ?? 0) > 0.3) }; })()`);
       await evaluate(`__game.input.setRaw('smoke', 'Mouse2', true); 1`);
       await gsleep(700);
       let es = await eyeSt();
@@ -2159,7 +2167,9 @@ const CHECKS = [
       es = await eyeSt();
       if (es.eye > 0.01 || es.off > 0.5) throw new Error('对准时仍在眼位、视线偏差 < 0.5° ' + JSON.stringify(es));
       // 裁定 15：没挂美术白石（art=0）→ 七段贴片回退（art=1 那条测真 GLB）
-      if (await evaluate(`__s2.puzzles.whiteStonesArtActive`)) throw new Error('art=0 不应挂美术白石');
+      // BUG-017：SMOKE_QUERY=art=1 时挂美术白石（贴片关），「显影」看数字石块加亮（上面 st / eyeSt 的 digits 已兼容）
+      const wsArt = await evaluate(`__s2.puzzles.whiteStonesArtActive`);
+      if (wsArt !== /(^|&)art=1/.test(process.env.SMOKE_QUERY ?? '')) throw new Error('美术白石挂载应跟 art 参数一致 ' + wsArt);
       await evaluate(`__game.input.setRaw('smoke', 'Mouse2', false); 1`);
       await gsleep(80);
       es = await eyeSt();
@@ -2168,7 +2178,7 @@ const CHECKS = [
       es = await eyeSt();
       // 观察点在室内贴着西窗，第三人称相机被墙前拉到头部附近（离眼位可能 < 0.5 m），所以只看 FOV / 朝向恢复
       if (es.eyeActive || Math.abs(es.fov - 55) > 3.5 || es.off < 30) throw new Error('松开后应回第三人称 FOV 55、朝向恢复 ' + JSON.stringify(es));
-      out.push(`裁定 16 观察：眼位 (0.95, 4.35, 1.0) / FOV 30 / 角色隐藏 / 进入偏 15° / 挪站位眼位不变 / 松开平滑回第三人称 ✓；art=0 七段贴片回退 ✓`);
+      out.push(`裁定 16 观察：眼位 (0.95, 4.35, 1.0) / FOV 30 / 角色隐藏 / 进入偏 15° / 挪站位眼位不变 / 松开平滑回第三人称 ✓；${wsArt ? 'art=1 数字石块加亮' : 'art=0 七段贴片回退'} ✓`);
       await tp(-0.6, 3.05, 1.0);
       await gsleep(300);
       await evaluate(`__game.input.setRaw('smoke', 'Mouse2', true); 1`);
@@ -2179,10 +2189,10 @@ const CHECKS = [
       out.push('观察点：换提示、偏 34° 看不到、对准完全显影 + 风铃、离开观察点看不到 ✓');
 
       // ---- 拨盘铁门：316 不开，317 开
-      await tp(4.2, 0.05, 10.4);
+      await tpStand('dial-gate-s2');
       await gsleep(300);
-      await trig('dial-gate-s2');
-      await gsleep(1200);
+      await trigDone('dial-gate-s2', `__game.input.context === 'puzzle'`, '拨盘机关模式');
+      await gsleep(300);
       for (let i = 0; i < 3; i++) await key('KeyD');
       await key('KeyE');
       await key('KeyD');
@@ -2193,9 +2203,8 @@ const CHECKS = [
       if (s.gateOpen || !s.gateCol || JSON.stringify(s.dials) !== '[108,36,216]') throw new Error('316 不应开门 ' + JSON.stringify(s));
       await key('KeyD');
       if (!(await until(`__s2.puzzles.state.gateOpen && __game.input.context === 'explore'`, 3000))) throw new Error('317 应开门并退出机关 ' + JSON.stringify(await st()));
-      await gsleep(1800);
-      s = await st();
-      if (s.gateCol) throw new Error('铁门开后碰撞应关掉');
+      // BUG-017：等铁门动画转完（游戏时间），不用固定 1.8 s
+      if (!(await until(`!__s2.colliderOf.get(__s2.greybox.dialGateLeaf).enabled`, 6000))) throw new Error('铁门开后碰撞应关掉 ' + JSON.stringify(await st()));
       out.push('拨盘：316 不开、317 自动开门 + 退出机关、门扇碰撞关掉 ✓');
       await evaluate(`localStorage.removeItem('foglight.save.v1'); 1`);
       try { await cdp.goto(''); } catch (e) { throw new Error('回 S1 失败：' + e.message, { cause: e }); }
