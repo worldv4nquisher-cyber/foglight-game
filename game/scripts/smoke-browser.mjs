@@ -1257,7 +1257,20 @@ const CHECKS = [
       if (await evaluate(`__game.scenes.current.lighthouseOn`)) throw new Error('BUG-006：进 S3 时灯塔不应已亮');
       await evaluate(`__game.scenes.current.lightTheLamp(); 1`);
       if (!(await evaluate(`__game.scenes.current?.name !== 's3-lighthouse' || __game.scenes.current.lighthouseOn`))) throw new Error('BUG-006：点灯后灯塔没亮');
-      if (!(await until(`__game.scenes.current?.name === 'chapter-end'`, 30000))) throw new Error('点灯后没进章节结束页');
+      // BUG-016：点灯 → 结尾演出 0:04（游戏时间）才切章节结束页；低帧率下墙钟可能 50–90 s。按游戏时间等 8 s（同 e9a58b2 修 015），墙钟 3 分钟兜底
+      const untilGame = async (expr, gameSec, wallMs = 180000) => {
+        const clock = () => evaluate(`__game.time.fixedTick * __game.time.fixedDelta`).catch(() => null);
+        const t0 = await clock();
+        const end = Date.now() + wallMs;
+        while (Date.now() < end) {
+          if (await evaluate(expr).catch(() => false)) return true;
+          const t = await clock();
+          if (t !== null && t0 !== null && t - t0 >= gameSec) return !!(await evaluate(expr).catch(() => false));
+          await sleep(100);
+        }
+        return false;
+      };
+      if (!(await untilGame(`__game.scenes.current?.name === 'chapter-end'`, 8))) throw new Error('点灯后没进章节结束页（游戏时间 8 s / 墙钟 180 s）');
       s = await st();
       if (!s.save?.chapterComplete) throw new Error('结束页没存 chapterComplete');
       if (s.groups.some((x) => /^s\d$/.test(x))) throw new Error('结束页应释放场景组：' + s.groups.join());
