@@ -301,6 +301,9 @@ test('032 SfxBank：旧 id 别名（README 对照表）→ 032 文件；a–d �
   assert.deepEqual(SFX_ALIASES['sfx-lock-open'], ['sfx-light-lock-open']);
   assert.deepEqual(SFX_ALIASES['sfx-glass-resonance'], ['sfx-beam-connect']);
   assert.equal(SFX_ALIASES['sfx-bell-wind'].length, 3);
+  // S1 钟风吹轻响：README 建议 6–14 s 一次（随机间隔）
+  const s1src = readFileSync(new URL('../src/levels/s1/puzzles.ts', import.meta.url), 'utf8');
+  assert.ok(/BELL_WIND_INTERVAL: readonly \[number, number\] = \[6, 14\]/.test(s1src) && s1src.includes('windTimer = nextBellWind()'), '钟风吹轻响间隔 6–14 s 随机');
   for (const s of STEP_SURFACES) assert.equal(SFX_ALIASES[`sfx-step-${s}`].length, 4);
   const bufs = new Map([...keys].map((k) => [k, { k }]));
   let i = 0;

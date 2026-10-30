@@ -24,9 +24,10 @@ export const S1_IDS = {
   p2: 's1-p2-raft',
 } as const;
 
-/** 潮汐钟「风吹轻响」的距离与间隔（占位音效 sfx-bell-wind） */
+/** 潮汐钟「风吹轻响」的距离与间隔（sfx-bell-wind → 032 sfx-tide-bell-wind-a~c 随机；README 建议 6–14 s 一次，均匀随机） */
 const BELL_HEAR_DISTANCE = 12;
-const BELL_WIND_INTERVAL = 7;
+export const BELL_WIND_INTERVAL: readonly [number, number] = [6, 14];
+const nextBellWind = (): number => BELL_WIND_INTERVAL[0] + Math.random() * (BELL_WIND_INTERVAL[1] - BELL_WIND_INTERVAL[0]);
 
 export interface S1PuzzleOptions {
   game: Game;
@@ -338,7 +339,7 @@ export function buildS1Puzzles(o: S1PuzzleOptions): S1Puzzles {
         }
         windTimer -= dt;
         if (windTimer <= 0) {
-          windTimer = BELL_WIND_INTERVAL;
+          windTimer = nextBellWind();
           events.emit('sfx:play', { id: 'sfx-bell-wind' });
         }
       } else windTimer = Math.min(windTimer, 1);
