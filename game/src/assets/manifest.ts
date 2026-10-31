@@ -106,6 +106,15 @@ export const manifest: AssetEntry[] = [
   { key: 'tex-rain-ripple-normal', type: 'ktx2', url: 'assets/art/textures/tex-rain-ripple-normal.ktx2', group: 'common', optional: true, art: true, srgb: false },
   { key: 'tex-lens-droplets-normal', type: 'ktx2', url: 'assets/art/textures/tex-lens-droplets-normal.ktx2', group: 'common', optional: true, art: true, srgb: false },
   { key: 'tex-water-normal', type: 'ktx2', url: 'assets/art/textures/tex-water-normal.ktx2', group: 'common', optional: true, art: true, srgb: false },
+  // 裁定 25 ①（10-31）：028 剩下 7 张 + 018 刷白石砌照常登记（README-028 §1 / §5 / §7）。消费方：beam-noise / beam-spot / glow → 灯束与辉光（排在 r4 之后），
+  // water-foam → 025 接水线泡沫，ramp-env / ramp-metal-wet → 023 环境三渲二，ramp-char → 父亲 toonRamp（README-031）；接上之前只下载不使用
+  { key: 'tex-beam-noise-albedo', type: 'ktx2', url: 'assets/art/textures/tex-beam-noise-albedo.ktx2', group: 'common', optional: true, art: true },
+  { key: 'tex-beam-spot-albedo', type: 'ktx2', url: 'assets/art/textures/tex-beam-spot-albedo.ktx2', group: 'common', optional: true, art: true },
+  { key: 'tex-glow-lighthouse-albedo', type: 'ktx2', url: 'assets/art/textures/tex-glow-lighthouse-albedo.ktx2', group: 'common', optional: true, art: true },
+  { key: 'tex-water-foam-albedo', type: 'ktx2', url: 'assets/art/textures/tex-water-foam-albedo.ktx2', group: 'common', optional: true, art: true },
+  { key: 'tex-ramp-char', type: 'ktx2', url: 'assets/art/textures/tex-ramp-char.ktx2', group: 'common', optional: true, art: true },
+  { key: 'tex-ramp-env', type: 'ktx2', url: 'assets/art/textures/tex-ramp-env.ktx2', group: 'common', optional: true, art: true },
+  { key: 'tex-ramp-metal-wet', type: 'ktx2', url: 'assets/art/textures/tex-ramp-metal-wet.ktx2', group: 'common', optional: true, art: true },
   // LUT：1024×32 PNG（flipY=false、NoColorSpace、线性过滤、无 mip，由 LutEffect 设置）；identity 只给校验用（307 B）
   { key: 'lut-overcast-dusk', type: 'texture', url: 'assets/art/textures/lut/lut-overcast-dusk.png', group: 'common', optional: true, art: true, srgb: false },
   { key: 'lut-overcast-after-rain', type: 'texture', url: 'assets/art/textures/lut/lut-overcast-after-rain.png', group: 'common', optional: true, art: true, srgb: false },
@@ -115,6 +124,8 @@ export const manifest: AssetEntry[] = [
   // ---- s1：LOD / 解谜关键物体测试用例（scripts/gen-lod-test-asset.mjs 生成）：白石（puzzleCritical，固定 LOD0）+ 普通对照石
   { key: 'test-lod-puzzle', type: 'gltf', url: 'assets/models/test-lod-puzzle-critical.glb', group: 's1', optional: true },
   // ---- s1：美术 018 / 020 交付（../art，外部 KTX2 在 ../art/textures；v0.1-013 接入，摆放以 src/levels/s1/layout.ts 为准）
+  // 018 主灯塔刷白石砌（mat-env-lighthouse-white，README-s1-layout）：裁定 25 ① 照常登记
+  { key: 'tex-lighthouse-whitewash-albedo', type: 'ktx2', url: 'assets/art/textures/tex-lighthouse-whitewash-albedo.ktx2', group: 's1', optional: true, art: true },
   { key: 'env-rock-shore-a', type: 'gltf', url: 'assets/art/models/env/env-rock-shore-a.glb', group: 's1', optional: true, art: true },
   { key: 'env-rock-shore-b', type: 'gltf', url: 'assets/art/models/env/env-rock-shore-b.glb', group: 's1', optional: true, art: true },
   { key: 'env-rock-shore-c', type: 'gltf', url: 'assets/art/models/env/env-rock-shore-c.glb', group: 's1', optional: true, art: true },

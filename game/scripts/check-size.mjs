@@ -23,6 +23,8 @@ const DIST = join(ROOT, 'dist');
 const ART = join(ROOT, '../art');
 const MB = 1024 * 1024;
 export const BUDGET = { menuMB: 15, firstPackageMB: 150, fontMB: 2 };
+/** 内部警戒线（裁定 25 ①：132.5 → 140 MB）：首次进入 S1 总下载超过只警告，硬上限仍是 BUDGET.firstPackageMB */
+export const WARN = { firstTotalMB: 140 };
 
 function walk(dir, out = []) {
   if (!existsSync(dir)) return out;
@@ -136,7 +138,7 @@ for (const f of walk(ART)) {
 }
 
 if (json) {
-  console.log(JSON.stringify({ groups: Object.fromEntries(Object.entries(groups).map(([k, v]) => [k, v.bytes])), firstPackage: first, firstTotal, lazyAfterEntry: Object.fromEntries(Object.entries(lazyAfter).map(([k, v]) => [k, v.bytes])), music, unlisted: unlisted.map((f) => relative(DIST, f)), art, budget: BUDGET }, null, 2));
+  console.log(JSON.stringify({ groups: Object.fromEntries(Object.entries(groups).map(([k, v]) => [k, v.bytes])), firstPackage: first, firstTotal, lazyAfterEntry: Object.fromEntries(Object.entries(lazyAfter).map(([k, v]) => [k, v.bytes])), music, unlisted: unlisted.map((f) => relative(DIST, f)), art, budget: BUDGET, warn: WARN }, null, 2));
 } else {
   console.log('分包体积（dist/，按 src/assets/manifest.ts 分组）');
   for (const g of ASSET_GROUPS) {
@@ -146,7 +148,7 @@ if (json) {
   }
   console.log(`  主菜单包 menu+boot          ${mb(groups.menu.bytes + groups.boot.bytes)} / ${BUDGET.menuMB} MB`);
   console.log(`  首场景包 common+s1          ${mb(first)} / ${BUDGET.firstPackageMB} MB`);
-  console.log(`  首次进入 S1 总下载           ${mb(firstTotal)} / ${BUDGET.firstPackageMB} MB`);
+  console.log(`  首次进入 S1 总下载           ${mb(firstTotal)} / ${BUDGET.firstPackageMB} MB（内部警戒线 ${WARN.firstTotalMB} MB）`);
   for (const [g, v] of Object.entries(lazyAfter)) {
     console.log(`  ${g} 进场后懒加载（首帧后）     ${mb(v.bytes)}  ${v.files.map((f) => basename(f)).join(', ')}（不计入上面两项）`);
   }
@@ -159,6 +161,7 @@ if (json) {
     );
   }
 }
+if (firstTotal > WARN.firstTotalMB * MB) console.warn(`  ! 首次进入 S1 总下载 ${mb(firstTotal)} 超过内部警戒线 ${WARN.firstTotalMB} MB（硬上限 ${BUDGET.firstPackageMB} MB，不判失败）`);
 for (const f of unlisted) console.warn(`  ! dist/${relative(DIST, f)} 没有登记在清单里（不会被加载，但打进了包）`);
 
 if (groups.menu.bytes + groups.boot.bytes > BUDGET.menuMB * MB) fail(`主菜单包 ${mb(groups.menu.bytes + groups.boot.bytes)} > ${BUDGET.menuMB} MB`);
