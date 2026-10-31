@@ -7,6 +7,7 @@
 //   2) 笔穿手：手皮肤 = char-xi_lod0 里 hand_r 子树骨权重和 ≥ 0.5 的顶点（三角形三点都在）；笔 lod0 顶点到手皮肤的带符号距离
 //      （最近三角形面法线，< 0 = 在里侧），负值再用射线奇偶核对（3 个方向多数票），报最深。
 //  另外：其余 clip 与备份逐通道比对（PEN_OLD 指定旧 char-xi-anims.glb），extras 差异也列出。
+//  PEN_XI_LOD=1：手皮肤取 char-xi 的 LOD1 网格（结果写 measure-pen-sit-write-lod1.json）。
 //  用法：node --import ./scripts/register-ts-paths.mjs scripts/measure-pen-sit-write.mjs   环境变量 PEN_OUT（默认 ../docs/tasks/shots-035/pen）、PEN_OLD
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
@@ -104,10 +105,26 @@ const downHit = (p, meshes) => {
 };
 
 // ---- 手皮肤
-const body = (() => { let m = null; xi.traverse((o) => { if (o.isSkinnedMesh && /_lod0$/.test(o.name) && (!m || o.geometry.attributes.position.count > m.geometry.attributes.position.count)) m = o; }); if (!m) xi.traverse((o) => { if (!m && o.isSkinnedMesh) m = o; }); return m; })();
+const XI_LOD = +(process.env.PEN_XI_LOD ?? 0); // 9ab5cff 起高 / 标准档汐近处是 LOD1：PEN_XI_LOD=1 量 LOD1 的手
+// 多材质网格拆成 char-xi_lodN / _lodN_1 / _lodN_2 几个子网格：取该级里手骨权重 ≥ 0.5 顶点最多的那个（= 皮肤）
 const handR = xi.getObjectByName('hand_r');
-const handBones = new Set();
-handR.traverse((o) => { if (o.isBone && o !== sock) handBones.add(body.skeleton.bones.indexOf(o)); });
+const handBoneObjs = [];
+handR.traverse((o) => { if (o.isBone && o !== sock) handBoneObjs.push(o); });
+const handVertCount = (m) => {
+  const ids = new Set(handBoneObjs.map((o) => m.skeleton.bones.indexOf(o)).filter((i) => i >= 0));
+  const si = m.geometry.attributes.skinIndex, sw = m.geometry.attributes.skinWeight;
+  let c = 0;
+  for (let i = 0; i < si.count; i++) { let w = 0; for (let k = 0; k < 4; k++) if (ids.has(si.getComponent(i, k))) w += sw.getComponent(i, k); if (w >= 0.5) c++; }
+  return c;
+};
+const body = (() => {
+  const re = new RegExp(`_lod${XI_LOD}(_\\d+)?$`);
+  let m = null, best = -1;
+  xi.traverse((o) => { if (o.isSkinnedMesh && re.test(o.name)) { const c = handVertCount(o); if (c > best) { best = c; m = o; } } });
+  if (!m) throw new Error(`char-xi 没有 _lod${XI_LOD} 蒙皮网格`);
+  return m;
+})();
+const handBones = new Set(handBoneObjs.map((o) => body.skeleton.bones.indexOf(o)));
 handBones.delete(-1);
 const sI = body.geometry.attributes.skinIndex, sW = body.geometry.attributes.skinWeight;
 const handW = (i) => { let w = 0; for (let k = 0; k < 4; k++) if (handBones.has(sI.getComponent(i, k))) w += sW.getComponent(i, k); return w; };
@@ -153,11 +170,13 @@ for (let f = 0; f < FR; f++) {
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(arr, 3));
   const bvh = new MeshBVH(g);
   const hmesh = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }));
-  let fw = 0, fwBone = null;
+  let fw = 0, fwBone = null, gap = Infinity;
   for (const { m, i } of penVerts) {
     v.fromBufferAttribute(m.geometry.attributes.position, i).applyMatrix4(m.matrixWorld);
-    const c = bvh.closestPointToPoint(v, hit, 0, 0.01);
+    const c = bvh.closestPointToPoint(v, hit, 0, 0.05);
     if (!c) continue;
+    gap = Math.min(gap, c.distance); // 笔到手皮肤最近距离（不分里外）：握住时应 ≈ 0，LOD 减面后手指变形可能离开笔
+    if (c.distance > 0.01) continue;
     const fi = c.faceIndex;
     tri.set(new THREE.Vector3().fromArray(arr, fi * 9), new THREE.Vector3().fromArray(arr, fi * 9 + 3), new THREE.Vector3().fromArray(arr, fi * 9 + 6));
     tri.getNormal(n);
@@ -176,6 +195,7 @@ for (let f = 0; f < FR; f++) {
     if (-s > fw) { fw = -s; fwBone = mainBone(handTris[fi * 3]); }
   }
   row.penInHandCm = cm(fw);
+  row.penHandGapCm = Number.isFinite(gap) ? cm(gap) : null;
   if (fw > worstPen.depth) worstPen = { depth: fw, frame: f, bone: fwBone };
   g.dispose();
   out.frames.push(row);
@@ -223,6 +243,7 @@ if (OLD) {
   out.summary.otherClipsChanged = cmp.filter((r) => r.clip !== attach.clip && (r.changed || !r.extrasSame)).map((r) => r.clip);
   out.summary.sitWriteChangedTracks = cmp.find((r) => r.clip === attach.clip)?.changed;
 }
-writeFileSync(resolve(OUT, 'measure-pen-sit-write.json'), JSON.stringify(out, null, 1));
+out.xiLod = XI_LOD;
+writeFileSync(resolve(OUT, `measure-pen-sit-write${XI_LOD ? `-lod${XI_LOD}` : ''}.json`), JSON.stringify(out, null, 1));
 console.log(JSON.stringify({ place: out.place.aheadM, attach: out.attach, hand: { bones: out.hand.bones.length, tris: out.hand.tris }, ...out.summary }, null, 1));
 if (out.compare) console.table(out.compare.clips);

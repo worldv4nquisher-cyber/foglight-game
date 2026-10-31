@@ -103,7 +103,8 @@ const PEN_STATE = `(() => { const p = __s3.pen, an = __s3.rig?.animator; if (!p)
   const tip = p.root.getObjectByName('prop-fountain-pen-tip'); const v = tip.getWorldPosition(p.root.position.clone());
   const j = __s3.scene.getObjectByName('prop-journal-father-s3'); const jy = j ? j.getWorldPosition(p.root.position.clone()).y : null;
   return { visible: p.root.visible, suppressed: p.isSuppressed, socket: p.socket.name, clip: p.clip, posing: an?.posing ?? null, w: +(an?.weightOf(p.clip) ?? 0).toFixed(3),
-    frame: an ? (window.__penFrame ?? Math.round(((__s3.endingCutscene.t - 58) % 4) * 30)) : null, tipAboveJournalSocketCm: jy === null ? null : +((v.y - jy) * 100).toFixed(2) }; })()`;
+    frame: an ? (window.__penFrame ?? Math.round(((__s3.endingCutscene.t - 58) % 4) * 30)) : null, tipAboveJournalSocketCm: jy === null ? null : +((v.y - jy) * 100).toFixed(2),
+    xiLod: (() => { let l = null; __s3.scene.traverse((o) => { if (o.isLOD && o.name === 'char-xi') l = o.getCurrentLevel(); }); return l; })() }; })()`;
 // 手部特写：每帧在演出写完镜头之后改机位（step 是 JS 里可替换的实例方法）
 const CLOSE = (side) => `(() => { const c = __s3.endingCutscene; if (!c.__step0) c.__step0 = c.step; const p = __s3.pen; const xi = __s3.rig.animator.model;
   c.step = function (t) { c.__step0.call(c, t); const V = p.root.position.constructor; const grip = p.root.getObjectByName('prop-fountain-pen-grip').getWorldPosition(new V());
