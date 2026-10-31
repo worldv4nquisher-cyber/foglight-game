@@ -2,7 +2,7 @@
  * 演出时钟（035）：演出时间 t（s）以「结尾曲在 AudioContext 里起播的时刻」为 0，跟音频时钟走，不跟游戏时间——
  * 软渲染 / 掉帧时游戏时间（dt 截断）会比真实时间慢，画面卡点就和音乐错开。
  * - audio()：音频时钟上的演出时间；结尾曲没在放 / context 没在跑（?art=0、下载失败、挂起）返回 null；
- * - 没有音频时用后备时钟：performance.now 的增量累加（暂停时不走；单次增量最多 MAX_STEP，切后台回来不跳一大段）；
+ * - 没有音频时用后备时钟：performance.now 的增量累加（暂停时不走；单次增量最多 CLOCK_MAX_STEP，切后台回来不跳一大段）；
  * - 单调：t = max(上一帧, 本帧候选)。后备 → 音频（结尾曲晚到补位）时音频落后就停着等，不倒退；音频超前就跟上去。
  * - seek(t)：调试 / 冒烟把时钟推到某一点（两种来源都生效：音频源加偏移）。
  */
@@ -15,8 +15,8 @@ export interface CutsceneClockSource {
 
 export type CutsceneClockKind = 'audio' | 'fallback';
 
-/** 后备时钟单次最多走多少（s） */
-export const CLOCK_MAX_STEP = 0.25;
+/** 后备时钟单次最多走多少（s）：只防切后台 / 断点回来跳一大段；软件渲染下一帧可能 0.5 s 以上，不能卡得太紧（否则演出比真实时间慢） */
+export const CLOCK_MAX_STEP = 1.0;
 
 export class CutsceneClock {
   private _t = 0;

@@ -3464,7 +3464,7 @@ CHECKS.push({
     await evaluate(cut035Hook);
     const w0 = Date.now();
     await evaluate(`__s3.lightTheLamp(); 1`);
-    if (!(await until(`__game.scenes.current?.name === 'chapter-end'`, 200000))) throw new Error('演出 200 s 墙钟内没进结束页 ' + JSON.stringify(await evaluate(`({ t: __s3.endingCutscene?.t, cues: window.__cut035.cues.length })`)));
+    if (!(await until(`__game.scenes.current?.name === 'chapter-end'`, 200000))) throw new Error('演出 200 s 墙钟内没进结束页 ' + JSON.stringify(await evaluate(`(() => { const c = __s3.endingCutscene, a = __game.audio; return { t: c?.t, cues: window.__cut035.cues.map((x) => x.id + ':' + x.src), fr: c?.clock.frames, src: c?.clock.source, key: a.musicKey, ctx: a.context?.state, at: a.audioTime, ig: __s3.endingMusic?.ignitedAt, res: __s3.endingMusic?.result, paused: __game.isPaused, gameFrames: window.__cut035.frames }; })()`)));
     const wall = (Date.now() - w0) / 1000;
     const r = await evaluate(`window.__cut035`);
     const want = ['lens', 'fog_open', 'silhouette', 'gaze', 'father_in', 'father_out', 'no_answer', 'sit_write', 'journal', 'pull_back', 'fade_out'];
@@ -3518,11 +3518,15 @@ CHECKS.push({
     const space = (type) => `window.dispatchEvent(new KeyboardEvent('${type}', { code: 'Space', key: ' ', bubbles: true })), 1`;
     const p0 = await evaluate(`({ id: __game.ui.skip.id, t: __s3.endingCutscene.t, wall: performance.now() })`);
     if (p0.id !== 'ch1-ending') throw new Error('演出中应注册跳过 ' + JSON.stringify(p0));
+    // 软件渲染下一帧可能 > 0.5 s：圆环 DOM 是否显示过用钩子记（UI 每帧 update），0.5 s 时的进度直接读控制器
+    await evaluate(`(() => { const h = __game.ui.skipHint; const u = h.update.bind(h); window.__hint035 = { shown: false, maxP: 0 }; h.update = (now) => { u(now); if (h.visible) { window.__hint035.shown = true; window.__hint035.maxP = Math.max(window.__hint035.maxP, __game.ui.skip.progress(now)); } }; return 1; })()`);
     await evaluate(space('keydown'));
     await sleep(500);
-    const mid = await evaluate(`({ p: __game.ui.skip.progress(performance.now()), vis: __game.ui.skipHint.visible, done: __s3.endingCutscene.endedBy })`);
+    const mid = await evaluate(`({ p: __game.ui.skip.progress(performance.now()), vis: __game.ui.skip.hintVisible(performance.now()), done: __s3.endingCutscene.endedBy })`);
     if (!(mid.p > 0.2 && mid.p < 1) || !mid.vis || mid.done) throw new Error('按住 0.5 s：圆环进度应在 0–1、未跳过 ' + JSON.stringify(mid));
     if (!(await until(`__s3.endingCutscene.endedBy === 'skip'`, 5000))) throw new Error('按住 1 s 没跳过');
+    const hint = await evaluate(`window.__hint035`);
+    if (!hint.shown) throw new Error('按住期间右下角圆环没显示过');
     const sk = await evaluate(`({ t: __s3.endingCutscene.t, wall: performance.now(), l: __game.audio.musicLog.at(-1), k: __game.audio.musicKey, log: __game.ui.skip.log.at(-1) })`);
     await evaluate(space('keyup'));
     const hold = (sk.log.at - (p0.wall)) / 1000;
@@ -3537,7 +3541,7 @@ CHECKS.push({
     const cues = r.cues.map((c) => c.id).join('/');
     await evaluate(`localStorage.clear(); 1`);
     await cdp.goto('');
-    return `演出 ${p0.t.toFixed(2)} s 按下 Space、0.5 s 圆环 ${mid.p.toFixed(2)}、${hold.toFixed(2)} s 后跳过（演出 ${sk.t.toFixed(2)} s；已触发 ${cues}）→ 结尾曲 stop fade ${sk.l.fade} s → ${toPage.toFixed(2)} s 后切结束页、淡入后 fade ${pg.fade.toFixed(2)}；日志第 6 页 ${pg.page6}`;
+    return `演出 ${p0.t.toFixed(2)} s 按下 Space、0.5 s 圆环进度 ${mid.p.toFixed(2)}（DOM 圆环显示过、最大 ${hint.maxP.toFixed(2)}）、${hold.toFixed(2)} s 后跳过（演出 ${sk.t.toFixed(2)} s；已触发 ${cues}）→ 结尾曲 stop fade ${sk.l.fade} s → ${toPage.toFixed(2)} s 后切结束页、淡入后 fade ${pg.fade.toFixed(2)}；日志第 6 页 ${pg.page6}`;
   },
 });
 
@@ -3551,7 +3555,7 @@ CHECKS.push({
     await evaluate(cut035Hook);
     await evaluate(`__s3.lightTheLamp(); 1`);
     const w0 = await evaluate(`performance.now()`);
-    if (!(await until(`__s3.endingCutscene.t >= 15`, 40000))) throw new Error('后备时钟没走到 15 s ' + (await evaluate(`__s3.endingCutscene.t`)));
+    if (!(await until(`__s3.endingCutscene.t >= 15`, 60000))) throw new Error('后备时钟没走到 15 s ' + (await evaluate(`__s3.endingCutscene.t`)));
     const a = await evaluate(`({ t: __s3.endingCutscene.t, wall: (performance.now() - ${w0}) / 1000, src: __s3.endingCutscene.clock.source, fr: __s3.endingCutscene.clock.frames, k: __game.audio.musicKey })`);
     if (a.src !== 'fallback' || a.fr.audio !== 0 || a.k === 'mus-ending-ch1') throw new Error('art=0 应用后备时钟 ' + JSON.stringify(a));
     // 中段推进：剩下的 cue 按序触发、照样到 106 s 才进结束页
