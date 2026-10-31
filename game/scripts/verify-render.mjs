@@ -29,6 +29,7 @@ import { S2_ART_SLOTS } from '@/levels/s2/artSlots';
 import { S3_ART_SLOTS } from '@/levels/s3/artSlots';
 import { manifest } from '@/assets/manifest';
 import { disposeObject3D } from '@/core/dispose';
+import { applyTextureMipCaps, capTextureMips } from '@/render/mipCap';
 import { S2 } from '@/levels/s2/layout';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -1467,6 +1468,78 @@ await test('disposeObject3D 释放阴影贴图 / 骨骼纹理，keep 中的保�
   assert.equal(boneDisposed, 1, '骨骼纹理未释放');
   assert.equal(keptDisposed, 0, 'keep 里的骨骼不该释放');
   return '阴影 RT、骨骼纹理随场景释放';
+});
+
+// v0.1-037 按画质档跳过 KTX2 高级 mip（加载后、上传前；口径同 verify-budget）
+function fakeKtx2(size, name) {
+  const mips = [];
+  for (let s = size; s >= 1; s >>= 1) mips.push({ data: new Uint8Array(Math.max(16, s * s)), width: s, height: s });
+  const t = new THREE.CompressedTexture(mips, size, size, THREE.RGBA_ASTC_4x4_Format);
+  t.name = name;
+  return t;
+}
+await test('KTX2 mip 跳级：按上限截前几级、可恢复、已上传的先释放', () => {
+  const t = fakeKtx2(4096, 'tex-xi-albedo');
+  const full = t.mipmaps;
+  let disposed = 0;
+  t.addEventListener('dispose', () => disposed++);
+  const v0 = t.version;
+  assert.equal(capTextureMips(t, 4096), false, '极致档上限 = 原尺寸，不跳');
+  assert.equal(capTextureMips(t, 2048), true);
+  assert.equal(t.mipmaps[0].width, 2048);
+  assert.equal(t.image.width, 2048);
+  assert.equal(t.image.height, 2048);
+  assert.equal(t.mipmaps.length, full.length - 1, '只去掉顶级，剩余 mip 链完整到 1×1');
+  assert.equal(t.mipmaps[t.mipmaps.length - 1].width, 1);
+  assert.equal(t.mipmaps[0], full[1], '复用原数据，不复制');
+  assert.equal(disposed, 1, '尺寸变了要释放旧 GL 纹理（texStorage 不会重分配）');
+  assert.ok(t.version > v0, 'needsUpdate');
+  assert.equal(capTextureMips(t, 2048), false, '同上限重复调用不再改动');
+  assert.equal(capTextureMips(t, 1024), true);
+  assert.equal(t.image.width, 1024);
+  assert.equal(capTextureMips(t, 4096), true, '换回极致档从完整链恢复');
+  assert.equal(t.mipmaps[0], full[0]);
+  assert.equal(t.mipmaps.length, full.length);
+  assert.equal(t.image.width, 4096);
+  const one = new THREE.CompressedTexture([{ data: new Uint8Array(16), width: 2048, height: 2048 }], 2048, 2048);
+  assert.equal(capTextureMips(one, 1024), false, '没有 mip 链的不动');
+  const plain = new THREE.DataTexture(new Uint8Array(4), 1, 1);
+  assert.equal(capTextureMips(plain, 1), false, '非压缩贴图不动');
+  return '4096 → 2048 → 1024 → 恢复 4096';
+});
+await test('KTX2 mip 跳级：角色 / 道具用 textureMaxSize、环境（含光照贴图）用 textureMaxSizeEnv，三档上限', () => {
+  const build = () => {
+    const root = new THREE.Scene();
+    const xiTex = fakeKtx2(4096, 'tex-xi-albedo');
+    const rockTex = fakeKtx2(2048, 'tex-rock-shore-albedo');
+    const lm = fakeKtx2(2048, 'tex-s1-lightmap');
+    const shared = fakeKtx2(2048, 'tex-shared');
+    const xi = new THREE.Group();
+    xi.name = 'char-xi';
+    const body = new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshStandardMaterial({ map: xiTex }));
+    xi.add(body);
+    const prop = new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshStandardMaterial({ map: shared }));
+    prop.name = 'prop-bell';
+    const rock = new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshStandardMaterial({ map: rockTex, lightMap: lm, normalMap: shared }));
+    rock.name = 'env-rock';
+    root.add(xi, prop, rock);
+    return { root, xiTex, rockTex, lm, shared };
+  };
+  const out = [];
+  for (const tier of ['ultra', 'high', 'standard']) {
+    const q = QUALITY_PRESETS[tier];
+    const s = build();
+    applyTextureMipCaps(s.root, q);
+    const w = (t) => t.image.width;
+    assert.ok(w(s.xiTex) <= q.textureMaxSize && w(s.xiTex) === Math.min(4096, q.textureMaxSize), `${tier} 角色贴图 ${w(s.xiTex)}`);
+    assert.equal(w(s.rockTex), Math.min(2048, q.textureMaxSizeEnv), `${tier} 环境贴图`);
+    assert.equal(w(s.lm), Math.min(2048, q.textureMaxSizeEnv), `${tier} 光照贴图`);
+    assert.equal(w(s.shared), Math.min(2048, q.textureMaxSize), `${tier} 角色 / 道具也在用的贴图按角色上限`);
+    assert.equal(s.lm.mipmaps[s.lm.mipmaps.length - 1].width, 1, '光照贴图 mip 链完整');
+    out.push(`${tier} 角色 ${w(s.xiTex)} / 环境 ${w(s.rockTex)}`);
+  }
+  assert.equal(QUALITY_PRESETS.ultra.textureMaxSize, 4096, '极致档不跳（角色 4096 原尺寸）');
+  return out.join('，');
 });
 
 let failed = 0;

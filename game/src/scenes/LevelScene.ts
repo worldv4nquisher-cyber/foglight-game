@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { disposeObject3D } from '@/core/dispose';
+import { applyTextureMipCaps } from '@/render/mipCap';
 import { BaseScene } from './BaseScene';
 import type { Game } from '@/core/Game';
 import { gameplay } from '@/config/gameplay';
@@ -492,6 +493,9 @@ export abstract class LevelScene extends BaseScene {
     applyLodDistances(this.scene, q.lodDistances);
     // 角色面数上限（裁定第 4 条）：高 / 标准档汐最高用 lod1（≤ 50k），父亲按 npcCharTris（高 40k / 标准 25k → lod1）
     applyCharLodCaps(this.scene, { hero: q.heroCharTris, npc: q.npcCharTris });
+    // 037：按档跳过 KTX2 高级 mip（口径同 verify-budget：角色 / 道具 ≤ textureMaxSize，环境 ≤ textureMaxSizeEnv；极致档不跳）。
+    // 进场时在首次上传前截；换档即时生效（从保留的完整 mip 链按新上限重新上传，不重新下载）
+    applyTextureMipCaps(this.scene, q);
   }
 
   // ---------------------------------------------------------------- 循环

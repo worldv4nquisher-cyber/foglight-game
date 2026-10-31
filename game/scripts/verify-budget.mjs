@@ -231,6 +231,9 @@ async function verifyScene(sid) {
       save();
     }
     const a = await evaluate(ASSETS);
+    // 换档后（037 按档截 KTX2 mip、释放重传）这一档的机位都画过了：WebGL 不该有错误标志（尺寸 / 存储不匹配会在这里冒出来）
+    const glErr = await evaluate('(() => { const gl = __game.renderer.getContext(); const e = []; for (let i = 0, x; i < 8 && (x = gl.getError()); i++) e.push(x); return e; })()');
+    if (glErr.length) report.failures.push(`${sid} ${tier} WebGL 错误 ${glErr.map((x) => '0x' + x.toString(16)).join(', ')}`);
     const badTex = a.textures.filter((t) => !t.ok);
     const badChar = a.chars.filter((c) => !c.ok);
     const badCrit = a.critical.filter((c) => !c.ok);
