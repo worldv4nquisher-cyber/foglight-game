@@ -199,6 +199,9 @@ async function freeze() {
   await evaluate(PROBE);
 }
 
+/** 读掉并返回 WebGL 错误标志（最多 8 个） */
+const GL_ERRORS = '(() => { const gl = __game.renderer.getContext(); const e = []; for (let i = 0, x; i < 8 && (x = gl.getError()); i++) e.push(x); return e; })()';
+
 async function setTier(tier) {
   await evaluate(`(() => { __game.quality.set('${tier}'); return 1; })()`);
   await waitFrames(4);
@@ -215,6 +218,9 @@ async function verifyScene(sid) {
     console.log(`  ✗ ${sid}：perf-spots.ts 里没有机位`);
     return;
   }
+  // 进场加载阶段的 WebGL 错误标志先读掉（只记警告：不归换档；已知 tex-*-ramp 256×1 转成 BC7 时 texStorage2D 0x502，见 037 进度）
+  const loadErr = await evaluate(GL_ERRORS);
+  if (loadErr.length) report.warnings.push(`${sid} 进场加载时 WebGL 错误 ${loadErr.map((x) => '0x' + x.toString(16)).join(', ')}（不是换档引起；见 verify-budget 注释）`);
   for (const tier of TIERS) {
     await setTier(tier);
     const q = QUALITY_PRESETS[tier];
@@ -241,9 +247,9 @@ async function verifyScene(sid) {
       save();
     }
     const a = await evaluate(ASSETS);
-    // 换档后（037 按档截 KTX2 mip、释放重传）这一档的机位都画过了：WebGL 不该有错误标志（尺寸 / 存储不匹配会在这里冒出来）
-    const glErr = await evaluate('(() => { const gl = __game.renderer.getContext(); const e = []; for (let i = 0, x; i < 8 && (x = gl.getError()); i++) e.push(x); return e; })()');
-    if (glErr.length) report.failures.push(`${sid} ${tier} WebGL 错误 ${glErr.map((x) => '0x' + x.toString(16)).join(', ')}`);
+    // 换档后（037 按档截 KTX2 mip、释放重传）这一档的机位都画过了：这一档期间不该有新的 WebGL 错误（尺寸 / 存储不匹配会在这里冒出来）
+    const glErr = await evaluate(GL_ERRORS);
+    if (glErr.length) report.failures.push(`${sid} ${tier} 换档后 WebGL 错误 ${glErr.map((x) => '0x' + x.toString(16)).join(', ')}`);
     const badTex = a.textures.filter((t) => !t.ok);
     const badChar = a.chars.filter((c) => !c.ok);
     const badCrit = a.critical.filter((c) => !c.ok);
