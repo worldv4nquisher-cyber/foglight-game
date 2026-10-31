@@ -737,7 +737,7 @@ test('036 交叉淡化：菜单 → S1 时长 2 s，旧曲淡出到 0 后 stop�
   assert.equal(switchMusic(a, () => undefined, MENU_MUSIC), 'missing');
 });
 
-test('BUG-025 没有上一首时（结尾曲放完 / 跳过停掉 → 结束页 → 主菜单、boot 第一首）菜单曲从 0 淡入 2 s，不满音量硬切入', () => {
+test('BUG-025 没有上一首时（结尾曲放完 / 跳过停掉 → 结束页 → 主菜单）菜单曲从 0 淡入 2 s，不满音量硬切入；boot 第一首照旧不淡入', () => {
   const ctx = new FakeContext();
   const a = new AudioSystem(ctx);
   const bufs = { 'mus-menu': { duration: 106.67 }, 'mus-ending-ch1': { duration: 107 } };
@@ -1298,8 +1298,9 @@ test('033 改 主菜单曲电平：manifest gainDb 后 mus-menu 与 mus-s1-ebb-s
   const a = new AudioSystem(ctx);
   const bufs = { 'mus-menu': { duration: 106.67 }, 'mus-s1-ebb-shore': { duration: 150 } };
   switchMusic(a, (k) => bufs[k], MENU_MUSIC);
-  // BUG-025 后第一首也淡入：曲目增益是淡入终点
-  assert.ok(Math.abs(lastRamp(ctx.sources[0].out[0].gain)[1] - musicTrackGain('mus-menu')) < 1e-9);
+  // boot 第一首不淡入（BUG-025 只改「这局放过曲子之后没有上一首」）：直接是曲目增益
+  assert.ok(Math.abs(ctx.sources[0].out[0].gain.value - musicTrackGain('mus-menu')) < 1e-9);
+  assert.equal(a.musicLog.at(-1).fade, 0, 'boot 第一首 fade 0');
   assert.ok(Math.abs(a.musicLevel - 10 ** (0.3 / 20)) < 1e-9);
   ctx.currentTime = 3;
   switchMusic(a, (k) => bufs[k], LEVELS.s1.music);
