@@ -30,3 +30,25 @@ export function guessGroup(name) {
 export function sizeBucket(entry) {
   return { group: entry.group, lazyAfterEntry: entry.type === 'audio' && entry.lazy === true };
 }
+
+const MiB = 1024 * 1024;
+/** 包体预算（v0.1-010）：超了构建失败 */
+export const BUDGET = Object.freeze({ menuMB: 15, firstPackageMB: 150, fontMB: 2 });
+/** 内部警戒线（裁定 25 ① 132.5 → 140 MB；batch17 D4）：首次进入 S1 总下载超过只警告，硬上限仍是 BUDGET.firstPackageMB */
+export const WARN = Object.freeze({ firstTotalMB: 140 });
+
+/**
+ * batch17 D4：体积判定（纯函数，verify-assets 单测）。字节数进，{ warnings, failures } 出：
+ * 首次进入 S1 总下载 > 140 MB → warning（不判失败）；> 150 MB → failure；主菜单包 > 15、首场景包 > 150 → failure
+ */
+export function sizeVerdict({ menuBytes, firstPackageBytes, firstTotalBytes }) {
+  const mb = (b) => `${(b / MiB).toFixed(2)} MB`;
+  const warnings = [];
+  const failures = [];
+  if (firstTotalBytes > WARN.firstTotalMB * MiB && firstTotalBytes <= BUDGET.firstPackageMB * MiB)
+    warnings.push(`首次进入 S1 总下载 ${mb(firstTotalBytes)} 超过内部警戒线 ${WARN.firstTotalMB} MB（硬上限 ${BUDGET.firstPackageMB} MB，不判失败）`);
+  if (menuBytes > BUDGET.menuMB * MiB) failures.push(`主菜单包 ${mb(menuBytes)} > ${BUDGET.menuMB} MB`);
+  if (firstPackageBytes > BUDGET.firstPackageMB * MiB) failures.push(`首场景包 common+s1 ${mb(firstPackageBytes)} > ${BUDGET.firstPackageMB} MB`);
+  if (firstTotalBytes > BUDGET.firstPackageMB * MiB) failures.push(`首次进入 S1 总下载 ${mb(firstTotalBytes)} > ${BUDGET.firstPackageMB} MB（硬上限）`);
+  return { warnings, failures };
+}

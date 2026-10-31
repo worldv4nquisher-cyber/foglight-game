@@ -16,15 +16,13 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, dirname, basename, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { manifest, ASSET_GROUPS } from '../src/assets/manifest.ts';
-import { guessGroup, sizeBucket } from './lib/size-groups.mjs';
+import { guessGroup, sizeBucket, sizeVerdict, BUDGET, WARN } from './lib/size-groups.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const DIST = join(ROOT, 'dist');
 const ART = join(ROOT, '../art');
 const MB = 1024 * 1024;
-export const BUDGET = { menuMB: 15, firstPackageMB: 150, fontMB: 2 };
-/** 内部警戒线（裁定 25 ①：132.5 → 140 MB）：首次进入 S1 总下载超过只警告，硬上限仍是 BUDGET.firstPackageMB */
-export const WARN = { firstTotalMB: 140 };
+export { BUDGET, WARN }; // 预算 / 140 MB 警戒线 / 判定逻辑在 lib/size-groups.mjs（batch17 D4，单测见 verify-assets）
 
 function walk(dir, out = []) {
   if (!existsSync(dir)) return out;
@@ -161,11 +159,10 @@ if (json) {
     );
   }
 }
-if (firstTotal > WARN.firstTotalMB * MB) console.warn(`  ! 首次进入 S1 总下载 ${mb(firstTotal)} 超过内部警戒线 ${WARN.firstTotalMB} MB（硬上限 ${BUDGET.firstPackageMB} MB，不判失败）`);
+const verdict = sizeVerdict({ menuBytes: groups.menu.bytes + groups.boot.bytes, firstPackageBytes: first, firstTotalBytes: firstTotal });
+for (const w of verdict.warnings) console.warn(`  ! ${w}`);
 for (const f of unlisted) console.warn(`  ! dist/${relative(DIST, f)} 没有登记在清单里（不会被加载，但打进了包）`);
 
-if (groups.menu.bytes + groups.boot.bytes > BUDGET.menuMB * MB) fail(`主菜单包 ${mb(groups.menu.bytes + groups.boot.bytes)} > ${BUDGET.menuMB} MB`);
-if (first > BUDGET.firstPackageMB * MB) fail(`首场景包 common+s1 ${mb(first)} > ${BUDGET.firstPackageMB} MB`);
-if (firstTotal > BUDGET.firstPackageMB * MB) fail(`首次进入 S1 总下载 ${mb(firstTotal)} > ${BUDGET.firstPackageMB} MB`);
+for (const f of verdict.failures) fail(f);
 if (!ok) process.exit(1);
 if (!json) console.log('  ✓ 分包体积在预算内');

@@ -12,7 +12,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { Document, NodeIO } from '@gltf-transform/core';
 import { checkOutlineNormals, prepareOutlineNormals } from '../src/assets/vertexColors.ts';
 import { auditGlb } from './lib/glb-audit.mjs';
-import { guessGroup } from './lib/size-groups.mjs';
+import { guessGroup, sizeVerdict, BUDGET, WARN } from './lib/size-groups.mjs';
 import { manifest } from '../src/assets/manifest.ts';
 import { PAPER_FOR_DOC, UI_CSS_VARS, UI_ICON_KEYS } from '../src/ui/uiArt.ts';
 import { readdirSync, statSync } from 'node:fs';
@@ -478,6 +478,27 @@ try {
     assert.equal(mat.normalMap, null, '法线槽不放棋盘格');
   }
   ok('GLTFLoader 外部 KTX2：取消后重试 → 材质颜色 / 法线贴图都在；全部失败 → 颜色槽棋盘格占位、法线槽清空');
+}
+
+// ---- batch17 D4：check-size 140 MB 警戒线只警告、150 MB 以上才失败
+{
+  const M = 1024 * 1024;
+  const v = (t, extra = {}) => sizeVerdict({ menuBytes: 5 * M, firstPackageBytes: t - 5 * M, firstTotalBytes: t, ...extra });
+  assert.equal(WARN.firstTotalMB, 140);
+  assert.equal(BUDGET.firstPackageMB, 150);
+  assert.deepEqual(v(132.41 * M), { warnings: [], failures: [] }, 'batch17 实测 132.41 MB：不警告');
+  assert.deepEqual(v(140 * M), { warnings: [], failures: [] }, '正好 140 不警告');
+  let r = v(140.01 * M);
+  assert.equal(r.warnings.length, 1, '超 140 警告');
+  assert.equal(r.failures.length, 0, '超 140 不失败');
+  r = v(150 * M);
+  assert.deepEqual([r.warnings.length, r.failures.length], [1, 0], '正好 150 仍只是警告');
+  r = v(150.01 * M);
+  assert.equal(r.failures.length, 1, '超 150 失败');
+  assert.ok(/硬上限/.test(r.failures[0]));
+  assert.equal(r.warnings.length, 0, '超 150 直接报错，不再重复警告');
+  assert.equal(v(100 * M, { menuBytes: 15.5 * M }).failures.length, 1, '主菜单包 > 15 MB 失败');
+  ok('check-size 判定：首次总下载 ≤ 140 通过、140–150 只警告、> 150 失败（D4）');
 }
 
 // ---- 031 准备：check-size 对 art/ 里未登记资源的分组估算
