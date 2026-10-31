@@ -124,6 +124,28 @@ export class PlayerController extends Component {
     });
   }
 
+  /**
+   * 演出摆位：立即放到 point（不加落地余量）并停掉物理（不受重力、不被碰撞体推挤），unpin() 恢复。
+   * 用于根节点本来就该在碰撞体里的姿势：035 坐写的根在椅子正下方地面，走 teleportTo 会被椅子碰撞体顶到座面上（双重座高，手离日志 0.47 m）。
+   */
+  pin(point: THREE.Vector3, facing?: number): void {
+    if (this.mode.kind === 'teleport') this.mode.resolve();
+    this.mode = { kind: 'free' };
+    this.body.teleport(point);
+    this.body.body.enabled = false;
+    this.loco.vx = this.loco.vz = 0;
+    if (facing !== undefined) this.facing = facing;
+    this.opts.events.emit('player:teleport', { x: point.x, y: point.y, z: point.z });
+  }
+
+  unpin(): void {
+    this.body.body.enabled = true;
+  }
+
+  get pinned(): boolean {
+    return !this.body.body.enabled && this.mode.kind !== 'traverse';
+  }
+
   /** 立即停下（清掉移动惯性；交互系统接管走位前调用） */
   halt(): void {
     this.loco.vx = this.loco.vz = 0;

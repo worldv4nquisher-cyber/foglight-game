@@ -276,7 +276,12 @@ export class S3Ending {
     const dir = facing.clone().transformDirection(this.h.frame.matrixWorld);
     rig.controller.halt();
     rig.controller.locked = true;
-    void rig.controller.teleportTo(at, { fade: 0, facing: Math.atan2(dir.x, dir.z) });
+    // 坐写：GLB lamp-room-sit-write 是地面点（xi-sit-write 自带座高），在椅子碰撞体里 → 钉住、不走物理；站着看海照常落地
+    if (where === 'sit') rig.controller.pin(at, Math.atan2(dir.x, dir.z));
+    else {
+      rig.controller.unpin();
+      void rig.controller.teleportTo(at, { fade: 0, facing: Math.atan2(dir.x, dir.z) });
+    }
     rig.visual.updateMatrixWorld(true);
   }
 
