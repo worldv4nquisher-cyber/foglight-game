@@ -3,6 +3,7 @@ import { t } from '@/content/text';
 import type { ConfirmDialog } from './ConfirmDialog';
 import type { Credits } from './Credits';
 import type { SettingsPanel } from './SettingsPanel';
+import { device } from '@/platform/device';
 import { cssUrl } from './uiArt';
 
 /**
@@ -30,6 +31,7 @@ export class MainMenu {
     this.el.innerHTML = `
       <div class="main-menu-home" data-ui>
         <h1 class="main-title"></h1>
+        <p class="main-desktop-only" role="note" hidden></p>
         <nav class="main-buttons">
           <button type="button" class="menu-btn main-btn primary" data-act="continue"></button>
           <button type="button" class="menu-btn main-btn" data-act="new"></button>
@@ -45,6 +47,15 @@ export class MainMenu {
     this.el.querySelector('.main-title')!.textContent = t('ui.title');
     this.el.querySelector('.main-version')!.textContent = t('ui.menu.version');
     this.notice = this.el.querySelector('.main-notice')!;
+    // BUG-035: phones / tablets without a precise pointer cannot play v0.1 (keyboard + mouse only):
+    // the home view shows ui.notice.desktop_only in place of the buttons (text-ch1.md trigger). Touch laptops are not affected.
+    if (device.desktopOnlyBlocked) {
+      this.el.classList.add('is-desktop-only');
+      const p = this.el.querySelector<HTMLParagraphElement>('.main-desktop-only')!;
+      p.textContent = t('ui.notice.desktop_only');
+      p.hidden = false;
+      this.el.querySelector<HTMLElement>('.main-buttons')!.hidden = true;
+    }
     const btn = (act: string, text: Parameters<typeof t>[0], fn: () => void): HTMLButtonElement => {
       const b = this.el.querySelector<HTMLButtonElement>(`[data-act="${act}"]`)!;
       b.textContent = t(text);
@@ -136,7 +147,7 @@ export class MainMenu {
     this.continueBtn.hidden = !this.game.save.canContinue;
     // 主按钮只用一个（style-guide §6）：有存档时是「继续」，否则是「新游戏」
     this.el.querySelector('[data-act="new"]')!.classList.toggle('primary', !this.game.save.canContinue);
-    const msg = this.game.save.menuNotice;
+    const msg = device.desktopOnlyBlocked ? null : this.game.save.menuNotice;
     this.notice.hidden = !msg;
     this.notice.textContent = msg ?? '';
   }

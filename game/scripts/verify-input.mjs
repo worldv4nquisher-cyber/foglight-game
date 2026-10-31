@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { EventBus } from '@/core/EventBus';
 import { InputManager } from '@/systems/input/InputManager';
 import { CONTEXTS, GLOBAL_BINDINGS, actionsForCode } from '@/systems/input/actions';
+import { isDesktopOnlyBlocked } from '@/platform/desktopOnly';
 
 let t = 0;
 const clock = () => t;
@@ -255,6 +256,23 @@ test('P3 EventBus.emit：监听器抛错不拦后面的监听器，console.error
   assert.equal(bus.recentListenerErrors.length, EventBus.LISTENER_ERROR_KEEP, '诊断记录有上限');
   bus.clear();
   assert.equal(bus.listenerErrors, 23, 'clear 不清计数');
+});
+
+test('BUG-035 仅支持电脑提示：手机 / 纯触屏平板提示，桌面 / 触屏笔记本 / 带触控板的平板不提示', () => {
+  const base = { primaryCoarse: false, primaryHover: true, anyFine: true, anyHover: true, mediaKnown: true, hasTouch: false, mobileOs: false };
+  const phone = { primaryCoarse: true, primaryHover: false, anyFine: false, anyHover: false, mediaKnown: true, hasTouch: true, mobileOs: true };
+  const cases = [
+    ['桌面（鼠标）', base, false],
+    ['触屏笔记本（主指针触控板，另有触屏）', { ...base, hasTouch: true }, false],
+    ['触屏笔记本被系统报成主指针 coarse（Windows 平板模式）', { ...base, hasTouch: true, primaryCoarse: true, primaryHover: false }, false],
+    ['iPad + 妙控键盘（触控板）', { ...base, hasTouch: true, mobileOs: true }, false],
+    ['手机', phone, true],
+    ['纯触屏平板（非移动 UA，如 iPadOS 桌面 UA）', { ...phone, mobileOs: false }, true],
+    ['老浏览器无 pointer 媒体查询 + 移动 UA + 触摸', { ...phone, mediaKnown: false, primaryCoarse: false }, true],
+    ['老浏览器无 pointer 媒体查询 + 桌面', { ...base, mediaKnown: false, anyFine: false, anyHover: false }, false],
+    ['手机接了鼠标（any-pointer fine + any-hover）', { ...phone, anyFine: true, anyHover: true }, false],
+  ];
+  for (const [name, p, want] of cases) assert.equal(isDesktopOnlyBlocked(p), want, name);
 });
 
 let failed = 0;

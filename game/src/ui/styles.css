@@ -1186,6 +1186,60 @@ body {
   color: var(--ui-text-2);
 }
 
+/* BUG-035：手机 / 无精确指针的平板——首页只留标题和一句「仅支持电脑」提示（按钮隐藏）。
+   忧郁、克制：宋体小字、宽行距、冷灰次要文字色，上方一截细琥珀线（远处的灯），整体居中、竖屏也放得下。 */
+.main-menu.is-desktop-only {
+  justify-content: center;
+  padding: 0 8vw;
+  background: linear-gradient(180deg, rgba(10, 13, 16, 0.25), rgba(10, 13, 16, 0.72) 70%);
+}
+
+.is-desktop-only .main-menu-home {
+  align-items: center;
+  text-align: center;
+  gap: 0;
+}
+
+.is-desktop-only .main-title {
+  font-size: clamp(36px, 12vw, 64px);
+  letter-spacing: 0.3em;
+  margin: 0 -0.3em 18px 0;
+}
+
+.is-desktop-only .main-title.has-logo {
+  margin: 0 0 6px;
+}
+
+.is-desktop-only .ui-logo {
+  width: min(428px, 78vw);
+  height: auto;
+}
+
+.main-desktop-only {
+  position: relative;
+  max-width: 20em;
+  margin: 0;
+  padding-top: 26px;
+  font-family: var(--ui-serif);
+  font-size: var(--fs-body);
+  line-height: 2;
+  letter-spacing: 0.12em;
+  color: var(--ui-text-2);
+  text-shadow: var(--ui-shadow-text);
+}
+
+.main-desktop-only::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 48px;
+  height: 1px;
+  transform: translateX(-50%);
+  background: linear-gradient(90deg, transparent, var(--ui-primary), transparent);
+  opacity: 0.7;
+}
+
 .main-version {
   position: absolute;
   right: 18px;
