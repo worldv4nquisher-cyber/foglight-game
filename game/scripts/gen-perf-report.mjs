@@ -36,11 +36,11 @@ p('');
 const b = (() => {
   const files = readdirSync(PERF).filter((f) => /^verify-budget(-s[123](\+s[123])*)?\.json$/.test(f)).map((f) => j(f)).filter((x) => x?.mode === 'verify');
   if (!files.length) return null;
-  const m = { at: files.map((f) => f.at).sort().at(-1), view: files[0].view, scenes: {}, failures: [] };
+  const m = { at: files.map((f) => f.at).sort().at(-1), view: files[0].view, scenes: {}, failures: [], warnings: [] };
   const at = {};
   for (const f of files)
     for (const [sid, sr] of Object.entries(f.scenes)) if (!at[sid] || f.at > at[sid]) { at[sid] = f.at; m.scenes[sid] = sr; }
-  for (const f of files) for (const x of f.failures) { const sid = /^(s[123])/.exec(x)?.[1]; if (!sid || at[sid] === f.at) m.failures.push(x); }
+  for (const f of files) for (const [list, out] of [[f.failures, m.failures], [f.warnings ?? [], m.warnings]]) for (const x of list) { const sid = /^(s[123])/.exec(x)?.[1]; if (!sid || at[sid] === f.at) out.push(x); }
   return m;
 })();
 p('## 2 预算校验（verify-budget）', '');
@@ -49,11 +49,11 @@ for (const t of TIERS) { const q = QUALITY_PRESETS[t]; p(`| ${TN[t]} | ${M(q.sce
 p('');
 if (!b) p('（还没跑：npm run verify:budget）', '');
 else {
-  p(`跑于 ${bj(b.at)}，视口 ${b.view.join('×')}；「主 pass」= 场景相机那一次 renderer.render 扣掉阴影；「整帧」含阴影、水面反射、后处理法线 / 深度 pass（只列不判）。结论：**${b.failures.length ? `${b.failures.length} 项不通过` : '全部通过'}**。`, '');
+  p(`跑于 ${bj(b.at)}，视口 ${b.view.join('×')}；「主 pass」= 场景相机那一次 renderer.render 扣掉阴影；「整帧」含阴影、水面反射、后处理法线 / 深度 pass（只列不判）。结论：**${b.failures.length ? `${b.failures.length} 项不通过` : '全部通过'}**${b.warnings.length ? `（另有已知警告 ${b.warnings.length} 项，见下「已知项」）` : ''}。`, '');
   p('| 场景 | 档 | 机位 | 主 pass 面数 | 主 pass call | 整帧面数 | 整帧 call | 阴影面数 / call | 角色当前 LOD | 结果 |', '|---|---|---|---|---|---|---|---|---|---|');
   for (const [sid, sr] of Object.entries(b.scenes))
     for (const t of TIERS) for (const sp of sr.tiers?.[t]?.spots ?? [])
-      p(`| ${sid.toUpperCase()} | ${TN[t]} | ${sp.id} | ${M(sp.main?.tris)} | ${sp.main?.calls ?? '—'} | ${M(sp.frame.tris)} | ${sp.frame.calls} | ${M(sp.frame.shadowTris)} / ${sp.frame.shadowCalls} | ${Object.entries(sp.charLevels).map(([k, v]) => `${k.replace('char-', '')} ${v}`).join('，') || '—'} | ${sp.ok ? '过' : '**不过**'} |`);
+      p(`| ${sid.toUpperCase()} | ${TN[t]} | ${sp.id} | ${M(sp.main?.tris)} | ${sp.main?.calls ?? '—'} | ${M(sp.frame.tris)} | ${sp.frame.calls} | ${M(sp.frame.shadowTris)} / ${sp.frame.shadowCalls} | ${Object.entries(sp.charLevels).map(([k, v]) => `${k.replace('char-', '')} ${v}`).join('，') || '—'} | ${sp.ok ? '过' : sp.known ? '已知项' : '**不过**'} |`);
   p('', '贴图 / 角色 LOD / puzzleCritical：', '', '| 场景 | 档 | 资源贴图 | 最大边 | 超限 | 角色最高可用级（面数 / 预算） | puzzleCritical |', '|---|---|---|---|---|---|---|');
   for (const [sid, sr] of Object.entries(b.scenes))
     for (const t of TIERS) { const tr = sr.tiers?.[t]; if (!tr?.textures) continue;
@@ -61,6 +61,10 @@ else {
   p('', '机位（game/src/config/perf-spots.ts；截图 docs/releases/perf/<机位>.png，极致档 1280×720）：', '');
   for (const [sid, spots] of Object.entries(PERF_SPOTS)) for (const sp of spots) p(`- ${sid.toUpperCase()} \`${sp.id}\` ${sp.label}：eye [${sp.eye}] → at [${sp.at}]，fov ${sp.fov}${existsSync(resolve(PERF, `${sp.id}.png`)) ? ` ![](perf/${sp.id}.png)` : ''}`);
   if (b.failures.length) p('', '不通过项：', '', ...b.failures.map((f) => `- ${f}`));
+  p('', '### 已知项（裁定 28 第 3 条）', '');
+  p('- **标准档 S1 主 pass 面数超预算**（1.5 M）：S1 美术场景在标准档可见面数 2.2–2.6 M。按裁定不做 LOD、不改预算，记为已知项，**等 M8 实机帧率（GTX 1650 级 1080p 标准档）再定**：帧率达标则保留，不达标再定是做环境 LOD 还是调预算。',
+    '  verify-budget 把它标成已知警告（只放过「S1 × 标准档 × 主 pass 面数」且 ≤ 2.7 M、draw call 仍须达标），不卡 check:release；其他场景 / 档位 / call / 贴图 / 角色 LOD / puzzleCritical 超限照样算失败。');
+  if (b.warnings.length) p('', '本次已知警告：', '', ...b.warnings.map((f) => `- ⚠ ${f}`));
   p('');
 }
 
@@ -100,6 +104,7 @@ else {
   p(`跑于 ${bj(mm.at)}，${TN[mm.tier] ?? mm.tier}档；路径 S1 → S2 → S3 → 主菜单 → 再进 S1；每站 GC 后量。估算显存 = 包住 WebGL 分配调用按格式累加（近似，不含驱动开销）。`, '');
   p('| 站 | 场景 | 估算显存 MB（贴图 / 缓冲 / RB） | 几何体 | 贴图 | 着色器程序 | JS 堆 MB |', '|---|---|---|---|---|---|---|');
   for (const s of mm.steps) p(`| ${s.label} | ${s.scene ?? '主菜单'} | ${s.glMB}（${s.texMB} / ${s.bufMB} / ${s.rbMB}） | ${s.geometries} | ${s.textures} | ${s.programs} | ${s.heapMB} |`);
+  if (mm.menu) p('', `回主菜单 vs 第一次进 S1（≤ ×${mm.menu.max}）：${mm.menu.glMB} / ${mm.menu.firstS1} MB（×${mm.menu.ratio}，${mm.menu.ok ? '过' : '**不过**'}）`);
   if (mm.compare) p('', `通关回 S1 vs 第一次进 S1（±${mm.tolerance * 100}%）：` + Object.entries(mm.compare).map(([k, v]) => `${k} ${v.first} → ${v.again}（×${v.ratio}，${v.ok ? '过' : '**不过**'}）`).join('；'));
   if (mm.failures.length) p('', ...mm.failures.map((f) => `- ✗ ${f}`));
   p('');

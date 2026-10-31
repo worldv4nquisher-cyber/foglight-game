@@ -6,6 +6,8 @@
 //   - 角色 LOD（裁定第 4 条）：汐能用到的最高一级面数 ≤ heroCharTris，父亲 ≤ npcCharTris；机位上实际显示的那一级也记下来；
 //   - puzzleCritical 物体全是 LOD0（子树里没有能降级的 LOD）。
 //   帧率不量（swiftshader 没意义；裁定第 8 条由用户 M8 实机填）。
+//   已知项（KNOWN，裁定 28 第 3 条）：只放过列出的「场景 × 档位 × 主 pass 面数」超限，且面数不超过记录的上限、draw call 仍须达标；
+//   记成警告（report.warnings），不算失败。其余超限（别的场景 / 档位、call、贴图、角色 LOD、puzzleCritical、超过已知上限）照样失败。
 // 用法：
 //   node --import ./scripts/register-ts-paths.mjs scripts/verify-budget.mjs [s1,s2,s3]       校验（结果 → ../docs/releases/perf/verify-budget.json）
 //   node --import ./scripts/register-ts-paths.mjs scripts/verify-budget.mjs --scan [s1,s2,s3] 扫最差机位（极致档；结果 → ../docs/releases/perf/scan-<场景>.json，挑 3 个抄进 perf-spots.ts）
@@ -29,10 +31,15 @@ const scenes = (args.find((a) => !a.startsWith('--')) ?? 's1,s2,s3').split(',').
 const TIERS = (process.env.BUDGET_TIERS ?? 'ultra,high,standard').split(',').filter((t) => t in QUALITY_PRESETS);
 const SHOTS = process.env.BUDGET_SHOTS === '1';
 const VIEW = [640, 360];
+/** 已知超限（不改 LOD、不放宽预算；等 M8 实机帧率再定，见 docs/releases/v0.1-perf-report.md「已知项」） */
+const KNOWN = [
+  { scene: 's1', tier: 'standard', maxTris: 2_700_000, why: '标准档 S1 主 pass 面数 2.20–2.56 M > 1.5 M：不做 LOD、不改预算，等 M8 实机帧率定' },
+];
+const knownTris = (sid, tier, m, q) => KNOWN.find((k) => k.scene === sid && k.tier === tier && !!m.main && m.main.tris > q.sceneVisibleTris && m.main.tris <= k.maxTris && m.main.calls <= q.maxDrawCalls);
 
 const server = await preview({ root, preview: { host: '127.0.0.1', port: 0, strictPort: false, open: false }, logLevel: 'silent' });
 const base = `http://127.0.0.1:${server.httpServer.address().port}/?smoke=1&debug=1&art=1`;
-const report = { at: new Date().toISOString(), mode: SCAN ? 'scan' : 'verify', view: VIEW, tiers: TIERS, scenes: {}, failures: [], errors: [] };
+const report = { at: new Date().toISOString(), mode: SCAN ? 'scan' : 'verify', view: VIEW, tiers: TIERS, scenes: {}, failures: [], warnings: [], errors: [] };
 const reportFile = join(OUT, SCAN ? `scan-${scenes.join('+')}.json` : `verify-budget${process.argv[2] && !process.argv[2].startsWith('--') ? '-' + scenes.join('+') : ''}.json`);
 const save = () => writeFileSync(reportFile, JSON.stringify(report, null, 2));
 
@@ -219,9 +226,12 @@ async function verifyScene(sid) {
       const lv = await evaluate(CHAR_LEVELS);
       const top = await evaluate(TOP);
       const ok = !!m.main && m.main.tris <= q.sceneVisibleTris && m.main.calls <= q.maxDrawCalls;
-      tr.spots.push({ id: sp.id, ok, main: m.main, frame: m.frame, charLevels: lv, top, passes: m.passes });
-      if (!ok) report.failures.push(`${sid} ${tier} ${sp.id}：主 pass ${m.main?.tris} 面 / ${m.main?.calls} call 超过 ${q.sceneVisibleTris} / ${q.maxDrawCalls}`);
-      console.log(`  ${ok ? '✓' : '✗'} ${sid} ${tier.padEnd(8)} ${sp.id.padEnd(16)} 主 pass ${m.main?.tris} 面 / ${m.main?.calls} call（整帧 ${m.frame.tris} / ${m.frame.calls}，阴影 ${m.frame.shadowTris} / ${m.frame.shadowCalls}）角色 LOD ${JSON.stringify(lv)}`);
+      const known = ok ? null : knownTris(sid, tier, m, q);
+      tr.spots.push({ id: sp.id, ok, known: known ? known.why : undefined, main: m.main, frame: m.frame, charLevels: lv, top, passes: m.passes });
+      const msg = `${sid} ${tier} ${sp.id}：主 pass ${m.main?.tris} 面 / ${m.main?.calls} call 超过 ${q.sceneVisibleTris} / ${q.maxDrawCalls}`;
+      if (known) report.warnings.push(`${msg}（已知项，上限 ${known.maxTris}：${known.why}）`);
+      else if (!ok) report.failures.push(msg);
+      console.log(`  ${ok ? '✓' : known ? '⚠' : '✗'} ${sid} ${tier.padEnd(8)} ${sp.id.padEnd(16)} 主 pass ${m.main?.tris} 面 / ${m.main?.calls} call（整帧 ${m.frame.tris} / ${m.frame.calls}，阴影 ${m.frame.shadowTris} / ${m.frame.shadowCalls}）角色 LOD ${JSON.stringify(lv)}`);
       if (SHOTS && tier === TIERS[0]) {
         await setView(1280, 720);
         await waitFrames(2);
@@ -308,4 +318,6 @@ try {
 }
 console.log(`\n${SCAN ? '扫描' : '预算校验'}${report.failures.length ? `：${report.failures.length} 项不通过` : '通过'} → ${reportFile}`);
 for (const f of report.failures) console.log('  ✗', f);
+if (report.warnings.length) console.log(`已知警告 ${report.warnings.length} 项（不算失败）：`);
+for (const w of report.warnings) console.log('  ⚠', w);
 process.exit(SCAN ? 0 : report.failures.length ? 1 : 0);
