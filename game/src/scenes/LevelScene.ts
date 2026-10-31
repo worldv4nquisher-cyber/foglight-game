@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { disposeObject3D } from '@/core/dispose';
 import { BaseScene } from './BaseScene';
 import type { Game } from '@/core/Game';
 import { gameplay } from '@/config/gameplay';
@@ -610,8 +611,12 @@ export abstract class LevelScene extends BaseScene {
 
   override dispose(): void {
     this.disposed = true;
-    this.entities.clear();
+    // 实体（汐 / 父亲 / 道具…）先从场景摘下，场景 dispose 遍历不到它们：单独释放，否则每进一次关卡就漏一套
+    // 克隆材质（着色器程序跟着留下）、骨骼纹理和非缓存几何体（v0.1-037）
+    const roots = this.entities.clear();
     this.physics.clear();
     super.dispose();
+    const keep = this.game.assets.sharedResources();
+    for (const r of roots) disposeObject3D(r, { keep });
   }
 }

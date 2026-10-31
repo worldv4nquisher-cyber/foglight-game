@@ -4,7 +4,9 @@
 //     - renderer.info.memory（几何体 / 贴图数）、renderer.info.programs 数；
 //     - 估算显存：页面启动前包住 WebGL2 的 texStorage / texImage / compressedTexImage / bufferData / renderbufferStorage 和对应 delete，按格式每像素字节累加（近似值，不含驱动开销）；
 //     - JS 堆（CDP Runtime.getHeapUsage，GC 后）。
-//   验收：通关回到 S1 后，估算显存 / 几何体 / 贴图数 / JS 堆都在第一次进 S1 时的 ±10% 以内。
+//   验收：通关回到 S1 后，估算显存 / 几何体 / 贴图数 / JS 堆都在第一次进 S1 时的 ±10% 以内；
+//         回主菜单时估算显存 ≤ 第一次进 S1 的 MENU_MAX（关卡资源 / 阴影 RT / 骨骼纹理都该释放掉，菜单只剩公共资源）。
+//   每站另记活着的 GL 纹理数和最大的几张（尺寸 / 格式 / 创建于哪一站），泄漏时直接看是谁没释放。
 //   box 上是 swiftshader，显存是「WebGL 分配量」的估算；实机显存（任务管理器 / about:gpu）由制作人桌面复测。
 // 用法：node --import ./scripts/register-ts-paths.mjs scripts/verify-memory.mjs    结果 → ../docs/releases/perf/verify-memory.json
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
@@ -19,6 +21,7 @@ mkdirSync(OUT, { recursive: true });
 if (!existsSync(join(root, 'dist/index.html'))) throw new Error('先 npm run build');
 const TIER = process.env.MEMORY_TIER ?? 'ultra';
 const TOL = 0.1;
+const MENU_MAX = 0.5;
 
 // 估算显存：按 WebGL 对象记字节（重复分配覆盖旧值，delete 扣掉）
 const GL_TRACK = `(() => {
@@ -31,17 +34,24 @@ const GL_TRACK = `(() => {
     0x83F0: 0.5, 0x83F1: 0.5, 0x83F2: 1, 0x83F3: 1, 0x8E8C: 1, 0x8E8D: 1, 0x9274: 0.5, 0x9275: 0.5, 0x9278: 1, 0x9279: 1, 0x93B0: 1, 0x93D0: 1, 0x8C4C: 0.5, 0x8C4F: 1, 0x8DBB: 0.5, 0x8DBD: 1 };
   const bpp = (f) => BPP[f] ?? 4;
   const first = (t, level) => level === 0 && (t === 0x0DE1 || t === 0x8515); // 2D 的 0 级 / 立方体 +X 面 0 级 = 重新分配，其余累加
-  const curTex = new WeakMap(); // gl → {target → tex}
-  const texOf = (gl, target) => { const m = curTex.get(gl); return m ? m[target === 0x8513 || (target >= 0x8515 && target <= 0x851A) ? 0x8513 : target] : null; };
+  // 绑定按「纹理单元 × target」记（three 的 state 缓存按单元跳过重复 bind，只记 target 会把上传算到别的单元的纹理上）
+  const curTex = new WeakMap(); // gl → {unit → {target → tex}}
+  const unitOf = new WeakMap(); // gl → 当前 activeTexture 单元
+  const texOf = (gl, target) => { const m = curTex.get(gl)?.[unitOf.get(gl) ?? 0]; return m ? m[target === 0x8513 || (target >= 0x8515 && target <= 0x851A) ? 0x8513 : target] : null; };
+  const live = (window.__glTexLive = new Map()); // tex → {phase, w, h, fmt}
+  window.__glPhase = 'boot';
+  const note = (tex, w, h, fmt) => { const e = tex && live.get(tex); if (e) { e.w = Math.max(e.w, w); e.h = Math.max(e.h, h); e.fmt = fmt; } };
   const add = (obj, kind, bytes, replace) => { if (!obj) return; const prev = sizes.get(obj); if (replace && prev) M[prev.kind] -= prev.bytes; const nb = replace || !prev ? bytes : prev.bytes + bytes; sizes.set(obj, { kind, bytes: nb }); M[kind] += replace || !prev ? bytes : bytes; };
   const wrap = (name, fn) => { const o = P[name]; if (!o) return; P[name] = function (...a) { const r = o.apply(this, a); try { fn.call(this, a, r); } catch (e) { /* */ } return r; }; };
-  wrap('bindTexture', function (a) { let m = curTex.get(this); if (!m) curTex.set(this, (m = {})); m[a[0]] = a[1]; });
-  wrap('texStorage2D', function ([t, levels, fmt, w, h]) { let s = 0; for (let i = 0; i < levels; i++) s += Math.max(1, w >> i) * Math.max(1, h >> i); add(texOf(this, t), 'tex', s * bpp(fmt) * (t === 0x8513 ? 6 : 1), true); });
-  wrap('texStorage3D', function ([t, levels, fmt, w, h, d]) { let s = 0; for (let i = 0; i < levels; i++) s += Math.max(1, w >> i) * Math.max(1, h >> i) * (t === 0x8C1A ? d : Math.max(1, d >> i)); add(texOf(this, t), 'tex', s * bpp(fmt), true); });
-  wrap('texImage2D', function (a) { if (a.length < 9 && typeof a[3] !== 'number') { const img = a[5]; add(texOf(this, a[0]), 'tex', (img?.width ?? 0) * (img?.height ?? 0) * 4, first(a[0], a[1])); return; } add(texOf(this, a[0]), 'tex', a[3] * a[4] * bpp(a[2]), first(a[0], a[1])); });
-  wrap('compressedTexImage2D', function (a) { add(texOf(this, a[0]), 'tex', a[3] * a[4] * bpp(a[2]), first(a[0], a[1])); });
+  wrap('activeTexture', function ([u]) { unitOf.set(this, u - 0x84C0); });
+  wrap('createTexture', function (a, r) { if (r) live.set(r, { phase: window.__glPhase, w: 0, h: 0, fmt: 0 }); });
+  wrap('bindTexture', function (a) { let m = curTex.get(this); if (!m) curTex.set(this, (m = {})); const u = unitOf.get(this) ?? 0; (m[u] ??= {})[a[0]] = a[1]; });
+  wrap('texStorage2D', function ([t, levels, fmt, w, h]) { let s = 0; for (let i = 0; i < levels; i++) s += Math.max(1, w >> i) * Math.max(1, h >> i); add(texOf(this, t), 'tex', s * bpp(fmt) * (t === 0x8513 ? 6 : 1), true); note(texOf(this, t), w, h, fmt); });
+  wrap('texStorage3D', function ([t, levels, fmt, w, h, d]) { let s = 0; for (let i = 0; i < levels; i++) s += Math.max(1, w >> i) * Math.max(1, h >> i) * (t === 0x8C1A ? d : Math.max(1, d >> i)); add(texOf(this, t), 'tex', s * bpp(fmt), true); note(texOf(this, t), w, h, fmt); });
+  wrap('texImage2D', function (a) { if (a.length < 9 && typeof a[3] !== 'number') { const img = a[5]; add(texOf(this, a[0]), 'tex', (img?.width ?? 0) * (img?.height ?? 0) * 4, first(a[0], a[1])); return; } add(texOf(this, a[0]), 'tex', a[3] * a[4] * bpp(a[2]), first(a[0], a[1])); note(texOf(this, a[0]), a[3], a[4], a[2]); });
+  wrap('compressedTexImage2D', function (a) { note(texOf(this, a[0]), a[3], a[4], a[2]); add(texOf(this, a[0]), 'tex', a[3] * a[4] * bpp(a[2]), first(a[0], a[1])); });
   wrap('texImage3D', function (a) { add(texOf(this, a[0]), 'tex', a[3] * a[4] * a[5] * bpp(a[2]), a[1] === 0); });
-  wrap('deleteTexture', function ([t]) { const s = t && sizes.get(t); if (s) { M[s.kind] -= s.bytes; sizes.delete(t); } });
+  wrap('deleteTexture', function ([t]) { live.delete(t); const s = t && sizes.get(t); if (s) { M[s.kind] -= s.bytes; sizes.delete(t); } });
   const curBuf = new WeakMap();
   wrap('bindBuffer', function ([target, b]) { let m = curBuf.get(this); if (!m) curBuf.set(this, (m = {})); m[target] = b; });
   wrap('bufferData', function ([target, d]) { const b = curBuf.get(this)?.[target]; add(b, 'buf', typeof d === 'number' ? d : d?.byteLength ?? 0, true); });
@@ -64,6 +74,7 @@ const { send, evaluate, until } = cdp;
 const MB = (b) => +(b / 1048576).toFixed(1);
 
 async function settle(label, sceneName) {
+  await evaluate(`(window.__glPhase = ${JSON.stringify(label)}, 1)`);
   if (sceneName) {
     if (!(await until(`__game.scenes.current?.name === '${sceneName}' && !__game.flow.transitioning`, 900_000, 500))) throw new Error(`${label}：没进 ${sceneName}`);
     await until('__game.assets.loadStats.every((x) => x.done)', 900_000, 500);
@@ -75,11 +86,13 @@ async function settle(label, sceneName) {
   await sleep(500);
   await send('HeapProfiler.collectGarbage');
   const heap = await send('Runtime.getHeapUsage');
-  const m = await evaluate(`(() => { const i = __game.renderer.info; return { scene: __game.scenes.current?.name ?? null, geometries: i.memory.geometries, textures: i.memory.textures, programs: i.programs?.length ?? 0, gl: { ...window.__glMem } }; })()`);
+  const m = await evaluate(`(() => { const i = __game.renderer.info;
+    const big = [...window.__glTexLive.values()].sort((a, b) => b.w * b.h - a.w * a.h).slice(0, 6).map((e) => e.w + 'x' + e.h + ' 0x' + e.fmt.toString(16) + ' @' + e.phase);
+    return { scene: __game.scenes.current?.name ?? null, geometries: i.memory.geometries, textures: i.memory.textures, programs: i.programs?.length ?? 0, glTextures: window.__glTexLive.size, bigTextures: big, gl: { ...window.__glMem } }; })()`);
   const row = { label, ...m, glMB: MB(m.gl.tex + m.gl.buf + m.gl.rb), texMB: MB(m.gl.tex), bufMB: MB(m.gl.buf), rbMB: MB(m.gl.rb), heapMB: MB(heap.usedSize) };
   report.steps.push(row);
   save();
-  console.log(`  ${label.padEnd(14)} ${String(row.scene).padEnd(16)} 估算显存 ${row.glMB} MB（贴图 ${row.texMB} / 缓冲 ${row.bufMB} / RB ${row.rbMB}）几何体 ${row.geometries} 贴图 ${row.textures} 着色器 ${row.programs} JS 堆 ${row.heapMB} MB`);
+  console.log(`  ${label.padEnd(14)} ${String(row.scene).padEnd(16)} 估算显存 ${row.glMB} MB（贴图 ${row.texMB} / 缓冲 ${row.bufMB} / RB ${row.rbMB}）几何体 ${row.geometries} 贴图 ${row.textures}（GL ${row.glTextures}）着色器 ${row.programs} JS 堆 ${row.heapMB} MB`);
   return row;
 }
 
@@ -90,14 +103,17 @@ try {
   await send('Page.navigate', { url: `${base}&scene=s1` });
   const s1a = await settle('进 S1', 's1-ebb-shore');
   for (const [id, name] of [['s2', 's2-keeper-house'], ['s3', 's3-lighthouse']]) {
-    await evaluate(`(__game.flow.goToLevel('${id}'), 1)`);
+    await evaluate(`(window.__glPhase = '切到 ${id.toUpperCase()}', __game.flow.goToLevel('${id}'), 1)`);
     await sleep(1000);
     await settle(`切到 ${id.toUpperCase()}`, name);
   }
-  await evaluate('(__game.flow.toMenu(), 1)');
+  await evaluate(`(window.__glPhase = '回主菜单', __game.flow.toMenu(), 1)`);
   await until('!__game.flow.transitioning && !!document.querySelector(\'.main-menu [data-act="new"]\')?.checkVisibility()', 300_000, 500);
-  await settle('回主菜单', null);
-  await evaluate(`(__game.flow.goToLevel('s1'), 1)`);
+  const menu = await settle('回主菜单', null);
+  const menuRatio = menu.glMB / Math.max(1e-9, s1a.glMB);
+  report.menu = { glMB: menu.glMB, firstS1: s1a.glMB, ratio: +menuRatio.toFixed(3), max: MENU_MAX, ok: menuRatio <= MENU_MAX };
+  if (!report.menu.ok) report.failures.push(`回主菜单估算显存 ${menu.glMB} MB = 第一次进 S1 的 ×${menuRatio.toFixed(2)}（应 ≤ ×${MENU_MAX}，关卡资源没释放）；最大的活纹理：${menu.bigTextures.join('；')}`);
+  await evaluate(`(window.__glPhase = '再进 S1', __game.flow.goToLevel('s1'), 1)`);
   await sleep(1000);
   const s1b = await settle('再进 S1', 's1-ebb-shore');
   const cmp = {};

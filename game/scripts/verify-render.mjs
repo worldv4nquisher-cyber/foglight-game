@@ -28,6 +28,7 @@ import { S1_ART_SLOTS } from '@/levels/s1/artSlots';
 import { S2_ART_SLOTS } from '@/levels/s2/artSlots';
 import { S3_ART_SLOTS } from '@/levels/s3/artSlots';
 import { manifest } from '@/assets/manifest';
+import { disposeObject3D } from '@/core/dispose';
 import { S2 } from '@/levels/s2/layout';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -1431,6 +1432,42 @@ if (hasArt) {
     return `截平以外出网格 ≤ ${(worst * 100).toFixed(1)} cm；南沿网格出挡人体 ${(south * 100).toFixed(0)} cm（深水边界限制，胶囊贴着走时会贴进这么多）；与邻块缝 ${gaps.join('、')} m`;
   });
 }
+
+// v0.1-037 跨场景显存泄漏：场景 dispose 要连带释放灯光阴影 RT 与蒙皮骨骼纹理（它们不挂在材质上）
+await test('disposeObject3D 释放阴影贴图 / 骨骼纹理，keep 中的保留', () => {
+  const root = new THREE.Group();
+  const sun = new THREE.DirectionalLight();
+  sun.castShadow = true;
+  sun.shadow.map = new THREE.WebGLRenderTarget(8, 8);
+  let rtDisposed = 0;
+  sun.shadow.map.addEventListener('dispose', () => rtDisposed++);
+  root.add(sun);
+  const bones = [new THREE.Bone(), new THREE.Bone()];
+  bones[0].add(bones[1]);
+  const skeleton = new THREE.Skeleton(bones);
+  skeleton.computeBoneTexture();
+  let boneDisposed = 0;
+  skeleton.boneTexture.addEventListener('dispose', () => boneDisposed++);
+  const skinned = new THREE.SkinnedMesh(new THREE.BoxGeometry(), new THREE.MeshBasicMaterial());
+  skinned.add(bones[0]);
+  skinned.bind(skeleton);
+  root.add(skinned);
+  const keptBones = [new THREE.Bone()];
+  const keptSkel = new THREE.Skeleton(keptBones);
+  keptSkel.computeBoneTexture();
+  const keptTex = keptSkel.boneTexture;
+  let keptDisposed = 0;
+  keptTex.addEventListener('dispose', () => keptDisposed++);
+  const keptMesh = new THREE.SkinnedMesh(new THREE.BoxGeometry(), new THREE.MeshBasicMaterial());
+  keptMesh.add(keptBones[0]);
+  keptMesh.bind(keptSkel);
+  root.add(keptMesh);
+  disposeObject3D(root, { keep: new Set([keptSkel]) });
+  assert.equal(rtDisposed, 1, '阴影 RT 未释放');
+  assert.equal(boneDisposed, 1, '骨骼纹理未释放');
+  assert.equal(keptDisposed, 0, 'keep 里的骨骼不该释放');
+  return '阴影 RT、骨骼纹理随场景释放';
+});
 
 let failed = 0;
 for (const [name, err, out] of results) {

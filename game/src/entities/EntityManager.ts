@@ -42,11 +42,16 @@ export class EntityManager {
     this.pendingRemove.clear();
   }
 
-  clear(): void {
+  /** 销毁全部实体并从场景摘下；返回摘下的根节点，调用方负责释放它们的 GPU 资源（摘下后场景 dispose 遍历不到） */
+  clear(): THREE.Object3D[] {
+    const roots: THREE.Object3D[] = [];
     for (const e of this.entities) {
       e.destroy();
       e.object3D.removeFromParent();
+      roots.push(e.object3D);
     }
     this.entities = [];
+    this.pendingRemove.clear();
+    return roots;
   }
 }
