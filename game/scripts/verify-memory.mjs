@@ -1,10 +1,10 @@
 // 037 内存 / 显存（npm run check:release 的一环；需要先 npm run build）：模拟一次完整通关的场景切换，看资源有没有持续增长。
-//   进 S1 → S2 → S3 → 回主菜单 → 新进 S1（走 GameFlow.goToLevel / toMenu，和玩家一样的切换路径）
+//   主菜单 → 进 S1 → S2 → S3 → 回主菜单 → 新进 S1（都走 GameFlow.goToLevel / toMenu，和玩家一样的切换路径）
 //   每站：加载完、停 3 s、强制 GC 后量 ——
 //     - renderer.info.memory（几何体 / 贴图数）、renderer.info.programs 数；
 //     - 估算显存：页面启动前包住 WebGL2 的 texStorage / texImage / compressedTexImage / bufferData / renderbufferStorage 和对应 delete，按格式每像素字节累加（近似值，不含驱动开销）；
 //     - JS 堆（CDP Runtime.getHeapUsage，GC 后）。
-//   验收：通关回到 S1 后，估算显存 / 几何体 / 贴图数 / JS 堆都在第一次进 S1 时的 ±10% 以内；
+//   验收：通关回到 S1 后，估算显存 / 几何体 / 贴图数 / 着色器程序数 / JS 堆都在第一次进 S1 时的 ±10% 以内；
 //         回主菜单时估算显存 ≤ 第一次进 S1 的 MENU_MAX（关卡资源 / 阴影 RT / 骨骼纹理都该释放掉，菜单只剩公共资源）。
 //   每站另记活着的 GL 纹理数和最大的几张（尺寸 / 格式 / 创建于哪一站），以及 GC 后仍活着的旧场景对象，泄漏时直接看是谁没释放。
 //   box 上是 swiftshader，显存是「WebGL 分配量」的估算；实机显存（任务管理器 / about:gpu）由制作人桌面复测。
@@ -104,7 +104,12 @@ let ok = false;
 try {
   await send('HeapProfiler.enable');
   await send('Page.addScriptToEvaluateOnNewDocument', { source: GL_TRACK });
-  await send('Page.navigate', { url: `${base}&scene=s1` });
+  // 第一次进 S1 也从主菜单走 goToLevel（和玩家点「新游戏」、和后面「再进 S1」同一条路径）。
+  // 之前用 ?scene=s1 直接进：不经过切场景的着色器预编译，基线比「再进 S1」少 ~10 个程序 / 2 MB 堆，比的不是同一种状态（v0.1-037）
+  await send('Page.navigate', { url: base });
+  await until('!!document.querySelector(\'.main-menu [data-act="new"]\')?.checkVisibility()', 300_000, 500);
+  await evaluate(`(window.__glPhase = '进 S1', __game.flow.goToLevel('s1'), 1)`);
+  await sleep(1000);
   const s1a = await settle('进 S1', 's1-ebb-shore');
   for (const [id, name] of [['s2', 's2-keeper-house'], ['s3', 's3-lighthouse']]) {
     await evaluate(`(window.__glPhase = '切到 ${id.toUpperCase()}', __game.flow.goToLevel('${id}'), 1)`);
@@ -121,7 +126,7 @@ try {
   await sleep(1000);
   const s1b = await settle('再进 S1', 's1-ebb-shore');
   const cmp = {};
-  for (const k of ['glMB', 'geometries', 'textures', 'heapMB']) {
+  for (const k of ['glMB', 'geometries', 'textures', 'programs', 'heapMB']) {
     const r = s1b[k] / Math.max(1e-9, s1a[k]);
     cmp[k] = { first: s1a[k], again: s1b[k], ratio: +r.toFixed(3), ok: Math.abs(r - 1) <= TOL };
     if (!cmp[k].ok) report.failures.push(`${k}：第一次进 S1 ${s1a[k]} → 通关回 S1 ${s1b[k]}（×${r.toFixed(2)}，超出 ±${TOL * 100}%）`);
