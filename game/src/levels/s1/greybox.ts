@@ -153,9 +153,13 @@ export function buildS1Greybox(mats: GreyboxMaterials = defaultGreyboxMaterials(
     const k = S1.rockColliderShrink;
     const bottom = -0.6;
     // 椭圆柱（S1.foregroundRockEllipse）：半轴 = 收缩后的盒半宽，去掉盒角（#157 盒角伸进深水区）
-    const geo = S1.foregroundRockEllipse.includes(idx)
-      ? new THREE.CylinderGeometry(1, 1, topY - bottom, 24).scale(hx * k, 1, hz * k)
-      : new THREE.BoxGeometry(hx * 2 * k, topY - bottom, hz * 2 * k);
+    // 1031：有网格轮廓（S1.foregroundRockHull）的用轮廓棱柱，贴合美术网格
+    const hullPoly = S1.foregroundRockHull[idx];
+    const geo = hullPoly
+      ? prismGeometry(hullPoly, topY - bottom)
+      : S1.foregroundRockEllipse.includes(idx)
+        ? new THREE.CylinderGeometry(1, 1, topY - bottom, 24).scale(hx * k, 1, hz * k)
+        : new THREE.BoxGeometry(hx * 2 * k, topY - bottom, hz * 2 * k);
     const box = new THREE.Mesh(geo, mats.reef);
     box.name = `s1-fg-rock-${idx}-collider`;
     box.position.set(r.translation[0], (topY + bottom) / 2, r.translation[2]);
@@ -276,4 +280,31 @@ export function buildS1Greybox(mats: GreyboxMaterials = defaultGreyboxMaterials(
 
   root.updateMatrixWorld(true);
   return { root, colliders, walls, decor };
+}
+
+/** 竖直棱柱：轮廓 poly（局部 xz，任意绕向的凸 / 简单多边形），高 h，以 y = 0 为中心（和 BoxGeometry / CylinderGeometry 一致） */
+export function prismGeometry(poly: readonly (readonly [number, number])[], h: number): THREE.BufferGeometry {
+  const n = poly.length;
+  // 统一成从上往下看逆时针（x 右、−z 上 → shape 用 (x, −z)）
+  const pts = poly.map(([x, z]) => new THREE.Vector2(x, -z));
+  if (THREE.ShapeUtils.isClockWise(pts)) pts.reverse();
+  const pos: number[] = [];
+  const y0 = -h / 2;
+  const y1 = h / 2;
+  for (const p of pts) pos.push(p.x, y0, -p.y);
+  for (const p of pts) pos.push(p.x, y1, -p.y);
+  const idx: number[] = [];
+  for (const [a, b, c] of THREE.ShapeUtils.triangulateShape(pts, [])) {
+    idx.push(n + a!, n + b!, n + c!); // 顶面朝上
+    idx.push(c!, b!, a!); // 底面朝下
+  }
+  for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n;
+    idx.push(i, j, n + j, i, n + j, n + i);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  return g;
 }

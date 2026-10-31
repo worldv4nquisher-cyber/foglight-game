@@ -1323,6 +1323,51 @@ if (hasArt) {
   });
 }
 
+if (hasArt) {
+  await test('1031 #157 挡人体贴合网格：轮廓棱柱 vs GLB LOD0 胶囊高度带（y 0–1.8）切片——南沿截平以外网格出挡人体 ≤ 3 cm；南沿（离深水边界 0.61 m）胶囊最多贴进网格的量单列；和相邻 8 块挡人体的缝要么 ≥ 0.6 能过、要么 < 0.5 明确过不去', async () => {
+    const { S1 } = await import('@/levels/s1/layout');
+    const { buildS1Greybox } = await import('@/levels/s1/greybox');
+    const { rockWorldTris, sliceXZ, HULL_BAND } = await import('./gen-s1-rock-hull.mjs');
+    const gb = buildS1Greybox();
+    const col = gb.colliders.find((c) => c.name === 's1-fg-rock-157-collider');
+    col.updateMatrixWorld(true);
+    // 挡人体世界轮廓（顶面那圈顶点）
+    const pos = col.geometry.getAttribute('position');
+    const poly = [];
+    const v = new THREE.Vector3();
+    const nPoly = S1.foregroundRockHull[157].length;
+    for (let i = nPoly; i < 2 * nPoly; i++) { v.fromBufferAttribute(pos, i).applyMatrix4(col.matrixWorld); poly.push([v.x, v.z]); }
+    const segD = (p, a, b) => { const dx = b[0] - a[0], dz = b[1] - a[1]; const t = Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dz) / (dx * dx + dz * dz))); return Math.hypot(p[0] - a[0] - t * dx, p[1] - a[1] - t * dz); };
+    const inside = (p) => { let c = false; for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) { const a = poly[i], b = poly[j]; if ((a[1] > p[1]) !== (b[1] > p[1]) && p[0] < ((b[0] - a[0]) * (p[1] - a[1])) / (b[1] - a[1]) + a[0]) c = !c; } return c; };
+    const outD = (p) => { if (inside(p)) return 0; let d = Infinity; for (let i = 0; i < poly.length; i++) d = Math.min(d, segD(p, poly[i], poly[(i + 1) % poly.length])); return d; };
+    const zCut = Math.min(...poly.map((p) => p[1]));
+    const { P, index } = await rockWorldTris(157);
+    let worst = 0, south = 0;
+    for (let y = HULL_BAND[0]; y <= HULL_BAND[1] + 1e-6; y += 0.1) {
+      for (const p of sliceXZ(P, index, y)) {
+        const d = outD(p);
+        if (p[1] < zCut + 1e-3) south = Math.max(south, d);
+        else worst = Math.max(worst, d);
+      }
+    }
+    assert.ok(worst <= 0.03, `截平以外网格出挡人体 ${worst.toFixed(3)} m`);
+    assert.ok(Math.abs(zCut - (-8.95 + 0.5 + S1.rockDeepGapMargin + 0.01)) < 0.005, `南沿 ${zCut}`);
+    // 相邻挡人体最近距离（水平）：新轮廓 vs 旧椭圆，原来能过（≥ 0.6）的现在也要能过
+    const ring = (m) => { m.updateMatrixWorld(true); const a = m.geometry.getAttribute('position'); const out = []; for (let i = 0; i < a.count; i++) { v.fromBufferAttribute(a, i).applyMatrix4(m.matrixWorld); out.push([v.x, v.z]); } return out; };
+    const minGap = (A, B) => { let d = Infinity; for (const p of A) for (let i = 0; i < B.length; i++) d = Math.min(d, segD(p, B[i], B[(i + 1) % B.length])); return d; };
+    const others = gb.colliders.filter((c) => /^s1-fg-rock-\d+-collider$/.test(c.name) && c !== col);
+    const gaps = [];
+    for (const o of others) {
+      const pts = ring(o);
+      const g = Math.min(minGap(pts, poly), minGap(poly, pts));
+      gaps.push(`#${o.name.match(/rock-(\d+)/)[1]} ${g.toFixed(2)}`);
+      // 缝要么够胶囊过（≥ 直径 + 余量），要么明确过不去（< 直径；#155 与 #157 网格本身相接，缝 ≈ 0.04 m 正确）
+      assert.ok(g >= 0.6 || g < 0.5, `#157 与 ${o.name} 缝 ${g.toFixed(2)} m：卡在胶囊直径附近`);
+    }
+    return `截平以外出网格 ≤ ${(worst * 100).toFixed(1)} cm；南沿网格出挡人体 ${(south * 100).toFixed(0)} cm（深水边界限制，胶囊贴着走时会贴进这么多）；与邻块缝 ${gaps.join('、')} m`;
+  });
+}
+
 let failed = 0;
 for (const [name, err, out] of results) {
   if (err) {
