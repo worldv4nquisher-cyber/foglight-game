@@ -12,7 +12,7 @@ import { CameraFollowSystem, CameraTrack } from '@/systems/CameraFollowSystem';
 import type { CameraKey } from '@/systems/camera/CameraTrack';
 import { InteractionSystem, actorFromRig } from '@/systems/interaction/InteractionSystem';
 import { SkyDome, SKY_CLOUDS_KEY } from '@/world/SkyDome';
-import { PlanarReflection, reflectionOverride } from '@/render/Reflections';
+import { PlanarReflection, reflectionOverride, reflectionStrengthOverride } from '@/render/Reflections';
 import { Water, WATER_NORMAL_KEY, RAIN_RIPPLE_KEY } from '@/world/Water';
 import { ATMO028, type Atmo028Tier } from '@/config/atmosphere028';
 import { Rain, RAIN_STREAK_KEY, RAIN_SPLASH_KEY, collectIndoorShapes } from '@/world/Rain';
@@ -70,6 +70,7 @@ export abstract class LevelScene extends BaseScene {
   /** 025 水面平面反射（室外场景才有） */
   protected reflection: PlanarReflection | null = null;
   private readonly reflectOverride = typeof location === 'undefined' ? null : reflectionOverride(location.search);
+  private readonly reflectKOverride = typeof location === 'undefined' ? null : reflectionStrengthOverride(location.search);
   protected rain: Rain | null = null;
   /**
    * 028 远景（README-028 §3）：天空层剪影按预设换色；fog 'none' = 不吃雾（S1 天空层小灯塔），'mid' = 用预设主岛 hint（S2 远景 S3 灯塔）。
@@ -467,7 +468,11 @@ export abstract class LevelScene extends BaseScene {
     this.qualityTier = q.tier;
     this.water?.setRipples(ATMO028.rainTiers[q.tier].ripples);
     // 025：反射分辨率 = 画质档 reflections.planar（极致 1.0 / 高 0.5 / 标准 0.25）；?reflect= 调试覆盖
-    if (this.reflection) this.reflection.scale = this.reflectOverride ?? q.reflections.planar;
+    if (this.reflection) {
+      this.reflection.scale = this.reflectOverride ?? q.reflections.planar;
+      // 强度 = 画质配置 reflections.planarStrength（三档共用 PLANAR_REFLECTION_STRENGTH）；?reflectK=0~1 调试覆盖
+      this.reflection.strength = this.reflectKOverride ?? q.reflections.planarStrength;
+    }
     // 阴影贴图尺寸 = §8 shadowType.mapSize（CSM 级数 / PCSS / 接触阴影在 023 做）；尺寸变了就丢掉旧贴图，下一帧按新尺寸重建
     const s = this.sun.shadow;
     const size = q.shadowType.mapSize;

@@ -12,6 +12,8 @@ import * as THREE from 'three';
  * - 雾：镜像相机到物体的距离 = 真实光路（相机 → 水面 → 物体），所以 RT 里的雾就是对的；Water 在自己的雾之后再混反射（不重复上雾）。
  * - 雨（镜头附近的粒子）和水面自身不进反射（hide 列表）；角色 / 灯束 / 雾卡照常画。
  * 分辨率 = 画布 × scale（画质档）；?reflect=off|0.25|0.5|1 调试覆盖。
+ * 强度 = strength（画质配置 reflections.planarStrength，三档共用 PLANAR_REFLECTION_STRENGTH）× 菲涅尔 × 淡入，乘在水面着色器
+ * mix(底色, refl·0.9, fr·uReflK) 的混合权重上；?reflectK=0~1 调试覆盖。strength = 0 → 不渲染 RT，画面与 ?reflect=off 一致。
  */
 export interface ReflectionStats {
   /** 本帧是否渲染了反射 */
@@ -70,6 +72,16 @@ export function reflectionOverride(search: string | null): number | null {
   return Number.isFinite(n) && n > 0 ? Math.min(1, n) : null;
 }
 
+/** URL 覆盖：?reflectK=0~1 → 反射混合强度倍率（夹到 [0,1]）；没有 / 非数字 → null（按画质配置） */
+export function reflectionStrengthOverride(search: string | null): number | null {
+  if (!search) return null;
+  const v = new URLSearchParams(search).get('reflectK');
+  if (v === null || v.trim() === '') return null;
+  if (v === 'off') return 0;
+  const n = Number(v);
+  return Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : null;
+}
+
 export class PlanarReflection {
   readonly target: THREE.WebGLRenderTarget;
   readonly camera = new THREE.PerspectiveCamera();
@@ -79,8 +91,10 @@ export class PlanarReflection {
     uReflMatrix: { value: new THREE.Matrix4() },
     uReflK: { value: 0 },
   };
-  /** 画质档倍率（0 = 关） */
+  /** 画质档分辨率倍率（0 = 关） */
   scale = 0.5;
+  /** 混合强度倍率（画质配置 reflections.planarStrength / ?reflectK；0 = 关，同 off） */
+  strength = 1;
   /** 反射里不画的东西（雨、水面自身） */
   readonly hide: THREE.Object3D[] = [];
   enabled = true;
@@ -170,7 +184,7 @@ export class PlanarReflection {
    * 每帧主画面之前调用。water = 水面网格（取 level / 范围 / 可见性），halfExtent = 水面平板半边长（m）。
    */
   update(renderer: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.PerspectiveCamera, water: THREE.Mesh | null, halfExtent: number): void {
-    if (!this.enabled || this.scale <= 0) return this.skip('off');
+    if (!this.enabled || this.scale <= 0 || this.strength <= 0) return this.skip('off');
     if (!water || !water.visible || !water.parent) return this.skip('no-water');
     const level = water.position.y;
     camera.updateMatrixWorld();
@@ -273,8 +287,8 @@ export class PlanarReflection {
     s.width = w;
     s.height = h;
     s.renders++;
-    s.k = k;
-    this.uniforms.uReflK.value = k;
+    s.k = k * this.strength;
+    this.uniforms.uReflK.value = s.k;
   }
 
   debugLine(): string {

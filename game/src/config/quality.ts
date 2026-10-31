@@ -14,6 +14,12 @@ import type { TextId } from '@/content/text';
  * 那些系统做的时候直接从这里读参数；`scripts/verify-quality.mjs` 逐项核对本表与 §8。
  * 本文件会被 Node（strip-types）直接导入做校验：只能 `import type`，不能用参数属性 / enum。
  */
+/**
+ * 025 水面平面反射的混合强度（乘在菲涅尔混合权重上；1 = 025 交付时的画面，0 = 等同关反射）。
+ * 三档共用这一个数：用户定了强度以后只改这里（?reflectK=0~1 调试覆盖；?reflect= 是 RT 分辨率倍率，不是强度）。
+ */
+export const PLANAR_REFLECTION_STRENGTH = 1;
+
 export type QualityTier = 'ultra' | 'high' | 'standard';
 
 /** 外扩描边（反面外扩壳）覆盖对象：角色 / 道具 / 近景 / 可交互物 */
@@ -64,7 +70,7 @@ export interface QualityPreset {
    * 反射：SSR（full / half / off，wetOnly = 只给湿地面）、平面反射分辨率倍数、反射探针。
    * 极致 SSR + 平面 1.0×；高 平面 0.5× + 湿地面 SSR 半分辨率；标准 探针 + 平面 0.25×
    */
-  reflections: { ssr: 'full' | 'half' | 'off'; ssrWetOnly: boolean; planar: number; probes: boolean };
+  reflections: { ssr: 'full' | 'half' | 'off'; ssrWetOnly: boolean; planar: number; probes: boolean; /** 平面反射混合强度（0–1，见 PLANAR_REFLECTION_STRENGTH） */ planarStrength: number };
   /** 景深：bokeh / 高斯（只在过场）/ 关 */
   dof: 'bokeh' | 'gaussian-cutscene' | 'off';
   bloom: { enabled: boolean; mipLevels: number };
@@ -116,7 +122,7 @@ export const QUALITY_PRESETS: Record<QualityTier, QualityPreset> = {
     shadowType: { cascades: 4, mapSize: 4096, filter: 'PCSS', contactShadows: true },
     pointLightShadows: { count: 2, mapSize: 1024 },
     ao: { gtao: 'full', baked: true },
-    reflections: { ssr: 'full', ssrWetOnly: false, planar: 1, probes: false },
+    reflections: { ssr: 'full', ssrWetOnly: false, planar: 1, probes: false, planarStrength: PLANAR_REFLECTION_STRENGTH },
     dof: 'bokeh',
     bloom: { enabled: true, mipLevels: 6 },
     lut: true,
@@ -155,7 +161,7 @@ export const QUALITY_PRESETS: Record<QualityTier, QualityPreset> = {
     shadowType: { cascades: 3, mapSize: 2048, filter: 'PCF_SOFT', contactShadows: false },
     pointLightShadows: { count: 1, mapSize: 1024 },
     ao: { gtao: 'half', baked: true },
-    reflections: { ssr: 'half', ssrWetOnly: true, planar: 0.5, probes: false },
+    reflections: { ssr: 'half', ssrWetOnly: true, planar: 0.5, probes: false, planarStrength: PLANAR_REFLECTION_STRENGTH },
     dof: 'gaussian-cutscene',
     bloom: { enabled: true, mipLevels: 5 },
     lut: true,
@@ -194,7 +200,7 @@ export const QUALITY_PRESETS: Record<QualityTier, QualityPreset> = {
     shadowType: { cascades: 2, mapSize: 2048, filter: 'PCF', contactShadows: false },
     pointLightShadows: { count: 1, mapSize: 512 },
     ao: { gtao: 'off', baked: true },
-    reflections: { ssr: 'off', ssrWetOnly: false, planar: 0.25, probes: true },
+    reflections: { ssr: 'off', ssrWetOnly: false, planar: 0.25, probes: true, planarStrength: PLANAR_REFLECTION_STRENGTH },
     dof: 'off',
     bloom: { enabled: true, mipLevels: 4 },
     lut: true,

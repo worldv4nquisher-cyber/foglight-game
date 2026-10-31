@@ -18,9 +18,9 @@ import { InstancedLodSet, lodLevelsOf } from '@/render/instancedLod';
 import { makeSkyLayer, SKY_DEPTH } from '@/render/skyLayer';
 import { applyObjectFog, fogExp2Factor, OBJECT_FOG_GLSL, readFogHint } from '@/render/objectFog';
 import { applyMaterialHints } from '@/render/materialHints';
-import { PlanarReflection, reflectionFade, reflectionOverride } from '@/render/Reflections';
+import { PlanarReflection, reflectionFade, reflectionOverride, reflectionStrengthOverride } from '@/render/Reflections';
 import { bakeSeabed, sampleSeabed, SEABED, shoalFactor } from '@/world/seabed';
-import { QUALITY_PRESETS } from '@/config/quality';
+import { PLANAR_REFLECTION_STRENGTH, QUALITY_PRESETS } from '@/config/quality';
 import { gameplay } from '@/config/gameplay';
 import { artLanternFrame } from '@/levels/s2/lantern';
 import { mountArtSlots } from '@/levels/artSlots';
@@ -1263,6 +1263,65 @@ await test('025 水面平面反射（纯数学，假 renderer）：贴近水面 
   assert.equal(renders, 1);
   r.dispose();
   return `淡入 0.05–0.6 m · 斜裁剪 / uv 一致 · 跳过 below / frustum / off`;
+});
+
+await test('037 反射强度 ?reflectK：解析夹到 [0,1]、画质配置三档共用一个数（默认 1 = 025 交付画面）、uReflK = 淡入 × 强度、强度 0 不渲染 RT（= off）、不影响 RT 分辨率；水面着色器乘在 refl·0.9 的菲涅尔混合权重上', () => {
+  assert.equal(reflectionStrengthOverride('?reflectK=0'), 0);
+  assert.equal(reflectionStrengthOverride('?reflectK=off'), 0);
+  assert.equal(reflectionStrengthOverride('?a=1&reflectK=0.5'), 0.5);
+  assert.equal(reflectionStrengthOverride('?reflectK=1'), 1);
+  assert.equal(reflectionStrengthOverride('?reflectK=3'), 1);
+  assert.equal(reflectionStrengthOverride('?reflectK=-1'), 0);
+  assert.equal(reflectionStrengthOverride('?reflectK=abc'), null);
+  assert.equal(reflectionStrengthOverride('?reflectK='), null);
+  assert.equal(reflectionStrengthOverride('?reflect=0.5'), null, 'reflect= 是分辨率，不是强度');
+  assert.equal(reflectionOverride('?reflectK=0.5'), null, 'reflectK= 不改分辨率');
+  assert.ok(PLANAR_REFLECTION_STRENGTH >= 0 && PLANAR_REFLECTION_STRENGTH <= 1);
+  assert.equal(PLANAR_REFLECTION_STRENGTH, 1, '默认值 = 025 交付画面（用户定之前不改）');
+  for (const t of ['ultra', 'high', 'standard']) assert.equal(QUALITY_PRESETS[t].reflections.planarStrength, PLANAR_REFLECTION_STRENGTH, t);
+  // 着色器：强度乘在 mix(底色, refl·0.9, fr·uReflK) 的权重上 → uReflK = 0 时与关反射同色
+  const water = readFileSync(resolve(ROOT, 'src/world/Water.ts'), 'utf8');
+  assert.ok(water.includes('mix(gl_FragColor.rgb, refl * 0.9, fr * uReflK)'), '水面混合式');
+  assert.ok(/if \(uReflK > 0\.0\)/.test(water), 'uReflK = 0 整段跳过');
+
+  const info = { render: { calls: 0, triangles: 0 }, autoReset: false };
+  let rt = null;
+  let renders = 0;
+  const renderer = {
+    info, autoClear: true, toneMapping: THREE.ACESFilmicToneMapping, xr: { enabled: false }, shadowMap: { autoUpdate: false },
+    state: { buffers: { depth: { setMask() {} } } },
+    getDrawingBufferSize: (v) => v.set(1280, 720),
+    getRenderTarget: () => rt, setRenderTarget: (t) => { rt = t; }, clear() {},
+    render: () => { renders++; },
+  };
+  const scene = new THREE.Scene();
+  const water3 = new THREE.Mesh(new THREE.PlaneGeometry(1, 1));
+  water3.position.y = -0.6;
+  scene.add(water3);
+  const cam = new THREE.PerspectiveCamera(60, 16 / 9, 0.1, 250);
+  const r = new PlanarReflection();
+  r.scale = 0.5;
+  const at = (h, strength) => {
+    r.strength = strength;
+    cam.position.set(3, -0.6 + h, 10);
+    cam.lookAt(0, -0.6, 0);
+    cam.updateMatrixWorld();
+    r.update(renderer, scene, cam, water3, 300);
+    return r.uniforms.uReflK.value;
+  };
+  assert.equal(r.strength, 1, '默认强度 1');
+  for (const h of [0.2, 0.4, 3]) {
+    const full = at(h, 1);
+    assert.ok(Math.abs(full - reflectionFade(h)) < 1e-9, `h=${h} 强度 1 与原来一致`);
+    assert.ok(Math.abs(at(h, 0.5) - 0.5 * reflectionFade(h)) < 1e-9, `h=${h} 强度 0.5`);
+    assert.equal(r.stats.width, 640, '强度不改 RT 尺寸');
+  }
+  const before = renders;
+  assert.equal(at(3, 0), 0);
+  assert.equal(r.stats.skip, 'off', '强度 0 = off');
+  assert.equal(renders, before, '强度 0 不渲染 RT');
+  r.dispose();
+  return `默认 ${PLANAR_REFLECTION_STRENGTH} · 0.5 → uReflK 减半 · 0 = off 不渲染`;
 });
 
 await test('1031 S1 沙斑（裁定 23 a）：海床高度图烘焙（合成斜坡）双线性采样误差 < 1 cm；压浪系数 0.375·s(d) < d（浪谷不露底）、露沙 0', () => {

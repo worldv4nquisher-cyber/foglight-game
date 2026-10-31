@@ -13,7 +13,8 @@
 | `smoke=1&art=1` | 控制台挂出 `__game` / `__s3` / `__perfSpot`。**`smoke=1` 必须配 `art=1`**，否则是白盒（数字无效） |
 | `debug=1` | 打开 F3 详细面板（FPS · 帧时间 · draw call / 三角面对照 §8 预算 · 显存估算），并允许 `scene=` 直接进场景 |
 | `scene=s1` / `s2` / `s3` | 跳过主菜单直接进场景（要 `debug=1`） |
-| `reflect=off` / `0.5` / `1` | S1 水面平面反射：关 / 反射 RT 分辨率倍率（不加 = 按档：极致 1、高 0.5、标准 0.25）。**注意：这是分辨率，不是反射强度**，强度（水面混合系数）不受影响 |
+| `reflect=off` / `0.5` / `1` | S1 水面平面反射：关 / 反射 RT 分辨率倍率（不加 = 按档：极致 1、高 0.5、标准 0.25）。**注意：这是分辨率，不是反射强度**，强度用 `reflectK=` |
+| `reflectK=0` / `0.5` / `1` | S1 水面平面反射**强度**（混合权重倍率，乘在菲涅尔混合上；0 = 不渲染反射 RT，画面同 `reflect=off`）。不加 = 画质配置 `PLANAR_REFLECTION_STRENGTH`（src/config/quality.ts，三档共用，现为 1，用户定后只改这一个数）。**`reflect=` 是分辨率，`reflectK=` 是强度**，两者可叠加（例：`reflect=1&reflectK=0.5`） |
 | `postfx=0` | 关后处理（只用于排查是否后处理吃帧，不进结论） |
 
 - 标准测试地址（下面简称 **U**）：`http://localhost:4173/?smoke=1&art=1&debug=1&quality=ultra&scene=s1`（换档改 `quality=`，换场景改 `scene=`）。进场后按 **F3** 开面板。
@@ -43,7 +44,7 @@
 ### 3 测试项
 - [ ] **A1 极致档（`quality=ultra`）· 全部机位**：S1 / S2 / S3 用 `__perfSpot` 走完第 1 节全部机位，按第 2 节记。另外每个场景不钉机位正常走一遍，记整段平均 FPS 和最低值（F3 目测）。**目标：每个机位平均 ≥ 60 fps，1% low ≥ 50 fps**
 - [ ] **A2 高档（`quality=high`）**：每场景面数最高的 1 个机位（S1 `s1-raft-back`、S2 S2_TOP、S3 S3_TOP）
-- [ ] **A3 水面反射开销对比（S1，极致档）**：`s1-opening` 和 `s1-raft-back` 两个机位，各用 `reflect=off`、`reflect=0.5`、`reflect=1` 三个地址重开（例：`U&reflect=off`），每次都按第 2 节记，并在控制台记一行 `__game.scenes.current.reflection.debugLine()`。填「反射对比表」。用途：反射默认强度用户还没定（制作人拿 off / 0.5 / 1 对比图问用户），这组数字给出每一档的真实 GPU 代价。box 参考：反射 pass +45～72 draw call、+2.8 M 三角面（off → 开）；0.5 / 1 的差别只在 RT 像素数（1440p 下 1280×720 vs 2560×1440，4 倍像素）
+- [ ] **A3 水面反射开销对比（S1，极致档）**：`s1-opening` 和 `s1-raft-back` 两个机位，各用 `reflect=off`、`reflect=0.5`、`reflect=1` 三个地址重开（例：`U&reflect=off`），每次都按第 2 节记，并在控制台记一行 `__game.scenes.current.reflection.debugLine()`。填「反射对比表」。用途：反射默认强度用户还没定（制作人拿 `reflectK=0` / `0.5` / `1` 对比图问用户，图在 docs/tasks/shots-025/strength/），这组数字给出每一档 RT 分辨率的真实 GPU 代价；强度 `reflectK` 只改混合权重、0 以外不改开销（0 = 等同 off）。box 参考：反射 pass +45～72 draw call、+2.8 M 三角面（off → 开）；0.5 / 1 的差别只在 RT 像素数（1440p 下 1280×720 vs 2560×1440，4 倍像素）
 - [ ] **A4 S3 结尾演出**：`U` 改 `scene=s3`，控制台 `__s3.lightTheLamp()`；Performance 录全程，记 05 过肩写日志、06 / 07 拉远出海各段 FPS，以及**第一次**播放有没有 > 100 ms 的长帧（着色器编译）
 - [ ] **A5 卡顿**：正常流程切场景（S1→S2→S3）、开机关、第一次进 S3 演出时有没有 > 100 ms 长帧，记位置和时长
 - [ ] **A6（有 GTX 1650 级机器时）1920×1080 · 标准档**：S1 / S2 / S3 面数最高机位各一个，是否 ≥ 30 fps 稳定可玩（GDD §14 最低配置）
