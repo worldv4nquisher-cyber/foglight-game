@@ -16,8 +16,12 @@ import {
   silhouetteAt,
   fatherOpacityAt,
   xiPoseAt,
+  glassReflectionAt,
+  GLASS_REFLECTION_OFF,
 } from '@/content/cutscenes/ending';
 import { makeGhost, GHOST_RENDER_ORDER } from '@/render/ghost';
+import { makeSpecularGate, SPECULAR_GATE_GLSL } from '@/render/specularGate';
+import { ShaderLib } from 'three';
 import { OUTRO_CUT_SEC, IGNITE_MONO_DELAY, IGNITE_MONO_SEC } from '@/levels/s3/puzzles';
 import { t as text } from '@/content/text';
 
@@ -376,6 +380,33 @@ function makePlayer(src, extra = {}) {
   // 再调一次不会给预写网格再挂预写
   assert.equal(makeGhost(root, 0).prepasses.length, 2);
   out.push('父亲幽灵深度预写（同骨骼子网格、colorWrite=false、renderOrder 先后、淡入淡出开关）✓');
+}
+
+// ---- 12. 裁定 25 ② 04 镜头关灯室玻璃反射
+{
+  assert.deepEqual([...GLASS_REFLECTION_OFF], [ENDING_T.regaze, ENDING_T.sitWrite]);
+  assert.ok(GLASS_REFLECTION_OFF[0] <= ENDING_T.noAnswer && ENDING_T.noAnswer + 3 <= GLASS_REFLECTION_OFF[1], '「那边没有亮。」整句在关的区间里');
+  assert.equal(glassReflectionAt(ENDING_T.regaze - 0.001), 1);
+  assert.equal(glassReflectionAt(ENDING_T.regaze), 0);
+  assert.equal(glassReflectionAt(51.2), 0);
+  assert.equal(glassReflectionAt(ENDING_T.sitWrite), 1);
+  assert.equal(glassReflectionAt(ENDING_T.gaze + 1), 1, '30 s 眺望镜头不受影响');
+  // 开关落在镜头切点（regaze 段的起止 = 42 / 58，见 levels/s3/ending.ts buildShots）
+  const glass = new THREE.MeshStandardMaterial({ name: 'mat-env-lighthouse-weather' });
+  const stone = new THREE.MeshStandardMaterial({ name: 'mat-env-lighthouse-ch1-wall' });
+  const root = new THREE.Group();
+  root.add(new THREE.Mesh(new THREE.BoxGeometry(), [stone, glass]), new THREE.Mesh(new THREE.BoxGeometry(), glass));
+  const gate = makeSpecularGate(root, /^mat-env-lighthouse-weather/);
+  assert.deepEqual(gate.materials, [glass], '只挂玻璃材质（去重）');
+  const shader = { uniforms: {}, vertexShader: '', fragmentShader: ShaderLib.physical.fragmentShader };
+  glass.onBeforeCompile(shader, null);
+  assert.ok(shader.fragmentShader.includes(SPECULAR_GATE_GLSL) && shader.uniforms.uSpecGate === gate.uniform, '镜面乘开关');
+  assert.ok(shader.fragmentShader.indexOf('uSpecGate;') < shader.fragmentShader.indexOf('totalSpecular'));
+  assert.ok(glass.customProgramCacheKey().includes('specgate'));
+  gate.value = 0;
+  assert.equal(shader.uniforms.uSpecGate.value, 0, 'uniform 开关不重新编译');
+  assert.equal(makeSpecularGate(null, /x/).materials.length, 0, 'art=0 没有玻璃');
+  out.push('04 镜头关玻璃反射（42–58 s = regaze 段，镜面 uniform 开关）✓');
 }
 
 console.log(`verify-cutscene：\n  ${out.join('\n  ')}`);

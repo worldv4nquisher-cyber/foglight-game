@@ -54,6 +54,17 @@ export const FOG_OPEN_K = 0.4;
 export const NO_ANSWER_SEC = 3.0;
 export const JOURNAL_ENTRY_SEC = 6.0;
 
+/**
+ * 裁定 25 ②：镜头 04（regaze，「那边没有亮。」所在的眺望长镜头）期间关掉灯室玻璃反射 ——
+ * 玻璃上的灯光亮斑正好压在远处第二座灯塔上，和台词「那边没有亮」矛盾。
+ * 开关落在镜头切点上（42 s 进 regaze、58 s 切过肩），段内不跳变；别的镜头不受影响。
+ */
+export const GLASS_REFLECTION_OFF: readonly [number, number] = Object.freeze([ENDING_T.regaze, ENDING_T.sitWrite] as const);
+/** 灯室玻璃镜面倍率：1 = 原样，0 = 关 */
+export function glassReflectionAt(t: number): number {
+  return t >= GLASS_REFLECTION_OFF[0] && t < GLASS_REFLECTION_OFF[1] ? 0 : 1;
+}
+
 export const ENDING_SUBTITLES: readonly SubtitleCue[] = Object.freeze([
   { at: ENDING_T.noAnswer, id: 'ch1.outro.no_answer' as TextId, duration: NO_ANSWER_SEC },
   { at: ENDING_T.journal, id: 'ch1.outro.journal_entry' as TextId, duration: JOURNAL_ENTRY_SEC },

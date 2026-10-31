@@ -10,6 +10,7 @@ import { CutscenePlayer, sampleShots, shotAt, type CutsceneEnd, type Shot, type 
 import { ENDING_MUSIC, ENDING_SKIP_FADE_SEC, type EndingMusic } from '@/systems/audio/endingMusic';
 import { makeSkyLayer, silhouetteColor, type SkyLayerHandle } from '@/render/skyLayer';
 import { makeGhost, type Ghost } from '@/render/ghost';
+import { makeSpecularGate, type SpecularGate } from '@/render/specularGate';
 import { ATMOSPHERE_PRESETS, type AtmospherePreset } from '@/config/atmosphere';
 import type { SubtitleCue } from '@/ui/Subtitles';
 import {
@@ -21,6 +22,7 @@ import {
   fadeAt,
   fatherOpacityAt,
   fogOpenAt,
+  glassReflectionAt,
   silhouetteAt,
   xiPoseAt,
 } from '@/content/cutscenes/ending';
@@ -47,6 +49,8 @@ export interface S3EndingHost {
   endingMusic: EndingMusic | null;
   gazePlace(): { position: THREE.Vector3; facing: THREE.Vector3 };
   setAtmosphere(a: AtmospherePreset): void;
+  /** 灯室玻璃所在的美术根（env-lighthouse-ch1-s3；白盒 / art=0 时 null） */
+  lampGlassRoot?: () => THREE.Object3D | null;
   alive(): boolean;
 }
 
@@ -58,6 +62,8 @@ const F2_WORLD = { translation: [142.9, -0.5, -268.5] as const, rotationY: 1.9, 
 const SIL_FOG_HIDDEN = 0.03;
 const SIL_FOG_SHOWN = 0.0045;
 export const SILHOUETTE_KEY = 'env-lighthouse-silhouette-far-s3';
+/** 灯室灯笼 12 面玻璃的材质（和风化贴花同一个，alpha 混合；art/tools/build-env-s3.mjs） */
+export const LAMP_GLASS_MATERIAL = /^mat-env-lighthouse-weather/;
 
 const UP = new THREE.Vector3(0, 1, 0);
 
@@ -72,6 +78,10 @@ export class S3Ending {
   private offs: Array<() => void> = [];
   /** 父亲幽灵材质（半透明 + 深度预写，裁定 25 ③） */
   ghost: Ghost | null = null;
+  /** 灯室玻璃镜面开关（裁定 25 ②） */
+  readonly glass: SpecularGate;
+  /** 冒烟 / 截图对比：false = 不按 cue 关玻璃反射（看改之前的样子） */
+  glassGateEnabled = true;
   private fatherStarted = false;
   private fatherDone = false;
   private posePlace: 'gaze' | 'sit' | null = null;
@@ -102,6 +112,8 @@ export class S3Ending {
       onUpdate: (t) => this.step(t),
       onFinish: (how) => this.finish(how),
     });
+    // 进场就挂好（uniform 开关，演出里切换不重新编译）
+    this.glass = makeSpecularGate(h.lampGlassRoot?.() ?? null, LAMP_GLASS_MATERIAL);
     this.cam.name = 'ch1-ending-cam';
     h.scene.add(this.cam);
     this.buildSilhouette();
@@ -203,6 +215,7 @@ export class S3Ending {
       this.cam.updateMatrixWorld(true);
     }
     h.game.ui.fade.set(fadeAt(t));
+    this.glass.value = this.glassGateEnabled ? glassReflectionAt(t) : 1;
   }
 
   private stepXi(t: number): void {
@@ -357,6 +370,7 @@ export class S3Ending {
     if (this.finishing) return;
     this.finishing = true;
     this.endedBy = how;
+    this.glass.value = 1;
     const { game } = this.h;
     // 终态（跳过与完整播放一致）：独白已看过、日志第 6 页、父亲收起
     game.narrative.markSeen('ch1.s3.ignite.mono');

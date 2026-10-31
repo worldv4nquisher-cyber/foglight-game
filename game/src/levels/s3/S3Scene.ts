@@ -224,6 +224,7 @@ export class S3Scene extends LevelScene {
         this.applyAtmosphere(a);
       },
       alive: () => scenes.current === this,
+      lampGlassRoot: () => this.art.root.getObjectByName('env-lighthouse-ch1-s3') ?? null,
     });
     this.endingCutscene = cut;
     this.cleanups.push(() => cut.dispose());
