@@ -407,7 +407,8 @@ export class S3Ending {
    * - journal：日志模型包围盒 8 角投影在画内的比例、画面里的 NDC 范围；
    * - occluded：日志上表面 8×6 网格点里被汐（含手臂 / 头发）挡住的比例（相机射线先打到汐）；
    * - crownPx：汐头发最高点离画面上沿多少像素（按 900 高；负 = 被裁）；
-   * - hand：右手（hand_r）是否在画内、是否被身体挡住。
+   * - hand：右手（hand_r）是否在画内、是否被身体挡住；
+   * - pen：「笔尖和笔杆可见」—— 笔尖点是否被汐挡、笔杆露出多少 cm（pen.ok）。
    */
   frameReport(heightPx = 900): Record<string, unknown> | null {
     const rig = this.h.rig();
@@ -469,14 +470,14 @@ export class S3Ending {
       const sw = m.geometry.attributes.skinWeight;
       const bones = (m as THREE.SkinnedMesh).skeleton?.bones;
       for (let i = 0; i < pos.count; i += step) {
-        // 马尾（hair_ponytail_*）CPU 蒙皮结果和画面对不上（会算到头顶上方 ~0.3 m），头顶只看头部头发
+        // 头顶只看头部头发，不算马尾（hair_ponytail_*）
         if (sk && sw && bones) {
           let best = 0;
           for (let k = 1; k < 4; k++) if (sw.getComponent(i, k) > sw.getComponent(i, best)) best = k;
           if (/ponytail/i.test(bones[sk.getComponent(i, best)]?.name ?? '')) continue;
         }
+        // SkinnedMesh.getVertexPosition 已经含蒙皮（r186），不能再 applyBoneTransform（以前叠了两次，发顶读数偏小约 60 px）
         m.getVertexPosition(i, v);
-        if ((m as THREE.SkinnedMesh).isSkinnedMesh) (m as THREE.SkinnedMesh).applyBoneTransform(i, v);
         v.applyMatrix4(m.matrixWorld).project(cam);
         if (Math.abs(v.x) <= 1.2 && v.z < 1) crownNdc = Math.max(crownNdc, v.y);
       }
@@ -489,6 +490,44 @@ export class S3Ending {
       handIn = inFrame(hp);
       handHidden = hitsXi(hp.clone().addScaledVector(hp.clone().sub(cam.position).normalize(), -0.08));
     }
+    // 钢笔：笔尖 → 笔尾 41 个采样点（笔杆点朝镜头偏 4 mm 取朝镜头一侧的表面；笔尖取轴上点），相机射线先打到汐 = 被挡
+    let pen: Record<string, unknown> | null = null;
+    const prop = this.h.pen?.() ?? null;
+    if (prop) {
+      let ud: { tipLocal?: unknown; tailLocal?: unknown } | null = null;
+      prop.root.traverse((o) => {
+        if (!ud && Array.isArray(o.userData?.tipLocal) && Array.isArray(o.userData?.tailLocal)) ud = o.userData;
+      });
+      const ext = ud as { tipLocal?: number[]; tailLocal?: number[] } | null;
+      if (ext?.tipLocal && ext.tailLocal) {
+        prop.root.updateMatrixWorld(true);
+        const tip = prop.root.localToWorld(new THREE.Vector3().fromArray(ext.tipLocal));
+        const tail = prop.root.localToWorld(new THREE.Vector3().fromArray(ext.tailLocal));
+        const N = 41;
+        const len = tip.distanceTo(tail);
+        let vis = 0;
+        let pattern = '';
+        for (let i = 0; i < N; i++) {
+          const q = tip.clone().lerp(tail, i / (N - 1));
+          if (i > 0) q.add(cam.position.clone().sub(q).normalize().multiplyScalar(0.004));
+          const ok = inFrame(q) && !hitsXi(q);
+          if (ok) vis++;
+          pattern += ok ? '#' : '.';
+        }
+        const tipRun = pattern.indexOf('.') < 0 ? N : pattern.indexOf('.');
+        const tipVisible = pattern[0] === '#';
+        const visibleCm = +((vis / N) * len * 100).toFixed(1);
+        pen = {
+          shown: prop.root.visible,
+          tipVisible,
+          tipRunCm: +((tipRun / (N - 1)) * len * 100).toFixed(1),
+          visibleCm,
+          pattern,
+          // 「笔尖和笔杆可见」：笔尖点不被挡，且整支笔露出 ≥ 2 cm
+          ok: prop.root.visible && tipVisible && visibleCm >= 2,
+        };
+      }
+    }
     return {
       t: +this.t.toFixed(3),
       shot: this.shot,
@@ -497,6 +536,7 @@ export class S3Ending {
       occluded: +(occ / n).toFixed(3),
       crownPx: Number.isFinite(crownNdc) ? Math.round(((1 - crownNdc) / 2) * heightPx) : null,
       hand: { inFrame: handIn, hidden: handHidden },
+      pen,
     };
   }
 

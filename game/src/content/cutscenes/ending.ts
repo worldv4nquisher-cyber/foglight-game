@@ -85,7 +85,7 @@ export function glassReflectionAt(t: number): number {
  * 基：f = 坐写站位 → 日志（水平，= 汐面朝方向），r = f × 上（汐右手），u = 世界上；原点 = 日志 socket（GLB lamp-room-journal-socket）。
  * - back：机位在日志后方（−f）多少米；side：往汐右手（+r，负 = 左肩）；up：比日志高多少。
  * - look：注视点相对日志的偏移（同一个基）。
- * 桌椅 / 日志节点 / xi-sit-write 换了，机位跟着节点走；构图是否合格由 shots-035 的 05 构图自检量（日志 8 角在画内、被汐遮挡比例、发顶离画面上沿）。
+ * 桌椅 / 日志节点 / xi-sit-write 换了，机位跟着节点走；构图是否合格由 shots-035 的 05 构图自检量（日志 8 角在画内、被汐遮挡比例、发顶离画面上沿、笔尖和笔杆可见）。
  */
 export interface OverShoulderKey {
   back: number;
@@ -95,8 +95,9 @@ export interface OverShoulderKey {
 }
 export const OVER_SHOULDER = {
   // 汐右后上方 3/4 过肩（左肩一侧被兜帽 / 马尾挡死日志，见 progress-1031-beam05 §3）：58 s → 74 s 缓推近
-  from: { back: 0.65, side: 1.85, up: 1.3, fov: 38 },
-  to: { back: 0.45, side: 1.55, up: 1.1, fov: 38 },
+  // batch20：比 b4f0d39 抬高 0.15、后拉 0.15、往右手再挪 0.4，让笔尖和笔尾一段笔杆从右手两头露出来（scripts/search-cam05.mjs 离线搜，progress-1031-025）
+  from: { back: 0.8, side: 2.25, up: 1.45, fov: 38 },
+  to: { back: 0.6, side: 1.95, up: 1.25, fov: 38 },
   // 注视点：日志上方 0.38 m（日志和汐的头都在画内）
   look: { back: 0.0, side: 0.0, up: 0.38 },
 };
