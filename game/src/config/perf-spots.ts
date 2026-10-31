@@ -25,6 +25,16 @@ export const PERF_SPOTS: Record<PerfSceneId, readonly PerfSpot[]> = {
     // 025 开场大景（制作人补充位）
     { id: 's1-opening', label: '开场远景：沙滩 → 灯塔方向', eye: [-0.9, 4.2, 9.5], at: [6.58, 4.2, -29.78], fov: 40 }, // text-ok: 预算校验机位说明，只进性能报告
   ],
-  s2: [],
-  s3: [],
+  s2: [
+    // --scan s2（10-31 20:33，极致档主 pass 面数前 3，互相隔开 ≥ 4 m）
+    { id: 's2-white-stone-5', label: '白石 5 +x 侧朝 −x 看（面数 / draw call 最多）', eye: [24.9, 1.41, 1.2], at: [20.4, 0.21, 1.2], fov: 50 }, // text-ok: 预算校验机位说明，只进性能报告
+    { id: 's2-white-stone-1', label: '白石 1 +x 侧朝 −x 看', eye: [21.1, 1.71, 2.8], at: [16.6, 0.51, 2.8], fov: 50 }, // text-ok: 预算校验机位说明，只进性能报告
+    { id: 's2-dial-gate', label: '转盘门 +z 侧朝 −z 看', eye: [4.2, 3.15, 16.25], at: [4.2, 1.95, 11.75], fov: 50 }, // text-ok: 预算校验机位说明，只进性能报告
+  ],
+  s3: [
+    // --scan s3（10-31 20:40，同上）
+    { id: 's3-spawn-south', label: '出生点 +z 侧朝 −z 看（面数 / draw call 最多）', eye: [39.73, 5.2, -86.25], at: [39.73, 4, -90.75], fov: 50 }, // text-ok: 预算校验机位说明，只进性能报告
+    { id: 's3-oil-valve', label: '油阀 −z 侧朝 +z 看', eye: [40.96, 3.1, -129.88], at: [40.96, 1.9, -125.38], fov: 50 }, // text-ok: 预算校验机位说明，只进性能报告
+    { id: 's3-logbook', label: '航海日志 −z 侧朝 +z 看', eye: [40.64, 5.58, -124.6], at: [40.64, 4.38, -120.1], fov: 50 }, // text-ok: 预算校验机位说明，只进性能报告
+  ],
 };

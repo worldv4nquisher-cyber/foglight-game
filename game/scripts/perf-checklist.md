@@ -33,8 +33,8 @@
 
 ### 1 机位（每个场景 3 个面数最差 + 补充位；box 上的面数 / draw call 见本报告第 2 节）
 - **S1**：`s1-raft-back`（draw call 最多）、`s1-neighbor-note`、`s1-spawn-north`、`s1-opening`（025 开场大景，反射最重）
-- **S2**：S2_SPOTS
-- **S3**：S3_SPOTS
+- **S2**：`s2-white-stone-5`（面数 / draw call 最多）、`s2-white-stone-1`、`s2-dial-gate`
+- **S3**：`s3-spawn-south`（面数 / draw call 最多）、`s3-oil-valve`、`s3-logbook`
 
 ### 2 每格记哪些指标
 钉好机位后等 5 s（着色器 / 贴图上传完），DevTools → Performance 录 10 s（不勾 Screenshots），从 Frames / Summary 读：
@@ -43,7 +43,7 @@
 
 ### 3 测试项
 - [ ] **A1 极致档（`quality=ultra`）· 全部机位**：S1 / S2 / S3 用 `__perfSpot` 走完第 1 节全部机位，按第 2 节记。另外每个场景不钉机位正常走一遍，记整段平均 FPS 和最低值（F3 目测）。**目标：每个机位平均 ≥ 60 fps，1% low ≥ 50 fps**
-- [ ] **A2 高档（`quality=high`）**：每场景面数最高的 1 个机位（S1 `s1-raft-back`、S2 S2_TOP、S3 S3_TOP）
+- [ ] **A2 高档（`quality=high`）**：每场景面数最高的 1 个机位（S1 `s1-raft-back`、S2 `s2-white-stone-5`、S3 `s3-spawn-south`）
 - [ ] **A3 水面反射开销对比（S1，极致档）**：`s1-opening` 和 `s1-raft-back` 两个机位，各用 `reflect=off`、`reflect=0.5`、`reflect=1` 三个地址重开（例：`U&reflect=off`），每次都按第 2 节记，并在控制台记一行 `__game.scenes.current.reflection.debugLine()`。填「反射对比表」。用途：反射默认强度用户还没定（制作人拿 `reflectK=0` / `0.5` / `1` 对比图问用户，图在 docs/tasks/shots-025/strength/），这组数字给出每一档 RT 分辨率的真实 GPU 代价；强度 `reflectK` 只改混合权重、0 以外不改开销（0 = 等同 off）。box 参考：反射 pass +45～72 draw call、+2.8 M 三角面（off → 开）；0.5 / 1 的差别只在 RT 像素数（1440p 下 1280×720 vs 2560×1440，4 倍像素）
 - [ ] **A4 S3 结尾演出**：`U` 改 `scene=s3`，控制台 `__s3.lightTheLamp()`；Performance 录全程，记 05 过肩写日志、06 / 07 拉远出海各段 FPS，以及**第一次**播放有没有 > 100 ms 的长帧（着色器编译）
 - [ ] **A5 卡顿**：正常流程切场景（S1→S2→S3）、开机关、第一次进 S3 演出时有没有 > 100 ms 长帧，记位置和时长
