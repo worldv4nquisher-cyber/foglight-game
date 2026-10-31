@@ -3440,15 +3440,15 @@ CHECKS.push({
 const cut035Hook = `(() => {
   const c = __s3.endingCutscene; if (!c || c.__hooked) return 0; c.__hooked = true;
   window.__cut035 = { cues: [], frames: 0, end: null, sceneAt: null };
-  const step = c.step.bind(c); let n = 0, lastT = -1;
+  const step = c.step.bind(c); let n = 0, lastT = -1, lastPrev = -1;
   const audioPos = () => { const a = __game.audio, em = __s3.endingMusic; return a.musicKey === 'mus-ending-ch1' && em?.ignitedAt != null ? a.context.currentTime - em.ignitedAt : null; };
-  c.step = (t) => { step(t); window.__cut035.frames++; const L = c.player.log; const prevT = lastT; lastT = t;
+  c.step = (t) => { step(t); window.__cut035.frames++; const L = c.player.log; const prevT = lastT; lastPrev = prevT; lastT = t;
     while (n < L.length) { const l = L[n++]; const f = __s3.father, an = __s3.rig?.animator, sub = __game.ui.subtitles.current;
       window.__cut035.cues.push({ id: l.id, at: l.at, firedAt: +l.firedAt.toFixed(3), prevT: +prevT.toFixed(3), src: l.source, audio: audioPos(), shot: c.shot, cam: __s3.cameraFollow.cutsceneName,
         sub: sub?.id ?? null, xi: an?.posing ?? null, fMode: f?.mode ?? null, fT: f ? +f.time.toFixed(3) : null, fVis: f?.visible ?? null,
         fog: +(__s3.scene.fog?.density ?? 0).toFixed(5), sil: c.silhouette?.visible ?? null, fade: +__game.ui.fade.opacity.toFixed(3), page6: __game.narrative.outroEntryUnlocked }); } };
   const fin = c.finish.bind(c);
-  c.finish = (how) => { if (window.__cut035.end === null) window.__cut035.end = { how, t: +c.t.toFixed(3), prevT: +lastT.toFixed(3), src: c.clock.source, wall: performance.now() }; fin(how); };
+  c.finish = (how) => { if (window.__cut035.end === null) window.__cut035.end = { how, t: +c.t.toFixed(3), prevT: +lastPrev.toFixed(3), src: c.clock.source, wall: performance.now() }; fin(how); };
   __game.events.on('scene:change', () => { if (window.__cut035.sceneAt === null) window.__cut035.sceneAt = { t: c.t, audio: audioPos(), wall: performance.now(), endedBy: c.endedBy }; });
   return 1; })()`;
 const cut035Row = (r) => `${r.id} 目标 ${r.at} s / 触发 ${r.firedAt.toFixed(2)} s（上一帧 ${r.prevT.toFixed(2)}，${r.src}${r.audio === null ? '' : `，曲 ${r.audio.toFixed(2)} s`}）镜头 ${r.shot}`;
@@ -3475,8 +3475,8 @@ CHECKS.push({
     const bad = [];
     for (const c of r.cues) {
       if (c.src !== 'audio') bad.push(`${c.id} 时钟来源 ${c.src}`);
-      // 软件渲染一帧 0.3–0.7 s：判据 = 跨过卡点的第一帧触发（上一帧 t < 卡点 ≤ 本帧 t），偏差 < 1 帧
-      if (!(c.firedAt >= c.at && c.prevT < c.at && c.firedAt - c.at < 1.0)) bad.push(`${c.id} 触发 ${c.firedAt}（上一帧 ${c.prevT}）vs ${c.at}`);
+      // 软件渲染一帧 0.3–2.7 s（机器负载而定）：判据 = 跨过卡点的第一帧触发（上一帧 t < 卡点 ≤ 本帧 t），偏差 < 1 帧；时间对不对另由「和曲子差 ≤ 0.1 s」管
+      if (!(c.firedAt >= c.at && c.prevT < c.at)) bad.push(`${c.id} 触发 ${c.firedAt}（上一帧 ${c.prevT}）vs ${c.at}`);
       if (c.audio !== null && Math.abs(c.audio - c.firedAt) > 0.1) bad.push(`${c.id} 和曲子差 ${(c.audio - c.firedAt).toFixed(3)}`);
     }
     if (C.lens.shot !== 'far-exterior' || C.lens.cam !== 'ch1-ending') bad.push('0:04 应切塔外远景 ' + JSON.stringify(C.lens));
@@ -3494,7 +3494,7 @@ CHECKS.push({
     const sa = r.sceneAt;
     // 演出结束 = 跨过 106.02（曲子结束）的第一帧；之后 completeChapter 异步切场景（软件渲染下约 1 s 墙钟），只要求墙钟 3 s 内切到
     const fe = r.end, endAt = 106.02;
-    if (!fe || fe.how !== 'end' || !(fe.t >= endAt && fe.prevT < endAt && fe.t - endAt < 1.0)) bad.push('演出结束时刻 ' + JSON.stringify(fe));
+    if (!fe || fe.how !== 'end' || !(fe.t >= endAt && fe.prevT < endAt)) bad.push('演出结束时刻 ' + JSON.stringify(fe));
     if (!sa || sa.endedBy !== 'end' || !fe || sa.wall - fe.wall > 3000) bad.push('结束页时刻 ' + JSON.stringify({ sa, fe }));
     if (bad.length) throw new Error(bad.join('；'));
     await sleep(1500);
