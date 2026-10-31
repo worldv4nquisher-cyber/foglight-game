@@ -1210,7 +1210,8 @@ const CHECKS = [
       const hudTxt = await evaluate(`({ loc: document.querySelector('.hud-location')?.textContent, hint: document.querySelector('.hud-hint')?.textContent, kbd: document.querySelectorAll('.hud-hint kbd').length })`);
       const wantHint = TEXT['ui.hud.controls'].replace(/\s+/g, '');
       if (hudTxt.loc !== TEXT['ch1.s1.location.title'] || (hudTxt.hint ?? '').replace(/\s+/g, '') !== wantHint || hudTxt.kbd < 9) throw new Error('S1 地名 / 操作提示不是文本表里的 ' + JSON.stringify(hudTxt));
-      if (!(await until(`__game.assets.isGroupLoaded('s2')`, 30000))) throw new Error('S1 没有后台预加载 s2');
+      // 预加载排在懒加载场景曲有结果之后（art=1 时最多再等 45 s 超时）
+      if (!(await until(`__game.assets.isGroupLoaded('s2')`, LOAD_MS + 45000))) throw new Error('S1 没有后台预加载 s2');
       // 桌面专做（GDD §15）：v0.1 不注册 TouchInput，页面上没有任何触屏按钮 / 摇杆
       const touchEls = await evaluate(`document.querySelectorAll('.touch-controls, .touch-btn, .joystick-base').length`);
       if (touchEls !== 0) throw new Error('v0.1 不应显示触屏控件，找到 ' + touchEls + ' 个');
@@ -2858,6 +2859,16 @@ CHECKS.push({
 
 // 033 / 036 配乐：主菜单 art=1 → mus-menu 整文件循环（未交互时 context 挂起不报错，第一次点击后真正出声）→ 新游戏进 S1 → 和 mus-s1-ebb-shore 2 s 交叉淡化。
 // 用 AnalyserNode 挂在音乐总线上量电平证明在播；等待按 AudioContext 时钟 / 游戏时间（__game.time.elapsed），不按墙钟
+/** 懒加载诊断：导航前注入（长任务 / rAF 断档 / 计时器迟到） */
+const LAZY_DIAG_INIT = `(() => { const d = (window.__diag = { lt: [], gap: [], late: [] });
+  try { new PerformanceObserver((l) => { for (const e of l.getEntries()) if (e.duration >= 1000) d.lt.push([Math.round(e.startTime), Math.round(e.duration)]); }).observe({ type: 'longtask' }); } catch {}
+  let last = 0; const f = (t) => { if (last && t - last >= 1500) d.gap.push([Math.round(last), Math.round(t - last)]); last = t; requestAnimationFrame(f); }; requestAnimationFrame(f);
+  let due = performance.now() + 500; setInterval(() => { const n = performance.now(); if (n - due >= 1500) d.late.push([Math.round(due), Math.round(n - due)]); due = n + 500; }, 500); })()`;
+/** 失败时：诊断记录 + 场景曲请求前后 2 s 起的全部资源请求（名 / 开始 / 结束 / 字节） */
+const LAZY_DIAG_DUMP = `(() => { const d = window.__diag ?? {}; const req = __game.scenes.current?.musicRequestedAt ?? 0;
+  const rs = performance.getEntriesByType('resource').filter((e) => e.responseEnd >= req - 2000).map((e) => [e.name.split('/').pop().slice(0, 40), Math.round(e.startTime), Math.round(e.responseEnd), e.encodedBodySize]);
+  return { lt: d.lt, gap: d.gap, late: d.late, res: rs.slice(0, 60), nres: rs.length, tr: __game.flow?.lastTransition ?? null }; })()`;
+
 CHECKS.push({
   name: 'v0.1-033 配乐：主菜单 mus-menu 循环 + 首次交互后出声、新游戏进 S1 与 mus-s1-ebb-shore 2 s 交叉淡化、menu 组无 preview',
   async run({ evaluate, cdp, sleep }) {
@@ -2890,6 +2901,8 @@ CHECKS.push({
       await waitClock(`${audio}.context.currentTime`, 8);
       return evaluate(liveRead);
     };
+    // 懒加载超时诊断（033menu 两次 45 s 超时）：主线程长任务 ≥1 s、rAF 断档 ≥1.5 s、计时器迟到 ≥1.5 s，失败时连同同期资源请求一起输出
+    await cdp.initScript(LAZY_DIAG_INIT);
     await evaluate(`localStorage.clear(); 1`);
     await cdp.gotoMenu('art=1');
     if (!(await until(`${audio}.musicKey === 'mus-menu'`, 30000))) throw new Error('主菜单没起 mus-menu ' + JSON.stringify(await evaluate(`({ k: ${audio}.musicKey, log: ${audio}.musicLog, has: !!__game.assets.getAudio('mus-menu') })`)));
@@ -2913,10 +2926,10 @@ CHECKS.push({
     const r = await evaluate(`(() => { const e = document.querySelector('.main-menu [data-act="new"]'); const b = e.getBoundingClientRect(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 }; })()`);
     await cdp.click(r.x, r.y);
     // 交叉淡化一开始就读（不等别的），淡化中途新曲增益应在 0–1 之间
-    if (!(await until(`__game.scenes.current?.name === 's1-ebb-shore' && ${audio}.musicKey === 'mus-s1-ebb-shore'`, 240000))) throw new Error('新游戏进 S1 后没切到 mus-s1-ebb-shore ' + JSON.stringify(await evaluate(`({ s: __game.scenes.current?.name, k: ${audio}.musicKey, log: ${audio}.musicLog, res: __game.scenes.current?.musicLazyResult, ff: __game.scenes.current?.musicFirstFrameAt, req: __game.scenes.current?.musicRequestedAt, now: performance.now(), fail: __game.assets.lazyAudioFailures, rt: performance.getEntriesByType('resource').filter((e) => /mus-s1/.test(e.name)).map((e) => ({ s: Math.round(e.startTime), e: Math.round(e.responseEnd), st: e.responseStatus })) })`)));
+    if (!(await until(`__game.scenes.current?.name === 's1-ebb-shore' && ${audio}.musicKey === 'mus-s1-ebb-shore'`, 240000))) throw new Error('新游戏进 S1 后没切到 mus-s1-ebb-shore ' + JSON.stringify(await evaluate(`({ s: __game.scenes.current?.name, k: ${audio}.musicKey, log: ${audio}.musicLog, res: __game.scenes.current?.musicLazyResult, ff: __game.scenes.current?.musicFirstFrameAt, req: __game.scenes.current?.musicRequestedAt, now: performance.now(), fail: __game.assets.lazyAudioFailures, rt: performance.getEntriesByType('resource').filter((e) => /mus-s1/.test(e.name)).map((e) => ({ s: Math.round(e.startTime), e: Math.round(e.responseEnd), st: e.responseStatus })), diag: ${LAZY_DIAG_DUMP} })`)));
     const x = await evaluate(`(() => { const l = ${audio}.musicLog.at(-1); const v = ${audio}.music; const sc = __game.scenes.current; const ff = __game.lastFirstFrame;
       const res = performance.getEntriesByType('resource').filter((e) => /mus-s1-ebb-shore\\.ogg/.test(e.name)).map((e) => ({ start: e.startTime, end: e.responseEnd }));
-      return { l, now: ${audio}.context.currentTime, loop: v.source.loop, g: v.gain.gain.value, ff, req: sc.musicRequestedAt, ffSeen: sc.musicFirstFrameAt, res, menuStillPlaying: ${audio}.musicLog.filter((e) => e.op === 'stop').length }; })()`);
+      return { l, now: ${audio}.context.currentTime, loop: v.source.loop, g: v.gain.gain.value, ff, req: sc.musicRequestedAt, ffSeen: sc.musicFirstFrameAt, res, menuStillPlaying: ${audio}.musicLog.filter((e) => e.op === 'stop').length, diag: ${LAZY_DIAG_DUMP} }; })()`);
     if (x.l.op !== 'play' || x.l.from !== 'mus-menu' || x.l.fade !== 2 || !x.loop) throw new Error('进 S1 应从 mus-menu 2 s 交叉淡化 ' + JSON.stringify(x));
     // 首帧证据：S1 首帧 render 时刻 ≤ 发起请求 ≤ 资源请求开始 ≤ 淡入开始（performance.now() 同一时基）
     if (!x.ff || x.ff.scene !== 's1-ebb-shore' || x.ffSeen !== x.ff.at) throw new Error('没有 S1 的 scene:firstFrame 记录 ' + JSON.stringify(x.ff));
@@ -2933,6 +2946,11 @@ CHECKS.push({
     if (fs1.key !== 'mus-s1-ebb-shore') throw new Error('S1 稳定后应在播 S1 曲 ' + fs1.key);
     if (Math.abs(fm.out - fs1.out) > 1) throw new Error(`主菜单曲与 S1 曲整条电平差 ${(fm.out - fs1.out).toFixed(2)} dB > 1 dB`);
     if (lv2 < -90) throw new Error('S1 曲在播但音乐总线没有电平');
+    // 诊断：下载窗口内同时在下的其他请求 / 主线程长任务（判断慢在哪：资源排队 vs 主线程被占）
+    const [ds, de] = [x.res[0].start, x.l.wall];
+    const co = x.diag.res.filter((r) => !/mus-s1-ebb-shore/.test(r[0]) && r[1] < x.res[0].end && r[2] > ds);
+    const lt = (x.diag.lt ?? []).filter((t) => t[0] + t[1] > ds && t[0] < de);
+    out.push(`下载窗口同期其他请求 ${co.length} 个 / ${(co.reduce((a, r) => a + r[3], 0) / 1e6).toFixed(2)} MB；请求→淡入期间主线程长任务(≥1 s) ${lt.length} 个共 ${(lt.reduce((a, t) => a + t[1], 0) / 1000).toFixed(1)} s` + (co.length ? `（${co.slice(0, 8).map((r) => r[0]).join(', ')}）` : ''));
     out.push(
       `进 S1：首帧 render @${x.ff.at.toFixed(0)} ms → 发起请求 @${x.req.toFixed(0)} ms（+${(x.req - x.ff.at).toFixed(0)}）→ 下载 ${x.res[0].start.toFixed(0)}–${x.res[0].end.toFixed(0)} ms → 淡入 @${x.l.wall.toFixed(0)} ms` +
         `；mus-menu → mus-s1-ebb-shore 交叉淡化 ${x.l.fade} s（读数时 ${(x.now - x.l.at).toFixed(2)} s 处新曲增益 ${x.g.toFixed(2)}），2.2 s 后增益 ${y.g.toFixed(2)}；S1 稳定后电平：整条 ${fs1.out.toFixed(2)} dBFS（文件 ${fs1.file.toFixed(2)} + 曲目 ${fs1.track.toFixed(2)} + 总线 ${fs1.bus.toFixed(2)}），实采 8 s ${lv2.toFixed(1)} dBFS；主菜单 − S1 整条差 ${(fm.out - fs1.out).toFixed(2)} dB`,
@@ -3945,6 +3963,10 @@ const cdp = {
     await send('Fetch.disable', {}, sessionId);
     await send('Network.setCacheDisabled', { cacheDisabled: false }, sessionId);
     await send('Network.disable', {}, sessionId);
+  },
+  /** 之后每次导航都先跑的脚本（诊断用：长任务 / rAF 断档记录） */
+  async initScript(source) {
+    await send('Page.addScriptToEvaluateOnNewDocument', { source }, sessionId);
   },
   async key(code, key = code, keyCode = 0) {
     const base = { code, key, windowsVirtualKeyCode: keyCode, nativeVirtualKeyCode: keyCode };
