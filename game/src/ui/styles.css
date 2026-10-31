@@ -742,6 +742,48 @@ body {
   transition: width 0.12s linear;
 }
 
+/* 035 跳过提示：右下角「按住 空格 跳过」+ 圆环；盖在黑场之上（结尾淡出、结束页上也看得到） */
+.skip-hint {
+  position: absolute;
+  right: 28px;
+  bottom: 26px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  color: var(--ui-text);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+  pointer-events: none !important;
+  z-index: 11;
+}
+
+.skip-hint[hidden] {
+  display: none;
+}
+
+.skip-hint-ring {
+  width: 22px;
+  height: 22px;
+}
+
+.skip-hint-track,
+.skip-hint-fill {
+  fill: none;
+  stroke-width: 2.5;
+}
+
+.skip-hint-track {
+  stroke: rgba(169, 188, 196, 0.25);
+}
+
+.skip-hint-fill {
+  stroke: var(--ui-primary);
+  stroke-linecap: round;
+  transform: rotate(-90deg);
+  transform-origin: 50% 50%;
+}
+
 /* ---------- 字幕 / 阅读界面 / 日志（v0.1-005） ---------- */
 /* 字幕：底部居中、无底框、浅阴影（style-guide §6）；字号由 --subtitle-size 控制（设置 小 / 中 / 大） */
 .subtitles {

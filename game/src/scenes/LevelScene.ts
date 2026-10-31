@@ -300,7 +300,16 @@ export abstract class LevelScene extends BaseScene {
       keys: this.establishingKeys(spawn),
       onSkip: () => this.establishingAfterSkip(spawn, hold),
     });
-    return this.cameraFollow.playEstablishing(track);
+    const p = this.cameraFollow.playEstablishing(track);
+    // 035：建立镜头的跳过仍由 CameraFollowSystem（skipHold）处理，右下角提示 / 圆环借 SkipController 显示
+    const { input, ui } = this.game;
+    const off = ui.skip.register(
+      { id: 'establishing', progress: () => input.getHoldProgress('skipHold'), active: () => this.cameraFollow.cutsceneSkippable },
+      performance.now(),
+    );
+    void p.then(off);
+    this.cleanups.push(off);
+    return p;
   }
 
   // ---------------------------------------------------------------- 搭建

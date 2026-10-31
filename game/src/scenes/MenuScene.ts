@@ -4,7 +4,10 @@ import { Rain } from '@/world/Rain';
 import { BaseScene } from './BaseScene';
 import { MENU_MUSIC } from './levels';
 import { switchMusic } from '@/systems/audio/music';
-import { ENDING_MUSIC } from '@/systems/audio/endingMusic';
+import { ENDING_MUSIC, ENDING_SKIP_FADE_SEC } from '@/systems/audio/endingMusic';
+
+/** 035：结束页上跳过结尾曲尾巴的目标 id */
+export const ENDING_PAGE_SKIP_ID = 'ch1-ending-page';
 
 /** 主菜单背景的雨丝数量（远少于游戏内，主菜单要轻） */
 const MENU_RAIN_DROPS = 4000;
@@ -193,11 +196,34 @@ export class ChapterEndScene extends MenuScene {
    * 结尾曲正在放就让它放完（不淡出、不放主菜单曲）；否则（直接进结束页 / 结尾曲缺失 / 已跳过）把上一首 2 s 淡出
    */
   protected override startMusic(): void {
+    this.registerEndingSkip();
     if (this.game.audio.musicKey === ENDING_MUSIC) return;
     switchMusic(this.game.audio, (k) => this.game.assets.getAudio(k), null);
   }
 
+  /** 035：结束页上结尾曲还在放（演出 1:46 后的尾巴 / 直接进结束页）——同样按住 Space 1 s 跳过 → 0.75 s 淡出 */
+  private registerEndingSkip(): void {
+    const audio = this.game.audio;
+    if (audio.musicKey !== ENDING_MUSIC) return;
+    this.offSkip = this.game.ui.skip.register(
+      {
+        id: ENDING_PAGE_SKIP_ID,
+        active: () => audio.musicKey === ENDING_MUSIC,
+        onSkip: () => {
+          (document.activeElement as HTMLElement | null)?.blur?.();
+          this.game.events.emit('cutscene:skip', { id: ENDING_PAGE_SKIP_ID });
+          if (audio.musicKey === ENDING_MUSIC) audio.stopMusic(ENDING_SKIP_FADE_SEC);
+        },
+      },
+      performance.now(),
+    );
+  }
+
+  private offSkip: (() => void) | null = null;
+
   override exit(): void {
+    this.offSkip?.();
+    this.offSkip = null;
     this.game.ui.chapterEnd.hide();
   }
 }

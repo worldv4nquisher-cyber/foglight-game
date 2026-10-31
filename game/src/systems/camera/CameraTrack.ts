@@ -76,6 +76,11 @@ export interface CameraTrackOptions {
    * v0.1-013 制作人裁定：画质检测第 1 轮没测完就跳过开场演出 → 接一段 3 s 不可跳过（skippable: false）的 S1 建立镜头。
    */
   onSkip?: () => CameraTrack | null;
+  /**
+   * 035：轨道时间来源。给了就每帧 t = clock()（演出时钟 = 音频时钟 / 后备时钟），不再累加游戏 dt——
+   * 软渲染掉帧时镜头也和音乐卡点对齐。
+   */
+  clock?: () => number;
   name?: string;
 }
 
@@ -89,6 +94,7 @@ export class CameraTrack {
   readonly holdUntil: (() => boolean) | null;
   readonly maxHold: number;
   readonly onSkip: (() => CameraTrack | null) | null;
+  readonly clock: (() => number) | null;
   readonly name: string;
   private readonly keys: Array<{ time: number; pose: CameraPose }>;
   private readonly node: THREE.Object3D | null;
@@ -100,6 +106,7 @@ export class CameraTrack {
     this.holdUntil = opts.holdUntil ?? null;
     this.maxHold = opts.maxHold ?? 5;
     this.onSkip = opts.onSkip ?? null;
+    this.clock = opts.clock ?? null;
     this.name = opts.name ?? 'track';
     const keys = [...(opts.keys ?? [])].sort((a, b) => a.time - b.time);
     let lastFov = 55;

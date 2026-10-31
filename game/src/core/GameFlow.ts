@@ -151,6 +151,9 @@ export class GameFlow {
     this.game.resume();
     await this.game.scenes.change('chapter-end');
     this.releaseLevelGroups([]);
+    // 035：结尾演出淡到黑（或跳过的 0.75 s 黑场）后进来 → 结束页从黑场淡入
+    const f = this.game.ui.fade.opacity;
+    if (f > 0) await this.animateFade(f, 0, TRANSITION.fadeIn);
   }
 
   /** 进场时取走场景出口带过来的入口 id（LevelScene.enter 调用；一次性） */

@@ -1,0 +1,100 @@
+import { ENDING_CUES, ENDING_CUTSCENE_ID } from '@/systems/audio/endingMusic';
+import type { SubtitleCue } from '@/ui/Subtitles';
+import type { TextId } from '@/content/text';
+
+/**
+ * 第一章结尾演出（035）时间轴数据：t = 0 = lighthouse:ignited 那一帧（结尾曲在 AudioContext 里起播的时刻）。
+ * 卡点 = art/audio/music/README.md CUES = text-ch1 §5（ENDING_CUES）；父亲回忆段 / 淡出 / 结束是程序按 §5 + README-031 排的。
+ * 纯数据 + 纯函数（Node 单测用）；场景里的执行见 levels/s3/ending.ts。
+ */
+export const ENDING_ID = ENDING_CUTSCENE_ID;
+
+/** xi-stand-gaze / father-hand-on-head 时长（180 帧 / 30 fps）：父亲在汐眺望第 2 个循环的第 0 帧入场，两人同帧（README-031 §4） */
+export const GAZE_LOOP_SEC = 6.0;
+
+export const ENDING_T = Object.freeze({
+  ignite: ENDING_CUES.ignite,
+  /** 0:04 透镜转、切塔外远景 */
+  lens: ENDING_CUES.lens,
+  /** 0:14 雾被推开（14 → 22 s 雾密度降到 FOG_OPEN_K） */
+  fogOpen: ENDING_CUES.fog_open,
+  fogOpenFull: ENDING_CUES.fog_open + 8,
+  /** 0:24 远处第二座灯塔剪影从雾口浮出（24 → 29 s） */
+  silhouette: ENDING_CUES.silhouette,
+  silhouetteFull: ENDING_CUES.silhouette + 5,
+  /** 0:30 汐在灯室玻璃前眺望（xi-stand-gaze 第 0 帧） */
+  gaze: ENDING_CUES.gaze,
+  /** 父亲回忆：汐眺望第 2 循环第 0 帧（36 s）起，hand-on-head 6 s；armDown 5.667 s 后淡出 */
+  fatherIn: ENDING_CUES.gaze + GAZE_LOOP_SEC,
+  fatherFadeOut: ENDING_CUES.gaze + GAZE_LOOP_SEC + 5.667,
+  fatherOut: ENDING_CUES.gaze + GAZE_LOOP_SEC + 6.6,
+  /** 回到眺望长镜头 */
+  regaze: ENDING_CUES.gaze + GAZE_LOOP_SEC + 6.0,
+  /** 0:50 「那边没有亮。」 */
+  noAnswer: ENDING_CUES.no_answer,
+  /** 0:58 坐下写日志 */
+  sitWrite: ENDING_CUES.sit_write,
+  /** 1:06 journal_entry */
+  journal: ENDING_CUES.journal,
+  /** 1:14 镜头后拉 */
+  pullBack: ENDING_CUES.pull_back,
+  /** 1:35 淡出 */
+  fadeOut: ENDING_CUES.fade_out,
+  /** 画面全黑（曲子 106 s 静音前 1 s） */
+  black: ENDING_CUES.silence - 1,
+  /** 演出结束 → 章节结束页（曲子 106 s 静音） */
+  end: ENDING_CUES.silence,
+});
+
+/** 父亲回忆段幽灵材质的最大不透明度 */
+export const FATHER_GHOST_OPACITY = 0.55;
+/** 雾口：雾密度最终倍率 */
+export const FOG_OPEN_K = 0.4;
+
+export const NO_ANSWER_SEC = 3.0;
+export const JOURNAL_ENTRY_SEC = 6.0;
+
+export const ENDING_SUBTITLES: readonly SubtitleCue[] = Object.freeze([
+  { at: ENDING_T.noAnswer, id: 'ch1.outro.no_answer' as TextId, duration: NO_ANSWER_SEC },
+  { at: ENDING_T.journal, id: 'ch1.outro.journal_entry' as TextId, duration: JOURNAL_ENTRY_SEC },
+]);
+
+/** 时间轴上的 cue（冒烟逐条对表；顺序即触发顺序） */
+export const ENDING_CUE_LIST = Object.freeze([
+  ['lens', ENDING_T.lens],
+  ['fog_open', ENDING_T.fogOpen],
+  ['silhouette', ENDING_T.silhouette],
+  ['gaze', ENDING_T.gaze],
+  ['father_in', ENDING_T.fatherIn],
+  ['father_out', ENDING_T.fatherOut],
+  ['no_answer', ENDING_T.noAnswer],
+  ['sit_write', ENDING_T.sitWrite],
+  ['journal', ENDING_T.journal],
+  ['pull_back', ENDING_T.pullBack],
+  ['fade_out', ENDING_T.fadeOut],
+] as const);
+
+const clamp01 = (x: number): number => Math.min(1, Math.max(0, x));
+const smooth = (a: number, b: number, t: number): number => {
+  const k = clamp01((t - a) / (b - a));
+  return k * k * (3 - 2 * k);
+};
+
+/** 雾口进度 0–1（14 → 22 s） */
+export const fogOpenAt = (t: number): number => smooth(ENDING_T.fogOpen, ENDING_T.fogOpenFull, t);
+/** 剪影显出 0–1（24 → 29 s） */
+export const silhouetteAt = (t: number): number => smooth(ENDING_T.silhouette, ENDING_T.silhouetteFull, t);
+/** 黑场 0–1（95 → 105 s） */
+export const fadeAt = (t: number): number => smooth(ENDING_T.fadeOut, ENDING_T.black, t);
+/** 父亲幽灵不透明度（36 s 0.8 s 淡入，armDown 后淡出） */
+export function fatherOpacityAt(t: number): number {
+  if (t < ENDING_T.fatherIn || t >= ENDING_T.fatherOut) return 0;
+  const k = Math.min(smooth(ENDING_T.fatherIn, ENDING_T.fatherIn + 0.8, t), 1 - smooth(ENDING_T.fatherFadeOut, ENDING_T.fatherOut, t));
+  return k * FATHER_GHOST_OPACITY;
+}
+/** 汐在演出里的 clip（null = 不管）：30–58 s xi-stand-gaze（t − 30 取模），58 s 起 xi-sit-write */
+export function xiPoseAt(t: number): { clip: 'xi-stand-gaze' | 'xi-sit-write'; time: number } | null {
+  if (t >= ENDING_T.sitWrite) return { clip: 'xi-sit-write', time: t - ENDING_T.sitWrite };
+  if (t >= ENDING_T.gaze) return { clip: 'xi-stand-gaze', time: (t - ENDING_T.gaze) % GAZE_LOOP_SEC };
+  return null;
+}

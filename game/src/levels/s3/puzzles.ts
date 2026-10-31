@@ -49,7 +49,7 @@ export const S3_DOOR_SEC = 1.4;
  */
 export const IGNITE_MONO_DELAY = 0.5;
 export const IGNITE_MONO_SEC = 3.0;
-/** 结尾演出 0:04：透镜开始转动、切塔外远景（035 接管；白盒阶段 = 章节结束页） */
+/** 结尾演出 0:04：透镜开始转动、切塔外远景（= ENDING_CUES.lens；035 起不再在这里切章节结束页，演出结束才切） */
 export const OUTRO_CUT_SEC = 4.0;
 /** 「没有油。」最短间隔（s） */
 export const NO_OIL_INTERVAL = 10;
@@ -520,21 +520,13 @@ export function buildS3Puzzles(d: S3PuzzleDeps): S3Puzzles {
   const setLeverAngle = (deg: number): void => {
     leverSwing.rotation.x = XI_IGNITE_LEVER_ALIGN.pullSign * deg * (Math.PI / 180);
   };
-  // 结尾演出时间轴（点燃 = 0:00）：独白走字幕时间轴（锁定、顶掉其他独白），到 0:04 结束时间轴
+  // 点燃后过去的游戏时间（调试 / 冒烟读）。结尾演出（独白、镜头、字幕）由 levels/s3/ending.ts 按演出时钟（音频时钟）驱动
   let outroT = -1;
-  const subs = game.ui.subtitles.track;
   const startOutro = (): void => {
     outroT = 0;
-    if (game.narrative.hasSeen('ch1.s3.ignite.mono')) return;
-    subs.setTimeline([{ at: IGNITE_MONO_DELAY, id: 'ch1.s3.ignite.mono', duration: IGNITE_MONO_SEC }]);
-    subs.playAt(0);
   };
   const stepOutro = (dt: number): void => {
-    if (outroT < 0 || outroT > OUTRO_CUT_SEC) return;
-    outroT += dt;
-    if (!subs.inTimeline) return;
-    if (outroT >= OUTRO_CUT_SEC) subs.endTimeline();
-    else subs.playAt(outroT);
+    if (outroT >= 0) outroT += dt;
   };
   const igniteNow = (): void => {
     if (state.ignited) return;

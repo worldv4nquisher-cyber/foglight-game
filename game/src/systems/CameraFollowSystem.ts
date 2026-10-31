@@ -212,6 +212,16 @@ export class CameraFollowSystem {
     });
   }
 
+  /** 当前在播、可按住空格跳过的演出轨道（035 跳过提示借它显示） */
+  get cutsceneSkippable(): boolean {
+    return this.mode.kind === 'cutscene' && this.mode.track.skippable;
+  }
+
+  /** 035：立即结束当前演出（交还输入上下文，不做 0.8 s 交还过渡） */
+  stopCutscene(): void {
+    if (this.mode.kind === 'cutscene') this.finishCutscene(true);
+  }
+
   /** 场景建立镜头（GDD §4：进入新场景 3 s，结束交还控制） */
   playEstablishing(track: CameraTrack): Promise<void> {
     return this.playCutscene(track);
@@ -440,7 +450,7 @@ export class CameraFollowSystem {
   }
 
   private updateCutscene(mode: Extract<Mode, { kind: 'cutscene' }>, dt: number): void {
-    mode.t += dt;
+    mode.t = mode.track.clock ? Math.max(mode.t, mode.track.clock()) : mode.t + dt;
     if (mode.track.skippable && this.input.consumePressed('skipHold')) {
       const next = mode.track.onSkip?.() ?? null;
       if (next) {

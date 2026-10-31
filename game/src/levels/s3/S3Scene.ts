@@ -18,13 +18,12 @@ import type { Collider } from '@/systems/PhysicsSystem';
 import { S3, S3_FRAME, alongDoor, cameraYawFacing, toLocal, toWorld } from './layout';
 import { buildS3Greybox, defaultS3GreyboxMaterials, type S3Greybox } from './greybox';
 import { buildS3Art, S3_DOOR_PROP_KEY, type S3Art } from './art';
-import { buildS3Puzzles, OUTRO_CUT_SEC, type S3Puzzles } from './puzzles';
+import { buildS3Puzzles, type S3Puzzles } from './puzzles';
+import { S3Ending } from './ending';
 import { doorLightmapScale } from '@/render/lightmap';
 import { EndingMusic } from '@/systems/audio/endingMusic';
 import { s3UpperLayerGain } from './music';
 import { S3_TOWER_CLOSED_LM } from '@/levels/lightmaps';
-
-/** 点灯后多久进章节结束页（s）。结尾演出（035）做好后由演出结束触发 */
 
 /**
  * S3 初望灯塔（v0.1-015 白盒 + 美术 020 接入；布局见 ./layout.ts，取代 010 的占位 S3LighthouseScene）。
@@ -48,7 +47,8 @@ export class S3Scene extends LevelScene {
   private readonly colliderOf = new Map<THREE.Mesh, Collider>();
   private readonly mats = defaultS3GreyboxMaterials();
   private ending = false;
-  private ended = false;
+  /** 035 结尾演出（afterEnter 建；点燃那一帧 start） */
+  endingCutscene: S3Ending | null = null;
   /** 031 父亲（BUG-023）：有 char-father + anims 才有；默认隐藏，回忆演出（035）/ dev 预览 ?father=gaze|walk|hand 调 playFather */
   father: FatherActor | null = null;
   /** 1031 结尾曲：进场首帧后预取，lighthouse:ignited 那一帧起播（systems/audio/endingMusic.ts） */
@@ -133,14 +133,16 @@ export class S3Scene extends LevelScene {
   }
 
   /**
-   * 点灯：xi-ignite-lever 第 34 帧（puzzles.igniteNow → onIgnite）调到这里；灯亮 → 结尾演出 0:04（OUTRO_CUT_SEC，游戏时间）切远景时
-   * 进章节结束页（035 结尾演出接在这里）。0:00–0:04 之间是点灯独白（0.5 s 起 3.0 s，锁定）。
+   * 点灯：xi-ignite-lever 第 34 帧（puzzles.igniteNow → onIgnite）调到这里；灯亮 → 035 结尾演出（levels/s3/ending.ts，按音频时钟走，
+   * 1:46 演出结束 / 按住 Space 跳过 → 章节结束页）。0:00–0:04 之间是点灯独白（0.5 s 起 3.0 s，锁定）。
    * smoke / 测试也可直接调用（跳过按 E 演出，同样只发一次 lighthouse:ignited）
    */
   lightTheLamp(): void {
     if (this.ending) return;
     this.ending = true;
     this.puzzles.igniteNow();
+    // lighthouse:ignited 已在 igniteNow 里发出（结尾曲同一帧 start(0)）→ 演出 t = 0
+    this.endingCutscene?.start();
   }
 
   private readonly upperTmp = new THREE.Vector3();
@@ -158,15 +160,14 @@ export class S3Scene extends LevelScene {
     if (!this.rig) return;
     this.puzzles.fixedUpdate(dt);
     super.fixedUpdate(dt);
-    if (this.ending && !this.ended && this.puzzles.outroTime >= OUTRO_CUT_SEC) {
-      this.ended = true;
-      if (this.game.scenes.current === this) void this.game.flow.completeChapter();
-    }
   }
 
   override update(dt: number, alpha: number): void {
     // 父亲先于实体更新：hand-on-head 同一帧里先写汐的 xi-stand-gaze 时间，XiAnimator 再取（两人帧号一一对应）
-    if (this.rig) this.father?.update(dt);
+    // 035 结尾演出：演出时钟推进 → 汐 / 父亲姿势、镜头节点、字幕、雾（父亲时间由演出时钟定，不再按 dt）
+    const cut = this.endingCutscene;
+    if (cut && this.ending) cut.update();
+    else if (this.rig) this.father?.update(dt);
     super.update(dt, alpha);
     if (!this.rig) return;
     this.puzzles.update(dt);
@@ -195,7 +196,7 @@ export class S3Scene extends LevelScene {
 
   protected override afterEnter(): void {
     // 1031 结尾曲：要在点燃那一帧就有 buffer → 进 S3 首帧渲染后就开始下载解码（和场景曲一样不进首场景包）。
-    // 演出 0:04 就切章节结束页（035 未做），结尾曲要接着放完：补位起播的存活条件是「还在 S3 或已到结束页」
+    // 演出结束 / 跳过才切章节结束页；结尾曲在结束页上还可能在放（1:46 静音、107 s 文件尾）：补位起播的存活条件是「还在 S3 或已到结束页」
     const { audio, events, assets, scenes } = this.game;
     const ending = new EndingMusic(audio, events, (k) => assets.loadAudio(k), () => scenes.current === this || scenes.current?.name === 'chapter-end');
     this.endingMusic = ending;
@@ -204,6 +205,24 @@ export class S3Scene extends LevelScene {
       void ending.prefetch();
     });
     this.cleanups.push(offFirst, () => ending.dispose());
+    // 035 结尾演出
+    const cut = new S3Ending({
+      game: this.game,
+      scene: this.scene,
+      frame: this.frame,
+      rig: () => this.rig,
+      cameraFollow: this.cameraFollow,
+      father: this.father,
+      endingMusic: ending,
+      gazePlace: () => this.fatherGazePlace(),
+      setAtmosphere: (a) => {
+        this.atmosphere = a;
+        this.applyAtmosphere(a);
+      },
+      alive: () => scenes.current === this,
+    });
+    this.endingCutscene = cut;
+    this.cleanups.push(() => cut.dispose());
     const q = new URLSearchParams(location.search);
     if (import.meta.env.DEV || q.has('smoke')) Object.assign(window, { __s3: this });
     // dev 预览：?father=gaze|walk|hand（dev / ?debug / ?smoke 才认）

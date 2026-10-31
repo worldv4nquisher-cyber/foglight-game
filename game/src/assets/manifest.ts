@@ -211,6 +211,8 @@ export const manifest: AssetEntry[] = [
   { key: 'prop-logbook-s3', type: 'gltf', url: 'assets/art/models/props/prop-logbook-s3.glb', group: 's3', optional: true, art: true },
   { key: 'prop-letter-b', type: 'gltf', url: 'assets/art/models/props/prop-letter-b.glb', group: 's3', optional: true, art: true },
   { key: 'prop-journal-father-s3', type: 'gltf', url: 'assets/art/models/props/prop-journal-father.glb', group: 's3', optional: true, art: true },
+  // 035 结尾演出：远处第二座灯塔剪影（与 S1 天空层同一文件，s3 组另登记 key）
+  { key: 'env-lighthouse-silhouette-far-s3', type: 'gltf', url: 'assets/art/models/env/env-lighthouse-silhouette-far.glb', group: 's3', optional: true, art: true },
   { key: 'prop-tide-bell-s3', type: 'gltf', url: 'assets/art/models/props/prop-tide-bell.glb', group: 's3', optional: true, art: true },
   { key: 'prop-oil-valve-s3', type: 'gltf', url: 'assets/art/models/props/prop-oil-valve-s3.glb', group: 's3', optional: true, art: true, pending: true },
   { key: 'prop-guide-mirror-window-s3', type: 'gltf', url: 'assets/art/models/props/prop-guide-mirror-window-s3.glb', group: 's3', optional: true, art: true, pending: true },

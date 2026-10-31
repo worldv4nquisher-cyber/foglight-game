@@ -244,6 +244,11 @@ export class AudioSystem {
     return this.music ? this.music.source.loop : null;
   }
 
+  /** AudioContext 在跑（没解锁 / 暂停挂起 / 没有 Web Audio 为 false）；035 演出时钟据此决定用不用音频时钟 */
+  get running(): boolean {
+    return this.context?.state === 'running';
+  }
+
   /** AudioContext 时钟（s；没有 context = 0）。结尾曲按它记点燃时刻（挂起时不走，和声音一致） */
   get audioTime(): number {
     return this.context?.currentTime ?? 0;

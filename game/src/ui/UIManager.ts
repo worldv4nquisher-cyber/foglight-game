@@ -18,6 +18,8 @@ import { Journal } from './Journal';
 import { Reader } from './Reader';
 import { Subtitles } from './Subtitles';
 import { Toast } from './Toast';
+import { SkipHint } from './SkipHint';
+import { SkipController } from '@/systems/cutscene/SkipController';
 import { HintPanel } from './HintPanel';
 import { gameplay } from '@/config/gameplay';
 import { bindUiSfx } from '@/ui/uiSfx';
@@ -53,6 +55,9 @@ export class UIManager {
   readonly toastLeft: Toast;
   /** 三级提示：右下角风灯图标 + H 弹窗（007）；场景进入时 bind(本场景的 HintSystem) */
   readonly hints: HintPanel;
+  /** 035 演出跳过（按住 Space 1 s，右下角圆环；任何输入上下文都可用，结束页上也行） */
+  readonly skip = new SkipController();
+  readonly skipHint: SkipHint;
   private offs: Array<() => void> = [];
 
   constructor(
@@ -71,6 +76,7 @@ export class UIManager {
     this.debug = new DebugPanel(root, game);
     this.loading = new LoadingScreen(root);
     this.fade = new ScreenFade(root);
+    this.skipHint = new SkipHint(root, this.skip);
     this.hud = new Hud(root);
     this.subtitles = new Subtitles(root, game.narrative, game.events);
     this.toastLeft = new Toast(root);
@@ -178,6 +184,10 @@ export class UIManager {
       this.reader.isOpen || this.journal.isOpen || this.pause.isOpen || this.mainMenu.isOpen || this.chapterEnd.isOpen || this.game.flow.transitioning;
     this.toastLeft.update(dt, covered);
     this.hints.update(covered || this.settings.isOpen || this.confirm.isOpen);
+    // 035 跳过：暂停 / 设置 / 确认框开着时按住不计
+    const now = performance.now();
+    this.skip.update(now, this.game.isPaused || this.settings.isOpen || this.confirm.isOpen);
+    this.skipHint.update(now);
   }
 
   dispose(): void {
@@ -186,6 +196,7 @@ export class UIManager {
     this.debug.dispose();
     this.loading.dispose();
     this.fade.dispose();
+    this.skipHint.dispose();
     this.hud.dispose();
     this.pause.dispose();
     this.settings.dispose();
