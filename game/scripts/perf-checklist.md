@@ -44,7 +44,7 @@
 ### 3 测试项
 - [ ] **A1 极致档（`quality=ultra`）· 全部机位**：S1 / S2 / S3 用 `__perfSpot` 走完第 1 节全部机位，按第 2 节记。另外每个场景不钉机位正常走一遍，记整段平均 FPS 和最低值（F3 目测）。**目标：每个机位平均 ≥ 60 fps，1% low ≥ 50 fps**
 - [ ] **A2 高档（`quality=high`）**：每场景面数最高的 1 个机位（S1 `s1-raft-back`、S2 `s2-white-stone-5`、S3 `s3-spawn-south`）
-- [ ] **A3 水面反射开销对比（S1，极致档）**：`s1-opening` 和 `s1-raft-back` 两个机位，各用 `reflect=off`、`reflect=0.5`、`reflect=1` 三个地址重开（例：`U&reflect=off`），每次都按第 2 节记，并在控制台记一行 `__game.scenes.current.reflection.debugLine()`。填「反射对比表」。用途：反射默认强度用户还没定（制作人拿 `reflectK=0` / `0.5` / `1` 对比图问用户，图在 docs/tasks/shots-025/strength/），这组数字给出每一档 RT 分辨率的真实 GPU 代价；强度 `reflectK` 只改混合权重、0 以外不改开销（0 = 等同 off）。box 参考：反射 pass +45～72 draw call、+2.8 M 三角面（off → 开）；0.5 / 1 的差别只在 RT 像素数（1440p 下 1280×720 vs 2560×1440，4 倍像素）
+- [ ] **A3 水面反射开销对比（S1，极致档）**：`s1-opening` 和 `s1-raft-back` 两个机位，各用 `reflect=off`、`reflect=0.5`、`reflect=1` 三个地址重开（例：`U&reflect=off`），每次都按第 2 节记，并在控制台记一行 `__game.scenes.current.reflection.debugLine()`。填「反射对比表」。用途：强度已定 0.5（对比图 docs/tasks/shots-025/strength/），极致档 RT 倍率已从 1 降到 0.5（不加 `reflect=` 即 0.5）；这组数字确认 0.5 → 1 的真实 GPU 代价，若 1 几乎不花钱可再调回；强度 `reflectK` 只改混合权重、0 以外不改开销（0 = 等同 off）。box 参考：反射 pass +45～72 draw call、+2.8 M 三角面（off → 开）；0.5 / 1 的差别只在 RT 像素数（1440p 下 1280×720 vs 2560×1440，4 倍像素）
 - [ ] **A4 S3 结尾演出**：`U` 改 `scene=s3`，控制台 `__s3.lightTheLamp()`；Performance 录全程，记 05 过肩写日志、06 / 07 拉远出海各段 FPS，以及**第一次**播放有没有 > 100 ms 的长帧（着色器编译）
 - [ ] **A5 卡顿**：正常流程切场景（S1→S2→S3）、开机关、第一次进 S3 演出时有没有 > 100 ms 长帧，记位置和时长
 - [ ] **A6（有 GTX 1650 级机器时）1920×1080 · 标准档**：S1 / S2 / S3 面数最高机位各一个，是否 ≥ 30 fps 稳定可玩（GDD §14 最低配置）

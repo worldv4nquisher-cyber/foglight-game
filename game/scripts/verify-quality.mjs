@@ -62,7 +62,7 @@ const SPEC = {
   ],
   reflections: [
     // planarStrength 不是 §8 的键：025 平面反射混合强度，三档共用 PLANAR_REFLECTION_STRENGTH（10-31 用户选一半强度 = 0.5）
-    { ssr: 'full', ssrWetOnly: false, planar: 1.0, probes: false, planarStrength: 0.5 },
+    { ssr: 'full', ssrWetOnly: false, planar: 0.5, probes: false, planarStrength: 0.5 }, // 037：planar 1 → 0.5（强度 0.5 后看不出差别，省 3/4 RT 像素）
     { ssr: 'half', ssrWetOnly: true, planar: 0.5, probes: false, planarStrength: 0.5 },
     { ssr: 'off', ssrWetOnly: false, planar: 0.25, probes: true, planarStrength: 0.5 },
   ],
