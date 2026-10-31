@@ -51,7 +51,8 @@
     "export:blockout-s2": "node --import ./scripts/register-ts-paths.mjs scripts/export-blockout-s2.mjs",
     "export:blockout-s3": "node --import ./scripts/register-ts-paths.mjs scripts/export-blockout-s3.mjs",
     "test:atmo": "node --import ./scripts/register-ts-paths.mjs scripts/verify-atmo028.mjs",
-    "test:lightmap": "node --import ./scripts/register-ts-paths.mjs scripts/verify-lightmap.mjs"
+    "test:lightmap": "node --import ./scripts/register-ts-paths.mjs scripts/verify-lightmap.mjs",
+    "smoke:xb": "node --import ./scripts/register-ts-paths.mjs scripts/smoke-xbrowser.mjs"
   },
   "dependencies": {
     "n8ao": "^2.0.1",
