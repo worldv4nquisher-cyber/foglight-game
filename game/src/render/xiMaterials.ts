@@ -1,3 +1,4 @@
+import { xiShadowWarm } from '@/config/debug';
 import * as THREE from 'three';
 
 /**
@@ -12,6 +13,8 @@ import * as THREE from 'three';
 
 /** 暗部冷色（线性）：灰蓝，不偏暖 */
 export const XI_SHADOW_TINT: readonly [number, number, number] = [0.3, 0.34, 0.42];
+/** r4 第 6 项对比用（?xiShadow=warm，默认不用）：暖色暗部，亮度和冷色版相当（Rec.709 Y 0.34 vs 0.34） */
+export const XI_SHADOW_TINT_WARM: readonly [number, number, number] = [0.42, 0.33, 0.29];
 /** 湿了以后的粗糙度 */
 export const XI_WET_ROUGHNESS = 0.28;
 /** 湿了以后颜色变暗比例 */
@@ -130,7 +133,7 @@ const WET_GLSL = /* glsl */ `
 export function applyXiMaterials(model: THREE.Object3D, tex: { ramp: THREE.Texture | null; sdf: THREE.Texture | null }): XiLook {
   const uniforms = {
     uXiRamp: { value: tex.ramp },
-    uXiShadowTint: { value: new THREE.Vector3(...XI_SHADOW_TINT) },
+    uXiShadowTint: { value: new THREE.Vector3(...(xiShadowWarm ? XI_SHADOW_TINT_WARM : XI_SHADOW_TINT)) },
     uXiWetness: { value: 0 },
     uXiSdf: { value: tex.sdf },
     uXiFwd: { value: new THREE.Vector3(0, 0, 1) },

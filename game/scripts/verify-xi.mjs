@@ -40,7 +40,7 @@ import { s1StepLinks, S1 } from '@/levels/s1/layout';
 import { buildLods, setForceLod0, applyLodDistances } from '@/render/lod';
 import { findXiClip, makeTurnTail } from '@/entities/xi/XiAnimator';
 import { xiActionTiming, XiActions } from '@/entities/xiActions';
-import { applyXiMaterials, xiFaceSdfParams, xiFaceLit, xiWetColor, xiWetRoughness, xiMaterialKind, XI_SHADOW_TINT } from '@/render/xiMaterials';
+import { applyXiMaterials, xiFaceSdfParams, xiFaceLit, xiWetColor, xiWetRoughness, xiMaterialKind, XI_SHADOW_TINT, XI_SHADOW_TINT_WARM } from '@/render/xiMaterials';
 import { stepLocomotion } from '@/systems/locomotion';
 import { stepWetness, xiWetTarget, isIndoor } from '@/entities/xi/XiLook';
 import { S2_KEY_KEYS } from '@/levels/s2/art';
@@ -221,6 +221,12 @@ const glbJson = (file) => {
   }
   assert.ok(xiFaceLit(0.3, 0.5) && !xiFaceLit(0.6, 0.5), '亮 = θ ≤ sdf');
   assert.ok(XI_SHADOW_TINT[2] > XI_SHADOW_TINT[1] && XI_SHADOW_TINT[1] > XI_SHADOW_TINT[0], '暗部冷色（B > G > R），不偏暖');
+  {
+    // r4 第 6 项对比色（?xiShadow=warm，默认不用）：亮度和冷色版相当，只换色相
+    const Y = (c) => 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+    assert.ok(Math.abs(Y(XI_SHADOW_TINT_WARM) - Y(XI_SHADOW_TINT)) < 0.015, '暖色对比暗部亮度 ≈ 冷色版');
+    assert.ok(XI_SHADOW_TINT_WARM[0] > XI_SHADOW_TINT_WARM[1] && XI_SHADOW_TINT_WARM[1] > XI_SHADOW_TINT_WARM[2], '对比色 R > G > B');
+  }
   assert.equal(xiMaterialKind('mat-char-xi-face'), 'face');
   assert.equal(xiMaterialKind('mat-env-wood'), null);
   // 跨越几何（制作人拍板：落点离边沿 ≥ 0.30 m）：先把起跳点挪向缝沿（toe 骨仍在台面上），不够再按实际距离缩放路径位移；

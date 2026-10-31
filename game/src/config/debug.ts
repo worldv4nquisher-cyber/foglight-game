@@ -40,3 +40,14 @@ export const lightmapEnabled: boolean = typeof location === 'undefined' || !['0'
 /** v0.1-023 角色外扩描边开关：`?hull=0` 不挂（对比截图用）。默认开。 */
 export const outlineHullEnabled: boolean = typeof location === 'undefined' || !['0', 'false'].includes(new URLSearchParams(location.search).get('hull') ?? 'x');
 
+/**
+ * r4 第 6 项肤色对比（只给截图 / 制作人看，默认值不变）：
+ * - `?xiShadow=warm`：汐的暗部色换成暖色 XI_SHADOW_TINT_WARM（默认冷色 XI_SHADOW_TINT）
+ * - `?lutKeepSat=0.5`：LUT 之后把色度往 LUT 之前拉回这个比例（亮度仍用 LUT 的；0 = 原样，整帧生效，不只皮肤）
+ */
+const q0 = typeof location === 'undefined' ? null : new URLSearchParams(location.search);
+export const xiShadowWarm: boolean = q0?.get('xiShadow') === 'warm';
+export const lutKeepSat: number = (() => {
+  const v = Number(q0?.get('lutKeepSat') ?? 0);
+  return Number.isFinite(v) ? Math.max(0, Math.min(1, v)) : 0;
+})();

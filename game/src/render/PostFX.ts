@@ -1,3 +1,4 @@
+import { lutKeepSat } from '@/config/debug';
 import * as THREE from 'three';
 import {
   BlendFunction,
@@ -119,6 +120,7 @@ export class PostFX {
     });
     this.toneMapping = new ToneMappingEffect({ mode: ToneMappingMode.ACES_FILMIC });
     this.lutEffect = new LutEffect();
+    this.lutEffect.keepSat = lutKeepSat;
     this.hueSat = new HueSaturationEffect();
     this.brightContrast = new BrightnessContrastEffect();
     this.vignette = new VignetteEffect();

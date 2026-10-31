@@ -12,6 +12,7 @@ import { BlendFunction, Effect } from 'postprocessing';
 const fragmentShader = /* glsl */ `
 uniform sampler2D tLut;
 uniform float lutOn;
+uniform float lutKeepSat;
 vec3 lutToSRGB(vec3 c) {
   return mix(c * 12.92, pow(c, vec3(0.41666)) * 1.055 - 0.055, step(0.0031308, c));
 }
@@ -30,7 +31,17 @@ vec3 applyLut(vec3 c) {
 }
 void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor) {
   vec3 c = inputColor.rgb;
-  if (lutOn > 0.5) c = lutToLinear(applyLut(lutToSRGB(clamp(c, 0.0, 1.0))));
+  if (lutOn > 0.5) {
+    vec3 s = lutToSRGB(clamp(c, 0.0, 1.0));
+    vec3 o = applyLut(s);
+    // r4 第 6 项对比（?lutKeepSat，默认 0 = 原样）：亮度用 LUT 的，色度往 LUT 之前拉回 lutKeepSat
+    if (lutKeepSat > 0.0) {
+      const vec3 W = vec3(0.2126, 0.7152, 0.0722);
+      float yo = dot(o, W);
+      o = clamp(vec3(yo) + mix(o - vec3(yo), s - vec3(dot(s, W)), lutKeepSat), 0.0, 1.0);
+    }
+    c = lutToLinear(o);
+  }
   outputColor = vec4(c, inputColor.a);
 }
 `;
@@ -54,6 +65,7 @@ export class LutEffect extends Effect {
       uniforms: new Map<string, THREE.Uniform>([
         ['tLut', new THREE.Uniform(null)],
         ['lutOn', new THREE.Uniform(0)],
+        ['lutKeepSat', new THREE.Uniform(0)],
       ]),
     });
   }
@@ -64,6 +76,10 @@ export class LutEffect extends Effect {
     this.uniforms.get('lutOn')!.value = t ? 1 : 0;
   }
 
+  /** r4 第 6 项对比：LUT 后保留多少原色度（0 = 原样） */
+  set keepSat(v: number) {
+    this.uniforms.get('lutKeepSat')!.value = Math.max(0, Math.min(1, v));
+  }
   get lut(): THREE.Texture | null {
     return this.uniforms.get('tLut')!.value as THREE.Texture | null;
   }
