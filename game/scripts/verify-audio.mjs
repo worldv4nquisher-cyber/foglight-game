@@ -737,6 +737,30 @@ test('036 交叉淡化：菜单 → S1 时长 2 s，旧曲淡出到 0 后 stop�
   assert.equal(switchMusic(a, () => undefined, MENU_MUSIC), 'missing');
 });
 
+test('BUG-025 没有上一首时（结尾曲放完 / 跳过停掉 → 结束页 → 主菜单、boot 第一首）菜单曲从 0 淡入 2 s，不满音量硬切入', () => {
+  const ctx = new FakeContext();
+  const a = new AudioSystem(ctx);
+  const bufs = { 'mus-menu': { duration: 106.67 }, 'mus-ending-ch1': { duration: 107 } };
+  // 结尾曲（不循环）放完 → musicKey = null
+  a.playMusic(bufs['mus-ending-ch1'], { key: 'mus-ending-ch1', loop: false });
+  ctx.currentTime = 107;
+  ctx.sources[0].onended?.();
+  assert.equal(a.musicKey, null, '结尾曲放完没有当前曲');
+  ctx.currentTime = 110;
+  assert.equal(switchMusic(a, (k) => bufs[k], MENU_MUSIC), 'play');
+  const g = ctx.sources[1].out[0].gain;
+  assert.deepEqual(g.events[0], ['set', 0, 110], '从 0 起');
+  assert.deepEqual(lastRamp(g), ['ramp', musicTrackGain('mus-menu'), 112], '2 s 淡到曲目增益');
+  const last = a.musicLog.at(-1);
+  assert.deepEqual([last.op, last.key, last.from, last.fade], ['play', 'mus-menu', null, 2], 'musicLog fade 2（原来 0）');
+  // 跳过：结尾曲 stop 0.75 后同样淡入
+  const b = new AudioSystem(new FakeContext());
+  b.playMusic(bufs['mus-ending-ch1'], { key: 'mus-ending-ch1', loop: false });
+  b.stopMusic(0.75);
+  switchMusic(b, (k) => bufs[k], MENU_MUSIC);
+  assert.equal(b.musicLog.at(-1).fade, 2);
+});
+
 test('033 自动播放限制：context 未解锁（suspended）时 playMusic 照常排程不抛错，第一次交互 resume', () => {
   const ctx = new FakeContext();
   ctx.state = 'suspended';
@@ -1254,7 +1278,8 @@ test('033 改 主菜单曲电平：manifest gainDb 后 mus-menu 与 mus-s1-ebb-s
   const a = new AudioSystem(ctx);
   const bufs = { 'mus-menu': { duration: 106.67 }, 'mus-s1-ebb-shore': { duration: 150 } };
   switchMusic(a, (k) => bufs[k], MENU_MUSIC);
-  assert.ok(Math.abs(ctx.sources[0].out[0].gain.value - musicTrackGain('mus-menu')) < 1e-9);
+  // BUG-025 后第一首也淡入：曲目增益是淡入终点
+  assert.ok(Math.abs(lastRamp(ctx.sources[0].out[0].gain)[1] - musicTrackGain('mus-menu')) < 1e-9);
   assert.ok(Math.abs(a.musicLevel - 10 ** (0.3 / 20)) < 1e-9);
   ctx.currentTime = 3;
   switchMusic(a, (k) => bufs[k], LEVELS.s1.music);
