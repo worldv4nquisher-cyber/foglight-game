@@ -375,6 +375,32 @@ if (existsSync(animsFile) && existsSync(modelFile)) {
   let skinned = 0;
   scene.traverse((o) => o.isSkinnedMesh && skinned++);
   assert.ok(skinned >= 3, 'LOD 三档都是蒙皮网格');
+  // r4（10-31）：每档 body / face / hair 三个 primitive，头发单独材质；耳朵从 face 挪到 body（face 只剩脸，左右不超过耳根）；
+  // 马尾尾段权重带上 chest / hood_01 / hood_02（跟兜帽走）
+  const r4 = {};
+  scene.traverse((o) => {
+    if (!o.isSkinnedMesh) return;
+    const lod = /_lod(\d)/.exec(o.name)?.[1] ?? '0';
+    const kind = xiMaterialKind(o.material.name);
+    const bi = o.geometry.attributes.skinIndex;
+    const bw = o.geometry.attributes.skinWeight;
+    const used = new Set();
+    for (let i = 0; i < bi.count; i++) for (let k = 0; k < 4; k++) if (bw.getComponent(i, k) > 0) used.add(o.skeleton.bones[bi.getComponent(i, k)].name);
+    const v = new THREE.Vector3();
+    let maxX = 0;
+    for (let i = 0; i < bi.count; i++) {
+      o.getVertexPosition(i, v).applyMatrix4(o.matrixWorld);
+      if (v.y > 1.3) maxX = Math.max(maxX, Math.abs(v.x));
+    }
+    (r4[lod] ??= {})[kind] = { used, maxX };
+  });
+  for (const [lod, k] of Object.entries(r4)) {
+    assert.deepEqual(Object.keys(k).sort(), ['body', 'face', 'hair'], `LOD${lod} body / face / hair 各一个 primitive`);
+    for (const b of ['hair_ponytail_01', 'hair_ponytail_02', 'hair_ponytail_03', 'hood_01', 'hood_02']) assert.ok(k.hair.used.has(b), `LOD${lod} 头发蒙皮带 ${b}`);
+    assert.deepEqual([...k.face.used].sort(), ['head', 'neck'], `LOD${lod} 脸只绑 head / neck`);
+    assert.ok(k.face.maxX < 0.075 && k.body.maxX > 0.075, `LOD${lod} 耳朵在 body（脸半宽 ${k.face.maxX.toFixed(3)}、body 头部半宽 ${k.body.maxX.toFixed(3)} m）`);
+  }
+  out.push(`r4 结构：LOD0–2 各 body / face / hair，头发 ${r4[0].hair.used.size} 骨（含马尾 3 节 + hood_01/02 + chest），耳朵在 body（脸半宽 ${r4[0].face.maxX.toFixed(3)} / body ${r4[0].body.maxX.toFixed(3)} m）✓`);
 
   // 材质补丁：真模型三种材质都换上、shader 注入点在 three 0.186 的 chunk 里都找得到、脸有 TEXCOORD_1
   {
