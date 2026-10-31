@@ -52,6 +52,8 @@ export interface S3EndingHost {
   setAtmosphere(a: AtmospherePreset): void;
   /** 灯室玻璃所在的美术根（env-lighthouse-ch1-s3；白盒 / art=0 时 null） */
   lampGlassRoot?: () => THREE.Object3D | null;
+  /** 美术节点在 S3 局部的位置（没有 / 白盒时 null）：日志 socket 等跟 GLB 走，不硬写 */
+  artPoint?: (name: string) => THREE.Vector3 | null;
   alive(): boolean;
 }
 
@@ -331,7 +333,8 @@ export class S3Ending {
     const sp = s.position;
     const sf = s.facing;
     const sr = new THREE.Vector3().crossVectors(sf, UP).normalize();
-    const journal = W(...S3.points.journal);
+    // 镜头目标 = 摊开的日志：优先 GLB lamp-room-journal-socket（035 桌面降到 0.68），没有用 layout
+    const journal = L(this.h.artPoint?.('lamp-room-journal-socket') ?? new THREE.Vector3(...S3.points.journal));
     const thDesk = (Math.atan2(sp.z, sp.x) * 180) / Math.PI;
     const T = ENDING_T;
     const pb1 = K(at(sp, -1.5, 0.5, 1.95, sf, sr), journal.clone().add(new THREE.Vector3(0, -0.1, 0)), 46);

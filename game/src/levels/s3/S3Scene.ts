@@ -175,10 +175,10 @@ export class S3Scene extends LevelScene {
     super.update(dt, alpha);
     if (!this.rig) return;
     this.puzzles.update(dt);
-    // 029：塔内按门开 −100° 烘的；门关着按门角把塔内光照贴图压到 S3_TOWER_CLOSED_LM
-    const towerLm = doorLightmapScale(this.puzzles.state.doorOpen, S3_TOWER_CLOSED_LM);
-    this.setLightmapScale('env-lighthouse-ch1-interior', towerLm);
-    this.setLightmapScale('env-lamp-room-ch1', towerLm);
+    // 029：塔内按门开 −100° 烘的；门关着按门角把塔内光照贴图压到 S3_TOWER_CLOSED_LM。
+    // C 项（035 美术问）：只压塔身室内。灯室在 22 m 高的塔顶、四周 2.3 m 高的玻璃，光照全来自玻璃，塔门在底层、
+    // 中间隔着 22 m 楼梯井，开关门对灯室亮度没有可感知的影响 → 灯室（env-lamp-room-ch1）不跟门走，保持 1
+    this.setLightmapScale('env-lighthouse-ch1-interior', doorLightmapScale(this.puzzles.state.doorOpen, S3_TOWER_CLOSED_LM));
     this.artSlots?.update();
     if (this.game.ui.debug.visible) {
       const b = this.puzzles.beam;
@@ -225,6 +225,12 @@ export class S3Scene extends LevelScene {
       },
       alive: () => scenes.current === this,
       lampGlassRoot: () => this.art.root.getObjectByName('env-lighthouse-ch1-s3') ?? null,
+      artPoint: (name) => {
+        const node = this.art.root.getObjectByName(name);
+        if (!node) return null;
+        this.frame.updateMatrixWorld(true);
+        return node.getWorldPosition(new THREE.Vector3()).applyMatrix4(this.frame.matrixWorld.clone().invert());
+      },
     });
     this.endingCutscene = cut;
     this.cleanups.push(() => cut.dispose());

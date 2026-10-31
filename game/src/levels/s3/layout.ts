@@ -45,7 +45,11 @@ export const S3 = {
     landings: { door: { tread: 11, span: [212, 238] }, window5m: { tread: 24, span: [310, 338] }, A: { tread: 49, span: [482, 518] }, B: { tread: 79, span: [692, 728] } },
     hatchDeg: [110, 182] as const,
   },
-  lampRoom: { floorY: 22, slab: 0.25, parapetH: 0.7, glassTop: 2.3, portHoleR: 0.22 },
+  /**
+   * 灯室：seatTop / deskTop = 椅子座面 / 桌面离地（035 美术降低：0.45 → 0.40 / 0.75 → 0.68）。
+   * 与 env-lamp-room-ch1.glb 节点 lamp-room-sit-write extras、char-xi-anims xi-sit-write extras.align.sitWrite 同值（verify-s3 校验）
+   */
+  lampRoom: { floorY: 22, slab: 0.25, parapetH: 0.7, glassTop: 2.3, portHoleR: 0.22, seatTop: 0.4, deskTop: 0.68 },
   /** 门外平台（沿门的方向 θ225：s = 离塔心距离，t = 横向）；石桥（GLB axis：s 8.5 → 33.0） */
   doorPlatform: { s: [3.3, 7.6] as const, t: [-2.4, 2.4] as const, top: 2.4 },
   steps: { s: [7.6, 8.5] as const, rise: 0.2, count: 3 },
@@ -78,8 +82,9 @@ export const S3 = {
     lampLightOrigin: [0, 23.55, 0] as V3,
     noteRead: [-0.941, 22.03, 0.132] as V3,
     sitWrite: [1.57, 22, -1.57] as V3,
-    journal: [1.839, 22.75, -1.839] as V3,
-    lantern: [1.655, 22.75, -2.079] as V3,
+    /** 桌面上的日志 / 风灯 socket：y = floorY + deskTop（运行时优先读 GLB 节点 lamp-room-journal-socket / -lantern-socket） */
+    journal: [1.839, 22.68, -1.839] as V3,
+    lantern: [1.655, 22.68, -2.079] as V3,
     deskCenter: [1.902, 22, -1.902] as V3,
     standGaze: [0.43, 22, 2.514] as V3,
     standGazeFacing: [0.168, 0, 0.986] as V3,

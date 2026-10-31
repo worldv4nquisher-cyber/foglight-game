@@ -15,6 +15,7 @@ import { SubtitleTrack } from '@/ui/Subtitles';
 import { t as text, textMeta } from '@/content/text';
 
 const out = [];
+const near = (a, b, tol, tag) => assert.ok(Math.abs(a - b) <= tol, `${tag}：${a} vs ${b}`);
 const near3 = (a, b, tol, tag) => {
   const d = Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
   assert.ok(d <= tol, `${tag}：白盒 ${a.map((v) => v.toFixed(3))} / 美术 ${b.map((v) => (+v).toFixed(3))} 差 ${d.toFixed(3)} m > ${tol}`);
@@ -114,6 +115,12 @@ if (existsSync(jsonUrl)) {
       assert.equal(scene.getObjectByName('oil-valve-s3-socket').userData.holdSec, 2, '油阀长按 2 s（GLB userData）');
     }
     if (file.includes('lamp-room')) {
+      // 035 美术降低座 / 桌：layout.lampRoom.seatTop / deskTop = GLB lamp-room-sit-write extras；日志 / 风灯 socket y = 地面 + 桌面
+      const sw = scene.getObjectByName('lamp-room-sit-write').userData;
+      near(S3.lampRoom.seatTop, sw.seatTop, 1e-6, '椅子座高 = GLB seatTop');
+      near(S3.lampRoom.deskTop, sw.deskTop, 1e-6, '桌高 = GLB deskTop');
+      for (const k of ['journal', 'lantern']) near(S3.points[k][1], S3.lampRoom.floorY + S3.lampRoom.deskTop, 0.005, `${k} socket 在桌面上`);
+      out.push(`灯室家具：座 ${sw.seatTop} / 桌 ${sw.deskTop}（GLB）= layout；日志 / 风灯 socket y ${S3.points.journal[1]} ✓`);
       const lv = scene.getObjectByName('ignite-lever-interact').userData;
       // 美术写 xi-pull-lever，工单写 xi-ignite-lever：程序用工单名，报告里列不一致
       out.push(`GLB 拉杆动画名 ${lv.anim}（工单 xi-ignite-lever）`);

@@ -217,11 +217,12 @@ export function buildS3Greybox(mats: S3GreyboxMaterials = defaultS3GreyboxMateri
     ped.position.y = L.floorY + 0.3;
     // 灯室书桌 + 椅子（碰撞）
     const f = S3.points;
-    const desk = addMesh('s3-lamp-desk', new THREE.BoxGeometry(0.9, 0.75, 0.5), mats.wood);
-    desk.position.set(f.deskCenter[0], L.floorY + 0.375, f.deskCenter[2]);
+    // 高度跟美术（035：座 0.40 / 桌 0.68，layout.lampRoom.seatTop / deskTop）
+    const desk = addMesh('s3-lamp-desk', new THREE.BoxGeometry(0.9, L.deskTop, 0.5), mats.wood);
+    desk.position.set(f.deskCenter[0], L.floorY + L.deskTop / 2, f.deskCenter[2]);
     desk.rotation.y = Math.atan2(0.707, -0.707);
-    const chair = addMesh('s3-lamp-chair', new THREE.BoxGeometry(0.42, 0.45, 0.4), mats.wood);
-    chair.position.set(f.sitWrite[0], L.floorY + 0.225, f.sitWrite[2]);
+    const chair = addMesh('s3-lamp-chair', new THREE.BoxGeometry(0.42, L.seatTop, 0.4), mats.wood);
+    chair.position.set(f.sitWrite[0], L.floorY + L.seatTop / 2, f.sitWrite[2]);
     chair.rotation.y = desk.rotation.y;
   }
 
