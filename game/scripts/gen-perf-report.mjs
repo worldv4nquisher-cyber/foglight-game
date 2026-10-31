@@ -75,7 +75,7 @@ else {
   p(`| 首次进 S1 总下载（menu + common + s1） | ${MB(sz.firstTotal)} MB | 150 MB（警戒 140） | ${sz.firstTotal <= 150 * 1048576 ? '过' : '**不过**'} |`);
   p(`| S2 / S3 场景包 | ${MB(sz.groups.s2)} / ${MB(sz.groups.s3)} MB | — | 切场景时加载 |`);
   p(`| 进场后懒加载配乐 S1 / S2 / S3 | ${Object.values(sz.lazyAfterEntry).map(MB).join(' / ')} MB | — | 不计入上面 |`);
-  p('', '压缩：`npm run size` 同时检查 dist 里每个 GLB 网格是 Meshopt、贴图是 KTX2（结果见 size 输出；测试模型 test-lod-puzzle-critical.glb 未压缩，只警告）。', '');
+  p('', '压缩：`npm run size` 同时检查 dist 里每个 GLB 网格是 Meshopt、贴图是 KTX2（结果见 size 输出；测试模型 test-lod-puzzle-critical.glb 未压缩，只警告；它在 dev 组，只有 ?scene=sandbox 下载，不计首场景包）。', '');
 }
 
 const ld = j('verify-load.json');

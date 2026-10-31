@@ -59,6 +59,9 @@ await test('加载分组：新游戏 common + s1；继续 S2 = common + s2；换
   assert.deepEqual(groupsForScene('s1-ebb-shore'), ['common', 's1']);
   assert.deepEqual(groupsForScene('s2-keeper-house'), ['common', 's2']);
   assert.deepEqual(groupsForScene('testbed'), ['common']);
+  // 037：沙盒 LOD 测试模型在 dev 组，正式 S1 不下载
+  assert.deepEqual(groupsForScene('sandbox'), ['common', 's1', 'dev']);
+  assert.ok(!entriesForGroup('s1').some((e) => e.url.includes('/test-')), 's1 组不该有测试模型');
   assert.deepEqual(groupsToKeep(LEVELS.s2), ['common', 's2', 's3']);
   assert.deepEqual(groupsToKeep(LEVELS.s3), ['common', 's3']);
 });

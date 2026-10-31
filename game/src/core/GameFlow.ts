@@ -15,7 +15,7 @@ export function sceneForSave(sceneId: string): PlayScene {
 /** 某个可玩场景需要的资源组（common 常驻 + 场景组） */
 export function groupsForScene(scene: PlayScene): AssetGroup[] {
   if (scene === 'testbed') return ['common'];
-  if (scene === 'sandbox') return ['common', 's1'];
+  if (scene === 'sandbox') return ['common', 's1', 'dev'];
   return ['common', levelByScene(scene)!.group];
 }
 
@@ -241,7 +241,7 @@ export class GameFlow {
 
   /** 释放不在 keep 里的场景资源组（common 常驻） */
   private releaseLevelGroups(keep: readonly AssetGroup[]): void {
-    for (const g of LEVEL_GROUPS) if (!keep.includes(g)) this.game.assets.unloadGroup(g);
+    for (const g of [...LEVEL_GROUPS, 'dev'] as const) if (!keep.includes(g)) this.game.assets.unloadGroup(g);
   }
 
   /** 新场景的着色器提前编译（全黑时做，避免淡入第一帧卡顿）；不支持或出错就跳过 */

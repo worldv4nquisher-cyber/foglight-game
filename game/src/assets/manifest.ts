@@ -20,7 +20,8 @@
 export type AssetType = 'gltf' | 'texture' | 'ktx2' | 'audio' | 'font' | 'image';
 
 /** 加载分组（顺序 = 一般加载顺序） */
-export const ASSET_GROUPS = ['boot', 'menu', 'common', 's1', 's2', 's3'] as const;
+/** dev：只给 ?scene=sandbox 用的测试资源（037：不进任何正式场景包，npm run size 单列，不计首场景包） */
+export const ASSET_GROUPS = ['boot', 'menu', 'common', 's1', 's2', 's3', 'dev'] as const;
 export type AssetGroup = (typeof ASSET_GROUPS)[number];
 /** 场景组：离开场景后可以释放 */
 export const LEVEL_GROUPS: readonly AssetGroup[] = ['s1', 's2', 's3'];
@@ -122,7 +123,7 @@ export const manifest: AssetEntry[] = [
   { key: 'lut-after-lit', type: 'texture', url: 'assets/art/textures/lut/lut-after-lit.png', group: 'common', optional: true, art: true, srgb: false },
   { key: 'lut-identity', type: 'texture', url: 'assets/art/textures/lut/lut-identity.png', group: 'common', optional: true, art: true, srgb: false },
   // ---- s1：LOD / 解谜关键物体测试用例（scripts/gen-lod-test-asset.mjs 生成）：白石（puzzleCritical，固定 LOD0）+ 普通对照石
-  { key: 'test-lod-puzzle', type: 'gltf', url: 'assets/models/test-lod-puzzle-critical.glb', group: 's1', optional: true },
+  { key: 'test-lod-puzzle', type: 'gltf', url: 'assets/models/test-lod-puzzle-critical.glb', group: 'dev', optional: true },
   // ---- s1：美术 018 / 020 交付（../art，外部 KTX2 在 ../art/textures；v0.1-013 接入，摆放以 src/levels/s1/layout.ts 为准）
   // 018 主灯塔刷白石砌（mat-env-lighthouse-white，README-s1-layout）：裁定 25 ① 照常登记
   { key: 'tex-lighthouse-whitewash-albedo', type: 'ktx2', url: 'assets/art/textures/tex-lighthouse-whitewash-albedo.ktx2', group: 's1', optional: true, art: true },
