@@ -215,6 +215,49 @@ export function applyLodDistances(root: THREE.Object3D, distances: LodDistances)
   return count;
 }
 
+/** 一级 LOD 的三角面数（含子树，结果缓存在 level.object.userData.lodTris） */
+function levelTris(obj: THREE.Object3D): number {
+  const cached: unknown = obj.userData.lodTris;
+  if (typeof cached === 'number') return cached;
+  let n = 0;
+  obj.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (!m.isMesh || !m.geometry) return;
+    // 描边壳（同一几何的反面外扩复制）不算模型面数
+    if (o.userData.outlineHull || o.userData.ghostPrepass) return;
+    const g = m.geometry;
+    n += g.index ? g.index.count / 3 : (g.attributes.position?.count ?? 0) / 3;
+  });
+  obj.userData.lodTris = n;
+  return n;
+}
+
+/**
+ * 角色 LOD 上限（拆单裁定第 4 条 / style-guide §8 heroCharTris、npcCharTris）：
+ * 托管 LOD 名字以 `char-` 开头的角色，取第一个面数 ≤ 预算的层级作为最高可用层级（例：高 / 标准档汐用 lod1 ≤ 50k，极致档 lod0 ≤ 120k）。
+ * 做法：把更高精度层级的切换距离都压到 0（THREE.LOD 从近到远逐级比较，距离 ≥ 0 恒成立）。在 applyLodDistances 之后调。
+ * @returns 每个角色当前的最高可用层级（名字 → 层级）
+ */
+export function applyCharLodCaps(root: THREE.Object3D, budget: { hero: number; npc: number; heroName?: string }): Record<string, number> {
+  const heroName = budget.heroName ?? 'char-xi';
+  const out: Record<string, number> = {};
+  root.traverse((o) => {
+    if (!isManagedLod(o) || isLod0Locked(o) || !/^char-/i.test(o.name)) return;
+    const cap = o.name.toLowerCase() === heroName ? budget.hero : budget.npc;
+    let min = o.levels.length - 1;
+    for (let i = 0; i < o.levels.length; i++) {
+      if (levelTris(o.levels[i]!.object) <= cap) {
+        min = i;
+        break;
+      }
+    }
+    for (let i = 1; i <= min; i++) o.levels[i]!.distance = 0;
+    o.userData.lodMinLevel = min;
+    out[o.name] = min;
+  });
+  return out;
+}
+
 /** 调试用：列出子树内所有托管 LOD 的当前层级 */
 export function describeLods(root: THREE.Object3D): Array<{ name: string; level: number; levels: number; critical: boolean }> {
   const out: Array<{ name: string; level: number; levels: number; critical: boolean }> = [];

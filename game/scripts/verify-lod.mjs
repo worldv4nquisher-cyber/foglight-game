@@ -11,7 +11,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { applyLodDistances, buildLods, describeLods, isPuzzleCritical, markPuzzleCritical } from '../src/render/lod.ts';
+import { applyCharLodCaps, applyLodDistances, buildLods, describeLods, isPuzzleCritical, markPuzzleCritical } from '../src/render/lod.ts';
 import { QUALITY_PRESETS } from '../src/config/quality.ts';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -168,6 +168,41 @@ ok('markPuzzleCritical 把 LOD 折叠为 LOD0 并保留位置');
   assert.equal(levelAt(c2, 5000), 0);
   c2.removeFromParent();
   ok('运行时在 LOD 上设 forceLod0：applyLodDistances 强制 LOD0');
+}
+
+// 角色 LOD 上限（037 / 裁定第 4 条）：char-xi 三级 120k / 48k / 24k 面、char-father 56k / 24k / 12k → 极致 0 / 0，高 1 / 1，标准 1 / 1
+{
+  const mk = (name, tris) => {
+    const g = new THREE.Group();
+    tris.forEach((n, i) => {
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(9), 3));
+      geo.setIndex(new Array(n * 3).fill(0));
+      const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial());
+      m.name = `${name}_lod${i}`;
+      g.add(m);
+    });
+    buildLods(g);
+    return g;
+  };
+  const xi = mk('char-xi', [119846, 48499, 24299]);
+  const fa = mk('char-father', [55870, 24000, 11999]);
+  scene.add(xi, fa);
+  const xl = xi.getObjectByName('char-xi');
+  const fl = fa.getObjectByName('char-father');
+  for (const [tier, want] of [['ultra', [0, 0]], ['high', [1, 1]], ['standard', [1, 1]]]) {
+    const q = QUALITY_PRESETS[tier];
+    applyLodDistances(scene, q.lodDistances);
+    const caps = applyCharLodCaps(scene, { hero: q.heroCharTris, npc: q.npcCharTris });
+    assert.deepEqual([caps['char-xi'], caps['char-father']], want, tier);
+    assert.equal(levelAt(xl, 0.5), want[0], `${tier} 汐贴脸`);
+    assert.equal(levelAt(fl, 0.5), want[1], `${tier} 父亲贴脸`);
+    assert.equal(levelAt(xl, q.lodDistances[1] + 5), 2, `${tier} 汐远处仍按距离降到 lod2`);
+  }
+  xi.removeFromParent();
+  fa.removeFromParent();
+  applyLodDistances(scene, QUALITY_PRESETS.ultra.lodDistances);
+  ok('角色 LOD 上限：汐 极致 lod0 / 高·标准 lod1（≤ 50k）；父亲 极致 lod0 / 高·标准 lod1（npc 40k / 25k）；远处仍按距离降级');
 }
 
 console.log(`\nLOD 校验通过（${passed} 项）`);

@@ -16,7 +16,7 @@ import { PlanarReflection, reflectionOverride } from '@/render/Reflections';
 import { Water, WATER_NORMAL_KEY, RAIN_RIPPLE_KEY } from '@/world/Water';
 import { ATMO028, type Atmo028Tier } from '@/config/atmosphere028';
 import { Rain, RAIN_STREAK_KEY, RAIN_SPLASH_KEY, collectIndoorShapes } from '@/world/Rain';
-import { applyLodDistances } from '@/render/lod';
+import { applyCharLodCaps, applyLodDistances } from '@/render/lod';
 import { applySceneLightmaps, presetLightmapScale, type LightmapHandle } from '@/render/lightmap';
 import { lightmapEnabled } from '@/config/debug';
 import { manifest } from '@/assets/manifest';
@@ -481,6 +481,8 @@ export abstract class LevelScene extends BaseScene {
     this.sun.castShadow = true;
     // LOD 切换距离随档位变化；puzzleCritical 物体不受影响
     applyLodDistances(this.scene, q.lodDistances);
+    // 角色面数上限（裁定第 4 条）：高 / 标准档汐最高用 lod1（≤ 50k），父亲按 npcCharTris（高 40k / 标准 25k → lod1）
+    applyCharLodCaps(this.scene, { hero: q.heroCharTris, npc: q.npcCharTris });
   }
 
   // ---------------------------------------------------------------- 循环
