@@ -101,9 +101,9 @@ const mm = j('verify-memory.json');
 p('## 5 内存 / 显存（verify-memory）', '');
 if (!mm) p('（还没跑：npm run verify:memory）', '');
 else {
-  p(`跑于 ${bj(mm.at)}，${TN[mm.tier] ?? mm.tier}档；路径 S1 → S2 → S3 → 主菜单 → 再进 S1；每站 GC 后量。估算显存 = 包住 WebGL 分配调用按格式累加（近似，不含驱动开销）。`, '');
-  p('| 站 | 场景 | 估算显存 MB（贴图 / 缓冲 / RB） | 几何体 | 贴图 | 着色器程序 | JS 堆 MB |', '|---|---|---|---|---|---|---|');
-  for (const s of mm.steps) p(`| ${s.label} | ${s.scene ?? '主菜单'} | ${s.glMB}（${s.texMB} / ${s.bufMB} / ${s.rbMB}） | ${s.geometries} | ${s.textures} | ${s.programs} | ${s.heapMB} |`);
+  p(`跑于 ${bj(mm.at)}，${TN[mm.tier] ?? mm.tier}档；路径 主菜单 → S1 → S2 → S3 → 主菜单 → 再进 S1（都走 goToLevel / toMenu）；每站 GC 后量。JS 堆拆成对象堆和 V8 代码区（字节码 / JIT 码，首次跑到的函数只增不减），±10% 比对象堆。估算显存 = 包住 WebGL 分配调用按格式累加（近似，不含驱动开销）。`, '');
+  p('| 站 | 场景 | 估算显存 MB（贴图 / 缓冲 / RB） | 几何体 | 贴图 | 着色器程序 | JS 堆 MB（对象 / V8 代码） |', '|---|---|---|---|---|---|---|');
+  for (const s of mm.steps) p(`| ${s.label} | ${s.scene ?? '主菜单'} | ${s.glMB}（${s.texMB} / ${s.bufMB} / ${s.rbMB}） | ${s.geometries} | ${s.textures} | ${s.programs} | ${s.heapMB}${s.objHeapMB != null ? `（${s.objHeapMB} / ${s.codeHeapMB}）` : ''} |`);
   if (mm.menu) p('', `回主菜单 vs 第一次进 S1（≤ ×${mm.menu.max}）：${mm.menu.glMB} / ${mm.menu.firstS1} MB（×${mm.menu.ratio}，${mm.menu.ok ? '过' : '**不过**'}）`);
   if (mm.compare) p('', `通关回 S1 vs 第一次进 S1（±${mm.tolerance * 100}%）：` + Object.entries(mm.compare).map(([k, v]) => `${k} ${v.first} → ${v.again}（×${v.ratio}，${v.ok ? '过' : '**不过**'}）`).join('；'));
   if (mm.failures.length) p('', ...mm.failures.map((f) => `- ✗ ${f}`));

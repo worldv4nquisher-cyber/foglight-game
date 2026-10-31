@@ -3,8 +3,8 @@
 //   每站：加载完、停 3 s、强制 GC 后量 ——
 //     - renderer.info.memory（几何体 / 贴图数）、renderer.info.programs 数；
 //     - 估算显存：页面启动前包住 WebGL2 的 texStorage / texImage / compressedTexImage / bufferData / renderbufferStorage 和对应 delete，按格式每像素字节累加（近似值，不含驱动开销）；
-//     - JS 堆（CDP Runtime.getHeapUsage，GC 后）。
-//   验收：通关回到 S1 后，估算显存 / 几何体 / 贴图数 / 着色器程序数 / JS 堆都在第一次进 S1 时的 ±10% 以内；
+//     - JS 堆（CDP Runtime.getHeapUsage，GC 后）；再拍堆快照拆成「对象堆」和 V8 代码区（字节码 / JIT 码，首次跑到的函数只增不减，不算泄漏）。
+//   验收：通关回到 S1 后，估算显存 / 几何体 / 贴图数 / 着色器程序数 / JS 对象堆（不含 V8 代码区）都在第一次进 S1 时的 ±10% 以内；
 //         回主菜单时估算显存 ≤ 第一次进 S1 的 MENU_MAX（关卡资源 / 阴影 RT / 骨骼纹理都该释放掉，菜单只剩公共资源）。
 //   每站另记活着的 GL 纹理数和最大的几张（尺寸 / 格式 / 创建于哪一站），以及 GC 后仍活着的旧场景对象，泄漏时直接看是谁没释放。
 //   box 上是 swiftshader，显存是「WebGL 分配量」的估算；实机显存（任务管理器 / about:gpu）由制作人桌面复测。
@@ -73,6 +73,22 @@ const cdp = await launchChrome({ width: 960, height: 540, tag: 'memory', watchdo
 const { send, evaluate, until } = cdp;
 const MB = (b) => +(b / 1048576).toFixed(1);
 
+// JS 堆里 V8 自己的代码区（字节码 / JIT 机器码 / 反馈向量，type = code 的节点）随「第一次跑到 S2 / S3 的函数」只增不减（有上限），
+// 不是游戏对象泄漏；拍一张堆快照把它分出来，±10% 比的是「对象堆」= 快照总量 − 代码区，总堆照样记。
+let snapChunks = [];
+cdp.on((msg) => { if (msg.method === 'HeapProfiler.addHeapSnapshotChunk') snapChunks.push(msg.params.chunk); });
+async function heapSplit() {
+  snapChunks = [];
+  await send('HeapProfiler.takeHeapSnapshot', { reportProgress: false });
+  const snap = JSON.parse(snapChunks.join(''));
+  snapChunks = [];
+  const meta = snap.snapshot.meta, NF = meta.node_fields.length, T = meta.node_types[0];
+  const iT = meta.node_fields.indexOf('type'), iS = meta.node_fields.indexOf('self_size');
+  let total = 0, code = 0;
+  for (let i = 0; i < snap.nodes.length; i += NF) { const sz = snap.nodes[i + iS]; total += sz; if (T[snap.nodes[i + iT]] === 'code') code += sz; }
+  return { total, code };
+}
+
 async function settle(label, sceneName) {
   await evaluate(`(window.__glPhase = ${JSON.stringify(label)}, 1)`);
   if (sceneName) {
@@ -86,6 +102,7 @@ async function settle(label, sceneName) {
   await sleep(500);
   await send('HeapProfiler.collectGarbage');
   const heap = await send('Runtime.getHeapUsage');
+  const split = await heapSplit();
   // 已离开的场景对象 GC 后还活着 = JS 侧泄漏（事件监听 / 闭包挂着旧场景）；记下来，泄漏时直接看是哪一站
   await evaluate(`((window.__sceneRefs ??= []).push([${JSON.stringify(label)}, new WeakRef(__game.scenes.current)]), 1)`);
   await send('HeapProfiler.collectGarbage');
@@ -93,10 +110,10 @@ async function settle(label, sceneName) {
     const staleScenes = window.__sceneRefs.filter(([, r]) => r.deref() && r.deref() !== __game.scenes.current).map(([l]) => l);
     const big = [...window.__glTexLive.values()].sort((a, b) => b.w * b.h - a.w * a.h).slice(0, 6).map((e) => e.w + 'x' + e.h + ' 0x' + e.fmt.toString(16) + ' @' + e.phase);
     return { scene: __game.scenes.current?.name ?? null, staleScenes, geometries: i.memory.geometries, textures: i.memory.textures, programs: i.programs?.length ?? 0, glTextures: window.__glTexLive.size, bigTextures: big, gl: { ...window.__glMem } }; })()`);
-  const row = { label, ...m, glMB: MB(m.gl.tex + m.gl.buf + m.gl.rb), texMB: MB(m.gl.tex), bufMB: MB(m.gl.buf), rbMB: MB(m.gl.rb), heapMB: MB(heap.usedSize) };
+  const row = { label, ...m, glMB: MB(m.gl.tex + m.gl.buf + m.gl.rb), texMB: MB(m.gl.tex), bufMB: MB(m.gl.buf), rbMB: MB(m.gl.rb), heapMB: MB(heap.usedSize), objHeapMB: MB(split.total - split.code), codeHeapMB: MB(split.code) };
   report.steps.push(row);
   save();
-  console.log(`  ${label.padEnd(14)} ${String(row.scene).padEnd(16)} 估算显存 ${row.glMB} MB（贴图 ${row.texMB} / 缓冲 ${row.bufMB} / RB ${row.rbMB}）几何体 ${row.geometries} 贴图 ${row.textures}（GL ${row.glTextures}）着色器 ${row.programs} JS 堆 ${row.heapMB} MB${row.staleScenes.length ? `（旧场景未回收：${row.staleScenes.join('、')}）` : ''}`);
+  console.log(`  ${label.padEnd(14)} ${String(row.scene).padEnd(16)} 估算显存 ${row.glMB} MB（贴图 ${row.texMB} / 缓冲 ${row.bufMB} / RB ${row.rbMB}）几何体 ${row.geometries} 贴图 ${row.textures}（GL ${row.glTextures}）着色器 ${row.programs} JS 堆 ${row.heapMB} MB（对象 ${row.objHeapMB} / 代码 ${row.codeHeapMB}）${row.staleScenes.length ? `（旧场景未回收：${row.staleScenes.join('、')}）` : ''}`);
   return row;
 }
 
@@ -126,7 +143,7 @@ try {
   await sleep(1000);
   const s1b = await settle('再进 S1', 's1-ebb-shore');
   const cmp = {};
-  for (const k of ['glMB', 'geometries', 'textures', 'programs', 'heapMB']) {
+  for (const k of ['glMB', 'geometries', 'textures', 'programs', 'objHeapMB']) {
     const r = s1b[k] / Math.max(1e-9, s1a[k]);
     cmp[k] = { first: s1a[k], again: s1b[k], ratio: +r.toFixed(3), ok: Math.abs(r - 1) <= TOL };
     if (!cmp[k].ok) report.failures.push(`${k}：第一次进 S1 ${s1a[k]} → 通关回 S1 ${s1b[k]}（×${r.toFixed(2)}，超出 ±${TOL * 100}%）`);
