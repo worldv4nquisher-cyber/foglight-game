@@ -3818,13 +3818,19 @@ CHECKS.push({
       if (S && !(await untilG(ready(S), 30, ESTAB_MS))) throw new Error(`继续后 ${scene} 没回到可操作`);
     };
     /** 走进当前场景出口（「外 → 内」触发：先放到外面一步，等两帧再放进去），等下一个场景可操作 */
+    const glClear = `(() => { const gl = __game.renderer.getContext(); for (let k = 0; k < 16 && gl.getError() !== gl.NO_ERROR; k++); return 1; })()`;
+    const glErrs = `(() => { const gl = __game.renderer.getContext(); const e = []; for (let x = gl.getError(), k = 0; x !== gl.NO_ERROR && k < 8; x = gl.getError(), k++) e.push('0x' + x.toString(16)); return e; })()`;
     const takeExit = async (nextScene, S) => {
+      await evaluate(glClear);
       await evaluate(`(async () => { const s = __game.scenes.current; const ex = s.exits[0]; const c = ex.opts.center.clone();
         s.rig.body.teleport(c.clone().add(s.name === 's1-ebb-shore' ? new c.constructor(2.5, 0.02, 0) : new c.constructor(3, 0.02, 3)));
         for (let k = 0; k < 3; k++) await new Promise((r) => requestAnimationFrame(r));
         s.rig.body.teleport(c.clone().setY(c.y + 0.02)); return 1; })()`);
       if (!(await untilW(`__game.scenes.current?.name === '${nextScene}'`, LOAD_MS))) throw new Error(`出口没进 ${nextScene}`);
       if (!(await untilG(ready(S), 30, ESTAB_MS))) throw new Error(`${nextScene} 进场后没回到可操作`);
+      // BUG-034：换场第一帧反射 pass 在阴影贴图建好前画受阴影物体 → INVALID_OPERATION（Chrome 只打警告，WebKit 记 console.error）
+      const ge = await evaluate(glErrs);
+      if (ge.length) throw new Error(`走出口进 ${nextScene} 期间有 GL 错误 ${ge.join(',')}`);
     };
 
     // ======================================================== 新游戏 → S1

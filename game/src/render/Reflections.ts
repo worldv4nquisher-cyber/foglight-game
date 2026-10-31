@@ -98,6 +98,13 @@ export class PlanarReflection {
   strength = 1;
   /** 反射里不画的东西（雨、水面自身） */
   readonly hide: THREE.Object3D[] = [];
+  /**
+   * M7 / BUG-034：投影的灯。反射 pass 关了阴影自动更新（省一次阴影 pass），但进场第一帧 / 切画质改了阴影尺寸后，
+   * 主画面还没跑过阴影 pass、灯的 shadow.map 为 null —— 这时 three 给 sampler2DShadow 绑的是没上传的空深度纹理
+   * （实际落到空的颜色纹理），WebGL 报 INVALID_OPERATION「texture format 和 sampler 类型不匹配」，这一帧反射里受阴影的物体画不出来。
+   * 有灯缺阴影贴图时这一帧照常让阴影更新（建出贴图），之后再关。
+   */
+  readonly shadowLights: Array<{ castShadow: boolean; shadow: THREE.LightShadow }> = [];
   enabled = true;
   readonly stats: ReflectionStats = { rendered: false, skip: 'init', calls: 0, triangles: 0, ms: 0, width: 0, height: 0, renders: 0, skips: 0, k: 0 };
 
@@ -255,7 +262,7 @@ export class PlanarReflection {
     const prevShadow = renderer.shadowMap.autoUpdate;
     const prevTone = renderer.toneMapping;
     renderer.xr.enabled = false;
-    renderer.shadowMap.autoUpdate = false;
+    renderer.shadowMap.autoUpdate = prevShadow && this.shadowLights.some((l) => l.castShadow && l.shadow.map === null);
     renderer.toneMapping = THREE.NoToneMapping;
     for (let i = 0; i < this.hide.length; i++) {
       this.hiddenState[i] = this.hide[i]!.visible;

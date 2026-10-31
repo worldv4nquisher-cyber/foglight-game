@@ -378,6 +378,7 @@ export abstract class LevelScene extends BaseScene {
       // 025 平面反射：雨、水面自身不进反射
       this.reflection = new PlanarReflection();
       this.reflection.hide.push(this.water, this.rain);
+      this.reflection.shadowLights.push(this.sun); // BUG-034：进场第一帧 / 改阴影尺寸后反射 pass 先建阴影贴图
       this.water.setReflection(this.reflection);
       this.reflection.attachOcclusion(this.game.renderer, this.water, this.camera);
       const r = this.reflection;
