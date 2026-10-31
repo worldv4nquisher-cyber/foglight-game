@@ -4115,6 +4115,8 @@ CHECKS.push({
       out.push(`${id}：` + rows.map((x) => `${x.tier} 亮度 ${x.mean} 亮像素 ${x.lit} 色数 ${x.colors} 网格 ${x.meshes}`).join(' → ') + `（可交互物 ${base.items}、出口 ${base.exits} 不变）✓`);
     }
     await evaluate(`__game.quality.set('ultra'); delete window.__qScene; 1`);
+    // 存档停在 s3 入口：不清档的话 autostart 会继续进 S3，等不到主场景
+    await evaluate(`localStorage.clear(); 1`);
     await cdp.goto('');
     return out.join('；');
   },
