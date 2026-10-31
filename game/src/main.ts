@@ -10,6 +10,7 @@ import { S3Scene } from '@/levels/s3/S3Scene';
 import { ChapterEndScene, MenuScene } from '@/scenes/MenuScene';
 import { TestbedScene } from '@/scenes/TestbedScene';
 import { installPerfSpot } from '@/debug/perfSpot';
+import { installQaHooks } from '@/debug/qaHooks';
 
 /** 入口：检测 WebGL2 → 创建 Game → 注册场景 → Boot → 主菜单 →（新游戏 / 继续）Loading → S1 → S2 → S3（流程见 core/GameFlow） */
 function showFatal(message: string): void {
@@ -57,6 +58,7 @@ function bootstrap(): void {
   // 开发模式（或冒烟测试 ?smoke=1）下暴露到 window，方便控制台调试：__game.quality.set('ultra')
   if (import.meta.env.DEV || new URLSearchParams(location.search).has('smoke')) {
     (window as unknown as { __game: Game }).__game = game;
+    installQaHooks(game); // M7：__qa.puzzles() / save() / saveData() / diff() / scene()
     installPerfSpot(game); // 037：__perfSpot('<机位 id>') 钉相机到预算机位（真 GPU 实测）
   }
 
