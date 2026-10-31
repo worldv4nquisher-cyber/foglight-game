@@ -23,6 +23,7 @@ import {
   fatherOpacityAt,
   fogOpenAt,
   glassReflectionAt,
+  GAZE_BACKOFF,
   silhouetteAt,
   xiPoseAt,
 } from '@/content/cutscenes/ending';
@@ -54,8 +55,7 @@ export interface S3EndingHost {
   alive(): boolean;
 }
 
-/** 眺望站位往塔心退多少（m）：父亲根在汐前 0.48 m，美术站位离矮墙内面只有 0.45 m，不退父亲背会插进矮墙 */
-export const GAZE_BACKOFF = 0.2;
+export { GAZE_BACKOFF } from '@/content/cutscenes/ending';
 /** 远景剪影 F2：与 S1 天空层第 2 座同一世界摆位（s3-layout.json silhouettes F2.world） */
 const F2_WORLD = { translation: [142.9, -0.5, -268.5] as const, rotationY: 1.9, scale: 0.72 };
 /** 剪影按物体雾：藏在雾里 → 显出 */

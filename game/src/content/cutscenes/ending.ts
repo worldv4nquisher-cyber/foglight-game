@@ -59,6 +59,9 @@ export const JOURNAL_ENTRY_SEC = 6.0;
  * 玻璃上的灯光亮斑正好压在远处第二座灯塔上，和台词「那边没有亮」矛盾。
  * 开关落在镜头切点上（42 s 进 regaze、58 s 切过肩），段内不跳变；别的镜头不受影响。
  */
+/** 眺望站位往塔心退多少（m）：父亲根在汐前 0.48 m，美术站位离矮墙内面只有 0.45 m，不退父亲背会插进矮墙（test:father 的 verify-hoh-035 量） */
+export const GAZE_BACKOFF = 0.2;
+
 export const GLASS_REFLECTION_OFF: readonly [number, number] = Object.freeze([ENDING_T.regaze, ENDING_T.sitWrite] as const);
 /** 灯室玻璃镜面倍率：1 = 原样，0 = 关 */
 export function glassReflectionAt(t: number): number {

@@ -32,7 +32,7 @@
     "verify:glb": "node --import ./scripts/register-ts-paths.mjs scripts/verify-lod.mjs",
     "check": "npm run typecheck && npm run lint && npm run test && npm run build && npm run size && npm run css",
     "test:xi": "node --import ./scripts/register-ts-paths.mjs scripts/verify-xi.mjs",
-    "test:father": "node --import ./scripts/register-ts-paths.mjs scripts/verify-father.mjs",
+    "test:father": "node --import ./scripts/register-ts-paths.mjs scripts/verify-father.mjs && node --import ./scripts/register-ts-paths.mjs scripts/verify-hoh-035.mjs",
     "test:cutscene": "node --import ./scripts/register-ts-paths.mjs scripts/verify-cutscene.mjs",
     "test:dressing": "node --import ./scripts/register-ts-paths.mjs scripts/verify-dressing.mjs",
     "smoke": "node --import ./scripts/register-ts-paths.mjs scripts/smoke-browser.mjs",
