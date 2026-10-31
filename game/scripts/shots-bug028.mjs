@@ -1,9 +1,9 @@
 // BUG-028 #157 南沿窄缝相机贴头 前后对比 → ../docs/tasks/shots-bug028/（art=1、high）
 //   同一机位：汐站在窄缝（x 10.5，深水边界 z −8.95 往北 0.4 m），探索相机按游戏逻辑跑 1.5 s 稳定后冻结截图；
 //   记录相机到头部跟随点（脚底 + pivotHeight 1.35）的距离、相机偏移 / 抬高 / 淡出不透明度（新 dist 才有）。
-//   before = 修之前的 dist（f1f6099 的 worktree 构建，SHOTS_DIST 指过去），after = 当前 dist。
-// 用法：SHOTS_VARIANT=before SHOTS_DIST=/tmp/bug028-dist-before node --import ./scripts/register-ts-paths.mjs scripts/shots-bug028.mjs
-//       SHOTS_VARIANT=after node --import ./scripts/register-ts-paths.mjs scripts/shots-bug028.mjs（先 npx vite build）
+//   同一份 dist、同一次会话：before = 运行时把 BUG-028 新参数关掉模拟修前（shoulderSkin 0、不换肩、不抬高、不淡出；
+//   Node 量测与修前代码逐行一致，见 measure-before.json），after = 默认参数。
+// 用法：npx vite build && node --import ./scripts/register-ts-paths.mjs scripts/shots-bug028.mjs
 import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -12,7 +12,6 @@ import { fileURLToPath } from 'node:url';
 import { preview } from 'vite';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const VARIANT = process.env.SHOTS_VARIANT ?? 'after';
 const DIST = resolve(root, process.env.SHOTS_DIST ?? 'dist');
 const OUT = resolve(root, process.env.SHOTS_OUT ?? '../docs/tasks/shots-bug028');
 mkdirSync(OUT, { recursive: true });
@@ -84,7 +83,7 @@ const waitFrames = async (n) => {
 
 const report = { atmo: ATMO || '(默认)', shots: [], failed: [], errors, loads: [], stats: [] };
 // 只拍部分（argv[2]）时报告另存，不覆盖全量报告
-const reportFile = join(OUT, `shots-bug028-${VARIANT}.json`);
+const reportFile = join(OUT, 'shots-bug028.json');
 const save = () => writeFileSync(reportFile, JSON.stringify(report, null, 2));
 
 /** 进 S1 并等全部 GLB / KTX2 加载完：有失败 / 占位就整页重进（负载高时 vite preview 偶发 Failed to fetch） */
@@ -115,6 +114,8 @@ async function enterS1() {
 
 
 const Z0 = -8.95;
+const LEGACY = JSON.stringify({ shoulderSkin: 0, shoulderSwitchGain: 1e9, shoulderSwitchRatio: 0, lowSpaceLift: 0, nearFade: [-2, -1] });
+const KEYS = JSON.stringify(Object.keys(JSON.parse(LEGACY)));
 // [名, x, 离边界, yaw（度，−90 = 朝东看）, 俯仰]
 const VIEWS = [
   ['east', 10.5, 0.4, -90, -0.3],
@@ -127,9 +128,12 @@ async function run() {
   await evaluate(`(() => { const s = __s1; s.updateLensDroplets = () => {}; __game.postfx.setLensDroplets(0); document.getElementById('ui-root').style.display = 'none'; return 1; })()`);
   await until(`__game.input.context === 'explore'`, 400000);
   await waitGame(1.5);
-  for (const [view, x, dz, yawDeg, pitch] of VIEWS) {
+  const DEF = await evaluate(`JSON.stringify(Object.fromEntries(${KEYS}.map((k) => [k, __s1.cameraFollow.cfg[k]])))`);
+  report.defaults = JSON.parse(DEF);
+  for (const [view, x, dz, yawDeg, pitch] of VIEWS) for (const VARIANT of ['before', 'after']) {
     const name = `bug028-${view}-${VARIANT}`;
     try {
+      await evaluate(`(() => { const c = __s1.cameraFollow.cfg; Object.assign(c, ${VARIANT === 'before' ? LEGACY : DEF}); return 1; })()`);
       await evaluate('(() => { __game.time.timeScale = 1; return 1; })()');
       // 先站到缝外开阔处再瞬移进缝：相机按真实逻辑收敛（含前拉 / 换肩 / 抬高平滑）
       await evaluate(`(() => { const s = __s1; const b = s.rig.body.body; const y = ${(yawDeg * Math.PI) / 180}; b.teleport(b.position.clone().set(${x}, 0.25, ${Z0 + dz})); b.velocity.set(0, 0, 0); s.rig.controller.facing = y + Math.PI; s.cameraFollow.yaw = y; s.cameraFollow.pitch = ${pitch}; return 1; })()`);

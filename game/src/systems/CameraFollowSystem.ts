@@ -99,6 +99,8 @@ type Mode =
  * 不依赖 DOM，Node 单测（scripts/verify-camera.mjs）直接构造。
  */
 export class CameraFollowSystem {
+  /** 相机参数（= gameplay.camera，同一对象；smoke / 截图脚本运行时调参用，例：BUG-028 前后对比把新参数关掉模拟修前） */
+  readonly cfg = cfg;
   /** 水平朝向（弧度；0 = 看向 -Z）。角色移动方向相对它 */
   yaw = 0;
   /** 俯仰（弧度；负 = 俯视，正 = 仰视） */

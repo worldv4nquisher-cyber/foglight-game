@@ -7,11 +7,10 @@ from PIL import Image, ImageDraw, ImageFont
 here = os.path.dirname(os.path.abspath(__file__))
 d = sys.argv[1] if len(sys.argv) > 1 else os.path.join(here, '..', '..', 'docs', 'tasks', 'shots-bug028')
 info = {}
-for v in ['before', 'after']:
-    p = os.path.join(d, f'shots-bug028-{v}.json')
-    if os.path.exists(p):
-        for s in json.load(open(p)).get('shots', []):
-            info[s['name']] = s
+p = os.path.join(d, 'shots-bug028.json')
+if os.path.exists(p):
+    for s in json.load(open(p)).get('shots', []):
+        info[s['name']] = s
 font = None
 for f in ['/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc', '/usr/share/fonts/opentype/noto/NotoSerifCJK-Regular.ttc']:
     if os.path.exists(f):
@@ -21,7 +20,7 @@ font = font or ImageFont.load_default()
 NAMES = {'east': '朝东', 'spin-66': '原地转到 −66°', 'north-rock': '朝北看礁石'}
 for view, vn in NAMES.items():
     cells = []
-    for v, vl in [('before', '修前'), ('after', '修后')]:
+    for v, vl in [('before', '修前（运行时关新参数模拟）'), ('after', '修后')]:
         f = os.path.join(d, f'bug028-{view}-{v}.png')
         if not os.path.exists(f):
             print('缺', f)
