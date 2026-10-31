@@ -10,6 +10,7 @@ import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { preview } from 'vite';
 import { S1, s1StepLinks } from '@/levels/s1/layout';
+import { ENDING_CUES } from '@/systems/audio/endingMusic';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 /** 文本表原文（005 检查对照显示的文字） */
@@ -1290,7 +1291,7 @@ const CHECKS = [
         return false;
       };
       // 035：结尾演出 106 s（演出时钟）才进结束页——这里只测流程，把演出推到 104 s
-      await evaluate(`__game.scenes.current?.endingCutscene?.seek(104), 1`);
+      await evaluate(`__game.scenes.current?.endingCutscene?.seek(${ENDING_CUES.silence - 2}), 1`);
       if (!(await untilGame(`__game.scenes.current?.name === 'chapter-end'`, 8))) throw new Error('点灯后没进章节结束页（游戏时间 8 s / 墙钟 180 s）');
       s = await st();
       if (!s.save?.chapterComplete) throw new Error('结束页没存 chapterComplete');
@@ -2797,7 +2798,7 @@ const CHECKS = [
       st = await evaluate(`({ cur: __s3.game.scenes.current === __s3, shot: __s3.endingCutscene.shot, cam: __s3.cameraFollow.cutsceneName })`);
       if (!st.cur || st.shot !== 'far-exterior' || st.cam !== 'ch1-ending') throw new Error('035：0:04 后应切塔外远景、仍在 S3（不再进结束页）' + JSON.stringify(st));
       // 推到演出尾：106 s 才进结束页
-      await evaluate(`__s3.endingCutscene.seek(104.5), 1`);
+      await evaluate(`__s3.endingCutscene.seek(${ENDING_CUES.silence - 1.5}), 1`);
       await sleep(300);
       if (await evaluate(`__s3.game.scenes.current !== __s3`)) throw new Error('035：106 s 前不应进结束页');
       if (!(await untilG(`typeof __s3 === 'undefined' || __s3.game.scenes.current !== __s3`, 8))) throw new Error('035：演出 106 s 结束后应进章节结束页');
@@ -3525,8 +3526,8 @@ CHECKS.push({
     if (!/^pull-/.test(C.pull_back.shot)) bad.push('1:14 后拉镜头 ' + C.pull_back.shot);
     if (C.fade_out.fade > 0.05 || !C.fade_out.shot) bad.push('1:35 淡出起点 ' + JSON.stringify(C.fade_out));
     const sa = r.sceneAt;
-    // 演出结束 = 跨过 106.02（曲子结束）的第一帧；之后 completeChapter 异步切场景（软件渲染下约 1 s 墙钟），只要求墙钟 3 s 内切到
-    const fe = r.end, endAt = 106.02;
+    // 演出结束 = 跨过 ENDING_CUES.silence（106 s，ending.ts end）的第一帧（BUG-032：原来写死 106.02，结束帧落在 [106, 106.02) 会假失败）；之后 completeChapter 异步切场景（软件渲染下约 1 s 墙钟），只要求墙钟 3 s 内切到
+    const fe = r.end, endAt = ENDING_CUES.silence;
     if (!fe || fe.how !== 'end' || !(fe.t >= endAt && fe.prevT < endAt)) bad.push('演出结束时刻 ' + JSON.stringify(fe));
     if (!sa || sa.endedBy !== 'end' || !fe || sa.wall - fe.wall > 3000) bad.push('结束页时刻 ' + JSON.stringify({ sa, fe }));
     if (bad.length) throw new Error(bad.join('；'));
@@ -3603,7 +3604,7 @@ CHECKS.push({
     if (!(await until(`__s3.endingCutscene.t >= 47`, 20000))) throw new Error('seek 后没走');
     await evaluate(`__s3.endingCutscene.seek(80), 1`);
     if (!(await until(`__s3.endingCutscene.t >= 81`, 20000))) throw new Error('seek 后没走');
-    await evaluate(`__s3.endingCutscene.seek(104), 1`);
+    await evaluate(`__s3.endingCutscene.seek(${ENDING_CUES.silence - 2}), 1`);
     await sleep(300);
     if (await evaluate(`__game.scenes.current?.name === 'chapter-end'`)) throw new Error('106 s 前进了结束页');
     if (!(await until(`__game.scenes.current?.name === 'chapter-end'`, 30000))) throw new Error('后备时钟到 106 s 没进结束页');
@@ -3613,7 +3614,7 @@ CHECKS.push({
     if (r.cues.some((c) => c.src !== 'fallback')) throw new Error('art=0 cue 时钟来源应全是 fallback');
     const early = r.cues.filter((c) => c.at <= 14);
     if (early.some((c) => c.firedAt - c.at > 1.0 || c.firedAt < c.at || c.prevT >= c.at)) throw new Error('实时段 cue 偏差 ' + JSON.stringify(early));
-    if (!(r.sceneAt.t >= 106 && r.sceneAt.endedBy === 'end')) throw new Error('结束页时刻 ' + JSON.stringify(r.sceneAt));
+    if (!(r.sceneAt.t >= ENDING_CUES.silence && r.sceneAt.endedBy === 'end')) throw new Error('结束页时刻 ' + JSON.stringify(r.sceneAt));
     await evaluate(`localStorage.clear(); 1`);
     await cdp.goto('');
     return `后备时钟：演出 ${a.t.toFixed(2)} s / 墙钟 ${a.wall.toFixed(2)} s（${a.fr.fallback} 帧 fallback、0 帧 audio）；实时段 ${early.map((c) => `${c.id} ${c.at}→${c.firedAt.toFixed(2)}`).join('、')}；seek 后 ${r.cues.length} 个 cue 按序（全部 fallback）；结束页 @演出 ${r.sceneAt.t.toFixed(2)} s`;
@@ -3733,9 +3734,9 @@ CHECKS.push({
       await waitClock(ac, 0.2);
       const a = await evaluate(`({ t: __s3.endingCutscene.t, src: __s3.endingCutscene.clock.source, fr: __s3.endingCutscene.clock.frames, k: __game.audio.musicKey })`);
       if (a.src !== 'fallback' || a.fr.audio !== 0 || a.k !== null) throw new Error('404 后演出应走后备时钟、没有音乐 ' + JSON.stringify(a));
-      for (const s of [45, 80, 104]) {
+      for (const s of [45, 80, ENDING_CUES.silence - 2]) {
         await evaluate(`__s3.endingCutscene.seek(${s}), 1`);
-        if (s < 104 && !(await until(`__s3.endingCutscene.t >= ${s + 1}`, 30000))) throw new Error('seek 后没走 ' + s);
+        if (s < ENDING_CUES.silence - 2 && !(await until(`__s3.endingCutscene.t >= ${s + 1}`, 30000))) throw new Error('seek 后没走 ' + s);
       }
       if (!(await until(`__game.scenes.current?.name === 'chapter-end'`, 60000))) throw new Error('后备时钟到 106 s 没进结束页');
       const r = await evaluate(`window.__cut035`);
@@ -3744,7 +3745,7 @@ CHECKS.push({
       if (r.cues.map((c) => c.id).join() !== want.join()) throw new Error('cue 顺序 ' + r.cues.map((c) => c.id).join());
       if (r.cues.some((c) => c.src !== 'fallback')) throw new Error('cue 应全是 fallback');
       if (F.some((f) => f.key === 'mus-ending-ch1' || f.src !== 'fallback')) throw new Error('演出期间放过结尾曲 / 用过音频时钟');
-      if (!(r.sceneAt.t >= 106 && r.sceneAt.endedBy === 'end')) throw new Error('结束页时刻 ' + JSON.stringify(r.sceneAt));
+      if (!(r.sceneAt.t >= ENDING_CUES.silence && r.sceneAt.endedBy === 'end')) throw new Error('结束页时刻 ' + JSON.stringify(r.sceneAt));
       if (hits.length !== 1) throw new Error('结尾曲应只请求 1 次（404）：' + hits.length);
       await sleep(1000);
       const pg = await evaluate(`({ fade: __game.ui.fade.opacity, page6: __game.narrative.outroEntryUnlocked, k: __game.audio.musicKey })`);
@@ -3860,7 +3861,7 @@ CHECKS.push({
     await sameAsSaved(s1Saved, 'S1');
     let s = await s1st();
     const d0 = Math.hypot(s.pos[0] - s1Initial.pos[0], s.pos[2] - s1Initial.pos[2]);
-    if (s.tide !== 'high' || Math.abs(s.level - 1.6) > 1e-3 || s.p1 || s.p2 || s.raft === 'floating' || Math.abs(s.raftX - s1Initial.raftX) > 0.05 || s.pushT !== 0 || !s.gate || s.goal !== s1Initial.goal || d0 > 0.6)
+    if (s.tide !== 'high' || Math.abs(s.level - 1.6) > 1e-3 || s.p1 || s.p2 || s.raft !== s1Initial.raft || Math.abs(s.raftX - s1Initial.raftX) > 0.05 || s.pushT !== 0 || !s.gate || s.goal !== s1Initial.goal || d0 > 0.6)
       throw new Error('S1 读档后应回入口、谜题复位（涨潮 1.6、谜题 1/2 未解、浮台原位、入口空气墙、初始目标）' + JSON.stringify({ s, s1Initial }));
     if (JSON.stringify(s.journal) !== JSON.stringify((await save()).readDocs)) throw new Error('S1 读档后日志应等于存档 readDocs ' + JSON.stringify({ s, sv: await save() }));
     out.push(`S1 中途（谜题 1 解开${readOk ? ' + 读纸条' : ''}）刷新 → 继续：回入口（偏 ${d0.toFixed(2)} m）、涨潮 1.6、谜题复位、目标 ${s.goal}、日志 ${s.journal.length} 条（中途内存里 ${midJournal.length} 条、存档 ${midSave.readDocs.length} 条）✓`);
