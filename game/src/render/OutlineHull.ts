@@ -93,7 +93,7 @@ export function addOutlineHull(root: THREE.Object3D): HullStats {
   });
   for (const m of targets) {
     if (m.geometry.userData.outlineNormals !== 'color' || !m.geometry.getAttribute('color')) {
-      stats.skipped.push(m.name || '(未命名)');
+      stats.skipped.push(m.name || '(unnamed)'); // 诊断统计，不上屏
       continue;
     }
     const srcMats = Array.isArray(m.material) ? m.material : [m.material];
