@@ -721,7 +721,7 @@ try {
 
 // ---- BUG-030：资源校验规则——KTX2 宽高须为 4 的倍数，例外只有清单 ramp: true 且 ≤ 4096 texel（check-size 对 dist 用同一条）
 {
-  const { ktx2AlignmentVerdict, readKtx2Size, KTX2_UNALIGNED_MAX_TEXELS } = await import('../src/assets/ktx2Route.ts');
+  const { ktx2AlignmentVerdict, readKtx2Size, KTX2_UNALIGNED_MAX_TEXELS } = await import('./lib/ktx2-rules.mjs');
   assert.equal(ktx2AlignmentVerdict({ name: 'a', width: 1024, height: 512, ramp: false }), null);
   assert.equal(ktx2AlignmentVerdict({ name: 'a', width: 1024, height: 512, ramp: true }), null);
   assert.match(ktx2AlignmentVerdict({ name: 'tex-x', width: 1022, height: 1024, ramp: false }), /4 的倍数/);
