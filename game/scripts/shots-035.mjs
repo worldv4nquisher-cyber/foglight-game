@@ -2,6 +2,8 @@
 //   进 S3 等资源全部到、点燃，演出时钟换成可停的后备时钟（截图时停住，画面 / 姿势 / 镜头都定在目标 t），按 t 从前往后 seek 拍：
 //   雾口 / 剪影 / 父亲摸头（hand 第 80 帧）/ 「那边没有亮。」/ 写日志 / 后拉。
 // 用法：npm run build && node --import ./scripts/register-ts-paths.mjs scripts/shots-035.mjs
+//   SHOTS_ONLY=03,04      只拍编号匹配的几张
+//   SHOTS_COMPARE=1       每张另拍一张 *-before.png：关掉裁定 25 的两项（父亲深度预写、04 镜头关玻璃反射），同一构建同一帧对比
 import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -64,7 +66,7 @@ const shot = async (file) => {
 
 
 const report = { shots: [], failed: [], errors, loads: [] };
-const reportFile = join(OUT, 'shots-035.json');
+const reportFile = join(OUT, process.env.SHOTS_ONLY || COMPARE ? 'shots-035-r25.json' : 'shots-035.json');
 const save = () => writeFileSync(reportFile, JSON.stringify(report, null, 2));
 
 const SHOTS = [
@@ -76,6 +78,11 @@ const SHOTS = [
   ['s3-ending-06-pull-back-room', 78],
   ['s3-ending-07-pull-back-sea', 91],
 ];
+
+const ONLY = (process.env.SHOTS_ONLY ?? '').split(',').map((x) => x.trim()).filter(Boolean);
+const COMPARE = process.env.SHOTS_COMPARE === '1';
+const FIX = (on) => `(() => { const c = __s3.endingCutscene; c.glassGateEnabled = ${on}; c.glass.value = ${on} ? (c.t >= 42 && c.t < 58 ? 0 : 1) : 1; if (c.ghost) { c.ghost.prepassEnabled = ${on}; c.ghost.setOpacity(c.ghost.opacity); } return { glass: c.glass.value, glassMats: c.glass.materials.length, prepass: c.ghost ? c.ghost.prepasses.filter((p) => p.visible).length : null }; })()`;
+const frames3 = () => evaluate('new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(() => r(1)))))');
 
 const STATE = `(() => { const c = __s3.endingCutscene, f = __s3.father, an = __s3.rig?.animator; return { t: +c.t.toFixed(3), shot: c.shot, sub: __game.ui.subtitles.current?.id ?? null, xi: an?.posing ?? null,
   father: f ? { mode: f.mode, frame: Math.round(f.clipTime * 30), visible: f.visible } : null, fog: +(__s3.scene.fog?.density ?? 0).toFixed(5), sil: c.silhouette?.visible ?? null, fade: +__game.ui.fade.opacity.toFixed(3) }; })()`;
@@ -100,6 +107,7 @@ try {
   // 换成可停的后备时钟（演出逻辑不变，只是时钟来源）
   await evaluate(`(() => { const c = __s3.endingCutscene.clock; c.src = { audio: () => null, now: () => performance.now(), paused: () => window.__hold }; return 1; })()`);
   for (const [name, T] of SHOTS) {
+    if (ONLY.length && !ONLY.some((k) => name.includes(`-${k}-`))) continue;
     try {
       await evaluate(`(() => { window.__hold = false; __s3.endingCutscene.seek(${T - 0.4}); return 1; })()`);
       if (!(await until(`__s3.endingCutscene.t >= ${T}`, 400000))) throw new Error('演出没走到 ' + T);
@@ -108,9 +116,19 @@ try {
       await until(`innerWidth === ${W}`, 60000);
       await evaluate('new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(() => r(1)))))');
       const st = await evaluate(STATE);
+      const fix = await evaluate(FIX(true));
+      await frames3();
       const file = await shot(`${name}.png`);
-      report.shots.push({ name, file, target: +T.toFixed(3), ...st });
-      console.log('  ✓', name, JSON.stringify(st));
+      report.shots.push({ name, file, target: +T.toFixed(3), ...st, fix });
+      console.log('  ✓', name, JSON.stringify(st), JSON.stringify(fix));
+      if (COMPARE) {
+        const before = await evaluate(FIX(false));
+        await frames3();
+        const fb = await shot(`${name}-before.png`);
+        report.shots.push({ name: `${name}-before`, file: fb, target: +T.toFixed(3), ...st, fix: before });
+        console.log('  ✓', `${name}-before`, JSON.stringify(before));
+        await evaluate(FIX(true));
+      }
       await setView(...SMALL);
       save();
     } catch (e) {
