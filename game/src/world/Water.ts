@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { ATMO028 } from '@/config/atmosphere028';
+import type { PlanarReflection } from '@/render/Reflections';
 
 /** 028 水面贴图 key（manifest common） */
 export const WATER_NORMAL_KEY = ATMO028.textures.waterNormal;
@@ -38,7 +39,15 @@ export class Water extends THREE.Mesh<THREE.PlaneGeometry, THREE.MeshStandardMat
     uRipL2: { value: 0 },
     uRipFrame: { value: new THREE.Vector2() },
     uRipMaxGrad: { value: 8 / 1024 },
+    // 025 平面反射（PlanarReflection 共享 tReflect / uReflMatrix / uReflK；没挂 = k 0）
+    tReflect: { value: null as THREE.Texture | null },
+    uReflMatrix: { value: new THREE.Matrix4() },
+    uReflK: { value: 0 },
+    uFres: { value: new THREE.Vector2(0.32, 0.92) },
+    uDistort: { value: 0.035 },
   };
+  /** 平板半边长（m，025 倒影视锥判定） */
+  readonly halfExtent: number;
   private ripple: RippleOpts | null = null;
   private raining = false;
 
@@ -58,6 +67,7 @@ export class Water extends THREE.Mesh<THREE.PlaneGeometry, THREE.MeshStandardMat
     this.name = 'water';
     this.receiveShadow = true;
     this.uniforms.uWaveScale.value = waveScale;
+    this.halfExtent = size / 2;
 
     material.onBeforeCompile = (shader) => {
       shader.uniforms.uTime = this.uniforms.uTime;
@@ -98,6 +108,7 @@ export class Water extends THREE.Mesh<THREE.PlaneGeometry, THREE.MeshStandardMat
           #endif`,
         )
         .replace('#include <begin_vertex>', 'vec3 transformed = position + wOffset;');
+      this.injectReflection(shader);
       if (!this.hasDetail) return;
       for (const k of ['tWN', 'tWR', 'uL0', 'uL1', 'uNScale', 'uRipK', 'uRipTile', 'uRipL2', 'uRipFrame', 'uRipMaxGrad'] as const) shader.uniforms[k] = this.uniforms[k];
       shader.vertexShader = shader.vertexShader
@@ -145,6 +156,58 @@ export class Water extends THREE.Mesh<THREE.PlaneGeometry, THREE.MeshStandardMat
     material.customProgramCacheKey = () => (this.hasDetail ? 'water028' : 'water');
   }
 
+  /**
+   * 025：平面反射。投影坐标用「浪位移后的点压回平均水位」（镜像平面 = 平均水位，倒影不随网格起伏错位），
+   * 扭曲 = 世界法线 xz（波浪 + 028 细节法线 + 雨圈）× reflectDistort（同美术 atmo028.js waterShader）；
+   * 菲涅尔 mix(fresnel[0], fresnel[1], (1 − N·V)^4)；在本材质上完雾之后再混（倒影 RT 已按完整光路上过雾，不重复）。
+   */
+  private injectReflection(shader: THREE.WebGLProgramParametersWithUniforms): void {
+    for (const k of ['tReflect', 'uReflMatrix', 'uReflK', 'uFres', 'uDistort'] as const) shader.uniforms[k] = this.uniforms[k];
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vReflW;\nvarying float vReflLevel;')
+      .replace('#include <project_vertex>', '#include <project_vertex>\n  vReflW = (modelMatrix * vec4(transformed, 1.0)).xyz;\n  vReflLevel = modelMatrix[3].y;');
+    shader.fragmentShader = shader.fragmentShader
+      .replace(
+        '#include <common>',
+        /* glsl */ `#include <common>
+        varying vec3 vReflW;
+        varying float vReflLevel;
+        uniform sampler2D tReflect;
+        uniform mat4 uReflMatrix;
+        uniform float uReflK, uDistort;
+        uniform vec2 uFres;`,
+      )
+      .replace(
+        '#include <fog_fragment>',
+        /* glsl */ `#include <fog_fragment>
+        if (uReflK > 0.0) {
+          vec3 rN = inverseTransformDirection(normal, viewMatrix);
+          vec3 toC = cameraPosition - vReflW;
+          float rDist = length(toC);
+          vec3 rV = toC / max(rDist, 1e-4);
+          vec4 ruv = uReflMatrix * vec4(vReflW.x, vReflLevel, vReflW.z, 1.0);
+          ruv.xy += rN.xz * uDistort * ruv.w / (1.0 + rDist * 0.05);
+          vec3 refl = texture2DProj(tReflect, ruv).rgb;
+          float fr = mix(uFres.x, uFres.y, pow(1.0 - clamp(dot(rV, rN), 0.0, 1.0), 4.0));
+          gl_FragColor.rgb = mix(gl_FragColor.rgb, refl * 0.9, fr * uReflK);
+        }`,
+      );
+  }
+
+  /** 025：挂上平面反射（PlanarReflection 直接写本材质的 uniform 对象，不重新编译）；null = 关 */
+  setReflection(r: PlanarReflection | null): void {
+    if (r) r.bindUniforms(this.uniforms);
+    else {
+      this.uniforms.uReflK.value = 0;
+      this.uniforms.tReflect.value = null;
+    }
+  }
+
+  /** 当前倒影强度（测试用） */
+  get reflectionStrength(): number {
+    return this.uniforms.uReflK.value;
+  }
+
   private get hasDetail(): boolean {
     return !!this.uniforms.tWN.value;
   }
@@ -168,8 +231,10 @@ export class Water extends THREE.Mesh<THREE.PlaneGeometry, THREE.MeshStandardMat
   }
 
   /** 预设：颜色 + 细节法线强度 */
-  applyAtmosphere(a: { waterColor: number; water: { normalScale: number }; rain: { enabled: boolean } }): void {
+  applyAtmosphere(a: { waterColor: number; water: { normalScale: number; fresnel?: readonly [number, number]; reflectDistort?: number }; rain: { enabled: boolean } }): void {
     this.material.color.set(a.waterColor);
+    if (a.water.fresnel) this.uniforms.uFres.value.set(a.water.fresnel[0], a.water.fresnel[1]);
+    if (a.water.reflectDistort !== undefined) this.uniforms.uDistort.value = a.water.reflectDistort;
     this.uniforms.uNScale.value = a.water.normalScale;
     this.raining = a.rain.enabled;
     this.updateRipK();

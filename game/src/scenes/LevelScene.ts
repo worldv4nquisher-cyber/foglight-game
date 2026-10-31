@@ -12,6 +12,7 @@ import { CameraFollowSystem, CameraTrack } from '@/systems/CameraFollowSystem';
 import type { CameraKey } from '@/systems/camera/CameraTrack';
 import { InteractionSystem, actorFromRig } from '@/systems/interaction/InteractionSystem';
 import { SkyDome, SKY_CLOUDS_KEY } from '@/world/SkyDome';
+import { PlanarReflection, reflectionOverride } from '@/render/Reflections';
 import { Water, WATER_NORMAL_KEY, RAIN_RIPPLE_KEY } from '@/world/Water';
 import { ATMO028, type Atmo028Tier } from '@/config/atmosphere028';
 import { Rain, RAIN_STREAK_KEY, RAIN_SPLASH_KEY, collectIndoorShapes } from '@/world/Rain';
@@ -66,6 +67,9 @@ export abstract class LevelScene extends BaseScene {
   protected rig!: PlayerRig;
   protected sky = new SkyDome(170);
   protected water: Water | null = null;
+  /** 025 水面平面反射（室外场景才有） */
+  protected reflection: PlanarReflection | null = null;
+  private readonly reflectOverride = typeof location === 'undefined' ? null : reflectionOverride(location.search);
   protected rain: Rain | null = null;
   /**
    * 028 远景（README-028 §3）：天空层剪影按预设换色；fog 'none' = 不吃雾（S1 天空层小灯塔），'mid' = 用预设主岛 hint（S2 远景 S3 灯塔）。
@@ -365,6 +369,13 @@ export abstract class LevelScene extends BaseScene {
         return water === null ? ground : Math.max(ground, water);
       });
       this.scene.add(this.rain);
+      // 025 平面反射：雨、水面自身不进倒影
+      this.reflection = new PlanarReflection();
+      this.reflection.hide.push(this.water, this.rain);
+      this.water.setReflection(this.reflection);
+      this.reflection.attachOcclusion(this.game.renderer, this.water, this.camera);
+      const r = this.reflection;
+      this.cleanups.push(() => r.dispose());
     }
   }
 
@@ -455,6 +466,8 @@ export abstract class LevelScene extends BaseScene {
     this.rain?.setTier(q.tier, q.rainParticles.count);
     this.qualityTier = q.tier;
     this.water?.setRipples(ATMO028.rainTiers[q.tier].ripples);
+    // 025：倒影分辨率 = 画质档 reflections.planar（极致 1.0 / 高 0.5 / 标准 0.25）；?reflect= 调试覆盖
+    if (this.reflection) this.reflection.scale = this.reflectOverride ?? q.reflections.planar;
     // 阴影贴图尺寸 = §8 shadowType.mapSize（CSM 级数 / PCSS / 接触阴影在 023 做）；尺寸变了就丢掉旧贴图，下一帧按新尺寸重建
     const s = this.sun.shadow;
     const size = q.shadowType.mapSize;
@@ -534,6 +547,19 @@ export abstract class LevelScene extends BaseScene {
     const p = this.rig.entity.object3D.position;
     this.sun.target.position.set(p.x, 0, p.z);
     this.sun.position.set(p.x + a.sunDirection[0], a.sunDirection[1], p.z + a.sunDirection[2]);
+  }
+
+  override beforeRender(halted: boolean): void {
+    const r = this.reflection;
+    if (!r) return;
+    // 暂停 / 冻结：相机不动，沿用上一帧的倒影
+    if (!halted) r.update(this.game.renderer, this.scene, this.camera, this.water, this.water?.halfExtent ?? 0);
+    if (this.game.ui.debug.visible) this.game.ui.debug.set('倒影', r.debugLine());
+  }
+
+  /** 025 冒烟 / 量测：倒影状态 */
+  get reflectionStats(): PlanarReflection['stats'] | null {
+    return this.reflection?.stats ?? null;
   }
 
   private updateLensDroplets(dt: number): void {

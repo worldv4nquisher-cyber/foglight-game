@@ -239,6 +239,7 @@ export class Game {
         // 章节已完成（结束页）不再计时，结束页显示的用时固定
         if (scene.savePoint && !scene.savePoint.chapterComplete) this.save.tick(time.delta);
       }
+      scene.beforeRender(halted);
       if (scene.usePostFX && this.postfx.active) {
         // 色调映射由后处理的 ToneMappingEffect(ACES) 完成，避免重复
         this.renderer.toneMapping = THREE.NoToneMapping;

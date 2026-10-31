@@ -18,6 +18,7 @@ import { InstancedLodSet, lodLevelsOf } from '@/render/instancedLod';
 import { makeSkyLayer, SKY_DEPTH } from '@/render/skyLayer';
 import { applyObjectFog, fogExp2Factor, OBJECT_FOG_GLSL, readFogHint } from '@/render/objectFog';
 import { applyMaterialHints } from '@/render/materialHints';
+import { PlanarReflection, reflectionFade, reflectionOverride } from '@/render/Reflections';
 import { QUALITY_PRESETS } from '@/config/quality';
 import { gameplay } from '@/config/gameplay';
 import { artLanternFrame } from '@/levels/s2/lantern';
@@ -1186,11 +1187,88 @@ if (hasArt) {
   });
 }
 
+await test('025 水面平面反射（纯数学，假 renderer）：贴近水面 k 连续淡入不跳、?reflect 解析、镜像相机贴图坐标（水面上的点 = 主相机屏幕坐标左右镜像）、斜裁剪把水下的东西裁掉、水下 / 视锥外 / 关闭时跳过', () => {
+  // 淡入：0 → 1 单调、连续（相邻 1 cm 差 < 0.05）
+  let prev = reflectionFade(-1);
+  assert.equal(prev, 0);
+  for (let h = -0.5; h <= 1.5; h += 0.01) {
+    const k = reflectionFade(h);
+    assert.ok(k >= prev - 1e-9 && k - prev < 0.05, `h=${h.toFixed(2)} k=${k}`);
+    prev = k;
+  }
+  assert.equal(reflectionFade(0.6), 1);
+  assert.equal(reflectionOverride('?reflect=off'), 0);
+  assert.equal(reflectionOverride('?a=1&reflect=0'), 0);
+  assert.equal(reflectionOverride('?reflect=0.5'), 0.5);
+  assert.equal(reflectionOverride('?x=1'), null);
+
+  const info = { render: { calls: 0, triangles: 0 }, autoReset: false };
+  let rt = null;
+  let renders = 0;
+  const renderer = {
+    info, autoClear: true, toneMapping: THREE.ACESFilmicToneMapping, xr: { enabled: false }, shadowMap: { autoUpdate: false },
+    state: { buffers: { depth: { setMask() {} } } },
+    getDrawingBufferSize: (v) => v.set(1280, 720),
+    getRenderTarget: () => rt, setRenderTarget: (t) => { rt = t; }, clear() {},
+    render: () => { renders++; info.render.calls += 7; info.render.triangles += 1000; },
+  };
+  const scene = new THREE.Scene();
+  const water = new THREE.Mesh(new THREE.PlaneGeometry(1, 1));
+  water.position.y = -0.6;
+  scene.add(water);
+  const cam = new THREE.PerspectiveCamera(60, 16 / 9, 0.1, 250);
+  cam.position.set(3, 2.4, 10);
+  cam.lookAt(0, -0.6, 0);
+  cam.updateMatrixWorld();
+  const r = new PlanarReflection();
+  r.scale = 0.5;
+  info.render.calls = 100; // 本帧前面已有的 draw call（Game 关了 autoReset）
+  r.update(renderer, scene, cam, water, 300);
+  assert.equal(renders, 1);
+  assert.equal(r.stats.calls, 7, '差值统计');
+  assert.equal(r.stats.width, 640);
+  assert.equal(rt, null, '恢复主渲染目标');
+  assert.equal(renderer.toneMapping, THREE.ACESFilmicToneMapping, '恢复色调映射');
+  const M = r.uniforms.uReflMatrix.value;
+  // 镜像相机在 (3, 2·level − 2.4, 10)；水面上的点在倒影贴图里的位置 = 主相机屏幕位置左右镜像（u' = 1 − u，v 相同）——
+  // 贴图本身就是左右翻的，着色器用同一个 uReflMatrix 取样，所以落回同一点
+  assert.ok(r.camera.position.distanceTo(new THREE.Vector3(3, -3.6, 10)) < 1e-6, '镜像相机位置');
+  for (const [x, z] of [[0, 0], [-4, -6], [5, 2]]) {
+    const p = new THREE.Vector4(x, -0.6, z, 1).applyMatrix4(M);
+    const s = new THREE.Vector3(x, -0.6, z).project(cam);
+    assert.ok(Math.abs(p.x / p.w - (0.5 - s.x * 0.5)) < 1e-4 && Math.abs(p.y / p.w - (s.y * 0.5 + 0.5)) < 1e-4, `(${x},${z}) uv`);
+  }
+  // 斜裁剪：水下 1 m 的点在镜像相机里 z/w < -1（被近平面裁掉）；水上 1 m 的点在 [-1,1]
+  const vc = r.camera;
+  const clip = (y) => new THREE.Vector4(0, y, -2, 1).applyMatrix4(vc.matrixWorldInverse).applyMatrix4(vc.projectionMatrix);
+  const under = clip(-1.6);
+  const above = clip(0.4);
+  assert.ok(under.z / under.w < -1 || under.w < 0, `水下 ${under.z / under.w}`);
+  assert.ok(above.z / above.w > -1 && above.z / above.w < 1, `水上 ${above.z / above.w}`);
+  // 跳过：相机在水下、看天（视锥外）、关闭
+  cam.position.set(0, -1, 0);
+  cam.updateMatrixWorld();
+  r.update(renderer, scene, cam, water, 300);
+  assert.equal(r.stats.skip, 'below');
+  cam.position.set(0, 5, 0);
+  cam.up.set(0, 0, -1);
+  cam.lookAt(0, 50, 0); // 正对天顶（略斜时 300 m 大平板的保守判定会算相交，那是正常的少裁）
+  cam.updateMatrixWorld();
+  r.update(renderer, scene, cam, water, 300);
+  assert.equal(r.stats.skip, 'frustum');
+  r.scale = 0;
+  r.update(renderer, scene, cam, water, 300);
+  assert.equal(r.stats.skip, 'off');
+  assert.equal(renders, 1);
+  r.dispose();
+  return `淡入 0.05–0.6 m · 斜裁剪 / uv 一致 · 跳过 below / frustum / off`;
+});
+
 let failed = 0;
 for (const [name, err, out] of results) {
   if (err) {
     failed++;
-    console.log(`✗ ${name}\n   ${err.message.split('\n')[0]}`);
+    console.log(`✗ ${name}\n   ${process.env.VERBOSE ? err.message : err.message.split('\n')[0]}`);
   } else console.log(`✓ ${name}${out ? '：' + out : ''}`);
 }
 if (!hasArt) console.log('（没有 ../art：只跑了合成用例）');

@@ -31,6 +31,8 @@ export abstract class BaseScene {
   exit(): void {}
   fixedUpdate(_dt: number): void {}
   update(_dt: number, _alpha: number): void {}
+  /** 每帧主画面渲染之前（相机已定位；025 平面反射在这里画）。halted = 暂停 / 冻结（画面不动，可沿用上一帧） */
+  beforeRender(_halted: boolean): void {}
 
   resize(width: number, height: number): void {
     this.camera.aspect = width / Math.max(1, height);
