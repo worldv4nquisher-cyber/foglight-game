@@ -159,6 +159,30 @@ if (json) {
     );
   }
 }
+// 037：压缩是否全部生效 —— dist 里每个 GLB：有网格就必须 EXT_meshopt_compression（顶点 / 索引 bufferView 全部压缩），贴图必须 KHR_texture_basisu（KTX2）；
+// 独立贴图只允许 ktx2（UI 的 webp / png、LUT png 例外）。test-* 测试模型只警告。
+{
+  const walkAll = (d) => readdirSync(d).flatMap((f) => { const p = join(d, f); return statSync(p).isDirectory() ? walkAll(p) : [p]; });
+  const glbs = walkAll(DIST).filter((f) => f.endsWith('.glb'));
+  let bad = 0;
+  for (const f of glbs) {
+    const b = readFileSync(f);
+    const j = JSON.parse(b.subarray(20, 20 + b.readUInt32LE(12)).toString());
+    const why = [];
+    if ((j.meshes ?? []).length && !(j.extensionsUsed ?? []).includes('EXT_meshopt_compression')) why.push('没有 Meshopt');
+    const rawVB = (j.bufferViews ?? []).filter((v) => !v.extensions?.EXT_meshopt_compression && (v.target === 34962 || v.target === 34963 || v.byteStride)).length;
+    if ((j.extensionsUsed ?? []).includes('EXT_meshopt_compression') && rawVB) why.push(`${rawVB} 个顶点 / 索引 bufferView 没压缩`);
+    const nonKtx = (j.textures ?? []).filter((t) => !t.extensions?.KHR_texture_basisu).length;
+    if (nonKtx) why.push(`${nonKtx} 张贴图不是 KTX2`);
+    if (!why.length) continue;
+    const msg = `dist/${relative(DIST, f)}：${why.join('、')}`;
+    if (basename(f).startsWith('test-')) console.warn(`  ! ${msg}（测试模型，只警告）`);
+    else { bad++; fail(msg); }
+  }
+  const loose = walkAll(DIST).filter((f) => /\.(png|jpe?g)$/i.test(f) && !/[\\/](ui|lut)[\\/]/.test(relative(DIST, f)) && !/^(favicon|icon)/.test(basename(f)) && relative(DIST, f).startsWith('assets'));
+  for (const f of loose) { bad++; fail(`dist/${relative(DIST, f)}：独立贴图不是 KTX2`); }
+  if (!json) console.log(`  ${bad ? '✗' : '✓'} 压缩：${glbs.length} 个 GLB 的网格 Meshopt、贴图 KTX2${bad ? `，${bad} 处没生效` : ' 全部生效'}`);
+}
 const verdict = sizeVerdict({ menuBytes: groups.menu.bytes + groups.boot.bytes, firstPackageBytes: first, firstTotalBytes: firstTotal });
 for (const w of verdict.warnings) console.warn(`  ! ${w}`);
 for (const f of unlisted) console.warn(`  ! dist/${relative(DIST, f)} 没有登记在清单里（不会被加载，但打进了包）`);
