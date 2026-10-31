@@ -748,7 +748,7 @@ const CHECKS = [
       if (await evaluate('__game.isPaused')) await evaluate('__game.resume()');
       // demo 灯塔（沙盒 = 原 v0.1 demo 岛；013 起 S1 是正式白盒，第一章点灯前没有可开关的灯塔）
       await cdp.goto('scene=sandbox&debug=1', 'sandbox');
-      if (!(await until(`__game.input.context === 'explore' && !__game.isPaused`, 30000))) throw new Error('沙盒开场演出没交还');
+      if (!(await until(`__game.input.context === 'explore' && !__game.isPaused`, ESTAB_MS))) throw new Error('沙盒开场演出没交还');
       const on0 = await evaluate(`__game.scenes.current.lighthouseOn`);
       await evaluate(`(() => { const s = __game.scenes.current; s.rig.body.teleport(new s.rig.body.position.constructor(11, 2.45, -8.3)); s.rig.controller.facing = Math.PI; return 1; })()`);
       const lp = await until(`/E\\s*操作/.test(${prompt()})`, 10000);
@@ -778,7 +778,7 @@ const CHECKS = [
         }
         return v;
       };
-      if (!(await until(`__game.input.context === 'explore' && !__game.isPaused`, 30000))) throw new Error('测试场地没进 explore');
+      if (!(await until(`__game.input.context === 'explore' && !__game.isPaused`, ESTAB_MS))) throw new Error('测试场地没进 explore');
       // 干净的进度（前面的检查读过告示）；事件记录
       await evaluate(`(() => { __game.save.newGame('ch1', 'testbed'); __game.narrative.resetMemory(); window.__nx = [];
         for (const n of ['subtitle:show', 'subtitle:hide', 'journal:updated', 'reader:open', 'reader:close', 'goal:changed']) __game.events.on(n, (p) => __nx.push([n, p]));
@@ -1424,7 +1424,7 @@ const CHECKS = [
       const place = (x, y, z, facing) => evaluate(`(() => { const tb = __testbed; tb.rig.body.body.teleport(new tb.tideArea.anchors.safe.constructor(${x}, ${y}, ${z})); tb.rig.controller.facing = ${facing}; return 1; })()`);
 
       // ---- 1. 敲钟：站到钟前，E
-      if (!(await until(`__game.input.context === 'explore'`, 20000))) throw new Error('测试场地没进 explore');
+      if (!(await until(`__game.input.context === 'explore'`, ESTAB_MS))) throw new Error('测试场地没进 explore');
       let s = await evaluate(st);
       if (s.state !== 'high' || Math.abs(s.level - 1.6) > 1e-6 || s.water !== s.level || !s.gate) throw new Error('初始应为涨潮 1.6、礁石路有墙 ' + JSON.stringify(s));
       await place(-4, 2.02, 22.45, Math.PI);
@@ -1587,7 +1587,7 @@ const CHECKS = [
         return false;
       };
       if ((await evaluate(`__game.scenes.current?.name`)) !== 's1-ebb-shore' || !(await evaluate(`!!window.__s1`))) await cdp.goto('');
-      if (!(await until(`!!(window.__s1 && __s1.puzzles) && __game.input.context === 'explore' && !__game.isPaused`, 40000))) throw new Error('S1 没就绪');
+      if (!(await until(`!!(window.__s1 && __s1.puzzles) && __game.input.context === 'explore' && !__game.isPaused`, ESTAB_MS))) throw new Error('S1 没就绪');
       // 潮汐 6 s 过渡是游戏时间：高负载下无头软件渲染帧很慢（每帧固定步数封顶）。按游戏时间判超时：
       // 条件 TIDE_GAME_SEC（20 s 游戏时间 > 6 s 过渡 + 漂回）内没满足才算失败；墙钟只做 15 min 兜底（batch14 负载 19 时 art=1 150 s 墙钟只走到一半）
       const TIDE_GAME_SEC = 20;
@@ -2616,7 +2616,7 @@ const CHECKS = [
         return v;
       };
       await cdp.goto('debug=1&scene=s3', 's3-lighthouse');
-      if (!(await until(`!!window.__s3?.rig && __s3.game.input.context === 'explore' && __s3.cameraFollow.modeName === 'explore'`, 120000))) throw new Error('?scene=s3 没进 S3');
+      if (!(await until(`!!window.__s3?.rig && __s3.game.input.context === 'explore' && __s3.cameraFollow.modeName === 'explore'`, ESTAB_MS))) throw new Error('?scene=s3 没进 S3');
       const put = (x, y, z) => `(() => { const s = __s3; const w = s.frame.localToWorld(s.rig.body.position.clone().set(${x}, ${y}, ${z})); s.rig.body.position.copy(w); s.rig.body.velocity.set(0, 0, 0); return 1; })()`;
       // 机器负载高时游戏时间远慢于真实时间：计时类步骤直接推进谜题 / 潮汐的物理步（每步 0.05 s）
       const ff = (sec) => evaluate(`(() => { for (let i = 0; i < ${Math.round(sec / 0.05)}; i++) __s3.puzzles.fixedUpdate(0.05); return 1; })()`);
