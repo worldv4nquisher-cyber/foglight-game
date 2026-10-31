@@ -3,6 +3,7 @@
 //   雾口 / 剪影 / 父亲摸头（hand 第 80 帧）/ 「那边没有亮。」/ 写日志 / 后拉。
 // 用法：npm run build && node --import ./scripts/register-ts-paths.mjs scripts/shots-035.mjs
 //   SHOTS_ONLY=03,04      只拍编号匹配的几张
+//   SHOTS_BEAM_COMPARE=1  每张另拍一张 *-beam-before.png（同帧旧灯束），另加 00 点火后 3 s；SHOTS_REPORT 改报告文件名
 //   SHOTS_COMPARE=1       每张另拍一张 *-before.png：关掉裁定 25 的两项（父亲深度预写、04 镜头关玻璃反射），同一构建同一帧对比
 import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
@@ -67,8 +68,6 @@ const shot = async (file) => {
 
 
 const report = { shots: [], failed: [], errors, loads: [] };
-const reportFile = join(OUT, process.env.SHOTS_ONLY || COMPARE ? 'shots-035-r25.json' : 'shots-035.json');
-const save = () => writeFileSync(reportFile, JSON.stringify(report, null, 2));
 
 const SHOTS = [
   ['s3-ending-01-fog-open', 20],
@@ -80,8 +79,13 @@ const SHOTS = [
   ['s3-ending-07-pull-back-sea', 91],
 ];
 
+// 裁定 25：SHOTS_BEAM_COMPARE=1 → 每张另拍一张同帧旧灯束（015 MeshBasic 圆锥，lamp.setStyle('legacy')）`-beam-before`，并加拍点火后 3 s 的探索镜头
+const BEAM_COMPARE = process.env.SHOTS_BEAM_COMPARE === '1';
+if (BEAM_COMPARE) SHOTS.unshift(['s3-ending-00-ignite-beam', 3]);
 const ONLY = (process.env.SHOTS_ONLY ?? '').split(',').map((x) => x.trim()).filter(Boolean);
 const COMPARE = process.env.SHOTS_COMPARE === '1';
+const reportFile = join(OUT, process.env.SHOTS_REPORT ?? (process.env.SHOTS_ONLY || COMPARE ? 'shots-035-r25.json' : 'shots-035.json'));
+const save = () => writeFileSync(reportFile, JSON.stringify(report, null, 2));
 const FIX = (on) => `(() => { const c = __s3.endingCutscene; c.glassGateEnabled = ${on}; c.glass.value = ${on} ? (c.t >= 42 && c.t < 58 ? 0 : 1) : 1; if (c.ghost) { c.ghost.prepassEnabled = ${on}; c.ghost.setOpacity(c.ghost.opacity); } return { glass: c.glass.value, glassMats: c.glass.materials.length, prepass: c.ghost ? c.ghost.prepasses.filter((p) => p.visible).length : null }; })()`;
 const frames3 = () => evaluate('new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(() => r(1)))))');
 
@@ -120,8 +124,19 @@ try {
       const fix = await evaluate(FIX(true));
       await frames3();
       const file = await shot(`${name}.png`);
-      report.shots.push({ name, file, target: +T.toFixed(3), ...st, fix });
-      console.log('  ✓', name, JSON.stringify(st), JSON.stringify(fix));
+      // 05 过肩：日志入画 / 遮挡 / 头顶留白（ending.frameReport）
+      const frame = st.shot === 'over-shoulder' ? await evaluate(`__s3.endingCutscene.frameReport(${H})`) : undefined;
+      report.shots.push({ name, file, target: +T.toFixed(3), ...st, fix, ...(frame ? { frame } : {}) });
+      console.log('  ✓', name, JSON.stringify(st), JSON.stringify(fix), frame ? JSON.stringify(frame) : '');
+      if (BEAM_COMPARE) {
+        await evaluate(`(__s3.puzzles.lamp.setStyle('legacy'), 1)`);
+        await frames3();
+        const fl = await shot(`${name}-beam-before.png`);
+        await evaluate(`(__s3.puzzles.lamp.setStyle('volume'), 1)`);
+        await frames3();
+        report.shots.push({ name: `${name}-beam-before`, file: fl, target: +T.toFixed(3), ...st, beam: 'legacy' });
+        console.log('  ✓', `${name}-beam-before`);
+      }
       if (COMPARE) {
         const before = await evaluate(FIX(false));
         await frames3();

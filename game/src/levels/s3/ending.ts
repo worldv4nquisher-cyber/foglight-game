@@ -24,6 +24,9 @@ import {
   fogOpenAt,
   glassReflectionAt,
   GAZE_BACKOFF,
+  OVER_SHOULDER,
+  overShoulderKeys,
+  type OverShoulderParams,
   silhouetteAt,
   xiPoseAt,
 } from '@/content/cutscenes/ending';
@@ -91,6 +94,8 @@ export class S3Ending {
   private finishing = false;
   /** 结束方式（冒烟读） */
   endedBy: CutsceneEnd | null = null;
+  /** 05 过肩机位参数（相对日志节点；截图 / 调参可改后 rebuildShots()） */
+  overShoulder: OverShoulderParams = structuredClone(OVER_SHOULDER);
   private readonly pose = makePose();
 
   constructor(private readonly h: S3EndingHost) {
@@ -281,10 +286,22 @@ export class S3Ending {
     return { position: g.position.clone().addScaledVector(f, -GAZE_BACKOFF), facing: f };
   }
 
+  /** 坐写站位：优先 GLB lamp-room-sit-write，朝向 = 站位 → 日志 socket（都跟 GLB 走；白盒用 layout） */
   private sitLocal(): { position: THREE.Vector3; facing: THREE.Vector3 } {
-    const p = new THREE.Vector3(...S3.points.sitWrite);
-    const f = new THREE.Vector3(...S3.points.deskCenter).sub(p).setY(0).normalize();
+    const p = this.h.artPoint?.('lamp-room-sit-write') ?? new THREE.Vector3(...S3.points.sitWrite);
+    const f = this.journalLocal().sub(p).setY(0).normalize();
     return { position: p, facing: f };
+  }
+
+  /** 摊开的日志（S3 局部）：优先 GLB lamp-room-journal-socket（035 桌面降到 0.68），没有用 layout */
+  private journalLocal(): THREE.Vector3 {
+    return this.h.artPoint?.('lamp-room-journal-socket') ?? new THREE.Vector3(...S3.points.journal);
+  }
+
+  /** 调试 / 截图：改了 overShoulder 之后重建镜头（只在演出开始后有意义） */
+  rebuildShots(): void {
+    this.shots.length = 0;
+    this.buildShots();
   }
 
   private buildSilhouette(): void {
@@ -333,8 +350,12 @@ export class S3Ending {
     const sp = s.position;
     const sf = s.facing;
     const sr = new THREE.Vector3().crossVectors(sf, UP).normalize();
-    // 镜头目标 = 摊开的日志：优先 GLB lamp-room-journal-socket（035 桌面降到 0.68），没有用 layout
-    const journal = L(this.h.artPoint?.('lamp-room-journal-socket') ?? new THREE.Vector3(...S3.points.journal));
+    // 镜头目标 = 摊开的日志（GLB 节点）；05 过肩机位按日志 + 坐写站位的局部基算（content/cutscenes/ending.ts OVER_SHOULDER）
+    const jl = this.journalLocal();
+    const journal = L(jl);
+    const os = overShoulderKeys([jl.x, jl.y, jl.z], [sp.x, sp.y, sp.z], this.overShoulder);
+    const osFrom = K(L(new THREE.Vector3(...os.from.position)), L(new THREE.Vector3(...os.from.lookAt)), os.from.fov);
+    const osTo = K(L(new THREE.Vector3(...os.to.position)), L(new THREE.Vector3(...os.to.lookAt)), os.to.fov);
     const thDesk = (Math.atan2(sp.z, sp.x) * 180) / Math.PI;
     const T = ENDING_T;
     const pb1 = K(at(sp, -1.5, 0.5, 1.95, sf, sr), journal.clone().add(new THREE.Vector3(0, -0.1, 0)), 46);
@@ -355,13 +376,111 @@ export class S3Ending {
       // 0:42 回到眺望（另一侧，更宽）；0:50「那边没有亮。」
       { name: 'regaze', start: T.regaze, end: T.sitWrite, from: K(at(gp, -1.9, -0.95, 1.6), at(gp, 25, 0, 0.4), 52), to: K(at(gp, -1.6, -0.7, 1.55), at(gp, 25, 0, 0.5), 46), ease: 'linear' },
       // 0:58 坐下写日志：过肩
-      { name: 'over-shoulder', start: T.sitWrite, end: T.pullBack, from: K(at(sp, -0.6, 0.38, 1.5, sf, sr), journal, 42), to: K(at(sp, -0.45, 0.3, 1.4, sf, sr), journal, 36), ease: 'linear' },
+      { name: 'over-shoulder', start: T.sitWrite, end: T.pullBack, from: osFrom, to: osTo, ease: 'linear' },
       // 1:14 后拉：灯室 → 塔 → 海（分段线性，段间速度连续用 in / linear / out）
-      { name: 'pull-room', start: T.pullBack, end: T.pullBack + 6, from: K(at(sp, -0.45, 0.3, 1.4, sf, sr), journal, 36), to: pb1, ease: 'in' },
+      { name: 'pull-room', start: T.pullBack, end: T.pullBack + 6, from: osTo, to: pb1, ease: 'in' },
       { name: 'pull-tower', start: T.pullBack + 6, end: T.pullBack + 14, from: pb1, to: pb2, ease: 'linear' },
       { name: 'pull-sea', start: T.pullBack + 14, end: T.fadeOut, from: pb2, to: pb3, ease: 'linear' },
       { name: 'pull-end', start: T.fadeOut, end: T.end, from: pb3, to: pb4, ease: 'out' },
     );
+  }
+
+  /**
+   * 05 过肩构图自检（shots-035 / 调参读；不进游戏逻辑）：用当前演出相机量
+   * - journal：日志模型包围盒 8 角投影在画内的比例、画面里的 NDC 范围；
+   * - occluded：日志上表面 8×6 网格点里被汐（含手臂 / 头发）挡住的比例（相机射线先打到汐）；
+   * - crownPx：汐头发最高点离画面上沿多少像素（按 900 高；负 = 被裁）；
+   * - hand：右手（hand_r）是否在画内、是否被身体挡住。
+   */
+  frameReport(heightPx = 900): Record<string, unknown> | null {
+    const rig = this.h.rig();
+    const j = this.h.scene.getObjectByName('prop-journal-father-open');
+    if (!rig || !j) return null;
+    const cam = this.cam;
+    cam.updateMatrixWorld(true);
+    rig.visual.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(j, true);
+    const v = new THREE.Vector3();
+    let inside = 0;
+    const nx = [Infinity, -Infinity];
+    const ny = [Infinity, -Infinity];
+    const inFrame = (p: THREE.Vector3): boolean => {
+      v.copy(p).project(cam);
+      return Math.abs(v.x) <= 1 && Math.abs(v.y) <= 1 && v.z < 1;
+    };
+    for (let i = 0; i < 8; i++) {
+      const p = new THREE.Vector3(i & 1 ? box.max.x : box.min.x, i & 2 ? box.max.y : box.min.y, i & 4 ? box.max.z : box.min.z);
+      if (inFrame(p)) inside++;
+      nx[0] = Math.min(nx[0]!, v.x);
+      nx[1] = Math.max(nx[1]!, v.x);
+      ny[0] = Math.min(ny[0]!, v.y);
+      ny[1] = Math.max(ny[1]!, v.y);
+    }
+    const meshes: THREE.Mesh[] = [];
+    rig.visual.traverseVisible((o) => {
+      if ((o as THREE.Mesh).isMesh) meshes.push(o as THREE.Mesh);
+    });
+    // 有 LOD 时只算最高一级（_lod0_，含描边壳），免得低模叠进遮挡统计
+    const lod0 = meshes.filter((m) => /_lod0_/.test(m.name));
+    if (lod0.length) meshes.splice(0, meshes.length, ...lod0);
+    const ray = new THREE.Raycaster();
+    const hitsXi = (target: THREE.Vector3): boolean => {
+      const d = target.clone().sub(cam.position);
+      const len = d.length();
+      ray.set(cam.position, d.divideScalar(len));
+      ray.far = len - 0.005;
+      return ray.intersectObjects(meshes, false).length > 0;
+    };
+    let occ = 0;
+    let n = 0;
+    const top = box.max.y + 0.002;
+    for (let a = 0; a < 8; a++)
+      for (let b = 0; b < 6; b++) {
+        const p = new THREE.Vector3(box.min.x + ((a + 0.5) / 8) * (box.max.x - box.min.x), top, box.min.z + ((b + 0.5) / 6) * (box.max.z - box.min.z));
+        n++;
+        if (hitsXi(p)) occ++;
+      }
+    // 头发最高点（屏幕上最靠上的头发顶点）
+    let crownNdc = -Infinity;
+    for (const m of meshes) {
+      const mat = Array.isArray(m.material) ? m.material[0] : m.material;
+      if (!/hair/i.test(`${m.name} ${mat?.name ?? ''}`)) continue;
+      const pos = m.geometry.attributes.position;
+      if (!pos) continue;
+      const step = Math.max(1, Math.floor(pos.count / 4000));
+      const sk = m.geometry.attributes.skinIndex;
+      const sw = m.geometry.attributes.skinWeight;
+      const bones = (m as THREE.SkinnedMesh).skeleton?.bones;
+      for (let i = 0; i < pos.count; i += step) {
+        // 马尾（hair_ponytail_*）CPU 蒙皮结果和画面对不上（会算到头顶上方 ~0.3 m），头顶只看头部头发
+        if (sk && sw && bones) {
+          let best = 0;
+          for (let k = 1; k < 4; k++) if (sw.getComponent(i, k) > sw.getComponent(i, best)) best = k;
+          if (/ponytail/i.test(bones[sk.getComponent(i, best)]?.name ?? '')) continue;
+        }
+        m.getVertexPosition(i, v);
+        if ((m as THREE.SkinnedMesh).isSkinnedMesh) (m as THREE.SkinnedMesh).applyBoneTransform(i, v);
+        v.applyMatrix4(m.matrixWorld).project(cam);
+        if (Math.abs(v.x) <= 1.2 && v.z < 1) crownNdc = Math.max(crownNdc, v.y);
+      }
+    }
+    const hand = rig.visual.getObjectByName('hand_r');
+    let handIn: boolean | null = null;
+    let handHidden: boolean | null = null;
+    if (hand) {
+      const hp = hand.getWorldPosition(new THREE.Vector3());
+      handIn = inFrame(hp);
+      handHidden = hitsXi(hp.clone().addScaledVector(hp.clone().sub(cam.position).normalize(), -0.08));
+    }
+    return {
+      t: +this.t.toFixed(3),
+      shot: this.shot,
+      journalCornersIn: inside,
+      journalNdc: { x: nx.map((x) => +x.toFixed(3)), y: ny.map((y) => +y.toFixed(3)) },
+      occluded: +(occ / n).toFixed(3),
+      crownPx: Number.isFinite(crownNdc) ? Math.round(((1 - crownNdc) / 2) * heightPx) : null,
+      hand: { inFrame: handIn, hidden: handHidden },
+    };
   }
 
   /** 当前镜头名（冒烟读） */

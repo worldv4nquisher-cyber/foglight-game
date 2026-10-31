@@ -18,6 +18,8 @@ import {
   xiPoseAt,
   glassReflectionAt,
   GLASS_REFLECTION_OFF,
+  OVER_SHOULDER,
+  overShoulderKeys,
 } from '@/content/cutscenes/ending';
 import { makeGhost, GHOST_RENDER_ORDER } from '@/render/ghost';
 import { makeSpecularGate, SPECULAR_GATE_GLSL } from '@/render/specularGate';
@@ -407,6 +409,30 @@ function makePlayer(src, extra = {}) {
   assert.equal(shader.uniforms.uSpecGate.value, 0, 'uniform 开关不重新编译');
   assert.equal(makeSpecularGate(null, /x/).materials.length, 0, 'art=0 没有玻璃');
   out.push('04 镜头关玻璃反射（42–58 s = regaze 段，镜面 uniform 开关）✓');
+}
+
+{
+  // 裁定 25 程序 P2：05 过肩机位只跟日志节点 + 坐写站位走（平移 / 绕 Y 旋转不变），不含世界坐标
+  const j = [1.2, 22.68, -0.4], sit = [0.7, 22.0, -0.1];
+  const a = overShoulderKeys(j, sit);
+  const rel = (p) => [p[0] - j[0], p[1] - j[1], p[2] - j[2]];
+  const f = a.basis.f, r = a.basis.r;
+  const dec = (p) => { const d = rel(p); return { back: -(d[0] * f[0] + d[2] * f[2]), side: d[0] * r[0] + d[2] * r[2], up: d[1] }; };
+  const near = (x, y, m) => assert.ok(Math.abs(x - y) < 1e-9, m + ' ' + x + ' vs ' + y);
+  for (const k of ['from', 'to']) {
+    const d = dec(a[k].position);
+    near(d.back, OVER_SHOULDER[k].back, k + '.back');
+    near(d.side, OVER_SHOULDER[k].side, k + '.side');
+    near(d.up, OVER_SHOULDER[k].up, k + '.up');
+    assert.equal(a[k].fov, OVER_SHOULDER[k].fov);
+  }
+  near(dec(a.from.lookAt).up, OVER_SHOULDER.look.up, 'look.up');
+  // 整套桌椅平移 + 绕 Y 转 90°：机位跟着转
+  const rot = (p) => [-(p[2]) + 5, p[1] + 0.3, p[0] - 2];
+  const b = overShoulderKeys(rot(j), rot(sit));
+  for (const k of ['from', 'to']) rot(a[k].position).forEach((x, i) => near(b[k].position[i], x, k + ' 平移旋转不变 #' + i));
+  near(Math.hypot(...a.basis.f), 1, 'f 单位');
+  out.push('05 过肩机位相对日志 socket + 坐写站位（平移 / 旋转不变，参数可逆读回）✓');
 }
 
 console.log(`verify-cutscene：\n  ${out.join('\n  ')}`);

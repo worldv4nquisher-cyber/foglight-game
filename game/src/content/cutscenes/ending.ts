@@ -68,6 +68,56 @@ export function glassReflectionAt(t: number): number {
   return t >= GLASS_REFLECTION_OFF[0] && t < GLASS_REFLECTION_OFF[1] ? 0 : 1;
 }
 
+/**
+ * 镜头 05 over-shoulder（sit_write 58 s → pull_back 74 s，坐下写日志）机位参数：全部相对「日志节点 + 坐写站位」算，不写世界坐标。
+ * 基：f = 坐写站位 → 日志（水平，= 汐面朝方向），r = f × 上（汐右手），u = 世界上；原点 = 日志 socket（GLB lamp-room-journal-socket）。
+ * - back：机位在日志后方（−f）多少米；side：往汐右手（+r，负 = 左肩）；up：比日志高多少。
+ * - look：注视点相对日志的偏移（同一个基）。
+ * 桌椅 / 日志节点 / xi-sit-write 换了，机位跟着节点走；构图是否合格由 shots-035 的 05 构图自检量（日志 8 角在画内、被汐遮挡比例、发顶离画面上沿）。
+ */
+export interface OverShoulderKey {
+  back: number;
+  side: number;
+  up: number;
+  fov: number;
+}
+export const OVER_SHOULDER = {
+  // 汐右后上方 3/4 过肩（左肩一侧被兜帽 / 马尾挡死日志，见 progress-1031-beam05 §3）：58 s → 74 s 缓推近
+  from: { back: 0.65, side: 1.85, up: 1.3, fov: 38 },
+  to: { back: 0.45, side: 1.55, up: 1.1, fov: 38 },
+  // 注视点：日志上方 0.38 m（日志和汐的头都在画内）
+  look: { back: 0.0, side: 0.0, up: 0.38 },
+};
+export type OverShoulderParams = typeof OVER_SHOULDER;
+
+type V3 = readonly [number, number, number];
+/** 过肩镜头的 from / to（S3 局部坐标）：journal / sit = GLB 日志 socket / 坐写站位 */
+export function overShoulderKeys(
+  journal: V3,
+  sit: V3,
+  p: OverShoulderParams = OVER_SHOULDER,
+): { from: { position: V3; lookAt: V3; fov: number }; to: { position: V3; lookAt: V3; fov: number }; basis: { f: V3; r: V3 } } {
+  let fx = journal[0] - sit[0];
+  let fz = journal[2] - sit[2];
+  const l = Math.hypot(fx, fz) || 1;
+  fx /= l;
+  fz /= l;
+  // r = f × (0,1,0) = (−fz, 0, fx)
+  const rx = -fz;
+  const rz = fx;
+  const at = (k: { back: number; side: number; up: number }): V3 => [
+    journal[0] - fx * k.back + rx * k.side,
+    journal[1] + k.up,
+    journal[2] - fz * k.back + rz * k.side,
+  ];
+  const look = at(p.look);
+  return {
+    from: { position: at(p.from), lookAt: look, fov: p.from.fov },
+    to: { position: at(p.to), lookAt: look, fov: p.to.fov },
+    basis: { f: [fx, 0, fz], r: [rx, 0, rz] },
+  };
+}
+
 export const ENDING_SUBTITLES: readonly SubtitleCue[] = Object.freeze([
   { at: ENDING_T.noAnswer, id: 'ch1.outro.no_answer' as TextId, duration: NO_ANSWER_SEC },
   { at: ENDING_T.journal, id: 'ch1.outro.journal_entry' as TextId, duration: JOURNAL_ENTRY_SEC },
