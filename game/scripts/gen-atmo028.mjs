@@ -21,7 +21,7 @@ export function strip(o) {
 export function atmo028FromArt() {
   if (!existsSync(SRC)) return null;
   const P = JSON.parse(readFileSync(SRC, 'utf8'));
-  return { version: P.version, textures: strip(P.textures), presets: strip(P.presets), rainTiers: strip(P.rainTiers), fogTiers: strip(P.fogTiers), s1: strip(P.s1), water: strip(P.water) };
+  return { version: P.version, textures: strip(P.textures), presets: strip(P.presets), rainTiers: strip(P.rainTiers), fogTiers: strip(P.fogTiers), s1: strip(P.s1), water: strip(P.water), beam: strip(P.beam), glow: strip(P.glow) };
 }
 
 function render(data) {

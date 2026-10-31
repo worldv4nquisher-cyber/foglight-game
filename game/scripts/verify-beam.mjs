@@ -17,6 +17,7 @@ import { S2 } from '@/levels/s2/layout';
 import { IgniterHum, IGNITER_HUM_ID } from '@/levels/s3/igniterHum';
 import { AudioSystem } from '@/systems/AudioSystem';
 import { bindSfxFallback } from '@/systems/tide/tideScene';
+import { LAMP_BEAM, LAMP_GLOW, LampBeam, lampBeamAlong, lampBeamEdge, lampBeamPhase } from '@/render/lampBeam';
 
 const DT = 1 / 60;
 const cfg = gameplay.beam;
@@ -576,6 +577,46 @@ test('性能：3 面镜子 + 4 次反射的光路重算单次 ≤ 1 ms（取 200
   const med = ms[100];
   assert.ok(med <= 1, `中位数 ${med.toFixed(3)} ms`);
   console.log(`    （重算中位数 ${med.toFixed(3)} ms，最慢 ${ms.at(-1).toFixed(3)} ms）`);
+});
+
+// 裁定 25 程序 P2：S3 体积灯束（render/lampBeam.ts）—— 末端淡到 0（没有圆盘）、侧面淡化、横向软边、开口圆锥无端盖、贴图缺失可建
+test('裁定 25 灯束：沿长度起点淡入 / 末端 0、侧面 fresnel 淡化、软边、无端盖、?art=0 无辉光', () => {
+  const B = LAMP_BEAM;
+  assert.ok(lampBeamAlong(0) === 0 && lampBeamAlong(B.startFade[0]) === 0, '灯处（灯室里）不画实心带');
+  assert.equal(lampBeamAlong(B.length), 0, '末端亮度 0（旧实现末端是硬边开口 → 圆盘）');
+  assert.ok(lampBeamAlong(B.length * 0.97) < 0.01, '末端前 3% 已近 0：' + lampBeamAlong(B.length * 0.97));
+  let prev = Infinity;
+  for (let m = B.startFade[1]; m <= B.length; m += 0.5) {
+    const v = lampBeamAlong(m);
+    assert.ok(v <= prev + 1e-12, `淡入之后单调衰减 @${m}`);
+    prev = v;
+  }
+  assert.ok(Math.abs(lampBeamPhase(0) - B.sideMin) < 1e-9, '侧面只剩 sideMin');
+  assert.ok(lampBeamPhase(1) > lampBeamPhase(-1) && lampBeamPhase(-1) === 1, '迎光看最亮、背光顺轴看 1');
+  assert.ok(lampBeamPhase(0.5) < lampBeamPhase(0.9), '越顺轴越亮');
+  assert.equal(lampBeamEdge(0), 0, '剪影边缘 0（软边，不是硬边）');
+  assert.equal(lampBeamEdge(1), 1);
+  const noTex = new LampBeam(0xffb25e);
+  assert.equal(noTex.glow, null, '没贴图不建辉光');
+  assert.equal(noTex.beams.children.length, 2, '两束背对背');
+  const cone = noTex.beams.children[0];
+  const pos = cone.geometry.attributes.position;
+  let minR = Infinity, minX = Infinity, maxX = -Infinity;
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i), r = Math.hypot(pos.getY(i), pos.getZ(i));
+    minR = Math.min(minR, r); minX = Math.min(minX, x); maxX = Math.max(maxX, x);
+  }
+  assert.ok(minR > 0.3, '开口圆锥没有端盖（没有半径 0 的盖心顶点）：' + minR);
+  assert.ok(Math.abs(minX) < 1e-6 && Math.abs(maxX - B.length) < 1e-6, '灯处在原点、沿 +X 延伸 ' + [minX, maxX]);
+  const fake = new THREE.DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1);
+  const lit = new LampBeam(0xffb25e, { noise: fake, glow: fake });
+  assert.ok(lit.glow && !lit.visible, '有贴图 → 辉光；默认熄灭');
+  lit.setOn(true);
+  lit.update(1);
+  assert.ok(lit.glow.material.uniforms.uIntensity.value > 0 && lit.glow.material.uniforms.uIntensity.value < LAMP_GLOW.intensity, '辉光 2.5 s 淡入中');
+  lit.update(5);
+  assert.ok(Math.abs(lit.glow.material.uniforms.uIntensity.value - LAMP_GLOW.intensity) < 1e-9, '淡入完 = 028 glow.intensity');
+  assert.ok(Math.abs(lit.beams.rotation.y - 6 * B.spin) < 1e-9, '旋转速度不变');
 });
 
 let failed = 0;

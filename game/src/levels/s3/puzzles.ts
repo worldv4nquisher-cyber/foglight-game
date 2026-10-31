@@ -10,6 +10,8 @@ import type { HintSystem } from '@/systems/HintSystem';
 import type { Collider, PhysicsSystem } from '@/systems/PhysicsSystem';
 import type { InteractionSystem } from '@/systems/interaction/InteractionSystem';
 import { Interactable } from '@/systems/interaction/Interactable';
+import { LAMP_BEAM, LampBeam, type LampBeamTextures } from '@/render/lampBeam';
+import { ATMO028 } from '@/config/atmosphere028';
 import { WhiteboxBeamRenderer } from '@/systems/light/BeamRenderer';
 import { TideController } from '@/systems/tide/TideController';
 import { TideBell } from '@/systems/tide/TideBell';
@@ -79,8 +81,13 @@ export interface S3PuzzleDeps {
 export interface S3Lamp {
   root: THREE.Group;
   light: THREE.PointLight;
-  beam: THREE.Group;
+  /** 体积灯束 + 辉光（render/lampBeam.ts） */
+  beam: LampBeam;
+  /** 015 旧圆锥（对比截图用） */
+  legacyBeam: THREE.Group;
   on: boolean;
+  readonly style: 'volume' | 'legacy';
+  setStyle(s: 'volume' | 'legacy'): void;
   setOn(on: boolean): void;
   update(dt: number): void;
 }
@@ -139,8 +146,11 @@ export interface S3Puzzles {
   dispose(): void;
 }
 
-/** 灯室暖光（点灯前关；颜色 = 美术 lamp-light-origin #FFB25E）+ 两束旋转光束 */
-export function buildS3Lamp(parent: THREE.Object3D): S3Lamp {
+/**
+ * 灯室暖光（点灯前关；颜色 = 美术 lamp-light-origin #FFB25E）+ 两束旋转体积灯束 + 灯室辉光（render/lampBeam.ts，裁定 25 程序 P2）。
+ * beam = 当前显示的灯束组；legacyBeam = 015 的旧 MeshBasic 圆锥，只给 shots-035 SHOTS_COMPARE 同帧对比用（setStyle('legacy')）。
+ */
+export function buildS3Lamp(parent: THREE.Object3D, tex: LampBeamTextures = {}): S3Lamp {
   const root = new THREE.Group();
   root.name = 's3-lamp';
   root.position.copy(v3(S3.points.lampLightOrigin));
@@ -149,8 +159,12 @@ export function buildS3Lamp(parent: THREE.Object3D): S3Lamp {
   light.name = 'lamp-light-s3';
   light.visible = false;
   root.add(light);
-  const beam = new THREE.Group();
-  beam.name = 'lamp-beam-s3';
+  const volume = new LampBeam(0xffb25e, tex);
+  volume.name = 'lamp-beam-s3';
+  root.add(volume);
+  // 旧实现（对比用，默认不显示）
+  const legacy = new THREE.Group();
+  legacy.name = 'lamp-beam-s3-legacy';
   const mat = new THREE.MeshBasicMaterial({ color: 0xffb25e, transparent: true, opacity: 0.16, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
   const geo = new THREE.ConeGeometry(3.2, 60, 24, 1, true);
   geo.rotateZ(Math.PI / 2);
@@ -160,22 +174,40 @@ export function buildS3Lamp(parent: THREE.Object3D): S3Lamp {
     m.rotation.y = r;
     m.frustumCulled = false;
     m.renderOrder = 2;
-    beam.add(m);
+    legacy.add(m);
   }
-  beam.visible = false;
-  root.add(beam);
+  legacy.visible = false;
+  root.add(legacy);
+  let style: 'volume' | 'legacy' = 'volume';
+  const apply = (): void => {
+    volume.setOn(lamp.on && style === 'volume');
+    legacy.visible = lamp.on && style === 'legacy';
+  };
   const lamp: S3Lamp = {
     root,
     light,
-    beam,
+    beam: volume,
+    legacyBeam: legacy,
     on: false,
+    get style() {
+      return style;
+    },
+    setStyle(s: 'volume' | 'legacy'): void {
+      style = s;
+      legacy.rotation.y = volume.beams.rotation.y;
+      apply();
+    },
     setOn(on: boolean): void {
       lamp.on = on;
-      light.visible = beam.visible = on;
+      light.visible = on;
       light.intensity = on ? 60 : 0;
+      apply();
     },
     update(dt: number): void {
-      if (lamp.on) beam.rotation.y += dt * 0.35;
+      if (!lamp.on) return;
+      if (volume.on) volume.update(dt);
+      else volume.beams.rotation.y += dt * LAMP_BEAM.spin;
+      legacy.rotation.y = volume.beams.rotation.y;
     },
   };
   return lamp;
@@ -245,7 +277,8 @@ export function buildS3Puzzles(d: S3PuzzleDeps): S3Puzzles {
   offs.push(tracer.bind(events));
   const renderer = new WhiteboxBeamRenderer({ debug: d.beamDebug });
   scene.add(renderer.root);
-  const lamp = buildS3Lamp(frame);
+  const tex = (k: string): THREE.Texture | null => (game.assets.has(k) ? game.assets.getTexture(k) : null);
+  const lamp = buildS3Lamp(frame, { noise: tex(ATMO028.textures.beamNoise), glow: tex(ATMO028.textures.glowLighthouse) });
   beam.igniter.requires = () => state.valveOpen;
 
   // ======================================================== 潮汐：底层地面 + 楼梯 1–5 级（面高 ≤ 1.2，涨潮水深 > 0.3）→ 送回门外平台

@@ -664,6 +664,29 @@ export const ATMO028 = {
       "grid": 8,
       "maxMipLevel": 3
     }
+  },
+  "beam": {
+    "noise": {
+      "scrollAlongBeam": 0.05,
+      "tile": [
+        6,
+        1
+      ],
+      "strength": 0.35
+    },
+    "spot": {
+      "opacity": 0.85,
+      "flicker": 0.04
+    }
+  },
+  "glow": {
+    "lighthouse": {
+      "sizeM": 9,
+      "intensity": 1.6,
+      "blend": "additive",
+      "fadeInS": 2.5,
+      "fogAttenuation": 0.4
+    }
   }
 } as const;
 
