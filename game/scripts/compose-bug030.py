@@ -15,7 +15,7 @@ for f in ['/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc', '/usr/share/
         font = ImageFont.truetype(f, 28)
         break
 font = font or ImageFont.load_default()
-PAIRS = [('s1-xi-body-front', 'S1 汐全身正面'), ('s1-xi-body-side', 'S1 汐全身侧面'), ('s1-xi-cuff-side', 'S1 袖口特写（侧）'), ('s3-ending-05-journal-write', 'S3 结尾镜头 05')]
+PAIRS = [('s1-xi-body-front', 'S1 汐全身正面'), ('s1-xi-body-side', 'S1 汐全身侧面'), ('s1-xi-cuff-side-031cam', 'S1 袖口特写（侧，旧图机位）'), ('s3-ending-05-journal-write', 'S3 结尾镜头 05')]
 
 
 def luma(im, box=None):
@@ -52,11 +52,11 @@ for name, label in PAIRS:
     canvas.save(out)
     print('→', out, json.dumps(res[name], ensure_ascii=False))
 
-fb = os.path.join(D, 'raw', 'before', 's1-xi-cuff-side.png')
+fb = os.path.join(D, 'raw', 'before', 's1-xi-cuff-side-031cam.png')
 if os.path.exists(fb) and os.path.exists(OLD):
     b, o = Image.open(fb).convert('RGB'), Image.open(OLD).convert('RGB')
     if b.size == o.size:
-        fa = os.path.join(D, 'raw', 'after', 's1-xi-cuff-side.png')
+        fa = os.path.join(D, 'raw', 'after', 's1-xi-cuff-side-031cam.png')
         a = Image.open(fa).convert('RGB') if os.path.exists(fa) else None
         m = lambda x, y: round(ImageStat.Stat(ImageChops.difference(x, y).convert('L')).mean[0], 2)
         res['oldShotCheck'] = {'old': os.path.relpath(OLD, D), 'oldLuma': round(luma(o), 2), 'beforeLuma': round(luma(b), 2),

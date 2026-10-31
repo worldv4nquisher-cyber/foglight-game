@@ -15,8 +15,8 @@ export const RAMP_PROBE = `(() => {
     const t = g.assets.getTexture(k); r.initTexture(t); const wt = r.properties.get(t).__webglTexture;
     while (gl.getError()) {}
     gl.bindFramebuffer(gl.FRAMEBUFFER, fb); gl.viewport(0, 0, 4, 1); gl.disable(gl.BLEND); gl.disable(gl.DEPTH_TEST); gl.disable(gl.SCISSOR_TEST); gl.disable(gl.CULL_FACE); gl.colorMask(true, true, true, true);
+    if (gl.bindVertexArray) gl.bindVertexArray(null); // 先解绑 three 的 VAO，再设属性（顺序反了第一次画不上）
     gl.useProgram(prog); gl.bindBuffer(gl.ARRAY_BUFFER, buf); for (let i = 1; i < 8; i++) gl.disableVertexAttribArray(i); gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
-    if (gl.bindVertexArray) gl.bindVertexArray(null);
     gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, wt); if (gl.bindSampler) gl.bindSampler(0, null); gl.uniform1i(gl.getUniformLocation(prog, 't'), 0);
     gl.clearColor(1, 0, 1, 1); gl.clear(gl.COLOR_BUFFER_BIT); gl.drawArrays(gl.TRIANGLES, 0, 3);
     const px = new Uint8Array(16); gl.readPixels(0, 0, 4, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);

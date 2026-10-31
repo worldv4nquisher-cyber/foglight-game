@@ -55,6 +55,8 @@ const VIEWS = [
   // BUG-030：全身正面 / 侧面（ramp 明暗对比；侧面 = 身体右侧）
   ['s1-xi-body-front', 'high', null, null, 35, true, 'body-front'],
   ['s1-xi-body-side', 'high', null, null, 35, true, 'body-side'],
+  // BUG-030：袖口侧面用旧图 shots-031/s1-xi-cuff-side.png 记下的机位（xiCam eye / at 固定），和旧图逐像素可比
+  ['s1-xi-cuff-side-031cam', 'high', [1.569, 3.144, -11.849], [2.116, 3.094, -11.79], 35, true],
 ];
 
 const server = await preview({ root, preview: { host: '127.0.0.1', port: 0, strictPort: false, open: false }, logLevel: 'silent' });
