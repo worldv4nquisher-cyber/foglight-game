@@ -6,6 +6,8 @@
  * 用 dist（vite preview），?smoke=1 暴露 __game；任一 console.error / 未捕获异常记为失败（与 smoke-browser 同口径）。
  * 手机模拟：XB_DEVICE='iPhone 15'（webkit）/ 'Pixel 7'（chromium，XB_CHROMIUM_PATH 指系统 Chrome）——只模拟视口 / UA / 触摸 / DPR，
  *   GPU、内存、iOS 真 Safari 的限制都模拟不了；只看「能不能打开、给没给提示、能不能跑」。
+ * XB_AUDIO_DECODE=reject：把 decodeAudioData 换成立即 EncodingError 拒绝。M7 装的 Linux WebKit（WPE）没有 GStreamer 解码插件，
+ *   decodeAudioData 连 WAV 都永不返回，带 art=1 时卡在启动；用它绕过，顺带模拟 Safari 18.4 以前解不了 Ogg 的情况（音频全部缺失也要能玩）。
  * WebKit 只是 Safari 的同引擎近似（Linux WPE/GTK 端口，GPU / 媒体栈 / 字体都不同），结论不能代替真 Safari。
  */
 import { mkdtempSync, rmSync, statSync } from 'node:fs';
@@ -43,6 +45,17 @@ try {
   browser = await pw[which].launch({ headless: true, timeout: 60000, ...(which === 'chromium' && process.env.XB_CHROMIUM_PATH ? { executablePath: process.env.XB_CHROMIUM_PATH, args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'] } : {}) });
   const ctx = await browser.newContext(dev ? { ...dev } : { viewport: { width: 1280, height: 720 } });
   const page = await ctx.newPage();
+  if (process.env.XB_AUDIO_DECODE === 'reject') {
+    await page.addInitScript(() => {
+      for (const C of [window.AudioContext, window.webkitAudioContext, window.OfflineAudioContext].filter(Boolean)) {
+        C.prototype.decodeAudioData = function (_buf, _ok, fail) {
+          const e = new DOMException('stub: decode disabled (XB_AUDIO_DECODE=reject)', 'EncodingError');
+          fail?.(e);
+          return Promise.reject(e);
+        };
+      }
+    });
+  }
   page.on('console', (m) => {
     if (m.type() === 'error') errors.push(`console.error（${lastStep} 之后，${((Date.now() - t0) / 1000).toFixed(1)}s）: ` + m.text());
     else if (m.type() === 'warning' || /\[assets\]|\[quality\]|\[render\]/.test(m.text())) infos.push(`${m.type()}: ${m.text()}`.slice(0, 300));
