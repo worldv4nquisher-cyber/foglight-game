@@ -1277,7 +1277,7 @@ await test('037 反射强度 ?reflectK：解析夹到 [0,1]、画质配置三档
   assert.equal(reflectionStrengthOverride('?reflect=0.5'), null, 'reflect= 是分辨率，不是强度');
   assert.equal(reflectionOverride('?reflectK=0.5'), null, 'reflectK= 不改分辨率');
   assert.ok(PLANAR_REFLECTION_STRENGTH >= 0 && PLANAR_REFLECTION_STRENGTH <= 1);
-  assert.equal(PLANAR_REFLECTION_STRENGTH, 1, '默认值 = 025 交付画面（用户定之前不改）');
+  assert.equal(PLANAR_REFLECTION_STRENGTH, 0.5, '默认值 = 用户选的一半强度（10-31）');
   for (const t of ['ultra', 'high', 'standard']) assert.equal(QUALITY_PRESETS[t].reflections.planarStrength, PLANAR_REFLECTION_STRENGTH, t);
   // 着色器：强度乘在 mix(底色, refl·0.9, fr·uReflK) 的权重上 → uReflK = 0 时与关反射同色
   const water = readFileSync(resolve(ROOT, 'src/world/Water.ts'), 'utf8');

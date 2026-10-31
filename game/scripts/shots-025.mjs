@@ -5,7 +5,7 @@
 // 用法：npx vite build && node --import ./scripts/register-ts-paths.mjs scripts/shots-025.mjs [views,逗号分隔]
 //   SHOTS_WATCHDOG_MS（默认 20 min）到点强退并清理 Chrome 临时目录
 // 037 强度变体：SHOTS_VARIANT=strength → 输出 shots-025/strength/，RT 分辨率固定 high 默认（reflections.planar = 0.5），
-//   每机位四档强度 k0（= ?reflectK=0 = off）/ k05 / k1 / kdef（画质配置 PLANAR_REFLECTION_STRENGTH），运行时改 reflection.strength
+//   每机位三档强度 k0（= ?reflectK=0 = off）/ k05（= 默认 PLANAR_REFLECTION_STRENGTH 0.5）/ k1，运行时改 reflection.strength
 //   （与 URL ?reflectK= 同一入口，免得每档整页重进）；之后用 scripts/compose-025-strength.py 拼 1×4。
 import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
@@ -167,7 +167,7 @@ async function run(views) {
       const def = await evaluate('__game.quality.preset.reflections.planarStrength');
       report.defaultStrength = def;
       report.planar = await evaluate('__game.quality.preset.reflections.planar');
-      for (const [kname, k] of [['k0', 0], ['k05', 0.5], ['k1', 1], ['kdef', def]]) {
+      for (const [kname, k] of [['k0', 0], ['k05', 0.5], ['k1', 1]]) {
         const name = `s1-${view}-strength-${kname}`;
         try {
           await evaluate(SET_STRENGTH(k));

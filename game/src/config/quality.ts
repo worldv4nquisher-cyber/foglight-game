@@ -16,9 +16,10 @@ import type { TextId } from '@/content/text';
  */
 /**
  * 025 水面平面反射的混合强度（乘在菲涅尔混合权重上；1 = 025 交付时的画面，0 = 等同关反射）。
- * 三档共用这一个数：用户定了强度以后只改这里（?reflectK=0~1 调试覆盖；?reflect= 是 RT 分辨率倍率，不是强度）。
+ * 10-31 用户选「一半强度」→ 0.5（倒影比 025 交付画面淡一半）。
+ * 三档共用这一个数：要改强度只改这里（?reflectK=0~1 调试覆盖；?reflect= 是 RT 分辨率倍率，不是强度）。
  */
-export const PLANAR_REFLECTION_STRENGTH = 1;
+export const PLANAR_REFLECTION_STRENGTH = 0.5;
 
 export type QualityTier = 'ultra' | 'high' | 'standard';
 

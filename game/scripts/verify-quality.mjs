@@ -61,10 +61,10 @@ const SPEC = {
     { gtao: 'off', baked: true },
   ],
   reflections: [
-    // planarStrength 不是 §8 的键：025 平面反射混合强度，三档共用 PLANAR_REFLECTION_STRENGTH（等用户定，现为 1 = 025 交付画面）
-    { ssr: 'full', ssrWetOnly: false, planar: 1.0, probes: false, planarStrength: 1 },
-    { ssr: 'half', ssrWetOnly: true, planar: 0.5, probes: false, planarStrength: 1 },
-    { ssr: 'off', ssrWetOnly: false, planar: 0.25, probes: true, planarStrength: 1 },
+    // planarStrength 不是 §8 的键：025 平面反射混合强度，三档共用 PLANAR_REFLECTION_STRENGTH（10-31 用户选一半强度 = 0.5）
+    { ssr: 'full', ssrWetOnly: false, planar: 1.0, probes: false, planarStrength: 0.5 },
+    { ssr: 'half', ssrWetOnly: true, planar: 0.5, probes: false, planarStrength: 0.5 },
+    { ssr: 'off', ssrWetOnly: false, planar: 0.25, probes: true, planarStrength: 0.5 },
   ],
   dof: ['bokeh', 'gaussian-cutscene', 'off'],
   bloom: [
