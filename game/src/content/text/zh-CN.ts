@@ -1,5 +1,5 @@
 // 自动生成：node scripts/import-text.mjs（来源 docs/gdd/text-ch1.json），不要手改。
-// 章节 ch1 · zh-CN · v1 · 177 条
+// 章节 ch1 · zh-CN · v1 · 178 条
 
 export const TEXT_ZH_CN = {
   "ch1.common.journal_updated": "日志已更新",
@@ -130,6 +130,7 @@ export const TEXT_ZH_CN = {
   "ui.menu.overwrite_title": "开始新的旅程？",
   "ui.menu.settings": "设置",
   "ui.menu.version": "v0.1",
+  "ui.notice.desktop_only": "目前只支持电脑浏览器。请在电脑上用 Chrome、Edge、Firefox 或 Safari 打开。",
   "ui.pause.esc_hint": "Esc 继续",
   "ui.pause.resume": "继续",
   "ui.pause.settings": "设置",
@@ -319,6 +320,7 @@ export const TEXT_META: Record<keyof typeof TEXT_ZH_CN, TextMeta> = {
   "ui.menu.overwrite_title": {"type":"ui","speaker":"system"},
   "ui.menu.settings": {"type":"ui","speaker":"system"},
   "ui.menu.version": {"type":"ui","speaker":"system"},
+  "ui.notice.desktop_only": {"type":"ui","speaker":"system"},
   "ui.pause.esc_hint": {"type":"ui","speaker":"system"},
   "ui.pause.resume": {"type":"ui","speaker":"system"},
   "ui.pause.settings": {"type":"ui","speaker":"system"},
