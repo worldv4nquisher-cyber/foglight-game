@@ -30,7 +30,9 @@ const infos = [];
 const steps = [];
 let browser;
 const t0 = Date.now();
+let lastStep = '启动';
 const step = (name, extra = '') => {
+  lastStep = name;
   const s = `${((Date.now() - t0) / 1000).toFixed(1)}s ${name}${extra ? ' ' + extra : ''}`;
   steps.push(s);
   console.log('  ' + s);
@@ -42,10 +44,10 @@ try {
   const ctx = await browser.newContext(dev ? { ...dev } : { viewport: { width: 1280, height: 720 } });
   const page = await ctx.newPage();
   page.on('console', (m) => {
-    if (m.type() === 'error') errors.push('console.error: ' + m.text());
+    if (m.type() === 'error') errors.push(`console.error（${lastStep} 之后，${((Date.now() - t0) / 1000).toFixed(1)}s）: ` + m.text());
     else if (m.type() === 'warning' || /\[assets\]|\[quality\]|\[render\]/.test(m.text())) infos.push(`${m.type()}: ${m.text()}`.slice(0, 300));
   });
-  page.on('pageerror', (e) => errors.push('pageerror: ' + (e.stack ?? e.message)));
+  page.on('pageerror', (e) => errors.push(`pageerror（${lastStep} 之后）: ` + (e.stack ?? e.message)));
   const until = async (expr, ms, label) => {
     try {
       await page.waitForFunction(expr, null, { timeout: ms, polling: 200 });
@@ -135,7 +137,9 @@ try {
   const save = await page.evaluate(() => JSON.parse(localStorage.getItem('foglight.save.v1') ?? 'null'));
   if (save?.sceneId !== 's3') throw new Error('进 S3 后存档不是 s3：' + JSON.stringify(save));
   // ---- 刷新 → 继续（存档在本浏览器能读回）
+  lastStep = '刷新（离开 S3 页）';
   await page.goto(base, { timeout: 60000 });
+  lastStep = '刷新后主菜单';
   await until(() => !!document.querySelector('.main-menu [data-act="continue"]')?.getClientRects().length, LOAD_MS, '刷新后没有「继续」');
   if (dev) await page.tap('.main-menu [data-act="continue"]', { timeout: 20000 });
   else await page.click('.main-menu [data-act="continue"]', { timeout: 20000 });
