@@ -3447,6 +3447,8 @@ const cut035Hook = `(() => {
       window.__cut035.cues.push({ id: l.id, at: l.at, firedAt: +l.firedAt.toFixed(3), prevT: +prevT.toFixed(3), src: l.source, audio: audioPos(), shot: c.shot, cam: __s3.cameraFollow.cutsceneName,
         sub: sub?.id ?? null, xi: an?.posing ?? null, fMode: f?.mode ?? null, fT: f ? +f.time.toFixed(3) : null, fVis: f?.visible ?? null,
         fog: +(__s3.scene.fog?.density ?? 0).toFixed(5), sil: c.silhouette?.visible ?? null, fade: +__game.ui.fade.opacity.toFixed(3), page6: __game.narrative.outroEntryUnlocked }); } };
+  const fin = c.finish.bind(c);
+  c.finish = (how) => { if (window.__cut035.end === null) window.__cut035.end = { how, t: +c.t.toFixed(3), prevT: +lastT.toFixed(3), src: c.clock.source, wall: performance.now() }; fin(how); };
   __game.events.on('scene:change', () => { if (window.__cut035.sceneAt === null) window.__cut035.sceneAt = { t: c.t, audio: audioPos(), wall: performance.now(), endedBy: c.endedBy }; });
   return 1; })()`;
 const cut035Row = (r) => `${r.id} 目标 ${r.at} s / 触发 ${r.firedAt.toFixed(2)} s（上一帧 ${r.prevT.toFixed(2)}，${r.src}${r.audio === null ? '' : `，曲 ${r.audio.toFixed(2)} s`}）镜头 ${r.shot}`;
@@ -3490,13 +3492,16 @@ CHECKS.push({
     if (!/^pull-/.test(C.pull_back.shot)) bad.push('1:14 后拉镜头 ' + C.pull_back.shot);
     if (C.fade_out.fade > 0.05 || !C.fade_out.shot) bad.push('1:35 淡出起点 ' + JSON.stringify(C.fade_out));
     const sa = r.sceneAt;
-    if (!sa || sa.endedBy !== 'end' || sa.t < 106 || sa.t > 106.6) bad.push('结束页时刻 ' + JSON.stringify(sa));
+    // 演出结束 = 跨过 106.02（曲子结束）的第一帧；之后 completeChapter 异步切场景（软件渲染下约 1 s 墙钟），只要求墙钟 3 s 内切到
+    const fe = r.end, endAt = 106.02;
+    if (!fe || fe.how !== 'end' || !(fe.t >= endAt && fe.prevT < endAt && fe.t - endAt < 1.0)) bad.push('演出结束时刻 ' + JSON.stringify(fe));
+    if (!sa || sa.endedBy !== 'end' || !fe || sa.wall - fe.wall > 3000) bad.push('结束页时刻 ' + JSON.stringify({ sa, fe }));
     if (bad.length) throw new Error(bad.join('；'));
     await sleep(1500);
     const pg = await evaluate(`({ fade: __game.ui.fade.opacity, ctx: __game.input.context, save: JSON.parse(localStorage.getItem('foglight.save.v1') || 'null')?.chapterComplete })`);
     if (pg.fade > 0.05 || !pg.save) throw new Error('结束页应从黑场淡入、存 chapterComplete ' + JSON.stringify(pg));
     out.push(r.cues.map(cut035Row).join('；'));
-    out.push(`父亲 hand 起 @${C.father_in.firedAt.toFixed(2)} s 父亲时间 ${C.father_in.fT}、汐 ${C.father_in.xi}；雾 ${C.fog_open.fog} → ${C.silhouette.fog}；结束页 @演出 ${sa.t.toFixed(2)} s（曲 ${sa.audio === null ? '—' : sa.audio.toFixed(2)} s）墙钟 ${wall.toFixed(1)} s、${r.frames} 帧；结束页淡入后 fade ${pg.fade.toFixed(2)}`);
+    out.push(`父亲 hand 起 @${C.father_in.firedAt.toFixed(2)} s 父亲时间 ${C.father_in.fT}、汐 ${C.father_in.xi}；雾 ${C.fog_open.fog} → ${C.silhouette.fog}；演出结束 @${fe.t.toFixed(2)} s（上一帧 ${fe.prevT.toFixed(2)}，${fe.src}）→ ${((sa.wall - fe.wall) / 1000).toFixed(2)} s 后切结束页 @演出 ${sa.t.toFixed(2)} s（曲 ${sa.audio === null ? '—' : sa.audio.toFixed(2)} s）墙钟 ${wall.toFixed(1)} s、${r.frames} 帧；结束页淡入后 fade ${pg.fade.toFixed(2)}`);
     console.log('[035] cues ' + JSON.stringify(r.cues));
     await evaluate(`localStorage.clear(); 1`);
     await cdp.goto('');
