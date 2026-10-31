@@ -4412,8 +4412,15 @@ const realErrors = errors.filter(
   (e) => !/GPU stall due to ReadPixels|GL_CLOSE_PATH_NV|WebGL.*performance|DRACOLoader: Decoding failed: Unsupported geometry type/i.test(e) && !expectedErrors.some((re) => re.test(e)),
 );
 // P3：EventBus 监听器抛错会 console.error（上面已收），这里再读一次计数兜底（当前页面自加载以来）
-const busErrors = await evaluate(`window.__game?.events?.listenerErrors ?? 0`).catch(() => 0);
-if (busErrors > 0) {
+// M7：读不到（页面崩了 / CDP 断了 / 没有 __game / 计数不是数）直接判失败，不再当 0 放过
+const busRead = await Promise.race([new Promise((r) => setTimeout(() => r({ err: 'timeout 10 s' }), 10000)), evaluate(
+  `(() => { const g = window.__game; if (!g) return { err: 'no __game' }; const n = g.events?.listenerErrors; return typeof n === 'number' && Number.isFinite(n) ? { n } : { err: 'listenerErrors = ' + String(n) }; })()`,
+).then((v) => v, (e) => ({ err: 'evaluate failed: ' + String(e?.message ?? e).split('\n')[0] }))]);
+const busErrors = busRead && typeof busRead.n === 'number' ? busRead.n : 0;
+if (!busRead || typeof busRead.n !== 'number') {
+  console.log(`  ✗ 读不到 EventBus 监听器抛错计数（${busRead?.err ?? '无返回'}）：页面可能已崩溃或 __game 丢失`);
+  failed++;
+} else if (busErrors > 0) {
   const recent = await evaluate(`(window.__game.events.recentListenerErrors || []).map((r) => r.type + ': ' + String(r.error?.stack ?? r.error).split('\\n')[0])`).catch(() => []);
   console.log(`  ✗ EventBus 监听器抛错 ${busErrors} 次（最近：${JSON.stringify(recent)}）`);
   failed++;
