@@ -15,14 +15,16 @@ import { S1_ROCKS } from '../src/levels/s1/rocks.ts';
 import { S1 } from '../src/levels/s1/layout.ts';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const OUT = resolve(root, '../docs/tasks/shots-031');
+// SHOTS_OUT=目录（相对仓库上一级，如 docs/tasks/shots-r4）改输出目录；SHOTS_QUERY='&hull=0' 追加 URL 参数；SHOTS_SUFFIX 文件名后缀
+const OUT = resolve(root, '..', process.env.SHOTS_OUT ?? 'docs/tasks/shots-031');
 mkdirSync(OUT, { recursive: true });
 if (!existsSync(join(root, 'dist/index.html'))) throw new Error('先 npm run build');
 const chromePath = process.env.CHROME ?? ['/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser'].find((p) => existsSync(p));
 const W = 1600, H = 900;
 const only = process.argv[2]?.split(',').filter(Boolean) ?? null;
 const ATMO = process.env.SHOTS_ATMO ?? '';
-const SUFFIX = ATMO ? `-${ATMO}` : '';
+const SUFFIX = (ATMO ? `-${ATMO}` : '') + (process.env.SHOTS_SUFFIX ?? '');
+const EXTRA_Q = process.env.SHOTS_QUERY ?? '';
 // 018 新加的 9 块（rocks.ts 第 155 项之后）
 const NEW_ROCKS = S1_ROCKS.slice(155).map((r) => r.translation);
 if (NEW_ROCKS.length !== 9) throw new Error('rocks.ts 新礁石不是 9 块：' + NEW_ROCKS.length);
@@ -46,10 +48,13 @@ const VIEWS = [
   // 汐头部精修 r2：正脸 / 侧脸近景（对照 art/models/characters/preview/char-xi-head-r2-*-compare.png）
   ['s1-xi-face-front', 'high', null, null, 30, true, 'face-front'],
   ['s1-xi-face-side', 'high', null, null, 30, true, 'face-side'],
+  // r4：背面（马尾 / 兜帽）、左耳特写
+  ['s1-xi-face-back', 'high', null, null, 30, true, 'face-back'],
+  ['s1-xi-ear-l', 'high', null, null, 22, true, 'ear-l'],
 ];
 
 const server = await preview({ root, preview: { host: '127.0.0.1', port: 0, strictPort: false, open: false }, logLevel: 'silent' });
-const base = `http://127.0.0.1:${server.httpServer.address().port}/?smoke=1&art=1&quality=high${ATMO ? '&atmo=' + ATMO : ''}`;
+const base = `http://127.0.0.1:${server.httpServer.address().port}/?smoke=1&art=1&quality=high${ATMO ? '&atmo=' + ATMO : ''}${EXTRA_Q}`;
 const profile = mkdtempSync(join(tmpdir(), 'shots031-chrome-'));
 const chrome = spawn(chromePath, ['--headless=new', '--no-sandbox', '--no-first-run', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', `--window-size=${W},${H}`, '--hide-scrollbars', '--remote-debugging-port=0', `--user-data-dir=${profile}`, 'about:blank'], { stdio: ['ignore', 'ignore', 'pipe'] });
 const wsUrl = await new Promise((res, rej) => {
@@ -197,7 +202,7 @@ const xiCam = (kind, fov) => `(() => { const s = __s1; const o = s.rig.entity.ob
   const up = new V(0, 1, 0); const c = s.camera; let eye, at;
   const cuff = (sd) => { const hand = o.getObjectByName('hand_' + sd), el = o.getObjectByName('lower_arm_' + sd); const w = hand.getWorldPosition(new V()); return w.lerp(el.getWorldPosition(new V()), 0.18); };
   let headFwd = null, headVsBodyDeg = null;
-  if ('${kind}' === 'face-front' || '${kind}' === 'face-side') {
+  if (['face-front', 'face-side', 'face-back', 'ear-l'].includes('${kind}')) {
     // 脸朝向按 head 骨现在的世界旋转算（idle 时头会偏转 / 低头，脚尖方向不准）：bind 时模型面朝 +Z → head 骨局部的「前」= inv(bind 旋转)·+Z
     let sm = null; o.traverse((m) => { if (!sm && m.isSkinnedMesh && m.skeleton.bones.some((b) => b.name === 'head')) sm = m; });
     const Q = c.quaternion.constructor; const hb = sm.skeleton.bones.find((b) => b.name === 'head');
@@ -206,7 +211,8 @@ const xiCam = (kind, fov) => `(() => { const s = __s1; const o = s.rig.entity.ob
     headVsBodyDeg = +(Math.acos(Math.max(-1, Math.min(1, headFwd.dot(f)))) * 180 / Math.PI).toFixed(1);
     const hs = new V().crossVectors(up, headFwd).normalize();
     const hd = hb.getWorldPosition(new V()); at = hd.clone().add(new V(0, 0.07, 0)).addScaledVector(headFwd, 0.05);
-    eye = at.clone().addScaledVector('${kind}' === 'face-front' ? headFwd : hs, 0.75).add(new V(0, 0.02, 0));
+    if ('${kind}' === 'ear-l') { at = hd.clone().add(new V(0, 0.06, 0)).addScaledVector(hs, 0.07).addScaledVector(headFwd, -0.01); eye = at.clone().addScaledVector(hs, 0.42).addScaledVector(headFwd, 0.12).add(new V(0, 0.03, 0)); }
+    else eye = at.clone().addScaledVector('${kind}' === 'face-front' ? headFwd : '${kind}' === 'face-back' ? headFwd.clone().negate() : hs, 0.75).add(new V(0, 0.02, 0));
   }
   else if ('${kind}' === 'hem') { at = new V(p.x, p.y + 0.85, p.z); eye = at.clone().addScaledVector(f, 1.0).add(new V(0, 0.08, 0)); }
   else if ('${kind}' === 'cuff-side') { at = cuff('r'); const out = at.clone().sub(p).setY(0).normalize(); eye = at.clone().addScaledVector(out, 0.55).add(new V(0, 0.05, 0)); }

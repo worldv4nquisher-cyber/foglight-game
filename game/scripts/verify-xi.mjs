@@ -432,6 +432,33 @@ if (existsSync(animsFile) && existsSync(modelFile)) {
     out.push('材质补丁：body / face / hair 三个材质克隆后注入 ramp 光照 + 湿痕、脸 SDF（uv1）✓');
     scene.rotation.y = 0;
     scene.updateMatrixWorld(true);
+    // r4 第 4 项：023 外扩描边壳（COLOR_0 平滑法线，蒙皮同骨架，头发同贴图 alpha test）
+    const { prepareOutlineNormals } = await import('@/assets/vertexColors');
+    const { addOutlineHull, HULL_TAG, hullNdcOffset } = await import('@/render/OutlineHull');
+    const on = prepareOutlineNormals(scene);
+    assert.equal(on.invalid.length, 0, `COLOR_0 平滑法线校验：${JSON.stringify(on.invalid)}`);
+    const srcMeshes = [];
+    scene.traverse((o) => o.isMesh && !o.userData[HULL_TAG] && srcMeshes.push(o));
+    const hs = addOutlineHull(scene);
+    assert.equal(hs.meshes, srcMeshes.length, `每个网格都有描边壳（${hs.meshes}/${srcMeshes.length}，跳过 ${hs.skipped.join(',')}）`);
+    assert.equal(addOutlineHull(scene).meshes, 0, '重复调用不再加壳');
+    let hairHulls = 0;
+    for (const m of srcMeshes) {
+      const h = m.children.find((c) => c.userData[HULL_TAG]);
+      assert.ok(h && h.isSkinnedMesh && h.skeleton === m.skeleton && h.geometry === m.geometry, `${m.name} 壳 = 同几何同骨架的蒙皮网格`);
+      assert.ok(h.material.side === THREE.BackSide && !h.castShadow && !h.receiveShadow, `${m.name} 壳只画背面、不投影`);
+      assert.equal(h.material.map, m.material.map, `${m.name} 壳用同一张固有色贴图（线色 = 固有色压暗偏冷）`);
+      const sh = { uniforms: {}, defines: {}, vertexShader: THREE.ShaderLib.lambert.vertexShader, fragmentShader: THREE.ShaderLib.lambert.fragmentShader };
+      h.material.onBeforeCompile(sh);
+      assert.ok(sh.vertexShader.includes('attribute vec3 color;') && sh.vertexShader.includes('skinMatrix * vec4(hullN'), `${m.name} 壳顶点外扩注入`);
+      if (xiMaterialKind(m.material.name) === 'hair') { hairHulls++; assert.equal(h.material.alphaTest, m.material.alphaTest, '头发壳 alphaTest = 头发'); assert.ok(m.material.alphaTest >= 0.5, '头发 MASK 0.5'); }
+      else assert.equal(h.material.alphaTest, 0, `${m.name} 不做 alpha test`);
+    }
+    assert.ok(hairHulls >= 3 && hs.alphaTested === hairHulls, `头发三档 LOD 都做 alpha test（${hairHulls}）`);
+    const o169 = hullNdcOffset(16 / 9);
+    assert.ok(Math.abs((o169.y * 1080) / 2 - 1.5) < 1e-9 && Math.abs((o169.y * 1440) / 2 - 2) < 1e-9, '1080p 1.5 px、1440p 等比 2 px');
+    out.push(`023 描边壳：${hs.meshes} 个网格（头发 ${hairHulls} 个 alpha test ${srcMeshes.find((m) => xiMaterialKind(m.material.name) === 'hair')?.material.alphaTest}）同骨架、BackSide、1080p 1.5 px ✓`);
+    for (const m of srcMeshes) for (const c of [...m.children]) if (c.userData[HULL_TAG]) c.removeFromParent();
   }
 
   let tracks = 0;

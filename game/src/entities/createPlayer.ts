@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import { applyXiMaterials } from '@/render/xiMaterials';
+import { addOutlineHull } from '@/render/OutlineHull';
+import { outlineHullEnabled } from '@/config/debug';
 import { XiLookComponent } from '@/entities/xi/XiLook';
 import type { Game } from '@/core/Game';
 import { gameplay } from '@/config/gameplay';
@@ -93,6 +95,8 @@ export function createPlayer(game: Game, physics: PhysicsSystem, spawn: THREE.Ve
     const sdf = game.assets.has(XI_SDF_KEY) ? game.assets.getTexture(XI_SDF_KEY) : null;
     look = entity.add(new XiLookComponent(applyXiMaterials(model, { ramp: game.assets.getTexture(XI_RAMP_KEY), sdf })));
   }
+  // 023 外扩描边：三档 outlineHull 都含 'character'，汐始终描（头发走同一张贴图的 alpha test）
+  if (model && outlineHullEnabled) model.userData.outlineHull = addOutlineHull(model);
   return { entity, body, controller, visual, ...(animator ? { animator } : {}), ...(look ? { look } : {}) };
 }
 

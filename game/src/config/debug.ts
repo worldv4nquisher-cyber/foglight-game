@@ -36,3 +36,7 @@ export const greyboxVisible: boolean = typeof location !== 'undefined' && ['1', 
  * v0.1-029 光照贴图开关：`?lightmap=0` 不挂（对比截图 / 排查用，走原来的半球光）。默认开。
  */
 export const lightmapEnabled: boolean = typeof location === 'undefined' || !['0', 'false'].includes(new URLSearchParams(location.search).get('lightmap') ?? 'x');
+
+/** v0.1-023 角色外扩描边开关：`?hull=0` 不挂（对比截图用）。默认开。 */
+export const outlineHullEnabled: boolean = typeof location === 'undefined' || !['0', 'false'].includes(new URLSearchParams(location.search).get('hull') ?? 'x');
+
