@@ -4084,7 +4084,7 @@ CHECKS.push({
       return { scene: s, name: s.name, items: items.length, bad, xi, exits: (s.exits ?? []).length, meshes };
     })()`;
     for (const [id, name] of scenes) {
-      await cdp.goto(`scene=${id}&art=1`, name);
+      await cdp.goto(`debug=1&scene=${id}&art=1`, name); // ?scene= 直进要 debug=1（GameFlow）
       const end = Date.now() + ESTAB_MS;
       while (Date.now() < end && !(await evaluate(`__game.input.context === 'explore' && !__game.flow.transitioning`))) await sleep(250);
       await gameWait(1);
