@@ -222,6 +222,9 @@ export const manifest: AssetEntry[] = [
   { key: 'prop-logbook-s3', type: 'gltf', url: 'assets/art/models/props/prop-logbook-s3.glb', group: 's3', optional: true, art: true },
   { key: 'prop-letter-b', type: 'gltf', url: 'assets/art/models/props/prop-letter-b.glb', group: 's3', optional: true, art: true },
   { key: 'prop-journal-father-s3', type: 'gltf', url: 'assets/art/models/props/prop-journal-father.glb', group: 's3', optional: true, art: true },
+  // P3 钢笔（25 KB；结尾坐写 xi-sit-write 时挂汐右手。挂点 / clip / 局部矩阵读 GLB 根 extras.attach → src/entities/xi/clipProp.ts）。
+  // s3 组 = 进 S3 才加载（不进首包）；与日志同一图集 tex-props-dressing-ch1-*，KTX2 按 URL 共用缓存，不会重复加载
+  { key: 'prop-fountain-pen', type: 'gltf', url: 'assets/art/models/props/prop-fountain-pen.glb', group: 's3', optional: true, art: true },
   // 035 结尾演出：远处第二座灯塔剪影（与 S1 天空层同一文件，s3 组另登记 key）
   { key: 'env-lighthouse-silhouette-far-s3', type: 'gltf', url: 'assets/art/models/env/env-lighthouse-silhouette-far.glb', group: 's3', optional: true, art: true },
   { key: 'prop-tide-bell-s3', type: 'gltf', url: 'assets/art/models/props/prop-tide-bell.glb', group: 's3', optional: true, art: true },

@@ -683,6 +683,60 @@ if (existsSync(animsFile) && existsSync(modelFile)) {
     }
   }
 
+  // ---- P3 钢笔：extras.attach 读法 + 显隐规则（假动画器）+ 真 GLB 挂到 char-xi
+  {
+    const { readClipPropAttach, ClipProp, CLIP_PROP_VISIBLE_W } = await import('@/entities/xi/clipProp');
+    const mk = (attach) => { const g = new THREE.Group(); const n = new THREE.Object3D(); n.userData = attach === undefined ? {} : { attach }; g.add(n); return g; };
+    assert.equal(readClipPropAttach(mk(undefined)).attach, null, '没有 attach');
+    assert.equal(readClipPropAttach(mk({ clip: 'xi-sit-write' })).attach, null, '缺 socket');
+    assert.equal(readClipPropAttach(mk({ socket: 's', clip: 'c', localMatrix: 'weird' })).attach, null, 'localMatrix 不支持');
+    const m16 = new THREE.Matrix4().makeTranslation(0.01, 0.02, 0.03);
+    assert.ok(readClipPropAttach(mk({ socket: 's', clip: 'c', localMatrix: m16.toArray() })).attach.matrix.equals(m16), 'localMatrix 数组');
+    assert.ok(readClipPropAttach(mk({ socket: 's', clip: 'c' })).attach.matrix.equals(new THREE.Matrix4()), 'localMatrix 缺省 = 单位');
+    // 假动画器：posing / looping / weight 可改
+    const fa = { posing: null, looping: null, w: {}, resolve: (n) => (['xi-sit-write', 'xi-stand-gaze'].includes(n) ? n : null), weightOf(n) { return this.w[n] ?? 0; } };
+    const fm = new THREE.Group(); const fs = new THREE.Object3D(); fs.name = 'sock'; fm.add(fs);
+    assert.match(ClipProp.mount(mk({ socket: 'nope', clip: 'xi-sit-write' }), fm, fa).error, /挂点/);
+    assert.match(ClipProp.mount(mk({ socket: 'sock', clip: 'xi-nope' }), fm, fa).error, /clip/);
+    const fp = ClipProp.mount(mk({ socket: 'sock', clip: 'xi-sit-write', localMatrix: m16.toArray() }), fm, fa).prop;
+    assert.ok(fp && fp.root.parent === fs && !fp.root.visible, '挂上、初始藏');
+    near(fp.root.position.y, 0.02, 1e-9, '局部矩阵');
+    assert.equal(fp.update(), false, '没播 → 藏');
+    fa.posing = 'xi-sit-write'; fa.w['xi-sit-write'] = CLIP_PROP_VISIBLE_W - 0.01;
+    assert.equal(fp.update(), false, '淡入不到一半 → 藏');
+    fa.w['xi-sit-write'] = 1;
+    assert.equal(fp.update(), true, '播 → 显示');
+    fa.posing = 'xi-stand-gaze';
+    assert.equal(fp.update(), false, '换 clip → 藏（权重还在也藏）');
+    fa.posing = null; fa.looping = 'xi-sit-write';
+    assert.equal(fp.update(), true, 'setLoop 播也算');
+    fp.suppress(true);
+    assert.equal(fp.root.visible, false, '跳过 suppress → 立即藏');
+    assert.equal(fp.update(), false, 'suppress 后一直藏');
+    // 真 GLB：钢笔挂 char-xi，读到的 socket / clip 都在、单位矩阵、-tip 节点 = extras.tipLocal
+    const penFile = fileURLToPath(new URL('../../art/models/props/prop-fountain-pen.glb', import.meta.url));
+    if (existsSync(penFile)) {
+      const pen = await parse(penFile);
+      const at = readClipPropAttach(pen.scene).attach;
+      assert.ok(at, '钢笔 extras.attach');
+      assert.equal(at.socket, 'hand_r_socket');
+      assert.ok(XI_CLIP_NAMES.includes(at.clip), `attach.clip ${at.clip} 在 clip 表里`);
+      assert.ok(at.matrix.equals(new THREE.Matrix4()), '单位矩阵');
+      const ra = { posing: at.clip, looping: null, resolve: (n) => (XI_CLIP_NAMES.includes(n) ? n : null), weightOf: () => 1 };
+      const xiCopy = scene.clone(true);
+      const rp = ClipProp.mount(pen.scene, xiCopy, ra).prop;
+      assert.ok(rp && rp.socket.name === 'hand_r_socket' && rp.update(), '真 GLB 挂上并显示');
+      let ud = null;
+      pen.scene.traverse((o) => { if (!ud && o.userData?.tipLocal) ud = o.userData; });
+      const tipN = pen.scene.getObjectByName('prop-fountain-pen-tip');
+      tipN.position.toArray().forEach((x, i) => near(x, ud.tipLocal[i], 1e-5, `-tip = tipLocal[${i}]`));
+      let tris = 0;
+      pen.scene.getObjectByName('prop-fountain-pen_lod0').traverse((o) => { if (o.isMesh) tris += (o.geometry.index?.count ?? o.geometry.attributes.position.count) / 3; });
+      assert.ok(tris > 0 && tris <= 1000, `钢笔 LOD0 ${tris} 面`);
+      out.push(`P3 钢笔：extras.attach（${at.socket} / ${at.clip} / ${JSON.stringify(at.localMatrix)}）读法 + 显隐（未播 / 淡入 < ${CLIP_PROP_VISIBLE_W} / 换 clip / suppress 都藏）✓；真 GLB 挂 char-xi、-tip = tipLocal、LOD0 ${tris} 面 ✓`);
+    }
+  }
+
   out.push(
     `char-xi.glb 73 骨 / ${skinned} 个蒙皮网格 / hand_r_socket ✓；anims.glb ${tracks} 条轨道全部绑得上；循环 clip 原地（首尾 < 1 cm）；` +
       `step-across ${stepNote}（漂移 ${(maxDrift * 100).toFixed(1)} cm）；turn ±90° @34 帧、尾段抵消 ✓`,

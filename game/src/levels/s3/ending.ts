@@ -34,6 +34,7 @@ import {
 } from '@/content/cutscenes/ending';
 import { S3, toWorld } from './layout';
 import { IGNITE_MONO_DELAY, IGNITE_MONO_SEC } from './puzzles';
+import type { ClipProp } from '@/entities/xi/clipProp';
 
 /**
  * S3 结尾演出执行（035）：时间轴数据见 content/cutscenes/ending.ts，时钟见 systems/cutscene/CutsceneClock.ts。
@@ -59,6 +60,8 @@ export interface S3EndingHost {
   lampGlassRoot?: () => THREE.Object3D | null;
   /** S3 体积灯束（镜头 02 强度倍率；白盒没有时 null） */
   lampBeam?: () => LampBeam | null;
+  /** P3 钢笔（只在 xi-sit-write 显示；跳过 / 结束时 suppress 强制藏） */
+  pen?: () => ClipProp | null;
   /** 美术节点在 S3 局部的位置（没有 / 白盒时 null）：日志 socket 等跟 GLB 走，不硬写 */
   artPoint?: (name: string) => THREE.Vector3 | null;
   alive(): boolean;
@@ -179,6 +182,7 @@ export class S3Ending {
 
   dispose(): void {
     for (const off of this.offs.splice(0)) off();
+    this.h.pen?.()?.suppress(true);
     this.h.lampBeam?.()?.setBoost(1);
     this.cam.removeFromParent();
     this.silhouette?.removeFromParent();
@@ -511,6 +515,8 @@ export class S3Ending {
     game.narrative.markSeen('ch1.s3.ignite.mono');
     game.narrative.unlockOutroEntry();
     this.endFather();
+    // 钢笔：跳过时汐还停在 xi-sit-write 上（黑场 0.75 s 里不收姿势），笔要立即藏；完整播完也一样（下一帧就是结束页）
+    this.h.pen?.()?.suppress(true);
     for (const off of this.offs.splice(0)) off();
     if (how === 'skip') {
       // 结尾曲 0.75 s 淡出（EndingMusic 监听），画面同时 0.75 s 黑场，然后进结束页

@@ -8,6 +8,7 @@ import type { Game } from '@/core/Game';
 import { gameplay } from '@/config/gameplay';
 import { beamDebugEnabled, debugEnabled, greyboxVisible } from '@/config/debug';
 import { FatherActor, FATHER_ANIMS_KEY, FATHER_MODEL_KEY } from '@/entities/father/FatherActor';
+import { ClipProp } from '@/entities/xi/clipProp';
 import { parseFatherMode, type FatherMode } from '@/entities/father/clips';
 import { LevelScene, type SpawnPoint } from '@/scenes/LevelScene';
 import { LEVELS } from '@/scenes/levels';
@@ -24,6 +25,9 @@ import { doorLightmapScale } from '@/render/lightmap';
 import { EndingMusic } from '@/systems/audio/endingMusic';
 import { s3UpperLayerGain } from './music';
 import { S3_TOWER_CLOSED_LM } from '@/levels/lightmaps';
+
+/** P3 钢笔（manifest s3 组） */
+export const PEN_KEY = 'prop-fountain-pen';
 
 /**
  * S3 初望灯塔（v0.1-015 白盒 + 美术 020 接入；布局见 ./layout.ts，取代 010 的占位 S3LighthouseScene）。
@@ -53,6 +57,11 @@ export class S3Scene extends LevelScene {
   father: FatherActor | null = null;
   /** 1031 结尾曲：进场首帧后预取，lighthouse:ignited 那一帧起播（systems/audio/endingMusic.ts） */
   endingMusic: EndingMusic | null = null;
+  /** P3 钢笔（挂汐 extras.attach.socket，只在 extras.attach.clip 播放时显示；没有资源 / 白盒时 null） */
+  pen: ClipProp | null = null;
+  /** 钢笔挂不上的原因（冒烟读） */
+  penError: string | null = null;
+  private penModel: THREE.Object3D | null = null;
 
   constructor(game: Game) {
     super(game, LEVELS.s3);
@@ -174,6 +183,7 @@ export class S3Scene extends LevelScene {
     else if (this.rig) this.father?.update(dt);
     super.update(dt, alpha);
     if (!this.rig) return;
+    this.stepPen();
     this.puzzles.update(dt);
     // 029：塔内按门开 −100° 烘的；门关着按门角把塔内光照贴图压到 S3_TOWER_CLOSED_LM。
     // C 项（035 美术问）：只压塔身室内。灯室在 22 m 高的塔顶、四周 2.3 m 高的玻璃，光照全来自玻璃，塔门在底层、
@@ -226,6 +236,7 @@ export class S3Scene extends LevelScene {
       alive: () => scenes.current === this,
       lampGlassRoot: () => this.art.root.getObjectByName('env-lighthouse-ch1-s3') ?? null,
       lampBeam: () => this.puzzles?.lamp.beam ?? null,
+      pen: () => this.pen,
       artPoint: (name) => {
         const node = this.art.root.getObjectByName(name);
         if (!node) return null;
@@ -255,6 +266,27 @@ export class S3Scene extends LevelScene {
     this.frame.add(this.father.root);
     if (this.father.missing.length) console.warn('[father] char-father-anims 缺 clip：' + this.father.missing.join('、'));
     this.cleanups.push(() => this.father?.dispose());
+  }
+
+  /**
+   * P3 钢笔：汐的模型到了就挂（换了 rig 重挂），之后每帧按动画器定显隐（实体更新 = 动画器权重之后、渲染之前）。
+   * 资源在 s3 组（进 S3 才加载）；挂点、clip、局部矩阵全读 GLB 根 extras.attach。
+   */
+  private stepPen(): void {
+    const an = this.rig?.animator;
+    if (!an) return;
+    if (this.penModel !== an.model) {
+      this.pen?.dispose();
+      this.pen = null;
+      this.penModel = an.model;
+      if (!this.game.assets.has(PEN_KEY)) return;
+      const { prop, error } = ClipProp.mount(this.game.assets.getModel(PEN_KEY), an.model, an);
+      this.pen = prop;
+      this.penError = error;
+      if (error) console.warn(`[pen] ${PEN_KEY} 没挂上：${error}`);
+      if (prop) this.cleanups.push(() => prop.dispose());
+    }
+    this.pen?.update();
   }
 
   /** 灯室眺望站位（S3 局部）：美术 lamp-room-stand-gaze 节点（矮墙内面前 0.45 m，+Z 朝外）优先，没有用 layout standGaze */

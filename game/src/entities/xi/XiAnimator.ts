@@ -236,6 +236,11 @@ export class XiAnimator extends Component {
     return this.loop?.name ?? null;
   }
 
+  /** clip 当前混合权重 0–1（手持道具按它定显隐；没有这个 clip = 0） */
+  weightOf(name: string): number {
+    return this.slotOf(name)?.w ?? 0;
+  }
+
   /**
    * 原地转身 90°（turn-l90 / r90）：root 骨在 34 帧转完，此时实体朝向 += ±90°，尾段 34–40 帧淡回待机。
    * 返回在转身结束（40 帧）时 resolve。缺 clip 时直接改朝向。
