@@ -137,6 +137,10 @@ export class S3Scene extends LevelScene {
    * 1:46 演出结束 / 按住 Space 跳过 → 章节结束页）。0:00–0:04 之间是点灯独白（0.5 s 起 3.0 s，锁定）。
    * smoke / 测试也可直接调用（跳过按 E 演出，同样只发一次 lighthouse:ignited）
    */
+  protected override sceneMusicAllowed(): boolean {
+    return !this.ending;
+  }
+
   lightTheLamp(): void {
     if (this.ending) return;
     this.ending = true;

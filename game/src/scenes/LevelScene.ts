@@ -111,6 +111,11 @@ export abstract class LevelScene extends BaseScene {
   protected abstract readonly locationId: TextId;
   /** 进入时设置的当前目标（日志顶部）；null = 不改 */
   protected goalId: TextId | null = null;
+  /** 懒加载的场景曲到了还能不能起播（035：S3 点燃后结尾曲已接管，迟到的场景曲不能把它顶掉） */
+  protected sceneMusicAllowed(): boolean {
+    return true;
+  }
+
   /** 建立镜头结束后是否后台预加载下一个场景（沙盒关掉） */
   protected preloadNext = true;
   private disposed = false;
@@ -202,12 +207,12 @@ export abstract class LevelScene extends BaseScene {
         const upper = this.level.musicUpper;
         if (upper) {
           // 1031 S3 两层：并行下载；都到了同一时刻起播，只到底层先放底层、上层到了按底层位置对齐（见 switchLayeredMusicLazy）
-          void switchLayeredMusicLazy(audio, (k) => this.game.assets.loadAudio(k), music, upper, () => !this.disposed, () => this.upperLayerLevel()).then((r) => {
+          void switchLayeredMusicLazy(audio, (k) => this.game.assets.loadAudio(k), music, upper, () => !this.disposed && this.sceneMusicAllowed(), () => this.upperLayerLevel()).then((r) => {
             this.musicLazyResult = r.base;
             this.musicUpperResult = r.upper;
           });
         } else
-          void switchMusicLazy(audio, (k) => this.game.assets.loadAudio(k), music, () => !this.disposed).then((r) => {
+          void switchMusicLazy(audio, (k) => this.game.assets.loadAudio(k), music, () => !this.disposed && this.sceneMusicAllowed()).then((r) => {
             this.musicLazyResult = r;
           });
       });
