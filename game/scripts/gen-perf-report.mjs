@@ -1,7 +1,7 @@
 // 037 生成 docs/releases/v0.1-perf-report.md（npm run check:release 最后一步）：把 verify-budget / verify-load / verify-memory 的 JSON 和 npm run size 的结果填进表；
 // 「FPS / 1% low / 帧时间」栏留空，由用户 M8 实机填（裁定第 8 条）。重新生成会覆盖整份报告 —— 实机数字请填在 v0.1-perf-report-m8.md 或生成后再填。
 // 用法：node --import ./scripts/register-ts-paths.mjs scripts/gen-perf-report.mjs
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -32,7 +32,17 @@ for (const [m, r, t] of [['RTX 3060 级', '2560×1440', '极致'], ['RTX 3060 �
   for (const s of ['S1', 'S2', 'S3']) p(`| ${m} | ${r} | ${t} | ${s} 最差机位 |  |  |  |  |  |`);
 p('');
 
-const b = j('verify-budget.json');
+// 全量跑（verify-budget.json）和按场景跑（verify-budget-s1.json …）合并：同一场景取较新的那次
+const b = (() => {
+  const files = readdirSync(PERF).filter((f) => /^verify-budget(-s[123](\+s[123])*)?\.json$/.test(f)).map((f) => j(f)).filter((x) => x?.mode === 'verify');
+  if (!files.length) return null;
+  const m = { at: files.map((f) => f.at).sort().at(-1), view: files[0].view, scenes: {}, failures: [] };
+  const at = {};
+  for (const f of files)
+    for (const [sid, sr] of Object.entries(f.scenes)) if (!at[sid] || f.at > at[sid]) { at[sid] = f.at; m.scenes[sid] = sr; }
+  for (const f of files) for (const x of f.failures) { const sid = /^(s[123])/.exec(x)?.[1]; if (!sid || at[sid] === f.at) m.failures.push(x); }
+  return m;
+})();
 p('## 2 预算校验（verify-budget）', '');
 p('三档预算（style-guide §8，不改参数）：', '', '| 档 | 可见面数 | draw call | 主角 | NPC | 贴图（角色道具 / 环境） |', '|---|---|---|---|---|---|');
 for (const t of TIERS) { const q = QUALITY_PRESETS[t]; p(`| ${TN[t]} | ${M(q.sceneVisibleTris)} | ${q.maxDrawCalls} | ${M(q.heroCharTris)} | ${M(q.npcCharTris)} | ${q.textureMaxSize} / ${q.textureMaxSizeEnv} |`); }

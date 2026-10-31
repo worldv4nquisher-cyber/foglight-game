@@ -128,6 +128,32 @@ const ASSETS = `(() => {
   return { tier: g.quality.tier ?? q.tier, textures, chars, critical };
 })()`;
 
+/** 主相机视锥里的网格按面数排前 12（按顶层有名字的祖先归并；LOD 只算当前级，instanced 乘实例数）—— 超预算时看是谁 */
+const TOP = `(() => {
+  const s = __game.scenes.current, cam = s.camera;
+  const pm = cam.projectionMatrix.clone().multiply(cam.matrixWorldInverse);
+  const planes = []; const e = pm.elements;
+  const mk = (a, b, c, d) => { const l = Math.hypot(a, b, c); planes.push([a / l, b / l, c / l, d / l]); };
+  mk(e[3] - e[0], e[7] - e[4], e[11] - e[8], e[15] - e[12]); mk(e[3] + e[0], e[7] + e[4], e[11] + e[8], e[15] + e[12]);
+  mk(e[3] + e[1], e[7] + e[5], e[11] + e[9], e[15] + e[13]); mk(e[3] - e[1], e[7] - e[5], e[11] - e[9], e[15] - e[13]);
+  mk(e[3] - e[2], e[7] - e[6], e[11] - e[10], e[15] - e[14]); mk(e[3] + e[2], e[7] + e[6], e[11] + e[10], e[15] + e[14]);
+  const by = new Map();
+  const visibleChain = (o) => { for (let p = o; p; p = p.parent) { if (!p.visible) return false; if (p.parent?.isLOD) { const L = p.parent; if (L.levels[L.getCurrentLevel()]?.object !== p) return false; } } return true; };
+  s.scene.traverse((o) => {
+    if (!o.isMesh || !o.geometry || !visibleChain(o) || !o.layers.test(cam.layers)) return;
+    const g = o.geometry; if (!g.boundingSphere) g.computeBoundingSphere();
+    const c = g.boundingSphere.center.clone().applyMatrix4(o.matrixWorld); const r = g.boundingSphere.radius * o.matrixWorld.getMaxScaleOnAxis();
+    if (o.frustumCulled !== false && planes.some((pl) => pl[0] * c.x + pl[1] * c.y + pl[2] * c.z + pl[3] < -r)) return;
+    let n = (g.index ? g.index.count : g.attributes.position.count) / 3; if (g.drawRange.count !== Infinity) n = Math.min(n, g.drawRange.count / 3);
+    if (o.isInstancedMesh) n *= o.count;
+    let top = o; while (top.parent && top.parent !== s.scene) top = top.parent;
+    const k = (top.name || top.type) + (top === o ? '' : ' › ' + (o.name || o.type));
+    const key = top.name ? top.name : k;
+    by.set(key, (by.get(key) ?? 0) + n);
+  });
+  return [...by.entries()].sort((a, b) => b[1] - a[1]).slice(0, 12).map(([k, v]) => [k, Math.round(v)]);
+})()`;
+
 const CHAR_LEVELS = `(() => { const out = {}; __game.scenes.current.scene.traverse((o) => { if (o.isLOD && /^char-/i.test(o.name)) out[o.name] = o.getCurrentLevel(); }); return out; })()`;
 
 const setCam = (eye, at, fov) =>
@@ -191,8 +217,9 @@ async function verifyScene(sid) {
       await waitFrames(1);
       const m = await evaluate(MEASURE);
       const lv = await evaluate(CHAR_LEVELS);
+      const top = await evaluate(TOP);
       const ok = !!m.main && m.main.tris <= q.sceneVisibleTris && m.main.calls <= q.maxDrawCalls;
-      tr.spots.push({ id: sp.id, ok, main: m.main, frame: m.frame, charLevels: lv, passes: m.passes });
+      tr.spots.push({ id: sp.id, ok, main: m.main, frame: m.frame, charLevels: lv, top, passes: m.passes });
       if (!ok) report.failures.push(`${sid} ${tier} ${sp.id}：主 pass ${m.main?.tris} 面 / ${m.main?.calls} call 超过 ${q.sceneVisibleTris} / ${q.maxDrawCalls}`);
       console.log(`  ${ok ? '✓' : '✗'} ${sid} ${tier.padEnd(8)} ${sp.id.padEnd(16)} 主 pass ${m.main?.tris} 面 / ${m.main?.calls} call（整帧 ${m.frame.tris} / ${m.frame.calls}，阴影 ${m.frame.shadowTris} / ${m.frame.shadowCalls}）角色 LOD ${JSON.stringify(lv)}`);
       if (SHOTS && tier === TIERS[0]) {
