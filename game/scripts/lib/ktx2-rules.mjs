@@ -18,3 +18,20 @@ export function ktx2AlignmentVerdict(f) {
     return `${f.name} ${dims}：非 4 倍数的 ramp 运行时转未压缩 RGBA，限 ≤ ${KTX2_UNALIGNED_MAX_TEXELS} texel`;
   return null;
 }
+
+const ART_URL_PREFIX = 'assets/art/';
+/** 资源路径统一成「相对 art 根」的 posix 路径：清单 url `assets/art/textures/x.ktx2`、dist 相对路径同形、../art 相对路径 `textures/x.ktx2` 都 → `textures/x.ktx2` */
+export function artRelPath(p) {
+  const s = String(p).replace(/\\/g, '/').replace(/^\.\//, '');
+  return s.startsWith(ART_URL_PREFIX) ? s.slice(ART_URL_PREFIX.length) : s;
+}
+
+/**
+ * 豁免（ramp: true）按清单的完整路径匹配（M7：原来按文件名，别的目录里同名文件也会被放过）。
+ * @param {Array<{ url: string, ramp?: boolean }>} manifest
+ * @returns {(path: string) => boolean} path = dist 相对路径（assets/art/…）或 ../art 相对路径
+ */
+export function rampMatcher(manifest) {
+  const set = new Set(manifest.filter((e) => e.ramp).map((e) => artRelPath(e.url)));
+  return (path) => set.has(artRelPath(path));
+}

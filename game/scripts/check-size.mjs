@@ -16,7 +16,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, dirname, basename, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { manifest, ASSET_GROUPS } from '../src/assets/manifest.ts';
-import { ktx2AlignmentVerdict, readKtx2Size } from './lib/ktx2-rules.mjs';
+import { ktx2AlignmentVerdict, readKtx2Size, rampMatcher } from './lib/ktx2-rules.mjs';
 import { guessGroup, sizeBucket, sizeVerdict, BUDGET, WARN } from './lib/size-groups.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -188,14 +188,14 @@ if (json) {
 // 例外 = 清单 ramp: true 的查找表且 ≤ KTX2_UNALIGNED_MAX_TEXELS（运行时转未压缩 RGBA，见 src/assets/ktx2Route.ts；规则在 scripts/lib/ktx2-rules.mjs）
 {
   const walkAll = (d) => readdirSync(d).flatMap((f) => { const p = join(d, f); return statSync(p).isDirectory() ? walkAll(p) : [p]; });
-  const rampNames = new Set(manifest.filter((e) => e.ramp).map((e) => basename(e.url)));
+  const isRamp = rampMatcher(manifest); // 按清单完整路径（不是文件名）
   const ktx = walkAll(DIST).filter((f) => f.endsWith('.ktx2'));
   let bad = 0;
   let whitelisted = 0;
   for (const f of ktx) {
     const sz = readKtx2Size(readFileSync(f));
     if (!sz) { bad++; fail(`dist/${relative(DIST, f)}：不是合法 KTX2`); continue; }
-    const why = ktx2AlignmentVerdict({ name: `dist/${relative(DIST, f)}`, ...sz, ramp: rampNames.has(basename(f)) });
+    const why = ktx2AlignmentVerdict({ name: `dist/${relative(DIST, f)}`, ...sz, ramp: isRamp(relative(DIST, f)) });
     if (why) { bad++; fail(why); } else if (sz.width % 4 || sz.height % 4) whitelisted++;
   }
   if (!json) console.log(`  ${bad ? '✗' : '✓'} KTX2 块对齐：${ktx.length} 张，非 4 倍数 ${whitelisted} 张均为清单 ramp（运行时转 RGBA）${bad ? `，${bad} 张不合规` : ''}`);

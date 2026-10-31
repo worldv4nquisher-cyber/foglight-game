@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
-import { basename, dirname, join, resolve } from 'node:path';
+import { basename, dirname, join, relative, resolve } from 'node:path';
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
@@ -721,7 +721,7 @@ try {
 
 // ---- BUG-030：资源校验规则——KTX2 宽高须为 4 的倍数，例外只有清单 ramp: true 且 ≤ 4096 texel（check-size 对 dist 用同一条）
 {
-  const { ktx2AlignmentVerdict, readKtx2Size, KTX2_UNALIGNED_MAX_TEXELS } = await import('./lib/ktx2-rules.mjs');
+  const { ktx2AlignmentVerdict, readKtx2Size, KTX2_UNALIGNED_MAX_TEXELS, rampMatcher, artRelPath } = await import('./lib/ktx2-rules.mjs');
   assert.equal(ktx2AlignmentVerdict({ name: 'a', width: 1024, height: 512, ramp: false }), null);
   assert.equal(ktx2AlignmentVerdict({ name: 'a', width: 1024, height: 512, ramp: true }), null);
   assert.match(ktx2AlignmentVerdict({ name: 'tex-x', width: 1022, height: 1024, ramp: false }), /4 的倍数/);
@@ -730,16 +730,32 @@ try {
   assert.equal(ktx2AlignmentVerdict({ name: 'r', width: 4096, height: 1, ramp: true }), null);
   assert.match(ktx2AlignmentVerdict({ name: 'r', width: 4097, height: 1, ramp: true }), /≤ 4096/);
   assert.equal(KTX2_UNALIGNED_MAX_TEXELS, 4096);
+  // M7：豁免按清单完整路径匹配，别的目录里的同名文件不放过
+  {
+    const m = rampMatcher([{ url: 'assets/art/textures/tex-xi-ramp.ktx2', ramp: true }, { url: 'assets/art/textures/tex-other.ktx2' }]);
+    assert.equal(artRelPath('assets/art/textures/a.ktx2'), 'textures/a.ktx2');
+    assert.equal(artRelPath('textures\\a.ktx2'), 'textures/a.ktx2');
+    assert.equal(m('assets/art/textures/tex-xi-ramp.ktx2'), true, 'dist 相对路径命中');
+    assert.equal(m('textures/tex-xi-ramp.ktx2'), true, '../art 相对路径命中');
+    assert.equal(m('textures\\tex-xi-ramp.ktx2'), true, 'Windows 分隔符命中');
+    assert.equal(m('assets/art/models/tex-xi-ramp.ktx2'), false, '别的目录同名文件不豁免');
+    assert.equal(m('textures/sub/tex-xi-ramp.ktx2'), false, '子目录同名文件不豁免');
+    assert.equal(m('tex-xi-ramp.ktx2'), false, '只有文件名不豁免');
+    assert.equal(m('assets/art/textures/tex-other.ktx2'), false, '清单里没标 ramp 的不豁免');
+    assert.match(ktx2AlignmentVerdict({ name: 'models/tex-xi-ramp.ktx2', width: 256, height: 1, ramp: m('models/tex-xi-ramp.ktx2') }), /ramp: true/);
+    ok('KTX2 ramp 豁免按清单完整路径匹配：别的目录 / 子目录同名、只有文件名、清单未标 ramp 都不豁免');
+  }
   // 真文件：../art 里全部 KTX2
-  const rampNames = new Set(manifest.filter((e) => e.ramp).map((e) => basename(e.url)));
+  const isRamp = rampMatcher(manifest);
+  const artRoot = resolve(root, '../art');
   const walkK = (d) => (existsSync(d) ? readdirSync(d).flatMap((f) => { const p = join(d, f); return statSync(p).isDirectory() ? walkK(p) : p.endsWith('.ktx2') ? [p] : []; }) : []);
-  const files = walkK(resolve(root, '../art'));
+  const files = walkK(artRoot);
   const problems = [];
   const unaligned = [];
   for (const f of files) {
     const sz = readKtx2Size(readFileSync(f));
     assert.ok(sz, `${f} 是 KTX2`);
-    const why = ktx2AlignmentVerdict({ name: basename(f), ...sz, ramp: rampNames.has(basename(f)) });
+    const why = ktx2AlignmentVerdict({ name: basename(f), ...sz, ramp: isRamp(relative(artRoot, f)) });
     if (why) problems.push(why);
     if (sz.width % 4 || sz.height % 4) unaligned.push(basename(f));
   }
