@@ -3,6 +3,7 @@
 //  每个 clip 30 fps 逐帧 CPU 蒙皮：马尾顶点到兜帽面的带符号最近距离（按最近三角形面法线，< 0 = 在兜帽面里侧），
 //  负值再按 verify-father 的假负核对：从颈轴（neck 骨 → head 骨连线上最近点）沿「轴 → 点」打 DoubleSide 射线，打不到兜帽 = 其实在外面。
 //  只统计离兜帽面 ≤ 4 cm 的点（更深的是马尾根在帽口里侧，不算穿）。输出 docs/tasks/shots-r4/ponytail-hood.json + 表。
+// 环境变量：PT_ART 角色 glb 目录、PT_OUT 输出目录（默认 ../art/models/characters、../docs/tasks/shots-r4）。
 // 用法：node --import ./scripts/register-ts-paths.mjs scripts/measure-ponytail-hood.mjs [clip前缀,…]
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
@@ -11,8 +12,8 @@ import * as THREE from 'three';
 import { MeshBVH } from 'three-mesh-bvh';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const ART = resolve(root, '../art/models/characters');
-const OUT = resolve(root, '../docs/tasks/shots-r4');
+const ART = process.env.PT_ART ? resolve(process.env.PT_ART) : resolve(root, '../art/models/characters');
+const OUT = process.env.PT_OUT ? resolve(process.env.PT_OUT) : resolve(root, '../docs/tasks/shots-r4');
 mkdirSync(OUT, { recursive: true });
 const only = process.argv[2]?.split(',').filter(Boolean) ?? null;
 const FPS = 30, NEAR = 0.04, PEN = 0.002;
@@ -65,8 +66,10 @@ for (const clip of anims.animations) {
       fMin = Math.min(fMin, hit.distance);
       if (hit.distance > NEAR) continue;
       fNear++;
-      const fi = hit.faceIndex * 3;
-      tri.a.fromArray(arr, fi * 3); tri.b.fromArray(arr, fi * 3 + 3); tri.c.fromArray(arr, fi * 3 + 6); tri.getNormal(n);
+      // MeshBVH 给非索引几何生成 g.index 并在建树时重排三元组，hit.faceIndex 指重排后 g.index 的第几个三元组；
+      // 必须经 g.index 取顶点（r5 前按 arr[faceIndex*9] 取 → 拿到别的三角形，法线定符号近似随机，美术 r5 指出）。
+      const fi = hit.faceIndex * 3, ix = g.index;
+      tri.setFromAttributeAndIndices(g.attributes.position, ix.getX(fi), ix.getX(fi + 1), ix.getX(fi + 2)); tri.getNormal(n);
       const raw = n.dot(v.clone().sub(hit.point)) >= 0 ? hit.distance : -hit.distance;
       let chk = raw;
       if (raw < 0) { line.closestPointToPoint(v, false, cen); ray.origin.copy(v); ray.direction.copy(v).sub(cen).normalize(); if (bvh.raycast(ray, THREE.DoubleSide).length === 0) chk = -raw; }

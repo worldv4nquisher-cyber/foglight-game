@@ -104,7 +104,7 @@ const wallAt = (y, dir) => {
   rc.near = 0;
   rc.far = 4;
   const h = rc.intersectObject(envMesh)[0];
-  return h ? { r: 1.2 + h.distance, mat: triMat[h.faceIndex] } : null;
+  return h ? { r: 1.2 + h.distance, mat: triMat[eg.index ? Math.floor(eg.index.getX(h.faceIndex * 3) / 3) : h.faceIndex] } : null;
 };
 const radial = sp.clone().setY(0).normalize();
 const wallLow = wallAt(sp.y + 0.35, radial);
