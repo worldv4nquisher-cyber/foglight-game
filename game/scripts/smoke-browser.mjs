@@ -3557,14 +3557,14 @@ CHECKS.push({
     const p0 = await evaluate(`({ id: __game.ui.skip.id, t: __s3.endingCutscene.t, wall: performance.now() })`);
     if (p0.id !== 'ch1-ending') throw new Error('演出中应注册跳过 ' + JSON.stringify(p0));
     // 软件渲染下一帧可能 > 0.5 s：圆环 DOM 是否显示过用钩子记（UI 每帧 update），0.5 s 时的进度直接读控制器
-    await evaluate(`(() => { const h = __game.ui.skipHint; const u = h.update.bind(h); window.__hint035 = { shown: false, maxP: 0 }; h.update = (now) => { u(now); if (h.visible) { window.__hint035.shown = true; window.__hint035.maxP = Math.max(window.__hint035.maxP, __game.ui.skip.progress(now)); } }; return 1; })()`);
+    await evaluate(`(() => { const h = __game.ui.skipHint; const u = h.update.bind(h); window.__hint035 = { shown: false, maxP: 0, n: 0, last: performance.now(), gap: 0 }; h.update = (now) => { u(now); const w = window.__hint035; w.n++; w.gap = Math.max(w.gap, now - w.last); w.last = now; if (h.visible) { window.__hint035.shown = true; window.__hint035.maxP = Math.max(window.__hint035.maxP, __game.ui.skip.progress(now)); } }; return 1; })()`);
     await evaluate(space('keydown'));
     await sleep(500);
     const mid = await evaluate(`({ p: __game.ui.skip.progress(performance.now()), vis: __game.ui.skip.hintVisible(performance.now()), done: __s3.endingCutscene.endedBy })`);
     if (!(mid.p > 0.2 && mid.p < 1) || !mid.vis || mid.done) throw new Error('按住 0.5 s：圆环进度应在 0–1、未跳过 ' + JSON.stringify(mid));
     if (!(await until(`__s3.endingCutscene.endedBy === 'skip'`, 5000))) throw new Error('按住 1 s 没跳过');
     const hint = await evaluate(`window.__hint035`);
-    if (!hint.shown) throw new Error('按住期间右下角圆环没显示过');
+    if (!hint.shown) throw new Error(`按住期间右下角圆环没显示过（这期间 UI 更新 ${hint.n} 帧、最长帧间隔 ${hint.gap.toFixed(0)} ms）`);
     const sk = await evaluate(`({ t: __s3.endingCutscene.t, wall: performance.now(), l: __game.audio.musicLog.at(-1), k: __game.audio.musicKey, log: __game.ui.skip.log.at(-1) })`);
     await evaluate(space('keyup'));
     const hold = (sk.log.at - (p0.wall)) / 1000;
