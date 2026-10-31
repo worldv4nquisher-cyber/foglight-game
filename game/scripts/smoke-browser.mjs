@@ -2409,7 +2409,7 @@ const CHECKS = [
       await sleep(200);
       // 页面侧记录：按住 E（trigger）那一刻的游戏时间、浮台第一次 pushMoved 的游戏时间与当时阶段
       await evaluate(`(() => { const g = () => __game.time.fixedTick * __game.time.fixedDelta; const r = (window.__push = { t0: g(), move: null, phase: null, n: 0, ts: [__s1.puzzles.raftPush.pushT] });
-        if (!window.__pushOff) window.__pushOff = __game.events.on('interact:pushMoved', ({ id, t }) => { const q = window.__push; if (id !== 'raft-s1' || !q) return; q.n++; q.ts.push(t); if (q.move === null) { q.move = g(); q.phase = __s1.interaction.pushPhase; } });
+        if (!window.__pushOff) window.__pushOff = __game.events.on('interact:pushMoved', ({ id, t }) => { const q = window.__push; if (id !== 'raft-s1' || !q) return; q.n++; q.ts.push(t); if (q.move === null) { q.move = g(); q.phase = window.__s1?.interaction.pushPhase ?? null; } });
         return r.t0; })()`);
       await key(true);
       // t0 与 trigger 在页面同一段同步代码里取（不含 CDP 往返时间）
@@ -2634,7 +2634,7 @@ const CHECKS = [
         let t0 = null;
         let v;
         while (Date.now() < end) {
-          const r = await evaluate(`(() => { const v = (${expr}); return { v, tick: __s3.game.time.fixedTick, dt: __s3.game.time.fixedDelta }; })()`);
+          const r = await evaluate(`(() => { const v = (${expr}); return { v, tick: __game.time.fixedTick, dt: __game.time.fixedDelta }; })()`);
           v = r.v;
           if (v) return v;
           t0 ??= r.tick;
@@ -2799,7 +2799,7 @@ const CHECKS = [
       await evaluate(`__s3.endingCutscene.seek(104.5), 1`);
       await sleep(300);
       if (await evaluate(`__s3.game.scenes.current !== __s3`)) throw new Error('035：106 s 前不应进结束页');
-      if (!(await untilG(`__s3.game.scenes.current !== __s3`, 8))) throw new Error('035：演出 106 s 结束后应进章节结束页');
+      if (!(await untilG(`typeof __s3 === 'undefined' || __s3.game.scenes.current !== __s3`, 8))) throw new Error('035：演出 106 s 结束后应进章节结束页');
       out.push('点灯独白 0.5–3.5 s 锁定不可点掉、只一次，0:04 前消失 → 0:04 切塔外远景（不进结束页）→ 106 s 演出结束才进章节结束页 ✓');
       await evaluate(`localStorage.removeItem('foglight.save.v1'); 1`);
       try { await cdp.goto(''); } catch (e) { throw new Error('回 S1 失败：' + e.message, { cause: e }); }
@@ -3434,16 +3434,16 @@ CHECKS.push({
     // B) 重进 S3：点燃 1.5 s 后按住 Space 1 s 跳过演出 → 结尾曲 0.75 s 淡出、黑场 0.75 s → 章节结束页；之后总线静音
     await enterS3();
     await waitClock(ac, 2.5);
-    await evaluate(`__s3.lightTheLamp(); 1`);
+    await evaluate(`(window.__c035 = __s3.endingCutscene, window.__em035 = __s3.endingMusic, __s3.lightTheLamp(), 1)`); // BUG-031：跳过 / 结束后 S3 会释放，演出 / 结尾曲对象先存
     if (!(await until(`__game.audio.musicKey === 'mus-ending-ch1'`, 10000)))
       throw new Error("第二次点燃结尾曲没起");
     await waitClock(ac, 0.5);
     await evaluate(space("keydown"));
-    if (!(await until(`__s3.endingCutscene.endedBy === 'skip'`, 5000)))
-      throw new Error("演出中按住 Space 1 s 没跳过 " + JSON.stringify(await evaluate(`({ id: __game.ui.skip.id, t: __s3.endingCutscene.t })`)));
+    if (!(await until(`__c035.endedBy === 'skip'`, 5000)))
+      throw new Error("演出中按住 Space 1 s 没跳过 " + JSON.stringify(await evaluate(`({ id: __game.ui.skip.id, t: __c035.t })`)));
     await evaluate(space("keyup"));
     const sk = await evaluate(
-      `(() => ({ l: __game.audio.musicLog.at(-1), k: __game.audio.musicKey, now: __game.audio.context.currentTime, t: __s3.endingCutscene.t, el: __game.audio.context.currentTime - __s3.endingMusic.ignitedAt }))()`,
+      `(() => ({ l: __game.audio.musicLog.at(-1), k: __game.audio.musicKey, now: __game.audio.context.currentTime, t: __c035.t, el: __game.audio.context.currentTime - __em035.ignitedAt }))()`,
     );
     if (
       sk.k !== null ||
@@ -3470,15 +3470,15 @@ CHECKS.push({
 // ---------------------------------------------------------------- v0.1-035 结尾演出
 // 每个 cue 触发的那一帧（step 之后）记一份现场：演出 t / 时钟来源 / 结尾曲音频位置 / 镜头 / 字幕 / 汐姿势 / 父亲 / 雾 / 剪影 / 黑场 / 日志第 6 页
 const cut035Hook = `(() => {
-  const c = __s3.endingCutscene; if (!c || c.__hooked) return 0; c.__hooked = true;
+  const S3 = __s3; const c = S3.endingCutscene; if (!c || c.__hooked) return 0; c.__hooked = true; // BUG-031：钩子里不读全局 __s3（S3 释放后就没了）
   window.__cut035 = { cues: [], frames: 0, end: null, sceneAt: null };
   const step = c.step.bind(c); let n = 0, lastT = -1, lastPrev = -1;
-  const audioPos = () => { const a = __game.audio, em = __s3.endingMusic; return a.musicKey === 'mus-ending-ch1' && em?.ignitedAt != null ? a.context.currentTime - em.ignitedAt : null; };
+  const audioPos = () => { const a = __game.audio, em = S3.endingMusic; return a.musicKey === 'mus-ending-ch1' && em?.ignitedAt != null ? a.context.currentTime - em.ignitedAt : null; };
   c.step = (t) => { step(t); window.__cut035.frames++; const L = c.player.log; const prevT = lastT; lastPrev = prevT; lastT = t;
-    while (n < L.length) { const l = L[n++]; const f = __s3.father, an = __s3.rig?.animator, sub = __game.ui.subtitles.current;
-      window.__cut035.cues.push({ id: l.id, at: l.at, firedAt: +l.firedAt.toFixed(3), prevT: +prevT.toFixed(3), src: l.source, audio: audioPos(), shot: c.shot, cam: __s3.cameraFollow.cutsceneName,
+    while (n < L.length) { const l = L[n++]; const f = S3.father, an = S3.rig?.animator, sub = __game.ui.subtitles.current;
+      window.__cut035.cues.push({ id: l.id, at: l.at, firedAt: +l.firedAt.toFixed(3), prevT: +prevT.toFixed(3), src: l.source, audio: audioPos(), shot: c.shot, cam: S3.cameraFollow.cutsceneName,
         sub: sub?.id ?? null, xi: an?.posing ?? null, fMode: f?.mode ?? null, fT: f ? +f.time.toFixed(3) : null, fVis: f?.visible ?? null,
-        fog: +(__s3.scene.fog?.density ?? 0).toFixed(5), sil: c.silhouette?.visible ?? null, fade: +__game.ui.fade.opacity.toFixed(3), page6: __game.narrative.outroEntryUnlocked }); } };
+        fog: +(S3.scene.fog?.density ?? 0).toFixed(5), sil: c.silhouette?.visible ?? null, fade: +__game.ui.fade.opacity.toFixed(3), page6: __game.narrative.outroEntryUnlocked }); } };
   const fin = c.finish.bind(c);
   c.finish = (how) => { if (window.__cut035.end === null) window.__cut035.end = { how, t: +c.t.toFixed(3), prevT: +lastPrev.toFixed(3), src: c.clock.source, wall: performance.now() }; fin(how); };
   __game.events.on('scene:change', () => { if (window.__cut035.sceneAt === null) window.__cut035.sceneAt = { t: c.t, audio: audioPos(), wall: performance.now(), endedBy: c.endedBy }; });
@@ -3497,8 +3497,8 @@ CHECKS.push({
       throw new Error('结尾曲预取 / 父亲 / 汐没就绪 ' + JSON.stringify(await evaluate(`({ b: !!__s3.endingMusic?.buffer, f: !!__s3.father })`)));
     await evaluate(cut035Hook);
     const w0 = Date.now();
-    await evaluate(`__s3.lightTheLamp(); 1`);
-    if (!(await until(`__game.scenes.current?.name === 'chapter-end'`, 200000))) throw new Error('演出 200 s 墙钟内没进结束页 ' + JSON.stringify(await evaluate(`(() => { const c = __s3.endingCutscene, a = __game.audio; return { t: c?.t, cues: window.__cut035.cues.map((x) => x.id + ':' + x.src), fr: c?.clock.frames, src: c?.clock.source, key: a.musicKey, ctx: a.context?.state, at: a.audioTime, ig: __s3.endingMusic?.ignitedAt, res: __s3.endingMusic?.result, paused: __game.isPaused, gameFrames: window.__cut035.frames }; })()`)));
+    await evaluate(`(window.__c035 = __s3.endingCutscene, window.__em035 = __s3.endingMusic, __s3.lightTheLamp(), 1)`); // BUG-031：跳过 / 结束后 S3 会释放，演出 / 结尾曲对象先存
+    if (!(await until(`__game.scenes.current?.name === 'chapter-end'`, 200000))) throw new Error('演出 200 s 墙钟内没进结束页 ' + JSON.stringify(await evaluate(`(() => { const c = window.__s3?.endingCutscene ?? window.__c035, a = __game.audio; return { t: c?.t, cues: window.__cut035.cues.map((x) => x.id + ':' + x.src), fr: c?.clock.frames, src: c?.clock.source, key: a.musicKey, ctx: a.context?.state, at: a.audioTime, ig: __s3.endingMusic?.ignitedAt, res: __s3.endingMusic?.result, paused: __game.isPaused, gameFrames: window.__cut035.frames }; })()`)));
     const wall = (Date.now() - w0) / 1000;
     const r = await evaluate(`window.__cut035`);
     const want = ['lens', 'fog_open', 'silhouette', 'gaze', 'father_in', 'father_out', 'no_answer', 'sit_write', 'journal', 'pull_back', 'fade_out'];
@@ -3550,7 +3550,7 @@ CHECKS.push({
     await unlock(cdp);
     if (!(await until(`!!__s3.endingMusic?.buffer`, 180000))) throw new Error('结尾曲预取没到');
     await evaluate(cut035Hook);
-    await evaluate(`__s3.lightTheLamp(); 1`);
+    await evaluate(`(window.__c035 = __s3.endingCutscene, window.__em035 = __s3.endingMusic, __s3.lightTheLamp(), 1)`); // BUG-031：跳过 / 结束后 S3 会释放，演出 / 结尾曲对象先存
     await evaluate(`__s3.endingCutscene.seek(19.5), 1`);
     if (!(await until(`__s3.endingCutscene.t >= 20`, 20000))) throw new Error('演出没走到 20 s');
     const space = (type) => `window.dispatchEvent(new KeyboardEvent('${type}', { code: 'Space', key: ' ', bubbles: true })), 1`;
@@ -3561,12 +3561,12 @@ CHECKS.push({
     await evaluate(`(() => { const h = __game.ui.skipHint; const u = h.update.bind(h); const w = window.__hint035 = { shown: false, ev: [], maxP: 0, n: 0, last: performance.now(), gap: 0, count0: h.shownCount }; window.addEventListener('skiphint:shown', (e) => { w.shown = true; w.ev.push(e.detail); }); h.update = (now) => { u(now); w.n++; w.gap = Math.max(w.gap, now - w.last); w.last = now; if (h.visible) w.maxP = Math.max(w.maxP, __game.ui.skip.progress(now)); }; return 1; })()`);
     await evaluate(space('keydown'));
     await sleep(500);
-    const mid = await evaluate(`({ p: __game.ui.skip.progress(performance.now()), vis: __game.ui.skip.hintVisible(performance.now()), done: __s3.endingCutscene.endedBy })`);
+    const mid = await evaluate(`({ p: __game.ui.skip.progress(performance.now()), vis: __game.ui.skip.hintVisible(performance.now()), done: __c035.endedBy })`);
     if (!(mid.p > 0.2 && mid.p < 1) || !mid.vis || mid.done) throw new Error('按住 0.5 s：圆环进度应在 0–1、未跳过 ' + JSON.stringify(mid));
-    if (!(await until(`__s3.endingCutscene.endedBy === 'skip'`, 5000))) throw new Error('按住 1 s 没跳过');
+    if (!(await until(`__c035.endedBy === 'skip'`, 5000))) throw new Error('按住 1 s 没跳过');
     const hint = await evaluate(`window.__hint035`);
     if (!hint.shown || !hint.ev.some((d) => d.id === 'ch1-ending')) throw new Error(`按住期间右下角圆环没显示过（事件 ${JSON.stringify(hint.ev)}；这期间 UI 更新 ${hint.n} 帧、最长帧间隔 ${hint.gap.toFixed(0)} ms）`);
-    const sk = await evaluate(`({ t: __s3.endingCutscene.t, wall: performance.now(), l: __game.audio.musicLog.at(-1), k: __game.audio.musicKey, log: __game.ui.skip.log.at(-1) })`);
+    const sk = await evaluate(`({ t: __c035.t, wall: performance.now(), l: __game.audio.musicLog.at(-1), k: __game.audio.musicKey, log: __game.ui.skip.log.at(-1) })`);
     await evaluate(space('keyup'));
     const hold = (sk.log.at - (p0.wall)) / 1000;
     if (sk.l.op !== 'stop' || sk.l.from !== 'mus-ending-ch1' || sk.l.fade !== 0.75 || sk.k !== null) throw new Error('跳过应 0.75 s 淡出结尾曲 ' + JSON.stringify(sk));
@@ -3592,7 +3592,7 @@ CHECKS.push({
     await gotoLong(cdp, 'debug=1&scene=s3&art=0', 's3-lighthouse');
     if (!(await until(`!!window.__s3?.rig && !!__s3.endingCutscene`, 120000))) throw new Error('S3 art=0 没就绪');
     await evaluate(cut035Hook);
-    await evaluate(`__s3.lightTheLamp(); 1`);
+    await evaluate(`(window.__c035 = __s3.endingCutscene, window.__em035 = __s3.endingMusic, __s3.lightTheLamp(), 1)`); // BUG-031：跳过 / 结束后 S3 会释放，演出 / 结尾曲对象先存
     const w0 = await evaluate(`performance.now()`);
     if (!(await until(`__s3.endingCutscene.t >= 15`, 60000))) throw new Error('后备时钟没走到 15 s ' + (await evaluate(`__s3.endingCutscene.t`)));
     const a = await evaluate(`({ t: __s3.endingCutscene.t, wall: (performance.now() - ${w0}) / 1000, src: __s3.endingCutscene.clock.source, fr: __s3.endingCutscene.clock.frames, k: __game.audio.musicKey })`);
@@ -3622,10 +3622,10 @@ CHECKS.push({
 // ---------------------------------------------------------------- v0.1-035 补测（batch16 制作人 b / c）：结尾曲晚到 / 下载失败
 // 每帧记演出时钟（t / 来源 / 曲子位置 = AudioContext.currentTime − ignitedAt / 曲目 key），找后备 → 音频的切换帧
 const late035Hook = `(() => {
-  const c = __s3.endingCutscene; if (!c || c.__lateHooked) return 0; c.__lateHooked = true;
+  const S3 = __s3; const c = S3.endingCutscene; if (!c || c.__lateHooked) return 0; c.__lateHooked = true; // BUG-031：钩子里不读全局 __s3（S3 释放后就没了）
   window.__late035 = { frames: [] };
   const step = c.step.bind(c);
-  c.step = (t) => { step(t); const a = __game.audio, em = __s3.endingMusic; const F = window.__late035.frames;
+  c.step = (t) => { step(t); const a = __game.audio, em = S3.endingMusic; const F = window.__late035.frames;
     if (F.length < 6000) F.push({ t: +t.toFixed(4), src: c.clock.source, key: a.musicKey, a: em?.ignitedAt != null ? +(a.context.currentTime - em.ignitedAt).toFixed(4) : null, w: Math.round(performance.now()) }); };
   return 1; })()`;
 const nodeUntil = async (pred, ms, sleep) => {
@@ -3654,7 +3654,7 @@ CHECKS.push({
       if (pre.buf || pre.res !== null) throw new Error('扣住期间结尾曲不应已到 ' + JSON.stringify(pre));
       await evaluate(cut035Hook);
       await evaluate(late035Hook);
-      await evaluate(`__s3.lightTheLamp(); 1`);
+      await evaluate(`(window.__c035 = __s3.endingCutscene, window.__em035 = __s3.endingMusic, __s3.lightTheLamp(), 1)`); // BUG-031：跳过 / 结束后 S3 会释放，演出 / 结尾曲对象先存
       const ig = await evaluate(`({ ig: __s3.endingMusic.ignitedAt, l: __game.audio.musicLog.at(-1), k: __game.audio.musicKey, res: __s3.endingMusic.result })`);
       if (ig.ig === null || ig.res !== null) throw new Error('点燃时应记 ignitedAt、结尾曲还没结果 ' + JSON.stringify(ig));
       // 后备时钟先走到 6 s（演出时钟），但请求扣住不超过 30 s 墙钟
@@ -3696,7 +3696,7 @@ CHECKS.push({
       // 收尾：按住 Space 跳过 → 0.75 s 淡出 → 结束页
       const space = (type) => `window.dispatchEvent(new KeyboardEvent('${type}', { code: 'Space', key: ' ', bubbles: true })), 1`;
       await evaluate(space('keydown'));
-      if (!(await until(`__s3.endingCutscene.endedBy === 'skip'`, 10000))) throw new Error('按住 Space 没跳过');
+      if (!(await until(`__c035.endedBy === 'skip'`, 10000))) throw new Error('按住 Space 没跳过');
       await evaluate(space('keyup'));
       if (!(await until(`__game.scenes.current?.name === 'chapter-end'`, 30000))) throw new Error('跳过后没进结束页');
       const held = ((relWall - reqWall) / 1000).toFixed(1);
@@ -3724,7 +3724,7 @@ CHECKS.push({
         throw new Error('S3 没就绪 / 结尾曲没报 missing ' + JSON.stringify(await evaluate(`({ f: !!__s3?.father, m: __game.assets.isMissing('mus-ending-ch1'), fails: __game.assets.lazyAudioFailures })`)));
       await evaluate(cut035Hook);
       await evaluate(late035Hook);
-      await evaluate(`__s3.lightTheLamp(); 1`);
+      await evaluate(`(window.__c035 = __s3.endingCutscene, window.__em035 = __s3.endingMusic, __s3.lightTheLamp(), 1)`); // BUG-031：跳过 / 结束后 S3 会释放，演出 / 结尾曲对象先存
       if (!(await until(`__s3.endingMusic.result !== null`, 30000))) throw new Error('点燃后结尾曲没结果');
       const st = await evaluate(`({ res: __s3.endingMusic.result, k: __game.audio.musicKey, l: __game.audio.musicLog.at(-1) })`);
       if (st.res !== 'missing' || st.k === 'mus-ending-ch1') throw new Error('404 后不应放结尾曲 ' + JSON.stringify(st));
