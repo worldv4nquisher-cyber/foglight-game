@@ -111,8 +111,19 @@ export type InteractKindName = 'inspect' | 'read' | 'pickup' | 'place' | 'use' |
 
 type Handler<T> = (payload: T) => void;
 
+/** 监听器抛错的记录（P3：emit 逐个 try/catch，不吞——console.error + 计数，冒烟 / 开发可查 __game.events.listenerErrors） */
+export interface ListenerErrorRecord {
+  type: string;
+  error: unknown;
+}
+
 export class EventBus<Events extends object = GameEvents> {
   private handlers = new Map<keyof Events, Set<Handler<never>>>();
+  /** 自创建以来监听器抛错的总次数（不随 clear 归零） */
+  listenerErrors = 0;
+  /** 最近几次抛错（最多 LISTENER_ERROR_KEEP 条，诊断用） */
+  readonly recentListenerErrors: ListenerErrorRecord[] = [];
+  static readonly LISTENER_ERROR_KEEP = 8;
 
   on<K extends keyof Events>(type: K, handler: Handler<Events[K]>): () => void {
     let set = this.handlers.get(type);
@@ -142,9 +153,21 @@ export class EventBus<Events extends object = GameEvents> {
   ): void {
     const set = this.handlers.get(type);
     if (!set) return;
+    // 一个监听器抛错不能拦住后面的监听器（例如点灯时某个系统出错导致演出 / 音乐没起）；错误照样打出来并计数
     for (const h of [...set]) {
-      (h as Handler<Events[K] | undefined>)(args[0]);
+      try {
+        (h as Handler<Events[K] | undefined>)(args[0]);
+      } catch (error) {
+        this.reportListenerError(String(type), error);
+      }
     }
+  }
+
+  private reportListenerError(type: string, error: unknown): void {
+    this.listenerErrors++;
+    this.recentListenerErrors.push({ type, error });
+    if (this.recentListenerErrors.length > EventBus.LISTENER_ERROR_KEEP) this.recentListenerErrors.shift();
+    console.error(`[EventBus] listener for "${type}" threw:`, error);
   }
 
   clear(): void {

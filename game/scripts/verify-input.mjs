@@ -218,6 +218,45 @@ test('斜向移动不加速；按下缓冲 0.15s 后过期', () => {
   assert.equal(input.consumePressed('interact'), false);
 });
 
+test('P3 EventBus.emit：监听器抛错不拦后面的监听器，console.error 带事件名、计数可查', () => {
+  const bus = new EventBus();
+  const seen = [];
+  const logged = [];
+  const orig = console.error;
+  console.error = (...a) => logged.push(a);
+  try {
+    bus.on('interact:used', () => seen.push('a'));
+    bus.on('interact:used', () => {
+      throw new Error('boom');
+    });
+    bus.on('interact:used', (p) => seen.push('c:' + p.id));
+    bus.once('interact:used', () => {
+      throw new Error('once-boom');
+    });
+    bus.emit('interact:used', { id: 'x', kind: 'use' });
+    bus.emit('interact:used', { id: 'y', kind: 'use' });
+  } finally {
+    console.error = orig;
+  }
+  assert.deepEqual(seen, ['a', 'c:x', 'a', 'c:y']);
+  assert.equal(bus.listenerErrors, 3, '两次 emit 抛 2 次 + once 抛 1 次（once 抛错后也已解绑）');
+  assert.equal(logged.length, 3);
+  assert.ok(logged.every((a) => /interact:used/.test(String(a[0]))), '错误输出要带事件名');
+  assert.ok(logged[0][1] instanceof Error && logged[0][1].message === 'boom', '原始错误对象要打出来，不吞');
+  assert.deepEqual(bus.recentListenerErrors.map((r) => r.type), ['interact:used', 'interact:used', 'interact:used']);
+  for (let i = 0; i < 20; i++) {
+    console.error = () => {};
+    try {
+      bus.emit('interact:used', { id: 'z', kind: 'use' });
+    } finally {
+      console.error = orig;
+    }
+  }
+  assert.equal(bus.recentListenerErrors.length, EventBus.LISTENER_ERROR_KEEP, '诊断记录有上限');
+  bus.clear();
+  assert.equal(bus.listenerErrors, 23, 'clear 不清计数');
+});
+
 let failed = 0;
 for (const [s, name, e] of results) {
   console.log(`${s === 'ok' ? '✓' : '✗'} ${name}`);

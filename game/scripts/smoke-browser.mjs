@@ -4016,6 +4016,13 @@ try {
 const realErrors = errors.filter(
   (e) => !/GPU stall due to ReadPixels|GL_CLOSE_PATH_NV|WebGL.*performance|DRACOLoader: Decoding failed: Unsupported geometry type/i.test(e) && !expectedErrors.some((re) => re.test(e)),
 );
+// P3：EventBus 监听器抛错会 console.error（上面已收），这里再读一次计数兜底（当前页面自加载以来）
+const busErrors = await evaluate(`window.__game?.events?.listenerErrors ?? 0`).catch(() => 0);
+if (busErrors > 0) {
+  const recent = await evaluate(`(window.__game.events.recentListenerErrors || []).map((r) => r.type + ': ' + String(r.error?.stack ?? r.error).split('\\n')[0])`).catch(() => []);
+  console.log(`  ✗ EventBus 监听器抛错 ${busErrors} 次（最近：${JSON.stringify(recent)}）`);
+  failed++;
+}
 for (const e of realErrors) console.log(`  ✗ ${e}`);
 if (warnings.length) console.log(`  （警告 ${warnings.length} 条，首条：${warnings[0]?.slice(0, 120)}）`);
 failed += realErrors.length;
