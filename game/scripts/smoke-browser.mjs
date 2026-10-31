@@ -3556,15 +3556,16 @@ CHECKS.push({
     const space = (type) => `window.dispatchEvent(new KeyboardEvent('${type}', { code: 'Space', key: ' ', bubbles: true })), 1`;
     const p0 = await evaluate(`({ id: __game.ui.skip.id, t: __s3.endingCutscene.t, wall: performance.now() })`);
     if (p0.id !== 'ch1-ending') throw new Error('演出中应注册跳过 ' + JSON.stringify(p0));
-    // 软件渲染下一帧可能 > 0.5 s：圆环 DOM 是否显示过用钩子记（UI 每帧 update），0.5 s 时的进度直接读控制器
-    await evaluate(`(() => { const h = __game.ui.skipHint; const u = h.update.bind(h); window.__hint035 = { shown: false, maxP: 0, n: 0, last: performance.now(), gap: 0 }; h.update = (now) => { u(now); const w = window.__hint035; w.n++; w.gap = Math.max(w.gap, now - w.last); w.last = now; if (h.visible) { window.__hint035.shown = true; window.__hint035.maxP = Math.max(window.__hint035.maxP, __game.ui.skip.progress(now)); } }; return 1; })()`);
+    // 负载高时按住的 1 s 里可能只渲染 1–2 帧，帧采样采不到圆环：改听 SkipHint 显示时派发的 window 事件（按下当刻就显示），
+    // 帧数 / 最长帧间隔只作诊断；0.5 s 时的进度直接读控制器
+    await evaluate(`(() => { const h = __game.ui.skipHint; const u = h.update.bind(h); const w = window.__hint035 = { shown: false, ev: [], maxP: 0, n: 0, last: performance.now(), gap: 0, count0: h.shownCount }; window.addEventListener('skiphint:shown', (e) => { w.shown = true; w.ev.push(e.detail); }); h.update = (now) => { u(now); w.n++; w.gap = Math.max(w.gap, now - w.last); w.last = now; if (h.visible) w.maxP = Math.max(w.maxP, __game.ui.skip.progress(now)); }; return 1; })()`);
     await evaluate(space('keydown'));
     await sleep(500);
     const mid = await evaluate(`({ p: __game.ui.skip.progress(performance.now()), vis: __game.ui.skip.hintVisible(performance.now()), done: __s3.endingCutscene.endedBy })`);
     if (!(mid.p > 0.2 && mid.p < 1) || !mid.vis || mid.done) throw new Error('按住 0.5 s：圆环进度应在 0–1、未跳过 ' + JSON.stringify(mid));
     if (!(await until(`__s3.endingCutscene.endedBy === 'skip'`, 5000))) throw new Error('按住 1 s 没跳过');
     const hint = await evaluate(`window.__hint035`);
-    if (!hint.shown) throw new Error(`按住期间右下角圆环没显示过（这期间 UI 更新 ${hint.n} 帧、最长帧间隔 ${hint.gap.toFixed(0)} ms）`);
+    if (!hint.shown || !hint.ev.some((d) => d.id === 'ch1-ending')) throw new Error(`按住期间右下角圆环没显示过（事件 ${JSON.stringify(hint.ev)}；这期间 UI 更新 ${hint.n} 帧、最长帧间隔 ${hint.gap.toFixed(0)} ms）`);
     const sk = await evaluate(`({ t: __s3.endingCutscene.t, wall: performance.now(), l: __game.audio.musicLog.at(-1), k: __game.audio.musicKey, log: __game.ui.skip.log.at(-1) })`);
     await evaluate(space('keyup'));
     const hold = (sk.log.at - (p0.wall)) / 1000;
@@ -3579,7 +3580,7 @@ CHECKS.push({
     const cues = r.cues.map((c) => c.id).join('/');
     await evaluate(`localStorage.clear(); 1`);
     await cdp.goto('');
-    return `演出 ${p0.t.toFixed(2)} s 按下 Space、0.5 s 圆环进度 ${mid.p.toFixed(2)}（DOM 圆环显示过、最大 ${hint.maxP.toFixed(2)}）、${hold.toFixed(2)} s 后跳过（演出 ${sk.t.toFixed(2)} s；已触发 ${cues}）→ 结尾曲 stop fade ${sk.l.fade} s → ${toPage.toFixed(2)} s 后切结束页、淡入后 fade ${pg.fade.toFixed(2)}；日志第 6 页 ${pg.page6}`;
+    return `演出 ${p0.t.toFixed(2)} s 按下 Space、0.5 s 圆环进度 ${mid.p.toFixed(2)}（圆环显示事件 ${hint.ev.length} 次、帧采样最大进度 ${hint.maxP.toFixed(2)}、UI ${hint.n} 帧 / 最长间隔 ${hint.gap.toFixed(0)} ms）、${hold.toFixed(2)} s 后跳过（演出 ${sk.t.toFixed(2)} s；已触发 ${cues}）→ 结尾曲 stop fade ${sk.l.fade} s → ${toPage.toFixed(2)} s 后切结束页、淡入后 fade ${pg.fade.toFixed(2)}；日志第 6 页 ${pg.page6}`;
   },
 });
 
