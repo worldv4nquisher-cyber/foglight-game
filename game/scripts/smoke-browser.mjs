@@ -5,6 +5,7 @@
 import { spawn } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
+import { inflateSync } from 'node:zlib';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { preview } from 'vite';
@@ -3765,7 +3766,7 @@ CHECKS.push({
 // → 在读档后的场景里把谜题解完、走出口进下一场景（存档跟上）→ S3 点灯 → 按住 Space 跳过结尾 → 结束页 → 刷新 → 继续回结束页 → 新游戏覆盖确认清档。
 // 解谜步骤用各场景单项冒烟同样的捷径（传送 / interact 事件 / 机关按键 / beam.solve），这里只验「读档之后状态对、还能接着通关」。
 CHECKS.push({
-  name: 'v0.1-M7 存档读档全流程：S1 / S2 / S3 中途刷新 → 继续回场景入口且谜题复位 → 读档后解完谜题走出口 → 点灯 → 跳过结尾 → 结束页刷新后继续 → 新游戏清档',
+  name: 'v0.1-M7 完整通关 + 存档读档：主菜单新游戏 → S1 / S2 / S3 中途刷新 → 继续回场景入口且谜题复位 → 读档后解完谜题走出口 → 点灯 → 跳过结尾 → 结束页刷新后继续 → 新游戏清档',
   async run({ evaluate, cdp, sleep }) {
     const out = [];
     // 等待一律按游戏时间（无头软件渲染负载高时帧率很低），墙钟只兜底
@@ -3798,6 +3799,14 @@ CHECKS.push({
       await cdp.click(r.x, r.y);
     };
     const save = () => evaluate(`JSON.parse(localStorage.getItem('foglight.save.v1') || 'null')`);
+    /** 存档那一刻（进场自动存档）的谜题快照 vs 读档后：__qa.diff 必须为空 */
+    const snap = () => evaluate(`({ p: __qa.puzzles(), sv: __qa.saveData() })`);
+    const sameAsSaved = async (at, label) => {
+      const d = await evaluate(`__qa.diff(${JSON.stringify(at.p)}, __qa.puzzles())`);
+      if (d.length) throw new Error(label + ' 读档后谜题状态和存档时不一致：' + d.join('；'));
+      const sv2 = await evaluate(`__qa.save()`);
+      if (sv2?.sceneId !== at.sv?.sceneId || JSON.stringify(sv2.readDocs) !== JSON.stringify(at.sv.readDocs)) throw new Error(label + ' 读档后存档内容变了 ' + JSON.stringify({ before: at.sv, after: sv2 }));
+    };
     const ready = (S) => `!!(window.${S} && ${S}.puzzles && ${S}.rig) && __game.input.context === 'explore' && !__game.isPaused && !__game.flow.transitioning && !${S}.rig.controller.busy`;
     /** 刷新：重新打开游戏地址（不带 autostart → 主菜单），点「继续」，等场景可操作 */
     const refreshContinue = async (scene, S) => {
@@ -3839,6 +3848,7 @@ CHECKS.push({
       if (!(await untilG(`__s1.puzzles.p1Solved`, 6))) throw new Error('S1 小径尽头没解开谜题 1 ' + JSON.stringify(await s1st()));
     };
     const s1Initial = await s1st();
+    const s1Saved = await snap();
     // ---- S1 中途：谜题 1 解开 + 读邻居纸条 → 刷新
     await solveP1();
     await tp1(15.05, S1.sandY + 0.1, -1.1, Math.PI);
@@ -3847,6 +3857,7 @@ CHECKS.push({
     const midJournal = await evaluate(`__game.narrative.readDocs.slice()`);
     const midSave = await save();
     await refreshContinue('s1-ebb-shore', '__s1');
+    await sameAsSaved(s1Saved, 'S1');
     let s = await s1st();
     const d0 = Math.hypot(s.pos[0] - s1Initial.pos[0], s.pos[2] - s1Initial.pos[2]);
     if (s.tide !== 'high' || Math.abs(s.level - 1.6) > 1e-3 || s.p1 || s.p2 || s.raft === 'floating' || Math.abs(s.raftX - s1Initial.raftX) > 0.05 || s.pushT !== 0 || !s.gate || s.goal !== s1Initial.goal || d0 > 0.6)
@@ -3891,6 +3902,7 @@ CHECKS.push({
       await untilG('false', 0.15);
     };
     const s2Initial = await s2st();
+    const s2Saved = await snap();
     const s2Journal = async () => {
       await tp2(-3.9, 3.05, -0.25);
       await untilG('false', 0.3);
@@ -3921,12 +3933,14 @@ CHECKS.push({
     // ---- S2 中途：读日志 → 东灯台 + 转镜开锁、地窖门开 → 刷新
     await s2Journal();
     await s2Lock();
+    const s2Mid = await evaluate(`__qa.puzzles()`);
     await refreshContinue('s2-keeper-house', '__s2');
+    await sameAsSaved(s2Saved, 'S2');
     s = await s2st();
     const d2 = Math.hypot(s.pos[0] - s2Initial.pos[0], s.pos[2] - s2Initial.pos[2]);
     if (s.holding !== 'lantern' || s.glow || s.journalRead || s.lockOpen || s.doorOpen !== 0 || !s.doorCol || s.hasKey || s.gateOpen || !s.gateCol || s.A !== 0 || s.B !== 0 || s.goal !== s2Initial.goal)
       throw new Error('S2 读档后应回入口、谜题复位（拿着风灯、窗不亮、锁 / 地窖门 / 铁门关、镜子 0°、初始目标）' + JSON.stringify({ s, s2Initial }));
-    out.push(`S2 中途（日志 + 开锁 + 地窖门）刷新 → 继续：入口${d2 > 0.6 ? `（默认入口，和从 S1 进来的入口差 ${d2.toFixed(1)} m）` : ''}、拿着风灯、锁 / 门 / 镜子复位、目标 ${s.goal} ✓`);
+    out.push(`S2 中途（日志 + 开锁 + 地窖门）刷新 → 继续：__qa.puzzles() 与进场存档时一致（中途改过 ${(await evaluate(`__qa.diff(${JSON.stringify(s2Saved.p)}, ${JSON.stringify(s2Mid)})`)).length} 项，读档后全部回到存档值）、入口${d2 > 0.6 ? `（默认入口，和从 S1 进来的入口差 ${d2.toFixed(1)} m）` : ''}、拿着风灯、锁 / 门 / 镜子复位、目标 ${s.goal} ✓`);
 
     // ---- 读档后解完 S2：日志 → 开锁 → 钥匙 → 观察点 317 → 拨盘 317 → 出口
     await s2Journal();
@@ -3968,6 +3982,7 @@ CHECKS.push({
     const ff = (sec) => evaluate(`(() => { for (let i = 0; i < ${Math.round(sec / 0.05)}; i++) __s3.puzzles.fixedUpdate(0.05); return 1; })()`);
     const s3st = () => evaluate(`(() => { const s = __s3, p = s.puzzles, b = s.rig.body.position; const c = s.colliderOf.get(s.greybox.doorLeaf); return { tide: p.tide.state, level: +p.tide.level.toFixed(3), rings: p.bell.rings, door: p.state.doorOpen, doorCol: c ? c.enabled : null, valve: p.state.valveOpen, ignited: p.state.ignited, ig: p.beam.igniter.state, lever: p.leverIx.enabled, sky: p.beam.sky.alwaysOn, goal: __game.narrative.goal, pos: [b.x, b.y, b.z].map((v) => +v.toFixed(2)) }; })()`);
     const s3Initial = await s3st();
+    const s3Saved = await snap();
     const s3BellDoor = async () => {
       await evaluate(`__game.events.emit('interact:used', { id: 'tide-bell-s3', kind: 'use' }), 1`);
       await evaluate(`__s3.tides.fixedUpdate(7), 1`);
@@ -3981,6 +3996,7 @@ CHECKS.push({
     await evaluate(`__game.events.emit('interact:used', { id: 'oil-valve-s3', kind: 'hold' }), 1`);
     if (!(await evaluate(`__s3.puzzles.state.valveOpen`))) throw new Error('S3 开阀没生效');
     await refreshContinue('s3-lighthouse', '__s3');
+    await sameAsSaved(s3Saved, 'S3');
     s = await s3st();
     if (s.tide !== s3Initial.tide || Math.abs(s.level - s3Initial.level) > 1e-3 || s.rings !== 0 || s.door !== 0 || s.doorCol !== true || s.valve || s.ignited || s.sky || s.lever || s.goal !== s3Initial.goal)
       throw new Error('S3 读档后应回入口、谜题复位（涨潮、钟未敲、门关 + 碰撞、阀关、天光不常亮、拉杆不可点、初始目标）' + JSON.stringify({ s, s3Initial }));
@@ -4033,6 +4049,67 @@ CHECKS.push({
     await evaluate(`localStorage.removeItem('foglight.save.v1'); 1`);
     await cdp.goto('');
     return out.join('，');
+  },
+});
+
+
+// ---------------------------------------------------------------- M7 每个场景里切画质（制作人 M7 用）
+// S1 / S2 / S3（art=1，真模型）各切 ultra → high → standard → ultra：每次切完等画面走几帧，断言
+// ① 没有 GL 错误（切前先清 gl.getError，切后读）② 截图不是黑屏 / 纯色（平均亮度、亮像素占比、颜色数）
+// ③ 没丢实体：场景对象没换、所有可交互物 / 出口 / 汐都还挂在场景树上且整条父链可见、可交互物数量不变；网格总数变化只记录（雾片 / 草 / 雨跟档位走）
+CHECKS.push({
+  name: 'v0.1-M7 切画质：S1 / S2 / S3 每个场景三档来回切，无 GL 错误、不黑屏、不丢实体',
+  async run({ evaluate, cdp, sleep }) {
+    const out = [];
+    const scenes = [
+      ['s1', 's1-ebb-shore'],
+      ['s2', 's2-keeper-house'],
+      ['s3', 's3-lighthouse'],
+    ];
+    const gameWait = async (sec) => {
+      const t0 = await evaluate(`__game.time.fixedTick * __game.time.fixedDelta`);
+      const end = Date.now() + 120000;
+      while (Date.now() < end) {
+        if ((await evaluate(`__game.time.fixedTick * __game.time.fixedDelta`)) - t0 >= sec) return;
+        await sleep(150);
+      }
+    };
+    const census = `(() => { const s = __game.scenes.current, root = s.scene;
+      const chain = (o) => { if (!o) return 'none'; let c = o; while (c) { if (!c.visible) return 'hidden:' + c.name; if (c === root) return 'ok'; c = c.parent; } return 'detached'; };
+      const items = s.interaction.items.filter((i) => i.enabled !== false);
+      const bad = items.map((i) => [i.id, chain(i.object)]).filter(([, r]) => r !== 'ok');
+      const xi = chain(s.rig.visual);
+      let meshes = 0; root.traverse((o) => { if (o.isMesh) meshes++; });
+      return { scene: s, name: s.name, items: items.length, bad, xi, exits: (s.exits ?? []).length, meshes };
+    })()`;
+    for (const [id, name] of scenes) {
+      await cdp.goto(`scene=${id}&art=1`, name);
+      const end = Date.now() + ESTAB_MS;
+      while (Date.now() < end && !(await evaluate(`__game.input.context === 'explore' && !__game.flow.transitioning`))) await sleep(250);
+      await gameWait(1);
+      await evaluate(`(window.__qScene = __game.scenes.current, 1)`);
+      const base = await evaluate(`(() => { const c = ${census}; delete c.scene; return c; })()`);
+      if (base.xi !== 'ok') throw new Error(`${id} 切档前汐就不在场景里 / 不可见 ` + JSON.stringify(base)); // 可交互物本来就隐藏的（触发体等）记在 base.bad，切档后要一样
+      const rows = [];
+      for (const tier of ['ultra', 'high', 'standard', 'ultra']) {
+        await evaluate(`(() => { const gl = __game.renderer.getContext(); while (gl.getError() !== gl.NO_ERROR); return 1; })()`);
+        await evaluate(`__game.quality.set('${tier}'); 1`);
+        await gameWait(0.6);
+        await sleep(300);
+        const r = await evaluate(`(() => { const gl = __game.renderer.getContext(); const errs = []; for (let e = gl.getError(), k = 0; e !== gl.NO_ERROR && k < 8; e = gl.getError(), k++) errs.push('0x' + e.toString(16));
+          const c = ${census}; const same = c.scene === window.__qScene; delete c.scene; return { ...c, same, tier: __game.quality.tier, errs, lost: __game.renderer.getContext().isContextLost() }; })()`);
+        const shot = await cdp.shotStats();
+        rows.push({ tier, meshes: r.meshes, mean: +shot.mean.toFixed(1), lit: +shot.lit.toFixed(2), colors: shot.colors });
+        if (r.tier !== tier || !r.same) throw new Error(`${id} 切到 ${tier}：档位 ${r.tier}、场景${r.same ? '没换' : '被换了'}`);
+        if (r.errs.length || r.lost) throw new Error(`${id} 切到 ${tier} 有 GL 错误 ${r.errs.join(',')}${r.lost ? '，上下文丢失' : ''}`);
+        if (shot.mean < 6 || shot.lit < 0.05 || shot.colors < 24) throw new Error(`${id} 切到 ${tier} 画面像黑屏 / 纯色 ` + JSON.stringify(shot));
+        if (r.items !== base.items || r.exits !== base.exits || JSON.stringify(r.bad) !== JSON.stringify(base.bad) || r.xi !== 'ok') throw new Error(`${id} 切到 ${tier} 丢了实体 ` + JSON.stringify({ base, r }));
+      }
+      out.push(`${id}：` + rows.map((x) => `${x.tier} 亮度 ${x.mean} 亮像素 ${x.lit} 色数 ${x.colors} 网格 ${x.meshes}`).join(' → ') + `（可交互物 ${base.items}、出口 ${base.exits} 不变）✓`);
+    }
+    await evaluate(`__game.quality.set('ultra'); delete window.__qScene; 1`);
+    await cdp.goto('');
+    return out.join('；');
   },
 });
 
@@ -4162,7 +4239,47 @@ const evaluate = async (expression) => {
 };
 
 // 可信（isTrusted）输入：指针锁定等需要真实用户手势的功能用它测
+
+/** M7：解 CDP 截图（8 位 RGB / RGBA、非隔行 PNG）→ 平均亮度、亮像素（Y > 24）占比、粗量化后的颜色数（黑屏 / 纯色屏判定用） */
+function pngStats(buf) {
+  let p = 8, w = 0, h = 0, ct = 0;
+  const idat = [];
+  while (p < buf.length) {
+    const len = buf.readUInt32BE(p), type = buf.toString('ascii', p + 4, p + 8), d = buf.subarray(p + 8, p + 8 + len);
+    if (type === 'IHDR') { w = d.readUInt32BE(0); h = d.readUInt32BE(4); if (d[8] !== 8 || d[12] !== 0) throw new Error('pngStats 只支持 8 位非隔行'); ct = d[9]; }
+    else if (type === 'IDAT') idat.push(d);
+    else if (type === 'IEND') break;
+    p += 12 + len;
+  }
+  const bpp = ct === 6 ? 4 : ct === 2 ? 3 : 0;
+  if (!bpp) throw new Error('pngStats 不支持颜色类型 ' + ct);
+  const raw = inflateSync(Buffer.concat(idat)), stride = w * bpp;
+  let prev = Buffer.alloc(stride), sum = 0, lit = 0, n = 0;
+  const colors = new Set();
+  for (let y = 0; y < h; y++) {
+    const f = raw[y * (stride + 1)], line = Buffer.from(raw.subarray(y * (stride + 1) + 1, (y + 1) * (stride + 1)));
+    for (let i = 0; i < stride; i++) {
+      const a = i >= bpp ? line[i - bpp] : 0, b = prev[i], c = i >= bpp ? prev[i - bpp] : 0;
+      const pa = Math.abs(b - c), pb = Math.abs(a - c), pc = Math.abs(a + b - 2 * c);
+      line[i] = (line[i] + (f === 1 ? a : f === 2 ? b : f === 3 ? (a + b) >> 1 : f === 4 ? (pa <= pb && pa <= pc ? a : pb <= pc ? b : c) : 0)) & 255;
+    }
+    if (y % 4 === 0)
+      for (let x = 0; x < w; x += 4) {
+        const o = x * bpp, Y = 0.2126 * line[o] + 0.7152 * line[o + 1] + 0.0722 * line[o + 2];
+        sum += Y; n++; if (Y > 24) lit++;
+        colors.add((line[o] >> 4) * 256 + (line[o + 1] >> 4) * 16 + (line[o + 2] >> 4));
+      }
+    prev = line;
+  }
+  return { w, h, mean: sum / n, lit: lit / n, colors: colors.size };
+}
+
 const cdp = {
+  /** M7：截当前画面并统计亮度（见 pngStats） */
+  async shotStats() {
+    const r = await send('Page.captureScreenshot', { format: 'png' }, sessionId);
+    return pngStats(Buffer.from(r.data, 'base64'));
+  },
   async click(x, y, button = 'left') {
     const buttons = { left: 1, right: 2, middle: 4 }[button];
     await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y }, sessionId);
