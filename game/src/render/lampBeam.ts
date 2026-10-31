@@ -77,6 +77,10 @@ export function lampBeamPhase(va: number): number {
   const c = Math.abs(va);
   return (B.sideMin + (1 - B.sideMin) * c * c) * (1 + B.forward * Math.pow(Math.max(va, 0), 4));
 }
+/** 与 shader 同式：片元离相机 dist 米的近处淡出（BUG-026：灯束扫过灯室里的演出相机时，贴着相机的锥壁不画） */
+export function lampBeamNear(dist: number): number {
+  return smoothstep(LAMP_BEAM.nearFade[0], LAMP_BEAM.nearFade[1], dist);
+}
 /** 与 shader 同式：facing = |N · 视线去掉轴向分量|（剪影中心 1、边缘 0） */
 export function lampBeamEdge(facing: number): number {
   return Math.pow(smoothstep(0, 1, facing), LAMP_BEAM.edgePow);

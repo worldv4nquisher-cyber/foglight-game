@@ -17,7 +17,7 @@ import { S2 } from '@/levels/s2/layout';
 import { IgniterHum, IGNITER_HUM_ID } from '@/levels/s3/igniterHum';
 import { AudioSystem } from '@/systems/AudioSystem';
 import { bindSfxFallback } from '@/systems/tide/tideScene';
-import { LAMP_BEAM, LAMP_GLOW, LampBeam, lampBeamAlong, lampBeamEdge, lampBeamPhase } from '@/render/lampBeam';
+import { LAMP_BEAM, LAMP_GLOW, LampBeam, lampBeamAlong, lampBeamEdge, lampBeamNear, lampBeamPhase } from '@/render/lampBeam';
 
 const DT = 1 / 60;
 const cfg = gameplay.beam;
@@ -595,6 +595,12 @@ test('裁定 25 灯束：沿长度起点淡入 / 末端 0、侧面 fresnel 淡�
   assert.ok(lampBeamPhase(1) > lampBeamPhase(-1) && lampBeamPhase(-1) === 1, '迎光看最亮、背光顺轴看 1');
   assert.ok(lampBeamPhase(0.5) < lampBeamPhase(0.9), '越顺轴越亮');
   assert.equal(lampBeamEdge(0), 0, '剪影边缘 0（软边，不是硬边）');
+  // BUG-026：结尾父亲镜头相机离灯 1.97 m，光束转到 a≈1.2–1.4 rad 时旧圆锥的锥壁贴着相机扫过 → 上半屏整片硬边橙光。
+  // 新灯束：离相机 < nearFade[0] 的片元为 0、到 nearFade[1] 才全亮（贴脸的锥壁不画），且离灯 1.97 m 处沿长度系数还没到 1。
+  assert.equal(lampBeamNear(0), 0, 'BUG-026 贴着相机的锥壁亮度 0');
+  assert.equal(lampBeamNear(LAMP_BEAM.nearFade[0]), 0, 'BUG-026 nearFade 起点 0');
+  assert.ok(lampBeamNear(1) < 0.15 && lampBeamNear(LAMP_BEAM.nearFade[1]) === 1, 'BUG-026 1 m 内很淡、3 m 全亮：' + lampBeamNear(1));
+  assert.ok(lampBeamAlong(1.97) < 0.6, 'BUG-026 父亲镜头相机处（离灯 1.97 m）沿长度系数 < 0.6：' + lampBeamAlong(1.97));
   assert.equal(lampBeamEdge(1), 1);
   const noTex = new LampBeam(0xffb25e);
   assert.equal(noTex.glow, null, '没贴图不建辉光');
