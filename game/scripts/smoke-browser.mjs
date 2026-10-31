@@ -40,6 +40,11 @@ const ESTAB_MS = (() => {
   const v = Number(process.env.SMOKE_ESTAB_TIMEOUT_MS);
   return Number.isFinite(v) && v > 0 ? v : 180000;
 })();
+/** 换地址 / 刷新后等场景就绪的上限（ms，墙钟）：软件渲染 + box 高负载下 S3 冷启动会超过 60 s。默认 120 s，SMOKE_LOAD_TIMEOUT_MS 覆盖 */
+const LOAD_MS = (() => {
+  const v = Number(process.env.SMOKE_LOAD_TIMEOUT_MS);
+  return Number.isFinite(v) && v > 0 ? v : 120000;
+})();
 const chromePath =
   process.env.CHROME ??
   ['/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser', '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'].find(
@@ -3874,34 +3879,34 @@ const cdp = {
   async reload() {
     await send('Page.reload', { ignoreCache: false }, sessionId);
     await new Promise((r) => setTimeout(r, 300));
-    const end = Date.now() + 60000;
+    const end = Date.now() + LOAD_MS;
     while (Date.now() < end) {
       if (await evaluate(`Boolean(window.__game?.scenes?.current?.name === 's1-ebb-shore')`).catch(() => false)) return;
       await new Promise((r) => setTimeout(r, 250));
     }
-    throw new Error('刷新后 60 秒内主场景没有就绪');
+    throw new Error(`刷新后 ${LOAD_MS / 1000} 秒内主场景没有就绪`);
   },
   /** 换 URL 参数重新打开（在 ?smoke=1 基础上追加 query），等场景（默认主场景）就绪 */
   async goto(query, scene = 's1-ebb-shore') {
     await send('Page.navigate', { url: url + (query ? '&' + query : '') }, sessionId);
     await new Promise((r) => setTimeout(r, 300));
-    const end = Date.now() + 60000;
+    const end = Date.now() + LOAD_MS;
     while (Date.now() < end) {
       if (await evaluate(`Boolean(window.__game?.scenes?.current?.name === ${JSON.stringify(scene)})`).catch(() => false)) return;
       await new Promise((r) => setTimeout(r, 250));
     }
-    throw new Error('换地址后 60 秒内 ' + scene + ' 场景没有就绪');
+    throw new Error(`换地址后 ${LOAD_MS / 1000} 秒内 ${scene} 场景没有就绪（SMOKE_LOAD_TIMEOUT_MS）`);
   },
   /** 不带 autostart 打开（默认流程：启动 → 主菜单，v0.1-008），等主菜单就绪 */
   async gotoMenu(query = '') {
     await send('Page.navigate', { url: url.replace('&autostart=1', '') + (query ? '&' + query : '') }, sessionId);
     await new Promise((r) => setTimeout(r, 300));
-    const end = Date.now() + 60000;
+    const end = Date.now() + LOAD_MS;
     while (Date.now() < end) {
       if (await evaluate(`Boolean(window.__game?.scenes?.current?.name === 'menu' && window.__game.ui.mainMenu.isOpen)`).catch(() => false)) return;
       await new Promise((r) => setTimeout(r, 250));
     }
-    throw new Error('60 秒内主菜单没有就绪');
+    throw new Error(`${LOAD_MS / 1000} 秒内主菜单没有就绪`);
   },
   /** CDP Fetch 把匹配 urlPattern 的请求直接回 404（033 改：懒加载失败路径）；返回命中的 URL 列表。只拦这个页面会话 */
   async route404(urlPattern, mode = '404') {
