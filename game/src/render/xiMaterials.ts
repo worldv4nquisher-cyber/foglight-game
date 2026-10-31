@@ -18,6 +18,19 @@ export const XI_WET_ROUGHNESS = 0.28;
 export const XI_WET_DARKEN = 0.22;
 /** SDF 明暗交界的软化宽度（θ 单位） */
 export const XI_SDF_SOFT = 0.02;
+/**
+ * r4：光接近竖直时 θ 不稳——θ 只看光的水平方位，和仰角无关；仰角 87° 的点光源，脸挪 3 cm 方位就能转半圈，
+ * θ 在 0（全亮）和 2（全暗）之间跳，u 也来回翻（逐片元方向不同时还会成块花脸）。
+ * 处理：按光的水平分量长度 h（单位光向量，= cos 仰角）把 θ 往 0（正前方 = 全亮，和正上方的原约定一致）淡出：
+ * θ' = θ · smoothstep(LO, HI, h)。h ≥ HI（仰角 ≤ 69.5°）完全不变；h ≤ LO（仰角 ≥ 84.3°）按正上方算。
+ */
+export const XI_SDF_TOP_LO = 0.1;
+export const XI_SDF_TOP_HI = 0.35;
+
+const smooth01 = (a: number, b: number, x: number): number => {
+  const t = Math.max(0, Math.min(1, (x - a) / (b - a)));
+  return t * t * (3 - 2 * t);
+};
 
 export function xiWetColor(wet: number, wetness: number): number {
   return 1 - XI_WET_DARKEN * wet * wetness;
@@ -35,8 +48,9 @@ export function xiWetRoughness(rough: number, wet: number, wetness: number): num
 export function xiFaceSdfParams(lightLocal: { x: number; y: number; z: number }): { theta: number; flipU: boolean } {
   const h = Math.hypot(lightLocal.x, lightLocal.z);
   if (h < 1e-6) return { theta: 0, flipU: false };
+  const len = Math.hypot(h, lightLocal.y);
   const ang = Math.acos(Math.max(-1, Math.min(1, lightLocal.z / h)));
-  return { theta: ang / (Math.PI / 2), flipU: lightLocal.x > 0 };
+  return { theta: (ang / (Math.PI / 2)) * smooth01(XI_SDF_TOP_LO, XI_SDF_TOP_HI, h / len), flipU: lightLocal.x > 0 };
 }
 
 /** 亮 = θ ≤ sdf（硬判定；shader 里在 ±XI_SDF_SOFT 内平滑） */
@@ -81,6 +95,8 @@ void RE_Direct_Xi( const in IncidentLight directLight, const in vec3 geometryPos
   vec3 lh = directLight.direction - up * dot( directLight.direction, up );
   float hl = length( lh );
   float theta = hl < 1e-5 ? 0.0 : acos( clamp( dot( lh / hl, fwd ), -1.0, 1.0 ) ) / 1.5707963;
+  // 光接近竖直：θ 往 0 淡出（xiFaceSdfParams 同式；directLight.direction 是单位向量，hl = cos 仰角）
+  theta *= smoothstep( ${XI_SDF_TOP_LO.toFixed(3)}, ${XI_SDF_TOP_HI.toFixed(3)}, hl );
   vec2 fuv = vXiFaceUv;
   if ( hl >= 1e-5 && dot( lh, left ) > 0.0 ) fuv.x = 1.0 - fuv.x;
   float sdf = texture2D( uXiSdf, fuv ).r;

@@ -209,6 +209,16 @@ const glbJson = (file) => {
   near(sp.theta, 0.5, 1e-9, '左前 45° θ = 0.5');
   assert.equal(sp.flipU, true, '左侧（+X）光 u → 1 − u');
   assert.ok(xiFaceSdfParams({ x: 0, y: 0, z: -1 }).theta > 1.99, '背光 θ = 2（全暗）');
+  // r4：光接近竖直时 θ 往 0 淡出（原来仰角 89.9° 时脸挪 1 mm θ 就在 0 / 2 之间跳）
+  {
+    const at = (dx, dz) => xiFaceSdfParams({ x: -dx, y: 0.6, z: -dz }).theta;
+    assert.ok(at(0, 0.001) < 1e-9 && at(0, -0.001) < 1e-9, '仰角 89.9° 前后挪 1 mm：θ 都 = 0（原来 2 / 0）');
+    assert.ok(Math.abs(at(0, 0.03) - at(0, -0.03)) < 0.01, '仰角 87° 前后挪 3 cm：θ 差 < 0.01（原来 2.0）');
+    near(xiFaceSdfParams({ x: -1, y: Math.tan((65 * Math.PI) / 180), z: 0 }).theta, 1, 1e-9, '仰角 65°（h ≥ 0.35）θ 不变');
+    let prev = null, maxStep = 0;
+    for (let e = 60; e <= 90; e += 0.25) { const r = (e * Math.PI) / 180; const t = xiFaceSdfParams({ x: 0, y: Math.sin(r), z: -Math.cos(r) }).theta; if (prev !== null) maxStep = Math.max(maxStep, Math.abs(t - prev)); prev = t; }
+    assert.ok(maxStep < 0.06, `背光从仰角 60° 抬到 90°，θ 连续（每 0.25° 最大跳 ${maxStep.toFixed(3)}）`);
+  }
   assert.ok(xiFaceLit(0.3, 0.5) && !xiFaceLit(0.6, 0.5), '亮 = θ ≤ sdf');
   assert.ok(XI_SHADOW_TINT[2] > XI_SHADOW_TINT[1] && XI_SHADOW_TINT[1] > XI_SHADOW_TINT[0], '暗部冷色（B > G > R），不偏暖');
   assert.equal(xiMaterialKind('mat-char-xi-face'), 'face');
