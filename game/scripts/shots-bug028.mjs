@@ -1,5 +1,5 @@
 // BUG-028 #157 南沿窄缝相机贴头 前后对比 → ../docs/tasks/shots-bug028/（art=1、high）
-//   同一机位：汐站在窄缝（x 10.5，深水边界 z −8.95 往北 0.4 m），探索相机按游戏逻辑跑 1.5 s 稳定后冻结截图；
+//   同一机位：低潮（instant），汐站在窄缝（x 10.5，深水边界 z −8.95 往北 0.4 m），探索相机按游戏逻辑跑 1.5 s 稳定后冻结截图；
 //   记录相机到头部跟随点（脚底 + pivotHeight 1.35）的距离、相机偏移 / 抬高 / 淡出不透明度（新 dist 才有）。
 //   同一份 dist、同一次会话：before = 运行时把 BUG-028 新参数关掉模拟修前（shoulderSkin 0、不换肩、不抬高、不淡出；
 //   Node 量测与修前代码逐行一致，见 measure-before.json），after = 默认参数。
@@ -116,11 +116,11 @@ async function enterS1() {
 const Z0 = -8.95;
 const LEGACY = JSON.stringify({ shoulderSkin: 0, shoulderSwitchGain: 1e9, shoulderSwitchRatio: 0, lowSpaceLift: 0, nearFade: [-2, -1] });
 const KEYS = JSON.stringify(Object.keys(JSON.parse(LEGACY)));
-// [名, x, 离边界, yaw（度，−90 = 朝东看）, 俯仰]
+// [名, x, 离边界, yaw（度；0 = 朝 −z 即北看礁石，−90 = 朝东看）, 俯仰]
 const VIEWS = [
   ['east', 10.5, 0.4, -90, -0.3],
   ['spin-66', 10.5, 0.4, -66, -0.3],
-  ['north-rock', 10.5, 0.4, 180, -0.3],
+  ['north-rock', 10.5, 0.4, 0, -0.3],
 ];
 
 async function run() {
@@ -136,7 +136,7 @@ async function run() {
       await evaluate(`(() => { const c = __s1.cameraFollow.cfg; Object.assign(c, ${VARIANT === 'before' ? LEGACY : DEF}); return 1; })()`);
       await evaluate('(() => { __game.time.timeScale = 1; return 1; })()');
       // 先站到缝外开阔处再瞬移进缝：相机按真实逻辑收敛（含前拉 / 换肩 / 抬高平滑）
-      await evaluate(`(() => { const s = __s1; const b = s.rig.body.body; const y = ${(yawDeg * Math.PI) / 180}; b.teleport(b.position.clone().set(${x}, 0.25, ${Z0 + dz})); b.velocity.set(0, 0, 0); s.rig.controller.facing = y + Math.PI; s.cameraFollow.yaw = y; s.cameraFollow.pitch = ${pitch}; return 1; })()`);
+      await evaluate(`(() => { const s = __s1; s.puzzles.tide.set('low', { instant: true }); const b = s.rig.body.body; const y = ${(yawDeg * Math.PI) / 180}; b.teleport(b.position.clone().set(${x}, 0.25, ${Z0 + dz})); b.velocity.set(0, 0, 0); s.rig.controller.facing = y + Math.PI; s.cameraFollow.yaw = y; s.cameraFollow.pitch = ${pitch}; return 1; })()`);
       for (let k = 0; k < 6; k++) {
         await waitGame(0.25);
         await evaluate(`(() => { const s = __s1; s.cameraFollow.yaw = ${(yawDeg * Math.PI) / 180}; s.cameraFollow.pitch = ${pitch}; return 1; })()`);
@@ -146,6 +146,8 @@ async function run() {
       await until(`innerWidth === ${W}`, 60000);
       await waitFrames(4);
       const st = await evaluate(`(() => { const s = __s1; const c = s.cameraFollow; const p = s.rig.body.body.position; const cam = s.camera.position; const head = p.clone(); head.y += 1.35; return { feet: [p.x, p.y, p.z].map((v) => +v.toFixed(3)), camHead: +cam.distanceTo(head).toFixed(3), shoulder: c.shoulder ?? null, lift: c.lift ?? null, headDistance: Number.isFinite(c.headDistance) ? +c.headDistance.toFixed(3) : null, xiAlpha: s.xiNearAlpha ?? null }; })()`);
+      // 窄缝只在低潮可站（高潮会被潮水送回安全点 S1.safePoint）：脚不在缝里就算失败，不出图
+      if (Math.abs(st.feet[0] - x) > 0.3 || Math.abs(st.feet[2] - (Z0 + dz)) > 0.3) throw new Error(`汐不在窄缝里（被送回？）feet ${st.feet}`);
       await shot(`${name}.png`);
       report.shots.push({ name, view, variant: VARIANT, ...st });
       console.log('  ✓', name, JSON.stringify(st));
