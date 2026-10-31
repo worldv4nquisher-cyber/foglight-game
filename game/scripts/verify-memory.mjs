@@ -6,7 +6,7 @@
 //     - JS 堆（CDP Runtime.getHeapUsage，GC 后）。
 //   验收：通关回到 S1 后，估算显存 / 几何体 / 贴图数 / JS 堆都在第一次进 S1 时的 ±10% 以内；
 //         回主菜单时估算显存 ≤ 第一次进 S1 的 MENU_MAX（关卡资源 / 阴影 RT / 骨骼纹理都该释放掉，菜单只剩公共资源）。
-//   每站另记活着的 GL 纹理数和最大的几张（尺寸 / 格式 / 创建于哪一站），泄漏时直接看是谁没释放。
+//   每站另记活着的 GL 纹理数和最大的几张（尺寸 / 格式 / 创建于哪一站），以及 GC 后仍活着的旧场景对象，泄漏时直接看是谁没释放。
 //   box 上是 swiftshader，显存是「WebGL 分配量」的估算；实机显存（任务管理器 / about:gpu）由制作人桌面复测。
 // 用法：node --import ./scripts/register-ts-paths.mjs scripts/verify-memory.mjs    结果 → ../docs/releases/perf/verify-memory.json
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
@@ -86,13 +86,17 @@ async function settle(label, sceneName) {
   await sleep(500);
   await send('HeapProfiler.collectGarbage');
   const heap = await send('Runtime.getHeapUsage');
+  // 已离开的场景对象 GC 后还活着 = JS 侧泄漏（事件监听 / 闭包挂着旧场景）；记下来，泄漏时直接看是哪一站
+  await evaluate(`((window.__sceneRefs ??= []).push([${JSON.stringify(label)}, new WeakRef(__game.scenes.current)]), 1)`);
+  await send('HeapProfiler.collectGarbage');
   const m = await evaluate(`(() => { const i = __game.renderer.info;
+    const staleScenes = window.__sceneRefs.filter(([, r]) => r.deref() && r.deref() !== __game.scenes.current).map(([l]) => l);
     const big = [...window.__glTexLive.values()].sort((a, b) => b.w * b.h - a.w * a.h).slice(0, 6).map((e) => e.w + 'x' + e.h + ' 0x' + e.fmt.toString(16) + ' @' + e.phase);
-    return { scene: __game.scenes.current?.name ?? null, geometries: i.memory.geometries, textures: i.memory.textures, programs: i.programs?.length ?? 0, glTextures: window.__glTexLive.size, bigTextures: big, gl: { ...window.__glMem } }; })()`);
+    return { scene: __game.scenes.current?.name ?? null, staleScenes, geometries: i.memory.geometries, textures: i.memory.textures, programs: i.programs?.length ?? 0, glTextures: window.__glTexLive.size, bigTextures: big, gl: { ...window.__glMem } }; })()`);
   const row = { label, ...m, glMB: MB(m.gl.tex + m.gl.buf + m.gl.rb), texMB: MB(m.gl.tex), bufMB: MB(m.gl.buf), rbMB: MB(m.gl.rb), heapMB: MB(heap.usedSize) };
   report.steps.push(row);
   save();
-  console.log(`  ${label.padEnd(14)} ${String(row.scene).padEnd(16)} 估算显存 ${row.glMB} MB（贴图 ${row.texMB} / 缓冲 ${row.bufMB} / RB ${row.rbMB}）几何体 ${row.geometries} 贴图 ${row.textures}（GL ${row.glTextures}）着色器 ${row.programs} JS 堆 ${row.heapMB} MB`);
+  console.log(`  ${label.padEnd(14)} ${String(row.scene).padEnd(16)} 估算显存 ${row.glMB} MB（贴图 ${row.texMB} / 缓冲 ${row.bufMB} / RB ${row.rbMB}）几何体 ${row.geometries} 贴图 ${row.textures}（GL ${row.glTextures}）着色器 ${row.programs} JS 堆 ${row.heapMB} MB${row.staleScenes.length ? `（旧场景未回收：${row.staleScenes.join('、')}）` : ''}`);
   return row;
 }
 
