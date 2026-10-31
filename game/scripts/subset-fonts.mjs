@@ -37,7 +37,7 @@ function walk(dir, out = []) {
 }
 
 /** 不上屏的数据副本 / 校验数据：里面的中文（节点名 / note / 性能机位说明）不进字体子集 */
-const NOT_ON_SCREEN = ['src/config/atmosphere028.ts', 'src/config/perf-spots.ts'];
+const NOT_ON_SCREEN = ['src/config/atmosphere028.ts', 'src/config/perf-spots.ts', 'src/debug/perfSpot.ts'];
 
 /** 当前用字（排序后的字符串） */
 export function collectCharset() {
