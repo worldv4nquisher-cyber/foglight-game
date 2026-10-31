@@ -37,6 +37,12 @@ export const greyboxVisible: boolean = typeof location !== 'undefined' && ['1', 
  */
 export const lightmapEnabled: boolean = typeof location === 'undefined' || !['0', 'false'].includes(new URLSearchParams(location.search).get('lightmap') ?? 'x');
 
+/**
+ * BUG-030 对比开关：`?rampfix=0` 模拟修前——KTX2 不按宽高分流（256×1 的 ramp 也走 BC7 / BC3 压缩上传 → 0x502、采样为 0），
+ * ramp 保留整条 mip 链和 LinearMipmapLinear。只给前后对比截图用，默认开（修后）。
+ */
+export const rampFixEnabled: boolean = typeof location === 'undefined' || !['0', 'false'].includes(new URLSearchParams(location.search).get('rampfix') ?? 'x');
+
 /** v0.1-023 角色外扩描边开关：`?hull=0` 不挂（对比截图用）。默认开。 */
 export const outlineHullEnabled: boolean = typeof location === 'undefined' || !['0', 'false'].includes(new URLSearchParams(location.search).get('hull') ?? 'x');
 

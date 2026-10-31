@@ -7,7 +7,8 @@ import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js
 import type { EventBus } from '@/core/EventBus';
 import { disposeObject3D } from '@/core/dispose';
 import { gameConfig } from '@/config/gameConfig';
-import { artEnabled } from '@/config/debug';
+import { artEnabled, rampFixEnabled } from '@/config/debug';
+import { createKtx2Router, disableCompressedTargets, stripToBaseLevel, type Ktx2Router, type Ktx2WorkerConfig } from './ktx2Route';
 import { applyExtrasVisibility } from './extrasVisibility';
 import { applyMaterialHints } from '@/render/materialHints';
 import { buildLods } from '@/render/lod';
@@ -49,6 +50,10 @@ export class AssetLoader {
   private gltf: GLTFLoader;
   private draco: DRACOLoader;
   private ktx2: KTX2Loader;
+  /** BUG-030：宽 / 高非 4 倍数的 KTX2 只解未压缩 RGBA32（第一次用到才建，worker 1 个） */
+  private ktx2Raw: KTX2Loader | null = null;
+  /** BUG-030：按 KTX2 文件头宽高分流（manifest 的 ktx2 和 GLB 外部 KTX2 都走这里） */
+  readonly ktx2Router: Ktx2Router;
   /** GLB 外部 KTX2 共享缓存（解析后的绝对 URL → 纹理） */
   private ktx2Cache = new Map<string, Promise<THREE.Texture>>();
   private textureLoader: THREE.TextureLoader;
@@ -125,12 +130,27 @@ export class AssetLoader {
     // 构建时 vite.config.ts 的 threeDecodersWasmOnly 插件会把用不到的通用版/JS 回退从 dist 里去掉。
     this.draco = new DRACOLoader().setDecoderPath(DRACO_GLTF_CONFIG);
     this.ktx2 = new KTX2Loader().detectSupport(renderer);
+    // BUG-030：桌面把 Basis 转成 BC7 / BC3，宽高非 4 倍数（256×1 ramp）上传 0x502 → 采样为 0。
+    // 先取文件读头，非 4 倍数交给关掉全部压缩目标的第二个 loader（回落 RGBA32）。?rampfix=0 关掉分流（模拟修前）。
+    const fileLoader = new THREE.FileLoader().setResponseType('arraybuffer');
+    this.ktx2Router = createKtx2Router({
+      compressed: this.ktx2,
+      uncompressed: () => {
+        const raw = new KTX2Loader().detectSupport(renderer);
+        disableCompressedTargets(raw.workerConfig as unknown as Ktx2WorkerConfig);
+        raw.setWorkerLimit(1);
+        this.ktx2Raw = raw;
+        return raw;
+      },
+      fetch: (url, onProgress) => fileLoader.loadAsync(url, onProgress) as Promise<ArrayBuffer>,
+      enabled: rampFixEnabled,
+    });
     // 外部 KTX2（v0.1-013）：美术 GLB 的 images.uri = ../../textures/tex-*.ktx2，GLTFLoader 相对 GLB URL 解析后交给这里。
     // 同一张贴图被多个 GLB 引用（岩石 a–f + 主岛共用 tex-rock-shore-*）：按解析后的 URL 只下载 / 转码 / 上传一次。
     // BUG-012：网络失败 / 被浏览器取消时重试（loadRetry.ts），最终失败用棋盘格占位并记日志
-    const ktx2 = this.ktx2;
+    const router = this.ktx2Router;
     const shared = createSharedKtx2(this.ktx2Cache, {
-      load: (url, onProgress) => ktx2.loadAsync(url, onProgress),
+      load: (url, onProgress) => router.loadAsync(url, onProgress),
       resolve: (url) => new URL(url, typeof location === 'undefined' ? 'http://x/' : location.href).href,
       fallback: (url, err) => {
         this.degraded(url, 'ktx2', err);
@@ -335,8 +355,10 @@ export class AssetLoader {
         break;
       }
       case 'ktx2': {
-        const tex = await loadWithRetry(url, 'ktx2', () => this.ktx2.loadAsync(url, prog));
+        const tex = await loadWithRetry(url, 'ktx2', () => this.ktx2Router.loadAsync(url, prog));
         if (entry.srgb !== false) tex.colorSpace = THREE.SRGBColorSpace;
+        // BUG-030：ramp 只留第 0 级（?rampfix=0 保留 mip，模拟修前）
+        if (entry.ramp && rampFixEnabled) stripToBaseLevel(tex);
         this.textures.set(entry.key, tex);
         break;
       }
@@ -519,6 +541,7 @@ export class AssetLoader {
     this.groups.clear();
     this.draco.dispose();
     this.ktx2.dispose();
+    this.ktx2Raw?.dispose();
   }
 }
 

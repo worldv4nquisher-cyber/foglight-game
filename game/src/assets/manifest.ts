@@ -36,6 +36,11 @@ export interface AssetEntry {
   /** 纹理是否为颜色贴图（决定 sRGB 色彩空间），默认 true */
   srgb?: boolean;
   /**
+   * BUG-030：仅 ktx2，1D 查找表（色阶 ramp）。运行时只留第 0 级、Linear、不生成 mip；
+   * 也是 verify-assets「KTX2 宽高须为 4 的倍数」的白名单（≤ KTX2_UNALIGNED_MAX_TEXELS，运行时转未压缩 RGBA，见 ktx2Route.ts）。
+   */
+  ramp?: boolean;
+  /**
    * 仅 gltf：COLOR_0 的含义。默认跟随 gameConfig.assets.vertexColorsAreOutlineNormals（美术约定 = 描边平滑法线，
    * 加载后关掉材质 vertexColors）；'color' = 这个资源的 COLOR_0 是真顶点色，保留 vertexColors。
    */
@@ -95,7 +100,7 @@ export const manifest: AssetEntry[] = [
   { key: 'char-xi', type: 'gltf', url: 'assets/art/models/characters/char-xi.glb', group: 'common', optional: true, art: true },
   { key: 'char-xi-anims', type: 'gltf', url: 'assets/art/models/characters/char-xi-anims.glb', group: 'common', optional: true, art: true },
   // GLB 没引用、材质 extras 点名的两张：色阶 ramp、SDF 脸部阴影（art/tools/README §5）
-  { key: 'tex-xi-ramp', type: 'ktx2', url: 'assets/art/textures/tex-xi-ramp.ktx2', group: 'common', optional: true, art: true },
+  { key: 'tex-xi-ramp', type: 'ktx2', url: 'assets/art/textures/tex-xi-ramp.ktx2', group: 'common', optional: true, art: true, ramp: true },
   { key: 'tex-xi-sdf-face', type: 'ktx2', url: 'assets/art/textures/tex-xi-sdf-face.ktx2', group: 'common', optional: true, art: true },
   // ---- common：v0.1-028 天空 / 雾 / 雨 / 水面贴图 + 调色 LUT（README-028；室外场景共用 → common，8.4 MB）
   { key: 'tex-sky-clouds-overcast-albedo', type: 'ktx2', url: 'assets/art/textures/tex-sky-clouds-overcast-albedo.ktx2', group: 'common', optional: true, art: true },
@@ -113,9 +118,9 @@ export const manifest: AssetEntry[] = [
   { key: 'tex-beam-spot-albedo', type: 'ktx2', url: 'assets/art/textures/tex-beam-spot-albedo.ktx2', group: 'common', optional: true, art: true },
   { key: 'tex-glow-lighthouse-albedo', type: 'ktx2', url: 'assets/art/textures/tex-glow-lighthouse-albedo.ktx2', group: 'common', optional: true, art: true },
   { key: 'tex-water-foam-albedo', type: 'ktx2', url: 'assets/art/textures/tex-water-foam-albedo.ktx2', group: 'common', optional: true, art: true },
-  { key: 'tex-ramp-char', type: 'ktx2', url: 'assets/art/textures/tex-ramp-char.ktx2', group: 'common', optional: true, art: true },
-  { key: 'tex-ramp-env', type: 'ktx2', url: 'assets/art/textures/tex-ramp-env.ktx2', group: 'common', optional: true, art: true },
-  { key: 'tex-ramp-metal-wet', type: 'ktx2', url: 'assets/art/textures/tex-ramp-metal-wet.ktx2', group: 'common', optional: true, art: true },
+  { key: 'tex-ramp-char', type: 'ktx2', url: 'assets/art/textures/tex-ramp-char.ktx2', group: 'common', optional: true, art: true, ramp: true },
+  { key: 'tex-ramp-env', type: 'ktx2', url: 'assets/art/textures/tex-ramp-env.ktx2', group: 'common', optional: true, art: true, ramp: true },
+  { key: 'tex-ramp-metal-wet', type: 'ktx2', url: 'assets/art/textures/tex-ramp-metal-wet.ktx2', group: 'common', optional: true, art: true, ramp: true },
   // LUT：1024×32 PNG（flipY=false、NoColorSpace、线性过滤、无 mip，由 LutEffect 设置）；identity 只给校验用（307 B）
   { key: 'lut-overcast-dusk', type: 'texture', url: 'assets/art/textures/lut/lut-overcast-dusk.png', group: 'common', optional: true, art: true, srgb: false },
   { key: 'lut-overcast-after-rain', type: 'texture', url: 'assets/art/textures/lut/lut-overcast-after-rain.png', group: 'common', optional: true, art: true, srgb: false },

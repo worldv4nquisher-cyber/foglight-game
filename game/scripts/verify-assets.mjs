@@ -643,4 +643,80 @@ try {
   ok('AssetLoader.loadImage：同 key 并发共享一次下载、已加载直接返回、404 → null 且可重试、未登记 / ?art=0 → null 不发请求');
 }
 
+// ---- BUG-030：KTX2 宽高非 4 倍数 → 运行时转未压缩 RGBA（ktx2Route.ts）；ramp 只留第 0 级
+{
+  const { readKtx2Size, isBlockAligned, createKtx2Router, disableCompressedTargets, stripToBaseLevel } = await import('../src/assets/ktx2Route.ts');
+  // 文件头：真文件 256×1；非 KTX2 → null；高 0（1D）按 1
+  const rampFile = resolve(root, '../art/textures/tex-xi-ramp.ktx2');
+  if (existsSync(rampFile)) assert.deepEqual(readKtx2Size(readFileSync(rampFile)), { width: 256, height: 1 });
+  const hdr = (w, h) => {
+    const b = new Uint8Array(80);
+    b.set([0xab, 0x4b, 0x54, 0x58, 0x20, 0x32, 0x30, 0xbb, 0x0d, 0x0a, 0x1a, 0x0a]);
+    const dv = new DataView(b.buffer);
+    dv.setUint32(20, w, true);
+    dv.setUint32(24, h, true);
+    return b.buffer;
+  };
+  assert.deepEqual(readKtx2Size(hdr(512, 0)), { width: 512, height: 1 });
+  assert.equal(readKtx2Size(new Uint8Array(80).buffer), null, '不是 KTX2');
+  assert.equal(readKtx2Size(new Uint8Array(10).buffer), null, '太短');
+  assert.ok(isBlockAligned(1024, 512) && isBlockAligned(4, 4));
+  assert.ok(!isBlockAligned(256, 1) && !isBlockAligned(6, 8) && !isBlockAligned(8, 2));
+
+  // 分流：256×1 → 未压缩；1024² → 压缩；未压缩 loader 第一次用到才建、只建一次；enabled=false（?rampfix=0）全走压缩
+  const files = { 'ramp.ktx2': [256, 1], 'ramp2.ktx2': [16, 1], 'albedo.ktx2': [1024, 1024], 'odd.ktx2': [1022, 1024] };
+  const mk = (enabled) => {
+    const log = [];
+    let rawMade = 0;
+    const parser = (kind) => ({ parse: (buf, onLoad) => { log.push([kind, readKtx2Size(buf).width]); const t = new THREE.Texture(); t.userData.kind = kind; onLoad(t); } });
+    const r = createKtx2Router({
+      compressed: parser('bc7'),
+      uncompressed: () => { rawMade++; return parser('rgba'); },
+      fetch: async (url) => hdr(...files[url]),
+      enabled,
+    });
+    return { r, log, raw: () => rawMade };
+  };
+  const a = mk(true);
+  assert.equal((await a.r.loadAsync('albedo.ktx2')).userData.kind, 'bc7');
+  assert.equal(a.raw(), 0, '没碰到非 4 倍数就不建未压缩 loader');
+  const t = await a.r.loadAsync('ramp.ktx2');
+  assert.equal(t.userData.kind, 'rgba');
+  assert.equal(t.userData.ktx2Uncompressed, true);
+  assert.equal((await a.r.loadAsync('ramp2.ktx2')).userData.kind, 'rgba');
+  assert.equal((await a.r.loadAsync('odd.ktx2')).userData.kind, 'rgba', '通用规则：不只 ramp，宽 1022 也转');
+  assert.equal(a.raw(), 1, '未压缩 loader 只建一次');
+  assert.deepEqual([...a.r.uncompressedUrls].sort(), ['odd.ktx2', 'ramp.ktx2', 'ramp2.ktx2']);
+  const b = mk(false);
+  assert.equal((await b.r.loadAsync('ramp.ktx2')).userData.kind, 'bc7', '?rampfix=0：走原压缩路径');
+  assert.equal(b.raw(), 0);
+  // 解析失败要能被 loadWithRetry 看到（reject）
+  const bad = createKtx2Router({ compressed: { parse: (_b, _l, onErr) => onErr(new Error('transcode')) }, uncompressed: () => null, fetch: async () => hdr(8, 8), enabled: true });
+  await assert.rejects(bad.loadAsync('x.ktx2'), /transcode/);
+
+  // workerConfig：关掉全部 *Supported → Basis 回落 RGBA32
+  const cfg = disableCompressedTargets({ astcSupported: true, astcHDRSupported: false, etc1Supported: false, etc2Supported: true, dxtSupported: true, bptcSupported: true, pvrtcSupported: false });
+  assert.ok(Object.values(cfg).every((v) => v === false));
+
+  // ramp 只留第 0 级
+  const lv = (w) => ({ data: new Uint8Array(w * 4), width: w, height: 1 });
+  const ct = new THREE.CompressedTexture([lv(256), lv(128), lv(64), lv(1)], 256, 1, THREE.RGBAFormat);
+  ct.minFilter = THREE.LinearMipmapLinearFilter;
+  ct.generateMipmaps = true;
+  const v0 = ct.version;
+  stripToBaseLevel(ct);
+  assert.equal(ct.mipmaps.length, 1);
+  assert.equal(ct.mipmaps[0].width, 256);
+  assert.equal(ct.minFilter, THREE.LinearFilter);
+  assert.equal(ct.magFilter, THREE.LinearFilter);
+  assert.equal(ct.generateMipmaps, false);
+  assert.ok(ct.version > v0, 'needsUpdate');
+
+  // 清单：四张 ramp 标了 ramp: true，且都是 ktx2
+  const ramps = manifest.filter((e) => e.ramp).map((e) => e.key).sort();
+  assert.deepEqual(ramps, ['tex-ramp-char', 'tex-ramp-env', 'tex-ramp-metal-wet', 'tex-xi-ramp']);
+  assert.ok(manifest.filter((e) => e.ramp).every((e) => e.type === 'ktx2'));
+  ok('BUG-030：KTX2 读头分流（非 4 倍数 → 未压缩 RGBA，通用；?rampfix=0 全压缩）、未压缩 loader 懒建一次、workerConfig 全关、ramp 只留第 0 级 + Linear');
+}
+
 console.log(`\n资源加载后处理 / 交付自检校验通过（${passed} 项）`);
