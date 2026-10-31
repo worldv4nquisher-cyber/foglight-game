@@ -17,6 +17,7 @@ import {
   fatherOpacityAt,
   xiPoseAt,
 } from '@/content/cutscenes/ending';
+import { makeGhost, GHOST_RENDER_ORDER } from '@/render/ghost';
 import { OUTRO_CUT_SEC, IGNITE_MONO_DELAY, IGNITE_MONO_SEC } from '@/levels/s3/puzzles';
 import { t as text } from '@/content/text';
 
@@ -333,6 +334,48 @@ function makePlayer(src, extra = {}) {
   sampleShots(shots, 30, pose);
   near(pose.position.z, 10, 1e-9, '最后一段停在 end');
   out.push('镜头分段 ✓');
+}
+
+
+// ---- 11. 裁定 25 ③ 父亲幽灵：半透明 + 深度预写
+{
+  const bones = [new THREE.Bone(), new THREE.Bone()];
+  bones[0].add(bones[1]);
+  const geo = new THREE.BoxGeometry(1, 1, 1);
+  const n = geo.attributes.position.count;
+  geo.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(new Array(n * 4).fill(0), 4));
+  geo.setAttribute('skinWeight', new THREE.Float32BufferAttribute(new Array(n).fill([1, 0, 0, 0]).flat(), 4));
+  const skinned = new THREE.SkinnedMesh(geo, new THREE.MeshStandardMaterial({ name: 'cloak' }));
+  skinned.add(bones[0]);
+  skinned.bind(new THREE.Skeleton(bones));
+  const plain = new THREE.Mesh(geo, [new THREE.MeshStandardMaterial({ name: 'a' }), new THREE.MeshStandardMaterial({ name: 'b' })]);
+  const root = new THREE.Group();
+  root.add(skinned, plain);
+  const shared = skinned.material;
+  const g = makeGhost(root, 0);
+  assert.equal(g.prepasses.length, 2, '每个网格一个深度预写');
+  assert.equal(g.materials.length, 3);
+  assert.notEqual(skinned.material, shared, '克隆，不改共享材质');
+  for (const m of g.materials) assert.ok(m.transparent && !m.depthWrite && m.depthFunc === THREE.LessEqualDepth && m.colorWrite);
+  const pre = g.prepasses[0];
+  assert.ok(pre.isSkinnedMesh && pre.skeleton === skinned.skeleton && pre.parent === skinned, '预写跟同一副骨骼、挂在原网格下');
+  assert.ok(pre.bindMatrix.equals(skinned.bindMatrix));
+  for (const p of g.prepasses) for (const m of [p.material].flat()) assert.ok(m.transparent && m.depthWrite && !m.colorWrite, '预写只写深度');
+  assert.ok(pre.renderOrder === GHOST_RENDER_ORDER && skinned.renderOrder === GHOST_RENDER_ORDER + 1, '透明队列里预写先画');
+  assert.ok(!skinned.castShadow);
+  assert.ok(g.prepasses.every((p) => !p.visible), '不透明度 0：预写关');
+  g.setOpacity(0.55);
+  assert.ok(g.materials.every((m) => m.opacity === 0.55) && g.prepasses.every((p) => p.visible), '淡入：预写开');
+  g.setOpacity(fatherOpacityAt(ENDING_T.fatherOut - 0.05));
+  assert.ok(g.opacity > 0 && g.prepasses.every((p) => p.visible), '淡出途中预写仍开（内层不透出）');
+  g.setOpacity(0);
+  assert.ok(g.prepasses.every((p) => !p.visible), '淡出到 0：预写关');
+  g.prepassEnabled = false;
+  g.setOpacity(0.55);
+  assert.ok(g.prepasses.every((p) => !p.visible), 'prepassEnabled=false（对比用）');
+  // 再调一次不会给预写网格再挂预写
+  assert.equal(makeGhost(root, 0).prepasses.length, 2);
+  out.push('父亲幽灵深度预写（同骨骼子网格、colorWrite=false、renderOrder 先后、淡入淡出开关）✓');
 }
 
 console.log(`verify-cutscene：\n  ${out.join('\n  ')}`);

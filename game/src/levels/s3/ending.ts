@@ -9,6 +9,7 @@ import { CutsceneClock } from '@/systems/cutscene/CutsceneClock';
 import { CutscenePlayer, sampleShots, shotAt, type CutsceneEnd, type Shot, type ShotKey } from '@/systems/cutscene/CutscenePlayer';
 import { ENDING_MUSIC, ENDING_SKIP_FADE_SEC, type EndingMusic } from '@/systems/audio/endingMusic';
 import { makeSkyLayer, silhouetteColor, type SkyLayerHandle } from '@/render/skyLayer';
+import { makeGhost, type Ghost } from '@/render/ghost';
 import { ATMOSPHERE_PRESETS, type AtmospherePreset } from '@/config/atmosphere';
 import type { SubtitleCue } from '@/ui/Subtitles';
 import {
@@ -69,7 +70,8 @@ export class S3Ending {
   private silHandle: SkyLayerHandle | null = null;
   private fogBase = 0;
   private offs: Array<() => void> = [];
-  private ghostMats: THREE.Material[] = [];
+  /** 父亲幽灵材质（半透明 + 深度预写，裁定 25 ③） */
+  ghost: Ghost | null = null;
   private fatherStarted = false;
   private fatherDone = false;
   private posePlace: 'gaze' | 'sit' | null = null;
@@ -231,7 +233,7 @@ export class S3Ending {
     const want = t - ENDING_T.fatherIn;
     f.update(Math.max(0, want - f.time));
     const op = fatherOpacityAt(t);
-    for (const m of this.ghostMats) m.opacity = op;
+    this.ghost?.setOpacity(op);
   }
 
   private endFather(): void {
@@ -240,22 +242,9 @@ export class S3Ending {
     if (this.fatherStarted) this.h.father?.hide();
   }
 
-  /** 父亲回忆段：材质换成半透明（克隆，不改共享材质）、不投影 */
+  /** 父亲回忆段：材质换成半透明（克隆，不改共享材质）+ 深度预写（自身内层不透出）、不投影；见 render/ghost.ts */
   private makeGhost(f: FatherActor): void {
-    f.model.traverse((o) => {
-      const mesh = o as THREE.Mesh;
-      if (!mesh.isMesh) return;
-      mesh.castShadow = false;
-      const conv = (m: THREE.Material): THREE.Material => {
-        const c = m.clone();
-        c.transparent = true;
-        c.opacity = 0;
-        c.depthWrite = true;
-        this.ghostMats.push(c);
-        return c;
-      };
-      mesh.material = Array.isArray(mesh.material) ? mesh.material.map(conv) : conv(mesh.material);
-    });
+    this.ghost = makeGhost(f.model, 0);
   }
 
   private placeXi(where: 'gaze' | 'sit'): void {
