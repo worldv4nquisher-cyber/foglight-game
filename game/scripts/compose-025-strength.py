@@ -7,9 +7,9 @@ from PIL import Image, ImageDraw, ImageFont
 here = os.path.dirname(os.path.abspath(__file__))
 d = sys.argv[1] if len(sys.argv) > 1 else os.path.join(here, '..', '..', 'docs', 'tasks', 'shots-025', 'strength')
 rep = {}
-p = os.path.join(d, 'shots-025-strength.json')
-if os.path.exists(p):
-    rep = json.load(open(p))
+import glob
+for p in sorted(glob.glob(os.path.join(d, 'shots-025-strength*.json'))):
+    rep = json.load(open(p))  # 部分机位重拍时报告带后缀
 dflt = rep.get('defaultStrength', '?')
 font = None
 for f in ['/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc', '/usr/share/fonts/opentype/noto/NotoSerifCJK-Regular.ttc', '/usr/share/fonts/opentype/noto/NotoSerifCJK-Bold.ttc']:

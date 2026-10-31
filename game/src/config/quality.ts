@@ -123,7 +123,7 @@ export const QUALITY_PRESETS: Record<QualityTier, QualityPreset> = {
     shadowType: { cascades: 4, mapSize: 4096, filter: 'PCSS', contactShadows: true },
     pointLightShadows: { count: 2, mapSize: 1024 },
     ao: { gtao: 'full', baked: true },
-    // 平面反射 RT 倍率 1 → 0.5（037）：强度降到 0.5 后 0.5 / 1 画面差（强度 1 时 box 实测平均 3.2–4.3 灰阶）随混合权重减半；强度 0.5 下的实测见 shots-025/strength/*-k05-q1，
+    // 平面反射 RT 倍率 1 → 0.5（037）：强度降到 0.5 后 0.5 / 1 画面差（强度 1 时 box 实测平均 3.2–4.3 灰阶）；强度 0.5 下实测 2.8–4.0 灰阶（shots-025/strength/*-k05 vs *-k05-q1），肉眼分不出，
     // 倒影本身被波纹扰动、看不出锐度差；1 在 1440p 下是 2560×1440 的整场景第二遍着色，0.5 只要 1/4 像素
     reflections: { ssr: 'full', ssrWetOnly: false, planar: 0.5, probes: false, planarStrength: PLANAR_REFLECTION_STRENGTH },
     dof: 'bokeh',
