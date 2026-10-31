@@ -3785,8 +3785,33 @@ ws.addEventListener('message', (ev) => {
     else res(msg.result);
   } else if (msg.method) for (const l of listeners) l(msg);
 });
+/** 页面渲染进程崩溃（box 内存紧张时被 OOM killer 杀掉）：挂着的 CDP 请求永远不会回，直接全部失败，不要无限等 */
+let crashed = null;
+listeners.push((m) => {
+  if (m.method !== 'Inspector.targetCrashed' && !(m.method === 'Target.targetCrashed')) return;
+  crashed = `页面渲染进程崩溃（${m.method}；多半是 box 内存不足被 OOM 杀掉，环境问题，重跑）`;
+  for (const { rej } of pending.values()) rej(new Error(crashed));
+  pending.clear();
+  // 各项检查里的轮询会把错误吞掉一直等到超时：直接收场退出（退出码 1），由调用方重跑
+  console.log(`  ✗ ${crashed}`);
+  try {
+    chrome.kill('SIGKILL');
+  } catch {
+    /* 已退出 */
+  }
+  setTimeout(() => {
+    try {
+      rmSync(profile, { recursive: true, force: true });
+    } catch {
+      /* */
+    }
+    console.log('冒烟测试失败：页面崩溃');
+    process.exit(1);
+  }, 1000);
+});
 const send = (method, params = {}, sessionId) =>
   new Promise((res, rej) => {
+    if (crashed) return rej(new Error(crashed));
     const id = nextId++;
     pending.set(id, { res, rej });
     ws.send(JSON.stringify({ id, method, params, ...(sessionId ? { sessionId } : {}) }));
@@ -3822,6 +3847,8 @@ listeners.push((m) => {
   }
 });
 await send('Runtime.enable', {}, sessionId);
+await send('Inspector.enable', {}, sessionId);
+await send('Target.setDiscoverTargets', { discover: true });
 await send('Log.enable', {}, sessionId);
 await send('Page.enable', {}, sessionId);
 await send('Page.navigate', { url }, sessionId);
