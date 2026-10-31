@@ -126,6 +126,8 @@ export abstract class LevelScene extends BaseScene {
   /** 1031：同步上层的结果（with-base 同时起播 / aligned 晚到对齐 / missing …） */
   musicUpperResult: string | null = null;
   private pendingExits: SceneExitOptions[] = [];
+  /** 懒加载场景曲有结果（成功 / 失败 / 超时）时 resolve；没有懒加载场景曲 = 立即。下一场景预加载排在它后面 */
+  private musicSettled: Promise<void> = Promise.resolve();
 
   constructor(game: Game, level: LevelDef) {
     super(game);
@@ -199,6 +201,10 @@ export abstract class LevelScene extends BaseScene {
     // 才 loadAudio，解码完再交叉淡化（上一首已停就从 0 淡入）；404 / 超时 → 上一首照常淡出、不放音乐、不报错
     const music = this.level.music;
     if (music !== null && manifest.some((e) => e.key === music && e.type === 'audio' && e.lazy)) {
+      // 下一场景的后台预加载要等场景曲有结果（到了 / 404 / 45 s 超时）再开始：否则 S2 组 39 个文件 24 MB 和场景曲同时下载、
+      // 抢 HTTP 连接 + GLB / KTX2 解析占主线程，2.5 MB 的场景曲在负载下 85 s 才到、撞 45 s 超时整关没配乐（033menu 冒烟诊断）
+      let settle!: () => void;
+      this.musicSettled = new Promise<void>((r) => (settle = r));
       const offFirst = events.on('scene:firstFrame', ({ at }) => {
         offFirst();
         if (this.disposed) return;
@@ -210,11 +216,11 @@ export abstract class LevelScene extends BaseScene {
           void switchLayeredMusicLazy(audio, (k) => this.game.assets.loadAudio(k), music, upper, () => !this.disposed && this.sceneMusicAllowed(), () => this.upperLayerLevel()).then((r) => {
             this.musicLazyResult = r.base;
             this.musicUpperResult = r.upper;
-          });
+          }).finally(settle);
         } else
           void switchMusicLazy(audio, (k) => this.game.assets.loadAudio(k), music, () => !this.disposed && this.sceneMusicAllowed()).then((r) => {
             this.musicLazyResult = r;
-          });
+          }).finally(settle);
       });
       this.cleanups.push(offFirst);
     } else switchMusic(audio, (k) => this.game.assets.getAudio(k), music);
@@ -242,10 +248,12 @@ export abstract class LevelScene extends BaseScene {
     ui.hud.setLocation(t(this.locationId));
     this.afterEnter();
     const est = this.playEstablishing(spawn);
-    // 建立镜头结束（玩家可操作）后再后台预加载下一个场景：不和首场景加载 / 画质检测抢带宽和主线程；
+    // 建立镜头结束（玩家可操作）且懒加载场景曲有结果后，再后台预加载下一个场景：不和首场景加载 / 画质检测 / 场景曲抢带宽和主线程；
     // 画质检测在慢机器上可能拖住建立镜头，所以最晚进场 PRELOAD_FALLBACK_MS 后也开始预加载（重复调用无副作用）
     const preload = (): void => {
-      if (!this.disposed && this.preloadNext) this.game.flow.preloadNext(this.level);
+      void this.musicSettled.then(() => {
+        if (!this.disposed && this.preloadNext) this.game.flow.preloadNext(this.level);
+      });
     };
     void est.then(preload);
     const timer = window.setTimeout(preload, PRELOAD_FALLBACK_MS);
