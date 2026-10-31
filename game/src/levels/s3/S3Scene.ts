@@ -225,6 +225,7 @@ export class S3Scene extends LevelScene {
       },
       alive: () => scenes.current === this,
       lampGlassRoot: () => this.art.root.getObjectByName('env-lighthouse-ch1-s3') ?? null,
+      lampBeam: () => this.puzzles?.lamp.beam ?? null,
       artPoint: (name) => {
         const node = this.art.root.getObjectByName(name);
         if (!node) return null;

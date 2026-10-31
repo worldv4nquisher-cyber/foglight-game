@@ -4,6 +4,8 @@
 // 用法：npm run build && node --import ./scripts/register-ts-paths.mjs scripts/shots-035.mjs
 //   SHOTS_ONLY=03,04      只拍编号匹配的几张
 //   SHOTS_BEAM_COMPARE=1  每张另拍一张 *-beam-before.png（同帧旧灯束），另加 00 点火后 3 s；SHOTS_REPORT 改报告文件名
+//   SHOTS_FAR=1           另拍镜头 02 塔外远景（far-exterior，lens 4 s → fog_open 14 s）t = 8 / 12 s 两张（文件名带 -02-，SHOTS_ONLY=02 时一起拍）
+//   SHOTS_BOOST_COMPARE=1 每张另拍一张 *-boost-before.png：关掉镜头 02 灯束加强（beamBoostEnabled=false），timeScale=0 冻住灯束旋转、同一帧对比
 //   SHOTS_COMPARE=1       每张另拍一张 *-before.png：关掉裁定 25 的两项（父亲深度预写、04 镜头关玻璃反射），同一构建同一帧对比
 import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
@@ -85,6 +87,9 @@ const SHOTS = [
 // 裁定 25：SHOTS_BEAM_COMPARE=1 → 每张另拍一张同帧旧灯束（015 MeshBasic 圆锥，lamp.setStyle('legacy')）`-beam-before`，并加拍点火后 3 s 的探索镜头
 const BEAM_COMPARE = process.env.SHOTS_BEAM_COMPARE === '1';
 if (BEAM_COMPARE) SHOTS.unshift(['s3-ending-00-ignite-beam', 3]);
+// 1031 镜头 02 灯束加强：塔外远景两张（seek 只能往前 → 放在 01 之前）
+if (process.env.SHOTS_FAR === '1') SHOTS.splice(BEAM_COMPARE ? 1 : 0, 0, ['s3-ending-02-far-exterior-t08', 8], ['s3-ending-02-far-exterior-t12', 12]);
+const BOOST_COMPARE = process.env.SHOTS_BOOST_COMPARE === '1';
 const ONLY = (process.env.SHOTS_ONLY ?? '').split(',').map((x) => x.trim()).filter(Boolean);
 const COMPARE = process.env.SHOTS_COMPARE === '1';
 const reportFile = join(OUT, process.env.SHOTS_REPORT ?? (process.env.SHOTS_ONLY || COMPARE ? 'shots-035-r25.json' : 'shots-035.json'));
@@ -139,6 +144,18 @@ try {
         await frames3();
         report.shots.push({ name: `${name}-beam-before`, file: fl, target: +T.toFixed(3), ...st, beam: 'legacy' });
         console.log('  ✓', `${name}-beam-before`);
+      }
+      if (BOOST_COMPARE) {
+        // 冻住灯束旋转（lamp.update 走游戏 dt），关加强拍一张，再开回来
+        const bb = await evaluate(`(() => { __game.time.timeScale = 0; const c = __s3.endingCutscene; c.beamBoostEnabled = false; __s3.puzzles.lamp.beam.setBoost(1); return { boost: __s3.puzzles.lamp.beam.boost, rotY: +__s3.puzzles.lamp.beam.beams.rotation.y.toFixed(4) }; })()`);
+        await frames3();
+        const fb = await shot(`${name}-boost-before.png`);
+        await evaluate(`(() => { __s3.endingCutscene.beamBoostEnabled = true; return 1; })()`);
+        await frames3();
+        const fa = await shot(`${name}.png`);
+        const ba = await evaluate(`(() => { const r = { boost: __s3.puzzles.lamp.beam.boost, rotY: +__s3.puzzles.lamp.beam.beams.rotation.y.toFixed(4) }; __game.time.timeScale = 1; return r; })()`);
+        report.shots.push({ name: `${name}-boost-before`, file: fb, target: +T.toFixed(3), ...st, beam: bb }, { name: `${name}-boost-after`, file: fa, target: +T.toFixed(3), ...st, beam: ba });
+        console.log('  ✓', `${name}-boost-before / after`, JSON.stringify(bb), JSON.stringify(ba));
       }
       if (COMPARE) {
         const before = await evaluate(FIX(false));

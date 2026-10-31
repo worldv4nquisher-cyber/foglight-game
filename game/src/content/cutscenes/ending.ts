@@ -62,6 +62,18 @@ export const JOURNAL_ENTRY_SEC = 6.0;
 /** 眺望站位往塔心退多少（m）：父亲根在汐前 0.48 m，美术站位离矮墙内面只有 0.45 m，不退父亲背会插进矮墙（test:father 的 verify-hoh-035 量） */
 export const GAZE_BACKOFF = 0.2;
 
+/**
+ * 制作人裁定（1031，035 镜头 02）：点灯后第一个镜头（塔外远景 far-exterior，lens 4 s → fog_open 14 s）灯束太淡，
+ * 要让人感觉到「光出去了」。只在这个镜头里把体积灯束强度乘 BEAM_BOOST_02.k（只乘峰值亮度：软边 / 沿长度淡出 / 侧面淡化都不变），
+ * 倍率开关落在两个剪辑点上（lens 从玩家镜头切进远景、fog_open 切雾口），段内恒定 → 画面上没有跳变；
+ * 灯室辉光（LAMP_GLOW，07 后拉里看得到的那团）不受影响；别的镜头 = 1。
+ */
+export const BEAM_BOOST_02 = Object.freeze({ k: 2.4, range: Object.freeze([ENDING_T.lens, ENDING_T.fogOpen] as const) });
+/** 演出时刻 t 的灯束强度倍率 */
+export function beamBoostAt(t: number): number {
+  return t >= BEAM_BOOST_02.range[0] && t < BEAM_BOOST_02.range[1] ? BEAM_BOOST_02.k : 1;
+}
+
 export const GLASS_REFLECTION_OFF: readonly [number, number] = Object.freeze([ENDING_T.regaze, ENDING_T.sitWrite] as const);
 /** 灯室玻璃镜面倍率：1 = 原样，0 = 关 */
 export function glassReflectionAt(t: number): number {

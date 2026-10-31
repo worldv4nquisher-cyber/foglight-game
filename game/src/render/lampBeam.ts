@@ -301,6 +301,17 @@ export class LampBeam extends THREE.Group {
     if (!on) this.glowK = 0;
   }
 
+  private _boost = 1;
+  /** 强度倍率（035 镜头 02 用；只乘峰值亮度，辉光不变） */
+  get boost(): number {
+    return this._boost;
+  }
+  setBoost(k: number): void {
+    if (k === this._boost) return;
+    this._boost = k;
+    this.material.uniforms.uStrength!.value = LAMP_BEAM.strength * k;
+  }
+
   setColor(c: THREE.ColorRepresentation): void {
     (this.material.uniforms.uColor!.value as THREE.Color).set(c);
   }

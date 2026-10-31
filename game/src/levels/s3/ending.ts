@@ -9,6 +9,7 @@ import { CutsceneClock } from '@/systems/cutscene/CutsceneClock';
 import { CutscenePlayer, sampleShots, shotAt, type CutsceneEnd, type Shot, type ShotKey } from '@/systems/cutscene/CutscenePlayer';
 import { ENDING_MUSIC, ENDING_SKIP_FADE_SEC, type EndingMusic } from '@/systems/audio/endingMusic';
 import { makeSkyLayer, silhouetteColor, type SkyLayerHandle } from '@/render/skyLayer';
+import type { LampBeam } from '@/render/lampBeam';
 import { makeGhost, type Ghost } from '@/render/ghost';
 import { makeSpecularGate, type SpecularGate } from '@/render/specularGate';
 import { ATMOSPHERE_PRESETS, type AtmospherePreset } from '@/config/atmosphere';
@@ -21,6 +22,7 @@ import {
   FOG_OPEN_K,
   fadeAt,
   fatherOpacityAt,
+  beamBoostAt,
   fogOpenAt,
   glassReflectionAt,
   GAZE_BACKOFF,
@@ -55,6 +57,8 @@ export interface S3EndingHost {
   setAtmosphere(a: AtmospherePreset): void;
   /** 灯室玻璃所在的美术根（env-lighthouse-ch1-s3；白盒 / art=0 时 null） */
   lampGlassRoot?: () => THREE.Object3D | null;
+  /** S3 体积灯束（镜头 02 强度倍率；白盒没有时 null） */
+  lampBeam?: () => LampBeam | null;
   /** 美术节点在 S3 局部的位置（没有 / 白盒时 null）：日志 socket 等跟 GLB 走，不硬写 */
   artPoint?: (name: string) => THREE.Vector3 | null;
   alive(): boolean;
@@ -87,6 +91,8 @@ export class S3Ending {
   readonly glass: SpecularGate;
   /** 冒烟 / 截图对比：false = 不按 cue 关玻璃反射（看改之前的样子） */
   glassGateEnabled = true;
+  /** 冒烟 / 截图对比：false = 镜头 02 不加强灯束（看改之前的样子） */
+  beamBoostEnabled = true;
   private fatherStarted = false;
   private fatherDone = false;
   private posePlace: 'gaze' | 'sit' | null = null;
@@ -173,6 +179,7 @@ export class S3Ending {
 
   dispose(): void {
     for (const off of this.offs.splice(0)) off();
+    this.h.lampBeam?.()?.setBoost(1);
     this.cam.removeFromParent();
     this.silhouette?.removeFromParent();
   }
@@ -223,6 +230,7 @@ export class S3Ending {
     }
     h.game.ui.fade.set(fadeAt(t));
     this.glass.value = this.glassGateEnabled ? glassReflectionAt(t) : 1;
+    this.h.lampBeam?.()?.setBoost(this.beamBoostEnabled ? beamBoostAt(t) : 1);
   }
 
   private stepXi(t: number): void {

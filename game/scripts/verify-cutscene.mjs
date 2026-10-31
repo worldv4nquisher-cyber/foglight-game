@@ -18,9 +18,12 @@ import {
   xiPoseAt,
   glassReflectionAt,
   GLASS_REFLECTION_OFF,
+  BEAM_BOOST_02,
+  beamBoostAt,
   OVER_SHOULDER,
   overShoulderKeys,
 } from '@/content/cutscenes/ending';
+import { LampBeam, LAMP_BEAM } from '@/render/lampBeam';
 import { makeGhost, GHOST_RENDER_ORDER } from '@/render/ghost';
 import { makeSpecularGate, SPECULAR_GATE_GLSL } from '@/render/specularGate';
 import { ShaderLib } from 'three';
@@ -382,6 +385,26 @@ function makePlayer(src, extra = {}) {
   // 再调一次不会给预写网格再挂预写
   assert.equal(makeGhost(root, 0).prepasses.length, 2);
   out.push('父亲幽灵深度预写（同骨骼子网格、colorWrite=false、renderOrder 先后、淡入淡出开关）✓');
+}
+
+// ---- 12b. 1031 制作人裁定：镜头 02（far-exterior，lens → fog_open）灯束加强，倍率开关落在两个剪辑点，段内恒定
+{
+  assert.deepEqual([...BEAM_BOOST_02.range], [ENDING_T.lens, ENDING_T.fogOpen]);
+  assert.ok(BEAM_BOOST_02.k > 1 && BEAM_BOOST_02.k <= 3, '适度加强（不抢剪影）');
+  assert.equal(beamBoostAt(ENDING_T.lens - 0.001), 1, '点灯后玩家镜头不变');
+  for (const t of [ENDING_T.lens, 6, 9.5, ENDING_T.fogOpen - 0.001]) assert.equal(beamBoostAt(t), BEAM_BOOST_02.k, `t=${t} 段内恒定`);
+  for (const t of [ENDING_T.fogOpen, ENDING_T.silhouette + 1, 36, 51.2, 91]) assert.equal(beamBoostAt(t), 1, `t=${t} 别的镜头不变`);
+  const b = new LampBeam(0xffb25e, { glow: new THREE.Texture() });
+  b.setOn(true);
+  b.update(10);
+  const glow0 = b.glow.material.uniforms.uIntensity.value;
+  b.setBoost(BEAM_BOOST_02.k);
+  b.update(0.016);
+  assert.ok(Math.abs(b.material.uniforms.uStrength.value - LAMP_BEAM.strength * BEAM_BOOST_02.k) < 1e-9);
+  assert.equal(b.glow.material.uniforms.uIntensity.value, glow0, '辉光不跟倍率走（07 不变）');
+  b.setBoost(1);
+  assert.equal(b.material.uniforms.uStrength.value, LAMP_BEAM.strength);
+  out.push(`镜头 02 灯束 ×${BEAM_BOOST_02.k}（${ENDING_T.lens}–${ENDING_T.fogOpen} s，切点开关，辉光不变）✓`);
 }
 
 // ---- 12. 裁定 25 ② 04 镜头关灯室玻璃反射
