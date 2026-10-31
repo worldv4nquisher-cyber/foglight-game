@@ -4,6 +4,8 @@
  *   PW_MODULE=/workspace/pw-tools/node_modules/playwright/index.mjs PLAYWRIGHT_BROWSERS_PATH=/workspace/pw-browsers \
  *   XB_BROWSER=firefox|webkit|chromium npm run smoke:xb
  * 用 dist（vite preview），?smoke=1 暴露 __game；任一 console.error / 未捕获异常记为失败（与 smoke-browser 同口径）。
+ * 手机模拟：XB_DEVICE='iPhone 15'（webkit）/ 'Pixel 7'（chromium，XB_CHROMIUM_PATH 指系统 Chrome）——只模拟视口 / UA / 触摸 / DPR，
+ *   GPU、内存、iOS 真 Safari 的限制都模拟不了；只看「能不能打开、给没给提示、能不能跑」。
  * WebKit 只是 Safari 的同引擎近似（Linux WPE/GTK 端口，GPU / 媒体栈 / 字体都不同），结论不能代替真 Safari。
  */
 import { mkdtempSync, rmSync, statSync } from 'node:fs';
@@ -16,7 +18,8 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const which = process.env.XB_BROWSER ?? 'firefox';
 const pw = await import(pathToFileURL(process.env.PW_MODULE ?? 'playwright').href);
 const LOAD_MS = Number(process.env.XB_LOAD_MS ?? 240000);
-const shotDir = process.env.XB_SHOTS ?? mkdtempSync(join(tmpdir(), `m7-xb-${which}-`));
+const tag = `${which}${process.env.XB_DEVICE ? '-' + process.env.XB_DEVICE.replace(/\W+/g, '') : ''}`;
+const shotDir = process.env.XB_SHOTS ?? mkdtempSync(join(tmpdir(), `m7-xb-${tag}-`));
 
 const server = await preview({ root, preview: { host: '127.0.0.1', port: 0, strictPort: false, open: false }, logLevel: 'silent' });
 const port = server.httpServer.address().port;
@@ -33,8 +36,10 @@ const step = (name, extra = '') => {
   console.log('  ' + s);
 };
 try {
-  browser = await pw[which].launch({ headless: true, timeout: 60000 });
-  const ctx = await browser.newContext({ viewport: { width: 1280, height: 720 } });
+  const dev = process.env.XB_DEVICE ? pw.devices[process.env.XB_DEVICE] : null;
+  if (process.env.XB_DEVICE && !dev) throw new Error('playwright 没有设备 ' + process.env.XB_DEVICE);
+  browser = await pw[which].launch({ headless: true, timeout: 60000, ...(which === 'chromium' && process.env.XB_CHROMIUM_PATH ? { executablePath: process.env.XB_CHROMIUM_PATH, args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'] } : {}) });
+  const ctx = await browser.newContext(dev ? { ...dev } : { viewport: { width: 1280, height: 720 } });
   const page = await ctx.newPage();
   page.on('console', (m) => {
     if (m.type() === 'error') errors.push('console.error: ' + m.text());
@@ -49,7 +54,7 @@ try {
     }
   };
   const shot = async (name) => {
-    const f = join(shotDir, `${which}-${name}.png`);
+    const f = join(shotDir, `${tag}-${name}.png`);
     await page.screenshot({ path: f, timeout: 60000 });
     return `${name}.png ${(statSync(f).size / 1024).toFixed(0)}KB`;
   };
@@ -98,7 +103,8 @@ try {
   step('主菜单', await shot('menu'));
   const e0 = await env();
   // ---- 新游戏 → S1 首帧
-  await page.click('.main-menu [data-act="new"]', { timeout: 20000 });
+  if (dev) await page.tap('.main-menu [data-act="new"]', { timeout: 20000 });
+  else await page.click('.main-menu [data-act="new"]', { timeout: 20000 });
   await until(() => window.__game.scenes.current?.name === 's1-ebb-shore', LOAD_MS, '新游戏没进 S1');
   await until(() => window.__game.input.context === 'explore' && !window.__game.flow.transitioning, LOAD_MS, 'S1 没回到可操作');
   // 实际出帧：等主循环再走 30 个 fixed tick
@@ -106,6 +112,7 @@ try {
   await until(`window.__game.time.fixedTick > ${tick0} + 30`, 120000, 'S1 主循环不走');
   step('S1 首帧可操作', await shot('s1'));
   const fmt = await texFormats();
+  const touchUi = await page.evaluate(() => ({ touchControls: !!document.querySelector('.touch-controls'), touchPoints: navigator.maxTouchPoints, coarse: matchMedia('(pointer: coarse)').matches, hudPrompt: document.querySelector('.hud-prompt')?.textContent ?? null, visibleText: [...document.querySelectorAll('.hud *, .toast, .notice, [role="alert"]')].filter((e) => e.checkVisibility?.() ?? true).map((e) => e.textContent.trim()).filter(Boolean).slice(0, 6) }));
   const audio1 = await page.evaluate(() => ({ state: window.__game.audio.context?.state, music: window.__game.audio.musicKey ?? null }));
   // ---- S1 出口 → S2 → 出口 → S3（「外 → 内」踩出口；不解谜，同 010）
   const exit = async (next) => {
@@ -130,11 +137,12 @@ try {
   // ---- 刷新 → 继续（存档在本浏览器能读回）
   await page.goto(base, { timeout: 60000 });
   await until(() => !!document.querySelector('.main-menu [data-act="continue"]')?.getClientRects().length, LOAD_MS, '刷新后没有「继续」');
-  await page.click('.main-menu [data-act="continue"]', { timeout: 20000 });
+  if (dev) await page.tap('.main-menu [data-act="continue"]', { timeout: 20000 });
+  else await page.click('.main-menu [data-act="continue"]', { timeout: 20000 });
   await until(() => window.__game.scenes.current?.name === 's3-lighthouse' && window.__game.input.context === 'explore' && !window.__game.flow.transitioning, LOAD_MS, '继续没回 S3');
   step('刷新 → 继续回 S3');
   const perf = await page.evaluate(() => ({ fps: window.__game.time?.fps ?? null, mem: performance.memory?.usedJSHeapSize ?? null }));
-  console.log(JSON.stringify({ browser: which, version: browser.version(), env: e0, texFormats: fmt, audioAfterClick: audio1, perf }, null, 1));
+  console.log(JSON.stringify({ browser: which, version: browser.version(), device: process.env.XB_DEVICE ?? null, touchUi, env: e0, texFormats: fmt, audioAfterClick: audio1, perf }, null, 1));
 } catch (err) {
   errors.push('FAIL: ' + (err?.message ?? err));
 } finally {
