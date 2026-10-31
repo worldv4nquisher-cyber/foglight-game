@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { ATMO028 } from '@/config/atmosphere028';
 import type { PlanarReflection } from '@/render/Reflections';
+import { SEABED, seabedTexture, type SeabedMap } from './seabed';
 
 /** 028 水面贴图 key（manifest common） */
 export const WATER_NORMAL_KEY = ATMO028.textures.waterNormal;
@@ -45,6 +46,12 @@ export class Water extends THREE.Mesh<THREE.PlaneGeometry, THREE.MeshStandardMat
     uReflK: { value: 0 },
     uFres: { value: new THREE.Vector2(0.32, 0.92) },
     uDistort: { value: 0.035 },
+    // 1031 S1 沙斑（裁定 23 a）：海床高度图压浪（没挂 = uSeabedOn 0，浪不变）
+    tSeabed: { value: null as THREE.Texture | null },
+    uSeabedRect: { value: new THREE.Vector4(0, 0, 1, 1) },
+    uSeabedOn: { value: 0 },
+    uSeabedEmpty: { value: SEABED.empty as number },
+    uShoal: { value: new THREE.Vector2(SEABED.shoal[0], SEABED.shoal[1]) },
   };
   /** 平板半边长（m，025 倒影视锥判定） */
   readonly halfExtent: number;
@@ -72,12 +79,24 @@ export class Water extends THREE.Mesh<THREE.PlaneGeometry, THREE.MeshStandardMat
     material.onBeforeCompile = (shader) => {
       shader.uniforms.uTime = this.uniforms.uTime;
       shader.uniforms.uWaveScale = this.uniforms.uWaveScale;
+      for (const k of ['tSeabed', 'uSeabedRect', 'uSeabedOn', 'uSeabedEmpty', 'uShoal'] as const) shader.uniforms[k] = this.uniforms[k];
       shader.vertexShader = shader.vertexShader
         .replace(
           '#include <common>',
           /* glsl */ `#include <common>
           uniform float uTime;
           uniform float uWaveScale;
+          uniform sampler2D tSeabed;
+          uniform vec4 uSeabedRect;
+          uniform float uSeabedOn, uSeabedEmpty;
+          uniform vec2 uShoal;
+          // 浅水压浪：水深 = 水位（模型原点 y）− 海床；露出来的沙上 0，水深 ≥ uShoal.y 全振幅
+          float shoal(vec2 wxz) {
+            if (uSeabedOn < 0.5) return 1.0;
+            vec2 uv = (wxz - uSeabedRect.xy) * uSeabedRect.zw;
+            float bed = (uv.x < 0.0 || uv.y < 0.0 || uv.x > 1.0 || uv.y > 1.0) ? uSeabedEmpty : textureLod(tSeabed, uv, 0.0).r;
+            return smoothstep(uShoal.x, uShoal.y, modelMatrix[3].y - bed);
+          }
           // dir.xy, 振幅, 波长, 速度
           vec3 waveSum(vec2 p, out vec2 grad) {
             const int N = 4;
@@ -102,6 +121,9 @@ export class Water extends THREE.Mesh<THREE.PlaneGeometry, THREE.MeshStandardMat
           '#include <beginnormal_vertex>',
           /* glsl */ `vec2 wGrad;
           vec3 wOffset = waveSum(position.xz, wGrad);
+          float wShoal = shoal((modelMatrix * vec4(position, 1.0)).xz);
+          wOffset *= wShoal;
+          wGrad *= wShoal;
           vec3 objectNormal = normalize(vec3(-wGrad.x, 1.0, -wGrad.y));
           #ifdef USE_TANGENT
             vec3 objectTangent = vec3( tangent.xyz );
@@ -192,6 +214,22 @@ export class Water extends THREE.Mesh<THREE.PlaneGeometry, THREE.MeshStandardMat
           gl_FragColor.rgb = mix(gl_FragColor.rgb, refl * 0.9, fr * uReflK);
         }`,
       );
+  }
+
+  /** 1031 S1 沙斑（裁定 23 a）：挂海床高度图 → 顶点里按水深压浪；null = 取消 */
+  setSeabed(map: SeabedMap | null): void {
+    const u = this.uniforms;
+    u.tSeabed.value?.dispose();
+    u.tSeabed.value = map ? seabedTexture(map) : null;
+    u.uSeabedOn.value = map ? 1 : 0;
+    if (map) {
+      u.uSeabedRect.value.set(map.minX, map.minZ, 1 / map.sizeX, 1 / map.sizeZ);
+      u.uSeabedEmpty.value = map.empty;
+    }
+  }
+
+  get seabedOn(): boolean {
+    return this.uniforms.uSeabedOn.value > 0;
   }
 
   /** 025：挂上平面反射（PlanarReflection 直接写本材质的 uniform 对象，不重新编译）；null = 关 */

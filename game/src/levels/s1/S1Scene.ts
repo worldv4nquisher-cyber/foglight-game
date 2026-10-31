@@ -17,6 +17,7 @@ import { buildS1Greybox, defaultGreyboxMaterials, type S1Greybox } from './greyb
 import { buildS1Puzzles, type S1Puzzles } from './puzzles';
 import { buildS1Art, type S1Art } from './art';
 import { buildFogCards028, type FogCards028 } from '@/world/FogCards028';
+import { bakeSeabed, type SeabedMap } from '@/world/seabed';
 import { buildS1Dressing, type S1Dressing } from './dressing';
 import { interactNode } from '../dressing';
 import type { AtmospherePreset } from '@/config/atmosphere';
@@ -73,9 +74,36 @@ export class S1Scene extends LevelScene {
     this.fog028 = buildFogCards028(this.game.assets);
     if (this.fog028) this.scene.add(this.fog028);
     this.setGreyboxVisible(!this.art.loaded || greyboxVisible);
+    this.bakeSeabed();
 
     this.addExit({ target: 's2', entry: 'from-s1', center: v3(S1.exitToS2), radius: 1.1 });
   }
+
+  /**
+   * 1031 S1 沙斑（裁定 23 a 方案）：用美术海床 env-tidal-flat-s1 LOD0 烘一张高度图（0.25 m 格）挂到主海面，
+   * 顶点里按「水位 − 海床」压浪，露出来的沙上浪峰不再冒出来。?seabed=0 关（对比 / 排查用）。没有美术 = 不挂（白盒滩地照旧）。
+   */
+  private bakeSeabed(): void {
+    if (!this.water || !this.art.loaded) return;
+    if (typeof location !== 'undefined' && new URLSearchParams(location.search).get('seabed') === '0') return;
+    const flat = this.art.root.getObjectByName('env-tidal-flat-s1');
+    if (!flat) return;
+    const meshes: THREE.Mesh[] = [];
+    flat.traverse((o) => {
+      if ((o as THREE.Mesh).isMesh && /_lod0/.test(o.name)) meshes.push(o as THREE.Mesh);
+    });
+    if (!meshes.length) return;
+    const t0 = performance.now();
+    const map = bakeSeabed(meshes);
+    if (!map) return;
+    this.water.setSeabed(map);
+    this.seabed = { map, ms: performance.now() - t0 };
+    const water = this.water;
+    this.cleanups.push(() => water.setSeabed(null));
+  }
+
+  /** 冒烟 / 量测：海床高度图（null = 没挂） */
+  seabed: { map: SeabedMap; ms: number } | null = null;
 
   /** 白盒外观开关（碰撞不受影响；空气墙始终不可见） */
   setGreyboxVisible(on: boolean): void {

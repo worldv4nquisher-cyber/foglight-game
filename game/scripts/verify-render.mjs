@@ -19,6 +19,7 @@ import { makeSkyLayer, SKY_DEPTH } from '@/render/skyLayer';
 import { applyObjectFog, fogExp2Factor, OBJECT_FOG_GLSL, readFogHint } from '@/render/objectFog';
 import { applyMaterialHints } from '@/render/materialHints';
 import { PlanarReflection, reflectionFade, reflectionOverride } from '@/render/Reflections';
+import { bakeSeabed, sampleSeabed, SEABED, shoalFactor } from '@/world/seabed';
 import { QUALITY_PRESETS } from '@/config/quality';
 import { gameplay } from '@/config/gameplay';
 import { artLanternFrame } from '@/levels/s2/lantern';
@@ -1263,6 +1264,64 @@ await test('025 水面平面反射（纯数学，假 renderer）：贴近水面 
   r.dispose();
   return `淡入 0.05–0.6 m · 斜裁剪 / uv 一致 · 跳过 below / frustum / off`;
 });
+
+await test('1031 S1 沙斑（裁定 23 a）：海床高度图烘焙（合成斜坡）双线性采样误差 < 1 cm；压浪系数 0.375·s(d) < d（浪峰不高过海床）、露沙 0', () => {
+  // 合成：x∈[0,10]、z∈[0,6] 的斜面 y = 0.1·x − 0.5（两个三角形）
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute([0, -0.5, 0, 10, 0.5, 0, 10, 0.5, 6, 0, -0.5, 0, 10, 0.5, 6, 0, -0.5, 6], 3));
+  const m = new THREE.Mesh(g);
+  const map = bakeSeabed([m], { cell: 0.25 });
+  assert.ok(map && map.res.x === 40 && map.res.z === 24, JSON.stringify(map?.res));
+  let worst = 0;
+  for (let x = 0.2; x < 9.8; x += 0.37) for (let z = 0.2; z < 5.8; z += 0.41) worst = Math.max(worst, Math.abs(sampleSeabed(map, x, z) - (0.1 * x - 0.5)));
+  assert.ok(worst < 0.01, `误差 ${worst}`);
+  assert.equal(sampleSeabed(map, -1, 3), SEABED.empty, '范围外 = 深水');
+  for (let d = -1; d <= 2; d += 0.01) {
+    const a = 0.375 * shoalFactor(d);
+    if (d <= 0) assert.equal(a, 0, `露沙 d=${d}`);
+    else assert.ok(a < d, `d=${d.toFixed(2)} 浪峰 ${a.toFixed(3)}`);
+  }
+  assert.equal(shoalFactor(SEABED.shoal[1]), 1);
+  return `res ${map.res.x}×${map.res.z} · 误差 ${(worst * 1000).toFixed(1)} mm`;
+});
+
+if (hasArt) {
+  await test('1031 S1 沙斑（裁定 23 a）：env-tidal-flat-s1 LOD0 烘的高度图 = 射线海床（新礁石南侧 x 6–12、z −6…−11，±3 cm）；退潮水位 −0.6 时这片露沙压浪系数 0（原来浪峰 −0.225 会盖过 −0.30 的沙面）', async () => {
+    const { S1 } = await import('@/levels/s1/layout');
+    const flat = await loadGlb('models/env/env-tidal-flat-s1.glb');
+    const n = S1.artNodes['env-tidal-flat-s1'];
+    flat.position.set(...n.translation);
+    flat.rotation.y = n.rotationY;
+    flat.updateMatrixWorld(true);
+    const meshes = [];
+    flat.traverse((o) => { if (o.isMesh && /_lod0/.test(o.name)) meshes.push(o); });
+    const t0 = performance.now();
+    const map = bakeSeabed(meshes);
+    const ms = performance.now() - t0;
+    const rc = new THREE.Raycaster();
+    const down = new THREE.Vector3(0, -1, 0);
+    for (const o of meshes) o.material.side = THREE.DoubleSide;
+    const H = (x, z) => { rc.set(new THREE.Vector3(x, 20, z), down); const h = rc.intersectObjects(meshes, false); return h.length ? Math.max(...h.map((q) => q.point.y)) : NaN; };
+    let worst = 0, exposed = 0, flooded = 0, nPts = 0;
+    for (let x = 6.1; x <= 12; x += 0.7) {
+      for (let z = -6.1; z >= -11; z -= 0.7) {
+        const h = H(x, z);
+        if (Number.isNaN(h)) continue;
+        nPts++;
+        const b = sampleSeabed(map, x, z);
+        worst = Math.max(worst, Math.abs(b - h));
+        if (b > -0.6) {
+          exposed++;
+          if (b < -0.225) flooded++;
+          assert.equal(shoalFactor(-0.6 - b), 0, `(${x.toFixed(1)}, ${z.toFixed(1)}) 露沙应压平`);
+        }
+      }
+    }
+    assert.ok(nPts > 40, `点数 ${nPts}`);
+    assert.ok(worst < 0.03, `高度图 vs 射线 ${worst}`);
+    return `${map.res.x}×${map.res.z}（${map.sizeX.toFixed(0)}×${map.sizeZ.toFixed(0)} m）· ${map.triangles} 三角形 · ${ms.toFixed(0)} ms · 抽样 ${nPts} 点误差 ≤ ${(worst * 100).toFixed(1)} cm · 露沙 ${exposed} 点（其中 ${flooded} 点原来会被浪峰盖住）全部压平`;
+  });
+}
 
 let failed = 0;
 for (const [name, err, out] of results) {
