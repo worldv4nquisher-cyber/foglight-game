@@ -472,7 +472,7 @@ export abstract class LevelScene extends BaseScene {
     this.rain?.setTier(q.tier, q.rainParticles.count);
     this.qualityTier = q.tier;
     this.water?.setRipples(ATMO028.rainTiers[q.tier].ripples);
-    // 025：反射分辨率 = 画质档 reflections.planar（极致 1.0 / 高 0.5 / 标准 0.25）；?reflect= 调试覆盖
+    // 025：反射分辨率 = 画质档 reflections.planar（极致 0.5 / 高 0.5 / 标准 0.25；极致 1 → 0.5 见 0f42f4a）；?reflect= 调试覆盖
     if (this.reflection) {
       this.reflection.scale = this.reflectOverride ?? q.reflections.planar;
       // 强度 = 画质配置 reflections.planarStrength（三档共用 PLANAR_REFLECTION_STRENGTH）；?reflectK=0~1 调试覆盖

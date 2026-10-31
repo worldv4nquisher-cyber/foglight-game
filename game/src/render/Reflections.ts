@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 
 /**
- * v0.1-025 水面平面反射（style-guide §7.5 / §8 `reflections.planar`：极致 1.0× / 高 0.5× / 标准 0.25×）。
+ * v0.1-025 水面平面反射（style-guide §7.5 / §8 `reflections.planar`：极致 0.5× / 高 0.5× / 标准 0.25×；
+ * 025 交付时极致 1.0×，0f42f4a 改 0.5×，见 src/config/quality.ts）。
  *
  * 做法（同 three/examples Reflector 的镜像相机，但不自带材质：Water 在自己的 MeshStandardMaterial 里采样）：
  * - 镜像相机 = 主相机关于水平面 y = level（平均水位，不含浪）的镜像；投影 = 主相机投影 + Lengyel 斜裁剪（近平面换成水面，
