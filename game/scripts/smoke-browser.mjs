@@ -3667,6 +3667,7 @@ CHECKS.push({
       const st = await evaluate(`(() => { const a = __game.audio, em = __s3.endingMusic; const l = a.musicLog.filter((x) => x.key === 'mus-ending-ch1' && x.op === 'play').at(-1); return { res: em.result, k: a.musicKey, l, ig: em.ignitedAt, startAt: a.musicStartAt, now: a.context.currentTime, fails: __game.assets.lazyAudioFailures.map((f) => f.key + ':' + f.error) }; })()`);
       if (st.res !== 'late' || st.k !== 'mus-ending-ch1' || !st.l) throw new Error('晚到应补位起播（result=late）' + JSON.stringify(st));
       // 补位 offset = 起播时刻 − 点燃时刻（音频时钟）→ 文件 0 s 仍对齐点燃那一刻：startAt = ignitedAt
+      // batch17 D3：offset 与起播时刻出自同一次 ctx.currentTime 读数（endingMusic → playMusic opts.at），容差 1e-6 保留
       const off = st.l.offset ?? 0;
       if (Math.abs(off - (st.l.at - st.ig)) > 1e-6) throw new Error(`offset ${off} ≠ 起播 ${st.l.at} − 点燃 ${st.ig}`);
       if (Math.abs(st.startAt - st.ig) > 1e-6) throw new Error(`曲子 0 s 时刻 ${st.startAt} ≠ 点燃 ${st.ig}`);

@@ -80,7 +80,7 @@ export class EndingMusic {
     if (this.ignitedAt !== null) return;
     this.ignitedAt = this.audio.audioTime;
     if (this.buffer) {
-      this.start(0);
+      this.start(0, this.ignitedAt);
       return;
     }
     // 还没到：场景曲照样淡出，结尾曲到了再补位
@@ -90,13 +90,15 @@ export class EndingMusic {
       if (!this.alive()) return void (this.result = 'stale');
       if (this.skipped) return void (this.result = 'skipped');
       if (!b) return void (this.result = 'missing');
-      const offset = this.audio.audioTime - (this.ignitedAt ?? 0);
+      // D3：offset 和起播时刻用同一次音频时钟读数（原来 playMusic 里再读一次，负载下差一个 512 采样渲染块）
+      const now = this.audio.audioTime;
+      const offset = now - (this.ignitedAt ?? 0);
       if (offset >= ENDING_CUES.fade_out) return void (this.result = 'too-late');
-      this.start(offset);
+      this.start(offset, now);
     });
   }
 
-  private start(offset: number): void {
+  private start(offset: number, at: number): void {
     const b = this.buffer;
     if (!b) return;
     const late = offset > 0;
@@ -106,6 +108,7 @@ export class EndingMusic {
       fadeOutPrev: ENDING_SCENE_FADE_SEC,
       fadeIn: late ? ENDING_LATE_FADE_IN_SEC : 0,
       offset,
+      at,
       gain: musicTrackGain(ENDING_MUSIC),
     });
     this.result = late ? 'late' : 'play';

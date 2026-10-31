@@ -930,6 +930,26 @@ test('1031 结尾曲 EndingMusic：manifest s3 lazy；预取后 lighthouse:ignit
     assert.deepEqual([e.started, e.offset], [53.5, 3.5]);
     assert.equal(a.musicStartAt, 50, '补位后文件 0 s 仍对齐点燃时刻');
   }
+  // 2b) batch17 D3：负载下 AudioContext 每读一次走一个渲染块（512 采样 @48k）→ offset 和起播时刻仍出自同一次读数
+  {
+    const { ctx, a, ev } = mk();
+    let release;
+    const em = new EndingMusic(a, ev, () => new Promise((r) => (release = r)));
+    void em.prefetch();
+    await Promise.resolve();
+    ctx.currentTime = 0.08533;
+    ev.emit('lighthouse:ignited', undefined);
+    let t = 14.45333 - 512 / 48000;
+    Object.defineProperty(ctx, 'currentTime', { get: () => (t += 512 / 48000), set: (v) => (t = v), configurable: true });
+    release(buf);
+    for (let i = 0; i < 5; i++) await Promise.resolve();
+    assert.equal(em.result, 'late');
+    const l = a.musicLog.filter((x) => x.key === ENDING_MUSIC && x.op === 'play').at(-1);
+    assert.ok(Math.abs(l.offset - (l.at - em.ignitedAt)) < 1e-9, `offset ${l.offset} = 起播 ${l.at} − 点燃 ${em.ignitedAt}（batch17 冒烟差 512 采样）`);
+    assert.ok(Math.abs(a.musicStartAt - em.ignitedAt) < 1e-9, '文件 0 s 对齐点燃时刻');
+    const e = ctx.sources.at(-1);
+    assert.equal(e.started, l.at, 'source.start 用同一时刻');
+  }
   // 3) 缺失 / 过了淡出点 / 已跳过
   for (const [load, at, skip, want] of [[async () => null, 0, false, 'missing'], [null, 96, false, 'too-late'], [null, 1, true, 'skipped']]) {
     const { ctx, a, ev } = mk();

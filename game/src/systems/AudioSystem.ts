@@ -53,6 +53,12 @@ export interface MusicOptions {
    */
   offset?: number;
   /**
+   * batch17 D3：起播用的 AudioContext 时刻（默认这里再读一次 ctx.currentTime）。调用方已经用某次读数算了 offset 时传同一个值，
+   * 负载下两次读数之间 AudioContext 会走一个渲染块（512 采样 ≈ 10.7 ms），offset 和起播时刻就对不上。
+   * 只能是「刚读到的当前时刻」，不能用来排程未来起播。
+   */
+  at?: number;
+  /**
    * 1031：同步层——和底层**同一 AudioContext 时刻、同一 offset** start，同为 loop（S3 两层）。
    * 时长必须和底层一样（样本对齐循环），不一样的层丢掉不放。层增益用 setMusicLayerGain 改；层永远不单独 seek / 重启。
    */
@@ -283,7 +289,7 @@ export class AudioSystem {
     const split = opts.fadeOutPrev !== undefined;
     const fade = Math.max(0, (split ? opts.fadeIn : prev ? opts.crossfade : opts.fadeIn) ?? 0);
     const prevFade = split ? Math.max(0, opts.fadeOutPrev ?? 0) : fade;
-    const now = ctx.currentTime;
+    const now = opts.at ?? ctx.currentTime;
     const duration = buffer.duration;
     let offset = Math.max(0, opts.offset ?? 0);
     if (loop && duration > 0) offset %= duration;
