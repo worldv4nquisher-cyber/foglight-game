@@ -49,7 +49,10 @@ await send('Runtime.enable', {}, sessionId);
 await send('Page.enable', {}, sessionId);
 const setView = (w, h) => send('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: 1, mobile: false }, sessionId);
 const SMALL = [480, 270];
-const EVAL_MS = 600000;
+// 超时可配（裁定 25 接手：box 负载高时 seek 曾卡 10 min）：SHOTS_EVAL_MS 单次 evaluate、SHOTS_STEP_MS 每张等演出走到目标 t、SHOTS_TOTAL_MS 整体看门狗（到点杀 Chrome、删临时目录、退出码 3）
+const EVAL_MS = +(process.env.SHOTS_EVAL_MS ?? 600000);
+const STEP_MS = +(process.env.SHOTS_STEP_MS ?? 400000);
+if (process.env.SHOTS_TOTAL_MS) setTimeout(() => { console.log('  ✗ 总超时，强退'); try { chrome.kill('SIGKILL'); } catch { /* */ } try { rmSync(profile, { recursive: true, force: true }); } catch { /* */ } process.exit(3); }, +process.env.SHOTS_TOTAL_MS).unref();
 const evaluate = async (expression) => {
   const r = await Promise.race([
     send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true }, sessionId),
@@ -115,7 +118,7 @@ try {
     if (ONLY.length && !ONLY.some((k) => name.includes(`-${k}-`))) continue;
     try {
       await evaluate(`(() => { window.__hold = false; __s3.endingCutscene.seek(${T - 0.4}); return 1; })()`);
-      if (!(await until(`__s3.endingCutscene.t >= ${T}`, 400000))) throw new Error('演出没走到 ' + T);
+      if (!(await until(`__s3.endingCutscene.t >= ${T}`, STEP_MS))) throw new Error('演出没走到 ' + T);
       await evaluate(`(() => { window.__hold = true; return 1; })()`);
       await setView(W, H);
       await until(`innerWidth === ${W}`, 60000);
