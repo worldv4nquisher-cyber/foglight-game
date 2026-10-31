@@ -13,6 +13,7 @@ import { fileURLToPath } from 'node:url';
 import { preview } from 'vite';
 import { S1_ROCKS } from '../src/levels/s1/rocks.ts';
 import { S1 } from '../src/levels/s1/layout.ts';
+import { RAMP_PROBE } from './lib/ramp-probe.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 // SHOTS_OUT=目录（相对仓库上一级，如 docs/tasks/shots-r4）改输出目录；SHOTS_QUERY='&hull=0' 追加 URL 参数；SHOTS_SUFFIX 文件名后缀
@@ -51,6 +52,9 @@ const VIEWS = [
   // r4：背面（马尾 / 兜帽）、左耳特写
   ['s1-xi-face-back', 'high', null, null, 30, true, 'face-back'],
   ['s1-xi-ear-l', 'high', null, null, 22, true, 'ear-l'],
+  // BUG-030：全身正面 / 侧面（ramp 明暗对比；侧面 = 身体右侧）
+  ['s1-xi-body-front', 'high', null, null, 35, true, 'body-front'],
+  ['s1-xi-body-side', 'high', null, null, 35, true, 'body-side'],
 ];
 
 const server = await preview({ root, preview: { host: '127.0.0.1', port: 0, strictPort: false, open: false }, logLevel: 'silent' });
@@ -214,6 +218,7 @@ const xiCam = (kind, fov) => `(() => { const s = __s1; const o = s.rig.entity.ob
     if ('${kind}' === 'ear-l') { at = hd.clone().add(new V(0, 0.06, 0)).addScaledVector(hs, 0.07).addScaledVector(headFwd, -0.01); eye = at.clone().addScaledVector(hs, 0.42).addScaledVector(headFwd, 0.12).add(new V(0, 0.03, 0)); }
     else eye = at.clone().addScaledVector('${kind}' === 'face-front' ? headFwd : '${kind}' === 'face-back' ? headFwd.clone().negate() : hs, 0.75).add(new V(0, 0.02, 0));
   }
+  else if ('${kind}' === 'body-front' || '${kind}' === 'body-side') { at = new V(p.x, p.y + 0.82, p.z); const d = '${kind}' === 'body-front' ? f.clone() : new V().crossVectors(f, up).normalize(); eye = at.clone().addScaledVector(d, 3.0).add(new V(0, 0.15, 0)); }
   else if ('${kind}' === 'hem') { at = new V(p.x, p.y + 0.85, p.z); eye = at.clone().addScaledVector(f, 1.0).add(new V(0, 0.08, 0)); }
   else if ('${kind}' === 'cuff-side') { at = cuff('r'); const out = at.clone().sub(p).setY(0).normalize(); eye = at.clone().addScaledVector(out, 0.55).add(new V(0, 0.05, 0)); }
   else { const sd = '${kind}'.slice(-1); at = cuff(sd); const out = at.clone().sub(p).setY(0).normalize(); eye = at.clone().addScaledVector(f, 0.55).addScaledVector(out, 0.18).add(new V(0, 0.06, 0)); }
@@ -223,6 +228,10 @@ try {
   await setView(...SMALL);
   await enterS1();
   await evaluate(`(() => { const s = __s1; s.updateLensDroplets = () => {}; __game.postfx.setLensDroplets(0); document.getElementById('ui-root').style.display = 'none'; return 1; })()`);
+  // BUG-030：ramp 实际上传格式 + 原生 WebGL 采样（修前 BC7 → 全 0）
+  report.ramp = await evaluate(RAMP_PROBE).catch((e) => ({ err: String(e?.message ?? e) }));
+  console.log('  ramp', JSON.stringify(report.ramp));
+  save();
   // 等建立镜头 / 演出交还 explore，跟随相机才是游戏本身的状态
   await until(`__game.input.context === 'explore'`, 400000);
   await evaluate(`(() => { const f = __s1.cameraFollow; f.__u = f.update; return 1; })()`);

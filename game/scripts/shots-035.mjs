@@ -15,6 +15,7 @@ import { tmpdir } from 'node:os';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { preview } from 'vite';
+import { RAMP_PROBE } from './lib/ramp-probe.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 // SHOTS_OUT=目录（相对仓库上一级）改输出目录（默认 docs/tasks/shots-035）；SHOTS_QUERY='&hull=0' 追加 URL 参数
@@ -143,6 +144,9 @@ try {
     ok = !ls.bad.length && !ls.degraded;
   }
   if (!ok) throw new Error('3 次进 S3 都有加载失败');
+  // BUG-030：ramp 实际上传格式 + 原生 WebGL 采样
+  report.ramp = await evaluate(RAMP_PROBE).catch((e) => ({ err: String(e?.message ?? e) }));
+  console.log('  ramp', JSON.stringify(report.ramp));
   await until(`__game.input.context === 'explore' && !!__s3.father`, 400000);
   await evaluate(`(() => { __game.postfx.setLensDroplets?.(0); window.__hold = false; return 1; })()`);
   await evaluate(`__s3.lightTheLamp(), 1`);
