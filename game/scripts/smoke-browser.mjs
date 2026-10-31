@@ -31,6 +31,15 @@ if (!existsSync(join(root, 'dist/index.html'))) {
   }
   console.log(`  ✓ dist 解码器各一套：${[...draco, ...basis].join(', ')}`);
 }
+/**
+ * 建立镜头（进场演出）结束、交还 explore 的等待上限（ms，墙钟）。镜头按游戏时间走（单帧截断 0.25 s），
+ * box 负载高（13–18）时 3 s 演出要几十秒到上百秒墙钟，写死 60 s 会误报（batch16 制作人 ⑨）。
+ * 默认 180 s；SMOKE_ESTAB_TIMEOUT_MS=… 覆盖（如本机快可调小、负载更高可调大）。
+ */
+const ESTAB_MS = (() => {
+  const v = Number(process.env.SMOKE_ESTAB_TIMEOUT_MS);
+  return Number.isFinite(v) && v > 0 ? v : 180000;
+})();
 const chromePath =
   process.env.CHROME ??
   ['/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser', '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'].find(
@@ -109,8 +118,8 @@ const CHECKS = [
       const until = async (pred, ms = 20000) => { const end = Date.now() + ms; while (!pred() && Date.now() < end) await sleep(50); return pred(); };
       const cam = g.scenes.current.cameraFollow;
       const first = cam.modeName;
-      // 镜头按游戏时间走（单帧截断 0.25 s），机器极忙时 3 s 演出可能要几十秒墙钟：给 90 s
-      if (!(await until(() => g.input.context === 'explore' && cam.modeName === 'explore' && !cam.blending, 90000))) throw new Error('建立镜头没有结束：' + g.input.context + ' ' + cam.modeName);
+      // 镜头按游戏时间走（单帧截断 0.25 s），机器极忙时 3 s 演出可能要几十秒墙钟：上限 SMOKE_ESTAB_TIMEOUT_MS（默认 180 s）
+      if (!(await until(() => g.input.context === 'explore' && cam.modeName === 'explore' && !cam.blending, ${ESTAB_MS}))) throw new Error('建立镜头没有结束：' + g.input.context + ' ' + cam.modeName);
       return (first === 'cutscene' ? '开场是演出 ✓' : '（检查开始时已结束）') + '，已交还 explore ✓';`,
   },
   {
@@ -2049,7 +2058,7 @@ const CHECKS = [
       await evaluate(`localStorage.removeItem('foglight.save.v1'); 1`);
       await cdp.goto('debug=1&scene=s2&art=0', 's2-keeper-house');
       if (!(await until(`!!window.__s2?.puzzles`, 30000))) throw new Error('?scene=s2 没进 S2');
-      if (!(await until(`__game.input.context === 'explore' && !__s2.rig.controller.busy`, 40000))) throw new Error('建立镜头后没回到 explore');
+      if (!(await until(`__game.input.context === 'explore' && !__s2.rig.controller.busy`, ESTAB_MS))) throw new Error('建立镜头后没回到 explore');
       let s = await st();
       if (s.holding !== 'lantern' || s.glow || s.goal !== 'ch1.s2.goal.home') throw new Error('进 S2 应拿着风灯、窗口不亮、目标 home ' + JSON.stringify(s));
 
@@ -2269,7 +2278,7 @@ const CHECKS = [
       await evaluate(`localStorage.removeItem('foglight.save.v1'); 1`);
       await cdp.goto('debug=1&scene=s2&art=1', 's2-keeper-house');
       if (!(await until(`!!window.__s2?.puzzles`, 60000))) throw new Error('?scene=s2&art=1 没进 S2');
-      if (!(await until(`__game.input.context === 'explore' && !__s2.rig.controller.busy`, 40000))) throw new Error('建立镜头后没回到 explore');
+      if (!(await until(`__game.input.context === 'explore' && !__s2.rig.controller.busy`, ESTAB_MS))) throw new Error('建立镜头后没回到 explore');
       if (!(await evaluate(`!!__s2.rig.animator`))) throw new Error('art=1 下 S2 没有 XiAnimator');
       await tp(-3.9, 3.05, -0.25);
       await until(`false`, 300);
@@ -2384,7 +2393,7 @@ const CHECKS = [
       await evaluate(`localStorage.removeItem('foglight.save.v1'); 1`);
       await cdp.goto('art=1');
       if (!(await until(`!!window.__s1?.art?.loaded && !!__s1.rig.animator`, 60000))) throw new Error('art=1 没进 S1 / 没有 XiAnimator');
-      if (!(await until(`__game.input.context === 'explore' && !__s1.rig.controller.busy`, 40000))) throw new Error('S1 建立镜头后没回到 explore');
+      if (!(await until(`__game.input.context === 'explore' && !__s1.rig.controller.busy`, ESTAB_MS))) throw new Error('S1 建立镜头后没回到 explore');
       out.push(await ringArtBell('__s1', 'prop-tide-bell', [-14.52, 2.4, -6.2]));
       await evaluate(`__s1.tides.fixedUpdate(7), 1`);
       for (const c of ['xi-push-start', 'xi-push-loop', 'xi-push-end']) if (!(await evaluate(`__s1.rig.animator.has('${c}')`))) throw new Error('缺 clip ' + c);
@@ -2448,7 +2457,7 @@ const CHECKS = [
       await evaluate(`localStorage.removeItem('foglight.save.v1'); 1`);
       await cdp.goto('debug=1&scene=s3&art=1', 's3-lighthouse');
       if (!(await until(`!!window.__s3?.puzzles && !!__s3.rig.animator`, 60000))) throw new Error('?scene=s3&art=1 没进 S3 / 没有 XiAnimator');
-      if (!(await until(`__game.input.context === 'explore' && !__s3.rig.controller.busy`, 40000))) throw new Error('S3 建立镜头后没回到 explore');
+      if (!(await until(`__game.input.context === 'explore' && !__s3.rig.controller.busy`, ESTAB_MS))) throw new Error('S3 建立镜头后没回到 explore');
       const nodeAnims = await evaluate(`({ bell: __s3.puzzles.bell.interactable.resolveAnim(), lever: __s3.puzzles.leverIx.resolveAnim() })`);
       if (nodeAnims.bell !== 'xi-ring-bell' || nodeAnims.lever !== 'xi-ignite-lever') throw new Error('S3 交互 clip 不对 ' + JSON.stringify(nodeAnims));
       // 1030c 第 3 批：油阀 / 窗口镜 / 点火口 + 拉杆挂上、站位读美术 -interact；塔门 -interact 关门时缓存给 doorStand；白盒透镜球隐藏
@@ -3197,10 +3206,10 @@ CHECKS.push({
     if (
       !(await until(
         `__game.input.context === 'explore' && !__s3.rig.controller.busy`,
-        60000,
+        ESTAB_MS,
       ))
     )
-      throw new Error("S3 建立镜头后没回到 explore");
+      throw new Error(`S3 建立镜头后 ${ESTAB_MS / 1000} s 墙钟内没回到 explore（SMOKE_ESTAB_TIMEOUT_MS）`);
     // 进场是涨潮（机房水深 1.4，站楼梯底会被潮水送回桥尾）：冒烟直接退潮
     await evaluate(`__s3.puzzles.tide.set('low', { instant: true }), 1`);
     await evaluate(anInstall);
@@ -3586,6 +3595,146 @@ CHECKS.push({
   },
 });
 
+// ---------------------------------------------------------------- v0.1-035 补测（batch16 制作人 b / c）：结尾曲晚到 / 下载失败
+// 每帧记演出时钟（t / 来源 / 曲子位置 = AudioContext.currentTime − ignitedAt / 曲目 key），找后备 → 音频的切换帧
+const late035Hook = `(() => {
+  const c = __s3.endingCutscene; if (!c || c.__lateHooked) return 0; c.__lateHooked = true;
+  window.__late035 = { frames: [] };
+  const step = c.step.bind(c);
+  c.step = (t) => { step(t); const a = __game.audio, em = __s3.endingMusic; const F = window.__late035.frames;
+    if (F.length < 6000) F.push({ t: +t.toFixed(4), src: c.clock.source, key: a.musicKey, a: em?.ignitedAt != null ? +(a.context.currentTime - em.ignitedAt).toFixed(4) : null, w: Math.round(performance.now()) }); };
+  return 1; })()`;
+const nodeUntil = async (pred, ms, sleep) => {
+  const end = Date.now() + ms;
+  while (Date.now() < end) {
+    if (await pred()) return true;
+    await sleep(100);
+  }
+  return false;
+};
+
+CHECKS.push({
+  name: 'v0.1-035 结尾曲晚到 art=1：点燃时结尾曲还没下载完 → 后备时钟先走、场景曲照样淡出 → 到了按「点燃后音频时钟秒数」作 offset 补位起播（0.5 s 淡入）→ 演出时钟切到音频，t = 曲子位置',
+  async run({ evaluate, cdp, sleep }) {
+    const { until, unlock, gotoLong } = music1031({ evaluate, sleep });
+    await evaluate(`localStorage.clear(); 1`);
+    // 进 S3 首帧后结尾曲预取请求被扣住（CDP Fetch），懒加载超时 45 s（下载 + 解码）：放行要在请求发出后 ~30 s 内
+    const rt = await cdp.routeHold('*mus-ending-ch1.ogg*');
+    try {
+      await gotoLong(cdp, 'debug=1&scene=s3&art=1', 's3-lighthouse');
+      await unlock(cdp);
+      if (!(await until(`!!__s3.father && !!__s3.rig?.animator && !!__s3.endingCutscene`, 180000))) throw new Error('父亲 / 汐 / 演出没就绪');
+      if (!(await nodeUntil(async () => rt.held.length > 0, 60000, sleep))) throw new Error('结尾曲预取请求没发出 / 没被扣住');
+      const reqWall = rt.held[0].wall;
+      const pre = await evaluate(`({ buf: !!__s3.endingMusic.buffer, res: __s3.endingMusic.result, k: __game.audio.musicKey })`);
+      if (pre.buf || pre.res !== null) throw new Error('扣住期间结尾曲不应已到 ' + JSON.stringify(pre));
+      await evaluate(cut035Hook);
+      await evaluate(late035Hook);
+      await evaluate(`__s3.lightTheLamp(); 1`);
+      const ig = await evaluate(`({ ig: __s3.endingMusic.ignitedAt, l: __game.audio.musicLog.at(-1), k: __game.audio.musicKey, res: __s3.endingMusic.result })`);
+      if (ig.ig === null || ig.res !== null) throw new Error('点燃时应记 ignitedAt、结尾曲还没结果 ' + JSON.stringify(ig));
+      // 后备时钟先走到 6 s（演出时钟），但请求扣住不超过 30 s 墙钟
+      const heldBudget = 30000;
+      await nodeUntil(async () => (await evaluate(`__s3.endingCutscene.t`)) >= 6 || Date.now() - reqWall > heldBudget, 120000, sleep);
+      const before = await evaluate(`({ t: __s3.endingCutscene.t, src: __s3.endingCutscene.clock.source, fb: __s3.endingCutscene.clock.frames.fallback, au: __s3.endingCutscene.clock.frames.audio, k: __game.audio.musicKey, el: __game.audio.context.currentTime - __s3.endingMusic.ignitedAt })`);
+      if (before.src !== 'fallback' || before.au !== 0 || before.k === 'mus-ending-ch1') throw new Error('结尾曲没到时演出应走后备时钟 ' + JSON.stringify(before));
+      const relWall = Date.now();
+      await cdp.release();
+      if (!(await until(`__s3.endingMusic.result !== null`, 60000))) throw new Error('放行后 60 s 结尾曲没结果');
+      const st = await evaluate(`(() => { const a = __game.audio, em = __s3.endingMusic; const l = a.musicLog.filter((x) => x.key === 'mus-ending-ch1' && x.op === 'play').at(-1); return { res: em.result, k: a.musicKey, l, ig: em.ignitedAt, startAt: a.musicStartAt, now: a.context.currentTime, fails: __game.assets.lazyAudioFailures.map((f) => f.key + ':' + f.error) }; })()`);
+      if (st.res !== 'late' || st.k !== 'mus-ending-ch1' || !st.l) throw new Error('晚到应补位起播（result=late）' + JSON.stringify(st));
+      // 补位 offset = 起播时刻 − 点燃时刻（音频时钟）→ 文件 0 s 仍对齐点燃那一刻：startAt = ignitedAt
+      const off = st.l.offset ?? 0;
+      if (Math.abs(off - (st.l.at - st.ig)) > 1e-6) throw new Error(`offset ${off} ≠ 起播 ${st.l.at} − 点燃 ${st.ig}`);
+      if (Math.abs(st.startAt - st.ig) > 1e-6) throw new Error(`曲子 0 s 时刻 ${st.startAt} ≠ 点燃 ${st.ig}`);
+      if (st.l.fade !== 0.5) throw new Error('补位起播应 0.5 s 淡入 ' + JSON.stringify(st.l));
+      // 演出时钟：切到音频后 t = 曲子位置（单调，后备超前时停住等音频追上）
+      if (!(await until(`__s3.endingCutscene.clock.source === 'audio' && __s3.endingCutscene.t >= ${off} + 3`, 60000))) throw new Error('补位后演出时钟没切到音频 / 没走');
+      const F = await evaluate(`window.__late035.frames`);
+      const i = F.findIndex((f) => f.src === 'audio');
+      const sw = F[i], pv = F[i - 1];
+      const after = F.slice(i);
+      const drift = Math.max(...after.map((f) => Math.abs(f.t - f.a)));
+      // 后备时钟领先音频时：t 停住（取 max）直到音频追上，之后 t = 曲子位置
+      const lead = pv.t - sw.a;
+      const caught = after.findIndex((f) => Math.abs(f.t - f.a) < 0.002);
+      if (caught < 0) throw new Error('切换后演出 t 一直没和曲子位置对齐 ' + JSON.stringify(after.slice(0, 5)));
+      const tail = after.slice(caught);
+      const tailDrift = Math.max(...tail.map((f) => Math.abs(f.t - f.a)));
+      if (tailDrift > 0.002) throw new Error('对齐后演出 t 和曲子位置差 ' + tailDrift);
+      if (after.some((f, k) => k > 0 && f.t < after[k - 1].t)) throw new Error('演出时钟倒退');
+      if (lead < 0 && caught !== 0) throw new Error('后备落后音频时应在切换帧直接跳到音频 ' + JSON.stringify({ pv, sw }));
+      const cues = await evaluate(`window.__cut035.cues`);
+      const audioCues = cues.filter((c) => c.src === 'audio');
+      const badCue = audioCues.filter((c) => c.audio === null || Math.abs(c.audio - c.firedAt) > 0.1);
+      if (badCue.length) throw new Error('补位后 cue 和曲子差 > 0.1 s ' + JSON.stringify(badCue));
+      // 收尾：按住 Space 跳过 → 0.75 s 淡出 → 结束页
+      const space = (type) => `window.dispatchEvent(new KeyboardEvent('${type}', { code: 'Space', key: ' ', bubbles: true })), 1`;
+      await evaluate(space('keydown'));
+      if (!(await until(`__s3.endingCutscene.endedBy === 'skip'`, 10000))) throw new Error('按住 Space 没跳过');
+      await evaluate(space('keyup'));
+      if (!(await until(`__game.scenes.current?.name === 'chapter-end'`, 30000))) throw new Error('跳过后没进结束页');
+      const held = ((relWall - reqWall) / 1000).toFixed(1);
+      console.log('[035-late] switch ' + JSON.stringify({ pv, sw, next: F.slice(i + 1, i + 4), off, ig: st.ig, startAt: st.startAt, l: st.l }));
+      return `结尾曲请求扣住 ${held} s 墙钟；点燃 @音频 ${st.ig.toFixed(3)} 时 buffer 未到 → 场景曲 ${ig.l?.op ?? '—'} fade ${ig.l?.fade ?? '—'} s，演出走后备（放行前 t ${before.t.toFixed(2)} s、${before.fb} 帧 fallback / 0 帧 audio、点燃后音频 ${before.el.toFixed(2)} s）→ 放行 → result=late，play offset ${off.toFixed(3)} s = 起播 ${st.l.at.toFixed(3)} − 点燃 ${st.ig.toFixed(3)}，曲子 0 s 时刻 = 点燃（差 ${(st.startAt - st.ig).toExponential(1)}），淡入 ${st.l.fade} s；时钟切换帧：上一帧 t ${pv.t.toFixed(3)}（fallback，曲 ${pv.a?.toFixed(3) ?? '—'}）→ 本帧 t ${sw.t.toFixed(3)}（audio，曲 ${sw.a.toFixed(3)}），后备领先 ${lead.toFixed(3)} s → 第 ${caught} 帧对齐，之后 ${tail.length} 帧 |t − 曲子位置| ≤ ${tailDrift.toFixed(4)} s（切换后最大 ${drift.toFixed(3)}）、不倒退；补位后 ${audioCues.length} 个 cue 按音频触发（${audioCues.map((c) => `${c.id} ${c.firedAt.toFixed(2)}/曲 ${c.audio.toFixed(2)}`).join('、') || '—'}）；之前 ${cues.length - audioCues.length} 个 fallback；按住 Space 跳过 → 结束页`;
+    } finally {
+      await cdp.unroute();
+      await evaluate(`localStorage.clear(); 1`).catch(() => {});
+      await cdp.goto('');
+    }
+  },
+});
+
+CHECKS.push({
+  name: 'v0.1-035 结尾曲下载失败 art=1：CDP 把 mus-ending-ch1.ogg 路由成 404 → 不放音乐、不报错，演出走后备时钟照常放完 → 结束页',
+  async run({ evaluate, cdp, sleep }) {
+    const { until, unlock, gotoLong, ac, waitClock } = music1031({ evaluate, sleep });
+    await evaluate(`localStorage.clear(); 1`);
+    const hits = await cdp.route404('*mus-ending-ch1.ogg*');
+    const errBefore = errors.length;
+    try {
+      await gotoLong(cdp, 'debug=1&scene=s3&art=1', 's3-lighthouse');
+      await unlock(cdp);
+      if (!(await until(`!!__s3.father && !!__s3.rig?.animator && !!__s3.endingCutscene && __game.assets.isMissing('mus-ending-ch1')`, 180000)))
+        throw new Error('S3 没就绪 / 结尾曲没报 missing ' + JSON.stringify(await evaluate(`({ f: !!__s3?.father, m: __game.assets.isMissing('mus-ending-ch1'), fails: __game.assets.lazyAudioFailures })`)));
+      await evaluate(cut035Hook);
+      await evaluate(late035Hook);
+      await evaluate(`__s3.lightTheLamp(); 1`);
+      if (!(await until(`__s3.endingMusic.result !== null`, 30000))) throw new Error('点燃后结尾曲没结果');
+      const st = await evaluate(`({ res: __s3.endingMusic.result, k: __game.audio.musicKey, l: __game.audio.musicLog.at(-1) })`);
+      if (st.res !== 'missing' || st.k === 'mus-ending-ch1') throw new Error('404 后不应放结尾曲 ' + JSON.stringify(st));
+      if (!(await until(`__s3.endingCutscene.t >= 15`, 120000))) throw new Error('后备时钟没走到 15 s');
+      await waitClock(ac, 0.2);
+      const a = await evaluate(`({ t: __s3.endingCutscene.t, src: __s3.endingCutscene.clock.source, fr: __s3.endingCutscene.clock.frames, k: __game.audio.musicKey })`);
+      if (a.src !== 'fallback' || a.fr.audio !== 0 || a.k !== null) throw new Error('404 后演出应走后备时钟、没有音乐 ' + JSON.stringify(a));
+      for (const s of [45, 80, 104]) {
+        await evaluate(`__s3.endingCutscene.seek(${s}), 1`);
+        if (s < 104 && !(await until(`__s3.endingCutscene.t >= ${s + 1}`, 30000))) throw new Error('seek 后没走 ' + s);
+      }
+      if (!(await until(`__game.scenes.current?.name === 'chapter-end'`, 60000))) throw new Error('后备时钟到 106 s 没进结束页');
+      const r = await evaluate(`window.__cut035`);
+      const F = await evaluate(`window.__late035.frames`);
+      const want = ['lens', 'fog_open', 'silhouette', 'gaze', 'father_in', 'father_out', 'no_answer', 'sit_write', 'journal', 'pull_back', 'fade_out'];
+      if (r.cues.map((c) => c.id).join() !== want.join()) throw new Error('cue 顺序 ' + r.cues.map((c) => c.id).join());
+      if (r.cues.some((c) => c.src !== 'fallback')) throw new Error('cue 应全是 fallback');
+      if (F.some((f) => f.key === 'mus-ending-ch1' || f.src !== 'fallback')) throw new Error('演出期间放过结尾曲 / 用过音频时钟');
+      if (!(r.sceneAt.t >= 106 && r.sceneAt.endedBy === 'end')) throw new Error('结束页时刻 ' + JSON.stringify(r.sceneAt));
+      if (hits.length !== 1) throw new Error('结尾曲应只请求 1 次（404）：' + hits.length);
+      await sleep(1000);
+      const pg = await evaluate(`({ fade: __game.ui.fade.opacity, page6: __game.narrative.outroEntryUnlocked, k: __game.audio.musicKey })`);
+      if (pg.fade > 0.05 || !pg.page6 || pg.k !== null) throw new Error('结束页 ' + JSON.stringify(pg));
+      const gameErrors = errors.slice(errBefore).filter((e) => !/^浏览器: Failed to load resource: .*404.*mus-ending-ch1\.ogg/.test(e) && !/GPU stall due to ReadPixels|WebGL.*performance/i.test(e));
+      if (gameErrors.length) throw new Error('404 时游戏报错：' + gameErrors.join(' | '));
+      const early = r.cues.filter((c) => c.at <= 14);
+      return `404 ×${hits.length}（S3 首帧后预取）→ isMissing、点燃后 result=${st.res}、musicKey=${st.k}（场景曲 ${st.l?.op} fade ${st.l?.fade} s）；演出后备时钟 ${a.t.toFixed(2)} s 时 ${a.fr.fallback} 帧 fallback / 0 帧 audio；实时段 ${early.map((c) => `${c.id} ${c.at}→${c.firedAt.toFixed(2)}`).join('、')}；seek 后 ${r.cues.length} 个 cue 全部 fallback、${F.length} 帧没放过结尾曲；结束页 @演出 ${r.sceneAt.t.toFixed(2)} s（endedBy end）、淡入后 fade ${pg.fade.toFixed(2)}、日志第 6 页 ${pg.page6}；除 Chrome 那条 404 网络日志外无报错`;
+    } finally {
+      await cdp.unroute();
+      await evaluate(`localStorage.clear(); 1`).catch(() => {});
+      await cdp.goto('');
+    }
+  },
+});
+
 const extra = process.env.SMOKE_ONLY ? CHECKS.filter((c) => process.env.SMOKE_ONLY.split('|').some((k) => c.name.includes(k))) : CHECKS;
 
 // ---------------------------------------------------------------- 起服务 + 浏览器
@@ -3649,12 +3798,16 @@ const errors = [];
 const warnings = [];
 /** route404 期间预期内的 Chrome 网络 404 日志 */
 const expectedErrors = [];
-const route = { on: false, hits: [] };
+/** CDP Fetch 拦截：mode '404' 直接回 404；'hold' 先扣住（模拟慢网 / 资源晚到），release() 放行或 failHeld() 回 404 */
+const route = { on: false, hits: [], mode: '404', held: [] };
+const fulfill404 = (requestId) =>
+  send('Fetch.fulfillRequest', { requestId, responseCode: 404, responseHeaders: [{ name: 'Content-Type', value: 'text/plain' }], body: '' }, sessionId).catch(() => {});
 listeners.push((m) => {
   if (m.sessionId !== sessionId) return;
   if (m.method === 'Fetch.requestPaused') {
     route.hits.push(m.params.request.url);
-    void send('Fetch.fulfillRequest', { requestId: m.params.requestId, responseCode: 404, responseHeaders: [{ name: 'Content-Type', value: 'text/plain' }], body: '' }, sessionId).catch(() => {});
+    if (route.mode === 'hold') route.held.push({ requestId: m.params.requestId, url: m.params.request.url, wall: Date.now() });
+    else void fulfill404(m.params.requestId);
     return;
   }
   if (m.method === 'Runtime.exceptionThrown') {
@@ -3724,17 +3877,38 @@ const cdp = {
     throw new Error('60 秒内主菜单没有就绪');
   },
   /** CDP Fetch 把匹配 urlPattern 的请求直接回 404（033 改：懒加载失败路径）；返回命中的 URL 列表。只拦这个页面会话 */
-  async route404(urlPattern) {
+  async route404(urlPattern, mode = '404') {
     route.hits = [];
+    route.held = [];
+    route.mode = mode;
     route.on = true;
-    expectedErrors.push(/^浏览器: Failed to load resource: .*404.*mus-s1-ebb-shore\.ogg/);
+    // Chrome 自己那条 404 网络日志是预期内的（文件名取 pattern 去掉 *）
+    const file = urlPattern.replace(/\*/g, '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    expectedErrors.push(new RegExp('^浏览器: Failed to load resource: .*404.*' + file));
     // HTTP 缓存命中时不经过拦截：路由期间关缓存
     await send('Network.enable', {}, sessionId);
     await send('Network.setCacheDisabled', { cacheDisabled: true }, sessionId);
     await send('Fetch.enable', { patterns: [{ urlPattern, requestStage: 'Request' }] }, sessionId);
     return route.hits;
   },
+  /** 扣住匹配的请求（不回应），之后 release() 放行 / failHeld() 回 404；返回 route（hits / held） */
+  async routeHold(urlPattern) {
+    await cdp.route404(urlPattern, 'hold');
+    return route;
+  },
+  async release() {
+    const h = route.held.splice(0);
+    for (const r of h) await send('Fetch.continueRequest', { requestId: r.requestId }, sessionId).catch(() => {});
+    return h;
+  },
+  async failHeld() {
+    const h = route.held.splice(0);
+    for (const r of h) await fulfill404(r.requestId);
+    return h;
+  },
   async unroute() {
+    await cdp.release();
+    route.mode = '404';
     route.on = false;
     await send('Fetch.disable', {}, sessionId);
     await send('Network.setCacheDisabled', { cacheDisabled: false }, sessionId);
