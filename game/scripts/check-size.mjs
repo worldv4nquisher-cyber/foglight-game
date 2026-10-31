@@ -16,6 +16,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, dirname, basename, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { manifest, ASSET_GROUPS } from '../src/assets/manifest.ts';
+import { ktx2AlignmentVerdict, readKtx2Size } from '../src/assets/ktx2Route.ts';
 import { guessGroup, sizeBucket, sizeVerdict, BUDGET, WARN } from './lib/size-groups.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -182,6 +183,22 @@ if (json) {
   const loose = walkAll(DIST).filter((f) => /\.(png|jpe?g)$/i.test(f) && !/[\\/](ui|lut)[\\/]/.test(relative(DIST, f)) && !/^(favicon|icon)/.test(basename(f)) && relative(DIST, f).startsWith('assets'));
   for (const f of loose) { bad++; fail(`dist/${relative(DIST, f)}：独立贴图不是 KTX2`); }
   if (!json) console.log(`  ${bad ? '✗' : '✓'} 压缩：${glbs.length} 个 GLB 的网格 Meshopt、贴图 KTX2${bad ? `，${bad} 处没生效` : ' 全部生效'}`);
+}
+// BUG-030：KTX2 宽高须为 4 的倍数（桌面 BC7 / BC3 的块对齐要求，否则上传 0x502、采样为黑）；
+// 例外 = 清单 ramp: true 的查找表且 ≤ KTX2_UNALIGNED_MAX_TEXELS（运行时转未压缩 RGBA，见 src/assets/ktx2Route.ts）
+{
+  const walkAll = (d) => readdirSync(d).flatMap((f) => { const p = join(d, f); return statSync(p).isDirectory() ? walkAll(p) : [p]; });
+  const rampNames = new Set(manifest.filter((e) => e.ramp).map((e) => basename(e.url)));
+  const ktx = walkAll(DIST).filter((f) => f.endsWith('.ktx2'));
+  let bad = 0;
+  let whitelisted = 0;
+  for (const f of ktx) {
+    const sz = readKtx2Size(readFileSync(f));
+    if (!sz) { bad++; fail(`dist/${relative(DIST, f)}：不是合法 KTX2`); continue; }
+    const why = ktx2AlignmentVerdict({ name: `dist/${relative(DIST, f)}`, ...sz, ramp: rampNames.has(basename(f)) });
+    if (why) { bad++; fail(why); } else if (sz.width % 4 || sz.height % 4) whitelisted++;
+  }
+  if (!json) console.log(`  ${bad ? '✗' : '✓'} KTX2 块对齐：${ktx.length} 张，非 4 倍数 ${whitelisted} 张均为清单 ramp（运行时转 RGBA）${bad ? `，${bad} 张不合规` : ''}`);
 }
 const verdict = sizeVerdict({ menuBytes: groups.menu.bytes + groups.boot.bytes, firstPackageBytes: first, firstTotalBytes: firstTotal });
 for (const w of verdict.warnings) console.warn(`  ! ${w}`);

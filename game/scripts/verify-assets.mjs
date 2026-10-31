@@ -719,4 +719,32 @@ try {
   ok('BUG-030：KTX2 读头分流（非 4 倍数 → 未压缩 RGBA，通用；?rampfix=0 全压缩）、未压缩 loader 懒建一次、workerConfig 全关、ramp 只留第 0 级 + Linear');
 }
 
+// ---- BUG-030：资源校验规则——KTX2 宽高须为 4 的倍数，例外只有清单 ramp: true 且 ≤ 4096 texel（check-size 对 dist 用同一条）
+{
+  const { ktx2AlignmentVerdict, readKtx2Size, KTX2_UNALIGNED_MAX_TEXELS } = await import('../src/assets/ktx2Route.ts');
+  assert.equal(ktx2AlignmentVerdict({ name: 'a', width: 1024, height: 512, ramp: false }), null);
+  assert.equal(ktx2AlignmentVerdict({ name: 'a', width: 1024, height: 512, ramp: true }), null);
+  assert.match(ktx2AlignmentVerdict({ name: 'tex-x', width: 1022, height: 1024, ramp: false }), /4 的倍数/);
+  assert.match(ktx2AlignmentVerdict({ name: 'tex-x', width: 256, height: 1, ramp: false }), /ramp: true/, '没标 ramp 的 256×1 也失败');
+  assert.equal(ktx2AlignmentVerdict({ name: 'r', width: 256, height: 1, ramp: true }), null);
+  assert.equal(ktx2AlignmentVerdict({ name: 'r', width: 4096, height: 1, ramp: true }), null);
+  assert.match(ktx2AlignmentVerdict({ name: 'r', width: 4097, height: 1, ramp: true }), /≤ 4096/);
+  assert.equal(KTX2_UNALIGNED_MAX_TEXELS, 4096);
+  // 真文件：../art 里全部 KTX2
+  const rampNames = new Set(manifest.filter((e) => e.ramp).map((e) => basename(e.url)));
+  const walkK = (d) => (existsSync(d) ? readdirSync(d).flatMap((f) => { const p = join(d, f); return statSync(p).isDirectory() ? walkK(p) : p.endsWith('.ktx2') ? [p] : []; }) : []);
+  const files = walkK(resolve(root, '../art'));
+  const problems = [];
+  const unaligned = [];
+  for (const f of files) {
+    const sz = readKtx2Size(readFileSync(f));
+    assert.ok(sz, `${f} 是 KTX2`);
+    const why = ktx2AlignmentVerdict({ name: basename(f), ...sz, ramp: rampNames.has(basename(f)) });
+    if (why) problems.push(why);
+    if (sz.width % 4 || sz.height % 4) unaligned.push(basename(f));
+  }
+  assert.deepEqual(problems, [], problems.join('\n'));
+  ok(`BUG-030 资源校验：KTX2 宽高 4 的倍数或清单 ramp ≤ ${KTX2_UNALIGNED_MAX_TEXELS} texel；../art ${files.length} 张，非 4 倍数 ${unaligned.length} 张全是 ramp（${unaligned.sort().join(' / ')}）`);
+}
+
 console.log(`\n资源加载后处理 / 交付自检校验通过（${passed} 项）`);
