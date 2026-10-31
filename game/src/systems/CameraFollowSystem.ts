@@ -16,6 +16,9 @@ const fwd = new THREE.Vector3();
 const euler = new THREE.Euler(0, 0, 0, 'YXZ');
 const qOff = new THREE.Quaternion();
 const tmpBox = new THREE.Vector3();
+const left = new THREE.Vector3();
+const UP = new THREE.Vector3(0, 1, 0);
+const lifted = new THREE.Vector3();
 
 /** 固定时长的缓入缓出补间（目标变化时从当前值重新开始） */
 class Tween {
@@ -115,6 +118,16 @@ export class CameraFollowSystem {
   heightCaps: CameraHeightCap[] = [];
   /** 本帧相机距离被限高压短 */
   heightCapped = false;
+  /** BUG-028：当前肩后偏移（m，+ = 右肩，− = 左肩；平滑换边后、碰撞夹住前） */
+  shoulder: number = cfg.shoulderOffset;
+  /** BUG-028：本帧实际偏移（碰撞夹住后，m，同号约定） */
+  side: number = cfg.shoulderOffset;
+  /** BUG-028：空间不够时跟随支点抬高量（m） */
+  lift = 0;
+  /** BUG-028：本帧相机到头部跟随点（未偏移、未抬高）的距离（m；非探索模式为 Infinity） */
+  headDistance = Infinity;
+  /** BUG-028：本帧实际跟随支点（偏移 + 抬高之后；测试读） */
+  readonly pivotPoint = new THREE.Vector3();
   /** BUG-019：外扩过渡区的限高带（由 heightCaps 派生，换数组时重算） */
   private leadCaps: CameraHeightCap[] = [];
   private leadCapsOf: CameraHeightCap[] | null = null;
@@ -236,6 +249,7 @@ export class CameraFollowSystem {
 
   update(dt: number): void {
     this.clock += dt;
+    this.headDistance = Infinity;
     const mode = this.mode;
     if (mode.kind === 'explore') this.updateExplore(dt);
     else if (mode.kind === 'puzzle') this.updatePuzzle(mode);
@@ -340,11 +354,71 @@ export class CameraFollowSystem {
     let maxD = this.indoor ? Math.min(this.distance, cfg.indoorMaxDistance) : this.distance;
 
     // 肩后偏右：先从头部往右扫，避免贴右侧墙时跟随点进墙
+    // BUG-028：扫掠停在接触点后再让 shoulderSkin（否则后拉扫掠一出发就算碰到 → 距离 0）；右侧被挡时平滑换左肩 / 取宽侧，滞回不来回跳
     const physics = this.opts.physics;
     const r = cfg.collisionRadius;
-    const side = physics ? physics.sphereCast(head, right, r, cfg.shoulderOffset) : cfg.shoulderOffset;
+    const off = cfg.shoulderOffset;
+    const skin = cfg.shoulderSkin;
+    const room = (dir: THREE.Vector3): number => (physics ? Math.max(0, Math.min(off, physics.sphereCast(head, dir, r, off + skin) - skin)) : off);
+    left.copy(right).negate();
+    const roomR = room(right);
+    let roomL = -1;
+    const getL = (): number => (roomL < 0 ? (roomL = room(left)) : roomL);
+    // 后拉扫掠（从偏移 s 处的支点，未抬高）
+    const backAt = (sd: number): number => {
+      if (!physics) return maxD;
+      lifted.copy(head).addScaledVector(right, sd);
+      return physics.sphereCast(lifted, back, r, maxD);
+    };
+    const gain = cfg.shoulderSwitchGain;
+    let want: number = off;
+    if (physics) {
+      const dR = backAt(Math.min(off, roomR));
+      const rightBlocked = roomR < off * cfg.shoulderSwitchRatio;
+      if (this.shoulder < 0) {
+        // 已在左肩：右侧完全放开、且右肩后拉不比左肩差才换回来（滞回）
+        const l = getL();
+        const dL = backAt(-l);
+        want = roomR >= off - 1e-4 && dR >= dL - 0.05 ? off : -l;
+      } else if (rightBlocked || dR < maxD - gain) {
+        // 右侧明显不够，或右肩后拉被挡：左肩更好（偏移更宽 / 后拉多 gain 以上）才换
+        const l = getL();
+        const dL = backAt(-l);
+        want = (rightBlocked && l >= roomR) || dL > dR + gain ? -l : Math.min(off, roomR);
+      } else want = Math.min(off, Math.max(roomR, this.shoulder));
+    }
+    if (!this.initialized) this.shoulder = want;
+    else {
+      const k = THREE.MathUtils.damp(this.shoulder, want, 8, dt) - this.shoulder;
+      const lim = cfg.shoulderSwitchSpeed * dt;
+      this.shoulder += THREE.MathUtils.clamp(k, -lim, lim);
+      if (Math.abs(this.shoulder - want) < 1e-4) this.shoulder = want;
+    }
+    // 碰撞优先：实际偏移按该侧可用空间夹住
+    const side = this.shoulder >= 0 ? Math.min(this.shoulder, roomR) : -Math.min(-this.shoulder, getL());
+    this.side = side;
     pivot.copy(head).addScaledVector(right, side);
-    if (physics) maxD = physics.sphereCast(pivot, back, r, maxD);
+    // BUG-028：后拉空间不够 → 支点平滑抬高（决策用未抬高支点的扫掠，不形成反馈；抬高量再按向上扫掠夹住）
+    if (physics) {
+      const d0 = physics.sphereCast(pivot, back, r, maxD);
+      const need = smoothstep01(1 - d0 / cfg.lowSpaceDistance);
+      const upRoom = need > 0 || this.lift > 0 ? Math.max(0, physics.sphereCast(pivot, UP, r, cfg.lowSpaceLift + skin) - skin) : 0;
+      const liftWant = Math.min(cfg.lowSpaceLift * need, upRoom);
+      if (!this.initialized) this.lift = liftWant;
+      else {
+        const lim = cfg.lowSpaceLiftSpeed * dt;
+        this.lift += THREE.MathUtils.clamp(liftWant - this.lift, -lim, lim);
+      }
+      this.lift = Math.min(this.lift, upRoom);
+      if (this.lift > 1e-4) {
+        lifted.copy(pivot).addScaledVector(UP, this.lift);
+        pivot.copy(lifted);
+        maxD = physics.sphereCast(pivot, back, r, maxD);
+      } else {
+        this.lift = 0;
+        maxD = d0;
+      }
+    }
     // 室外限高（裁定 19；室内不管，观察固定眼位在上面已 return）
     // BUG-019：hardD = 真实带（硬上限，立即生效）；leadD = 外扩过渡区（≤ hardD），限速往里收，走 / 跑进带时在过渡区里就收完，不再一帧 6 m → 0.87 m
     const physD = maxD;
@@ -394,6 +468,8 @@ export class CameraFollowSystem {
 
     this.live.position.copy(pivot).addScaledVector(back, this.currentDistance);
     this.live.fov = this.fov.value;
+    this.headDistance = this.live.position.distanceTo(head);
+    this.pivotPoint.copy(pivot);
 
     if (this.observing) this.updateFocus();
   }

@@ -13,6 +13,7 @@ import type { CameraKey } from '@/systems/camera/CameraTrack';
 import { InteractionSystem, actorFromRig } from '@/systems/interaction/InteractionSystem';
 import { SkyDome, SKY_CLOUDS_KEY } from '@/world/SkyDome';
 import { PlanarReflection, reflectionOverride, reflectionStrengthOverride } from '@/render/Reflections';
+import { CharacterNearFade, nearFadeAlpha } from '@/render/nearFade';
 import { Water, WATER_NORMAL_KEY, RAIN_RIPPLE_KEY } from '@/world/Water';
 import { ATMO028, type Atmo028Tier } from '@/config/atmosphere028';
 import { Rain, RAIN_STREAK_KEY, RAIN_SPLASH_KEY, collectIndoorShapes } from '@/world/Rain';
@@ -65,6 +66,8 @@ export abstract class LevelScene extends BaseScene {
   protected physics = new PhysicsSystem();
   protected cameraFollow: CameraFollowSystem;
   protected rig!: PlayerRig;
+  /** BUG-028：相机贴近头部时汐抖动淡出 */
+  private nearFade: CharacterNearFade | null = null;
   protected sky = new SkyDome(170);
   protected water: Water | null = null;
   /** 025 水面平面反射（室外场景才有） */
@@ -529,6 +532,7 @@ export abstract class LevelScene extends BaseScene {
     if (this.level.musicUpper) this.game.audio.setMusicLayerGain(this.level.musicUpper, this.upperLayerLevel());
     this.entities.update(dt, alpha);
     this.cameraFollow.update(dt);
+    this.updateNearFade();
     this.interaction.update(dt);
     if (this.game.ui.debug.visible) {
       this.game.ui.debug.set('角色', debugPlayerLine(this.rig, this.physics));
@@ -554,6 +558,19 @@ export abstract class LevelScene extends BaseScene {
     const p = this.rig.entity.object3D.position;
     this.sun.target.position.set(p.x, 0, p.z);
     this.sun.position.set(p.x + a.sunDirection[0], a.sunDirection[1], p.z + a.sunDirection[2]);
+  }
+
+  /** BUG-028：探索相机离头部跟随点 < gameplay.camera.nearFade[1] 时汐抖动淡出，< nearFade[0] 全隐；演出 / 机关 / 固定眼位不管 */
+  private updateNearFade(): void {
+    this.nearFade ??= new CharacterNearFade(this.rig.visual);
+    const cf = this.cameraFollow;
+    const a = cf.modeName === 'explore' && !cf.blending && !cf.eyeActive ? nearFadeAlpha(cf.headDistance, gameplay.camera.nearFade) : 1;
+    this.nearFade.set(a);
+  }
+
+  /** 当前汐淡出不透明度（1 = 原样；smoke / 测试读） */
+  get xiNearAlpha(): number {
+    return this.nearFade?.alpha ?? 1;
   }
 
   override beforeRender(halted: boolean): void {

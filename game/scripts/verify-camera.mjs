@@ -15,6 +15,7 @@ import { S1, pierPoint } from '@/levels/s1/layout';
 import { S1_ROCKS } from '@/levels/s1/rocks';
 import { ViewpointTarget, viewAlignment } from '@/entities/components/ViewpointTarget';
 import { buildTestCourse } from '@/world/testCourse';
+import { CharacterNearFade, nearFadeAlpha } from '@/render/nearFade';
 
 const cfg = gameplay.camera;
 const DEG = Math.PI / 180;
@@ -755,10 +756,8 @@ await test('018 打磨 S1 新碰撞（码头桩 38 根 + 前景礁石 9 块）�
       const hit0 = phNew.sphereCast(e.camera.position, new THREE.Vector3(0, 1, 0), cfg.collisionRadius * 0.75, 0.01);
       assert.ok(hit0 !== 0, `${name} yaw ${k * 15}°：相机在碰撞体里 ${e.camera.position.toArray().map((v) => v.toFixed(2))}`);
       // 跟随点 → 相机这段不穿新碰撞
-      // 支点 = 头部 + 肩后偏右（与 CameraFollowSystem 同算法）
-      const head = at.clone().setY(at.y + cfg.pivotHeight);
-      const right = new THREE.Vector3(Math.cos(e.cam.yaw), 0, -Math.sin(e.cam.yaw));
-      const pivot = head.clone().addScaledVector(right, phNew.sphereCast(head, right, cfg.collisionRadius, cfg.shoulderOffset));
+      // 支点 = CameraFollowSystem 本帧实际支点（BUG-028 起可能换左肩 / 抬高）
+      const pivot = e.cam.pivotPoint.clone();
       const d = e.camera.position.clone().sub(pivot);
       const len = d.length();
       ray.set(pivot, d.normalize());
@@ -772,6 +771,128 @@ await test('018 打磨 S1 新碰撞（码头桩 38 根 + 前景礁石 9 块）�
     notes.push(`${name} ${pulled}/24 个朝向前拉（最近 ${minD.toFixed(2)} m）`);
   }
   return `甲板上新旧碰撞相机差 ${maxDiff.toExponential(1)} m；${notes.join('；')}`;
+});
+
+await test('BUG-028 #157 南沿窄缝（z ≈ −8.6，x 7.5–12.5）：朝东走 / 跑 / 站 / 从缝外走进 / 原地慢转，相机离头 ≥ 0.6 m（修前 0.05 m）、不进碰撞体；换肩平滑（非碰撞前拉单帧 ≤ 0.08 m）；朝西 / 朝南仍 4 m 右肩', () => {
+  const gb = buildS1Greybox();
+  const ph = new PhysicsSystem();
+  for (const m of gb.colliders) ph.addMesh(m);
+  for (const m of gb.walls) {
+    const c = ph.addMesh(m, { kind: 'wall' });
+    if (m.userData.walkableWhen === 'low') c.enabled = false;
+  }
+  const z0 = S1.deepWater.polygon.find(([x]) => x === 12.5)[1];
+  const E = -Math.PI / 2;
+  const runs = [
+    // [名, 起点 x, 离深水边界, vx, yaw（'spin' = −150°→−30° 慢转）, 俯仰, 秒]
+    ['朝东走 0.35', 7.5, 0.35, 1.6, E, -0.3, 4.5],
+    ['朝东走 0.6 俯', 7.5, 0.6, 1.6, E, -0.6, 4.5],
+    ['朝东走 平视', 7.5, 0.4, 1.6, E, 0, 4.5],
+    ['朝东跑', 7.5, 0.4, 3.2, E, -0.3, 2.3],
+    ['从缝外进缝', 4, 0.4, 1.6, E, -0.3, 6.5],
+    ['朝东站', 10.5, 0.4, 0, E, -0.3, 2],
+    ['原地慢转', 10.5, 0.4, 0, 'spin', -0.3, 4],
+    ['朝西走', 14.3, 0.4, -1.6, Math.PI / 2, -0.3, 4.5],
+    ['朝南站', 10.5, 0.4, 0, Math.PI, -0.3, 2],
+  ];
+  const notes = [];
+  let worst = Infinity;
+  for (const [name, x0, dz, vx, yaw, pitch, sec] of runs) {
+    let t = 0;
+    const events = new EventBus();
+    const input = new InputManager(events, () => t);
+    const camera = new THREE.PerspectiveCamera(cfg.fov, 16 / 9, 0.1, 500);
+    const cam = new CameraFollowSystem(camera, input, { physics: ph, events });
+    const spin = yaw === 'spin';
+    const target = new THREE.Object3D();
+    cam.target = target;
+    cam.pitch = pitch;
+    const b = new CharacterBody();
+    ph.addBody(b);
+    b.teleport(new THREE.Vector3(x0, 0.2, z0 + dz));
+    for (let i = 0; i < 20; i++) ph.step(DT);
+    const n = Math.round(sec / DT);
+    let minD = Infinity, maxSmooth = 0, sideLo = Infinity, sideHi = -Infinity;
+    const prev = { side: 0, lift: 0 };
+    for (let i = 0; i < n; i++) {
+      cam.yaw = spin ? ((-150 + (120 * i) / n) * Math.PI) / 180 : yaw; // QA 探针每步强制 yaw
+      b.velocity.x = vx;
+      b.velocity.z = 0;
+      ph.step(DT);
+      target.position.copy(b.position);
+      t += DT;
+      input.beginFrame();
+      cam.update(DT);
+      input.endFrame();
+      const head = b.position.clone();
+      head.y += cfg.pivotHeight;
+      minD = Math.min(minD, camera.position.distanceTo(head));
+      assert.ok(ph.sphereCast(camera.position, new THREE.Vector3(0, 1, 0), cfg.collisionRadius * 0.75, 0.01) !== 0, `${name} 第 ${i} 帧相机进碰撞体`);
+      // 换肩 / 抬高是平滑量（碰撞前拉照旧立即生效，不算）：偏移、抬高单帧变化
+      if (i > 0) maxSmooth = Math.max(maxSmooth, Math.abs(cam.shoulder - prev.side), Math.abs(cam.lift - prev.lift));
+      prev.side = cam.shoulder;
+      prev.lift = cam.lift;
+      sideLo = Math.min(sideLo, cam.side);
+      sideHi = Math.max(sideHi, cam.side);
+    }
+    ph.removeBody(b);
+    worst = Math.min(worst, minD);
+    assert.ok(minD >= 0.6, `${name}：相机离头最近 ${minD.toFixed(3)} m`);
+    assert.ok(maxSmooth <= 0.08, `${name}：偏移 / 抬高单帧变化 ${maxSmooth.toFixed(3)} m（跳变）`);
+    if (/朝西|朝南/.test(name)) {
+      assert.ok(minD > 3.9 && sideLo > 0.39, `${name}：开阔方向应是 4 m 右肩（${minD.toFixed(2)} / ${sideLo.toFixed(2)}）`);
+    }
+    notes.push(`${name} ${minD.toFixed(2)} m（偏移 ${sideLo.toFixed(2)}…${sideHi.toFixed(2)}，平滑量单帧 ≤ ${maxSmooth.toFixed(3)}）`);
+  }
+  return `缝内最近 ${worst.toFixed(2)} m；${notes.join('；')}`;
+});
+
+await test('BUG-028 角色近距淡出：nearFadeAlpha 0.35 m 以内 0、0.9 m 以外 1、单调；CharacterNearFade 只动蒙皮网格（含描边壳），钢笔（普通网格、共用道具材质）/ 幽灵预写不动，a = 1 时恢复原 alphaHash / opacity', () => {
+  const [n0, n1] = cfg.nearFade;
+  assert.equal(nearFadeAlpha(n0, cfg.nearFade), 0);
+  assert.equal(nearFadeAlpha(0.05, cfg.nearFade), 0);
+  assert.equal(nearFadeAlpha(n1, cfg.nearFade), 1);
+  let p = -1;
+  for (let d = 0; d <= 1.2; d += 0.01) {
+    const a = nearFadeAlpha(d, cfg.nearFade);
+    assert.ok(a >= p - 1e-9);
+    p = a;
+  }
+  const root = new THREE.Group();
+  const geo = new THREE.BoxGeometry();
+  const bone = new THREE.Bone();
+  const skel = new THREE.Skeleton([bone]);
+  const body = new THREE.SkinnedMesh(geo, new THREE.MeshStandardMaterial());
+  body.add(bone);
+  body.bind(skel);
+  const hull = new THREE.SkinnedMesh(geo, new THREE.MeshLambertMaterial({ side: THREE.BackSide }));
+  hull.userData.outlineHull = true;
+  body.add(hull);
+  const ghost = new THREE.SkinnedMesh(geo, new THREE.MeshStandardMaterial({ colorWrite: false }));
+  ghost.userData.ghostPrepass = true;
+  body.add(ghost);
+  const penMat = new THREE.MeshStandardMaterial();
+  const pen = new THREE.Mesh(geo, penMat);
+  bone.add(pen);
+  const hair = new THREE.MeshStandardMaterial({ transparent: true, opacity: 0.8 });
+  const hairMesh = new THREE.SkinnedMesh(geo, [hair, body.material]);
+  root.add(body, hairMesh);
+  const f = new CharacterNearFade(root);
+  f.set(0.5);
+  assert.equal(f.touched, 3, '身体 / 壳 / 头发');
+  assert.ok(body.material.alphaHash && hull.material.alphaHash && hair.alphaHash);
+  assert.equal(body.material.opacity, 0.5);
+  assert.ok(Math.abs(hair.opacity - 0.4) < 1e-9);
+  assert.ok(!penMat.alphaHash && penMat.opacity === 1, '钢笔不动');
+  assert.ok(!ghost.material.alphaHash, '幽灵预写不动');
+  f.set(0.2);
+  assert.ok(Math.abs(hair.opacity - 0.16) < 1e-9, '按原值乘，不累乘');
+  f.set(1);
+  assert.equal(f.touched, 0);
+  assert.ok(!body.material.alphaHash && !hull.material.alphaHash && !hair.alphaHash);
+  assert.equal(body.material.opacity, 1);
+  assert.ok(Math.abs(hair.opacity - 0.8) < 1e-9);
+  return `淡出 ${n0}–${n1} m · 3 个材质 alphaHash · 钢笔 / 幽灵预写不动 · 恢复原值`;
 });
 
 let failed = 0;

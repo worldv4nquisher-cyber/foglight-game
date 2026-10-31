@@ -101,6 +101,28 @@ export const gameplay = {
     minCollisionDistance: 0.35,
     /** -indoor 触发体内的最大距离（m） */
     indoorMaxDistance: 2.0,
+    /**
+     * BUG-028 窄缝（#157 南沿）：肩后偏移被挡时的处理。
+     * - shoulderSkin：右 / 左扫掠停在接触点后再往回让这么多（m）。原来支点正好停在碰撞球接触面上，下一步后拉扫掠
+     *   一出发就算「碰到」（球面追踪 d < 1e-3）→ 距离 0，相机落在头上；
+     * - 右侧可用 < shoulderOffset × shoulderSwitchRatio 时换左肩（左侧也不够就取两边较宽的一侧）；右肩后拉被挡、左肩能多拉 shoulderSwitchGain 以上也换；
+     *   右侧完全放开（≥ shoulderOffset）且右肩后拉不比左肩差才换回来（滞回不来回跳）；
+     * - 偏移按 shoulderSwitchSpeed（m/s，指数逼近 + 限速）平滑换边，不跳；实际偏移每帧再按该侧扫掠结果夹住（碰撞优先）。
+     */
+    shoulderSkin: 0.05,
+    shoulderSwitchRatio: 0.75,
+    shoulderSwitchSpeed: 1.6,
+    /** BUG-028：右肩后拉被挡时，左肩后拉要多出这么多（m）才换边 */
+    shoulderSwitchGain: 0.5,
+    /**
+     * BUG-028：后拉空间不够（从未抬高的支点扫掠 < lowSpaceDistance）时把跟随支点平滑抬高，最多 lowSpaceLift（m，向上扫掠夹住），
+     * 抬高量 = lowSpaceLift × smoothstep(1 − 后拉距离 / lowSpaceDistance)，按 lowSpaceLiftSpeed（m/s）逼近。
+     */
+    lowSpaceDistance: 1.2,
+    lowSpaceLift: 0.6,
+    lowSpaceLiftSpeed: 1.5,
+    /** BUG-028：相机离头（跟随点）近到 nearFade[1] 以内角色开始抖动淡出（alphaHash），nearFade[0] 以内全隐（m） */
+    nearFade: [0.35, 0.9] as readonly [number, number],
     /** 跟随点竖直方向的平滑（1/s），上下台阶时不抖 */
     pivotYDamping: 12,
     /** 自动回正：静止多久后开始（s）与漂移速度（°/s） */
