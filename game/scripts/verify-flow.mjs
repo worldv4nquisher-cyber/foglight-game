@@ -143,10 +143,24 @@ function fakeGame({ loadMs = 0, loaded = [] } = {}) {
       current: { name: 's1-ebb-shore', scene: {}, camera: {} },
       async change(name) {
         log.push(['change', name, fade.opacity, [...loadedGroups]]);
-        this.current = { name, scene: {}, camera: {} };
+        this.current = { name, scene: {}, camera: {}, usePostFX: true };
       },
     },
-    renderer: { compileAsync: async () => {} },
+    renderer: {
+      target: null,
+      toneMapping: THREE.ACESFilmicToneMapping,
+      compiled: [],
+      getRenderTarget() {
+        return this.target;
+      },
+      setRenderTarget(t) {
+        this.target = t;
+      },
+      async compileAsync() {
+        this.compiled.push({ toTarget: this.target !== null, toneMapping: this.toneMapping });
+      },
+    },
+    postfx: { active: true },
     events: { on: () => () => {} },
     input: { pushContext: () => () => {} },
     assets: {
@@ -198,6 +212,10 @@ await test('切换（已预加载）：总时长 ≤ 1.0 s、全黑时换场景�
   assert.equal(flow.transitioning, false);
   assert.equal(game.ui.fade.opacity, 0, '画面恢复');
   assert.equal(flow.takeEntry(), 'from-s1', '默认入口');
+  // 走后处理的关卡按「画进 RT、不做色调映射」预编译（和真实出图一致，不多编上屏变体），编完还原
+  assert.deepEqual(game.renderer.compiled, [{ toTarget: true, toneMapping: THREE.NoToneMapping }], '按后处理路径预编译');
+  assert.equal(game.renderer.target, null, '渲染目标还原');
+  assert.equal(game.renderer.toneMapping, THREE.ACESFilmicToneMapping, '色调映射还原');
   assert.equal(flow.takeEntry(), null, '入口只取一次');
 });
 

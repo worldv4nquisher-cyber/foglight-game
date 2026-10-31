@@ -1,3 +1,4 @@
+import * as THREE from 'three';
 import type { Game } from './Game';
 import { LEVEL_GROUPS, type AssetGroup } from '@/assets/manifest';
 import { debugEnabled } from '@/config/debug';
@@ -248,9 +249,27 @@ export class GameFlow {
   private async compileCurrent(): Promise<void> {
     const s = this.game.scenes.current;
     if (!s) return;
+    // 按真正的出图路径编译：走后处理时场景画进 composer 的 RT（线性输出、不做色调映射），直接上屏时是 sRGB + ACES。
+    // 之前一律按上屏编译，走后处理的关卡每个材质多编一套永远用不上的变体，还挂在材质上不释放
+    // （从菜单进 S1 着色器 77 个 vs 直接进 43 个，JS 堆多 ~3.5 MB，verify-memory 堆检查不过；v0.1-037）。
+    // 程序参数在 compileAsync 的同步部分就定了，所以只在调用那一下切 RT / 色调映射，马上还原，不影响之后的帧。
+    const r = this.game.renderer;
+    const viaPost = s.usePostFX && this.game.postfx.active;
+    const prevTarget = r.getRenderTarget();
+    const prevTone = r.toneMapping;
+    const rt = viaPost ? new THREE.WebGLRenderTarget(1, 1) : null;
     try {
-      await Promise.race([this.game.renderer.compileAsync(s.scene, s.camera), wait(250)]);
+      r.setRenderTarget(rt);
+      r.toneMapping = viaPost ? THREE.NoToneMapping : THREE.ACESFilmicToneMapping;
+      const p = r.compileAsync(s.scene, s.camera);
+      r.setRenderTarget(prevTarget);
+      r.toneMapping = prevTone;
+      rt?.dispose();
+      await Promise.race([p, wait(250)]);
     } catch {
+      r.setRenderTarget(prevTarget);
+      r.toneMapping = prevTone;
+      rt?.dispose();
       /* 编译失败不影响流程，第一帧再编译 */
     }
   }
