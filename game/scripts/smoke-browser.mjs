@@ -1260,7 +1260,7 @@ const CHECKS = [
       if (await evaluate(`__game.scenes.current.lighthouseOn`)) throw new Error('BUG-006：进 S3 时灯塔不应已亮');
       await evaluate(`__game.scenes.current.lightTheLamp(); 1`);
       if (!(await evaluate(`__game.scenes.current?.name !== 's3-lighthouse' || __game.scenes.current.lighthouseOn`))) throw new Error('BUG-006：点灯后灯塔没亮');
-      // BUG-016：点灯 → 结尾演出 0:04（游戏时间）才切章节结束页；低帧率下墙钟可能 50–90 s。按游戏时间等 8 s（同 e9a58b2 修 015），墙钟 3 分钟兜底
+      // BUG-016：点灯 → 结尾演出结束才切章节结束页（035 起 106 s 演出时钟，下面 seek 到 104 s）。按游戏时间等 8 s（同 e9a58b2 修 015），墙钟 3 分钟兜底
       const untilGame = async (expr, gameSec, wallMs = 180000) => {
         const clock = () => evaluate(`__game.time.fixedTick * __game.time.fixedDelta`).catch(() => null);
         const t0 = await clock();
@@ -1273,6 +1273,8 @@ const CHECKS = [
         }
         return false;
       };
+      // 035：结尾演出 106 s（演出时钟）才进结束页——这里只测流程，把演出推到 104 s
+      await evaluate(`__game.scenes.current?.endingCutscene?.seek(104), 1`);
       if (!(await untilGame(`__game.scenes.current?.name === 'chapter-end'`, 8))) throw new Error('点灯后没进章节结束页（游戏时间 8 s / 墙钟 180 s）');
       s = await st();
       if (!s.save?.chapterComplete) throw new Error('结束页没存 chapterComplete');
@@ -2755,24 +2757,35 @@ const CHECKS = [
       await ff(0.5);
       if ((await evaluate(`window.__lit`)) !== 1) throw new Error('lighthouse:ignited 应只发一次 ' + (await evaluate(`window.__lit`)));
       out.push('按 E：锁输入 → 走位 → 拉杆逐帧转到 −60° → 第 34 帧点燃，lighthouse:ignited 只一次；嗡鸣点燃前一直在、点燃后停 ✓');
-      // 点灯独白 ch1.s3.ignite.mono：ignited 后 0.5 s 起 3.0 s、锁定不可点掉、只一次；0:04 切远景（章节结束）前消失
-      const ffTo = async (T) => {
-        const now = await evaluate(`__s3.puzzles.outroTime`);
-        if (now < T) await ff(T - now);
+      // 点灯独白 ch1.s3.ignite.mono：ignited 后 0.5 s 起 3.0 s、锁定不可点掉、只一次；0:04 切远景前消失。
+      // 035 起时间轴走演出时钟（结尾曲音频时钟 / 无音频时 performance.now），不走游戏时间 → 按 __s3.endingCutscene.t 等；0:04 不再进结束页
+      const untilT = async (T, wallMs = 30000) => {
+        const end = Date.now() + wallMs;
+        while (Date.now() < end) {
+          if ((await evaluate(`__s3.endingCutscene?.t ?? -1`)) >= T) return true;
+          await sleep(50);
+        }
+        return false;
       };
       const subNow = `(() => { const c = __s3.game.ui.subtitles.current; return c ? { id: c.id, locked: c.locked } : null; })()`;
-      await ffTo(1.0);
+      if (!(await untilT(1.0))) throw new Error('演出时钟没走到 1.0 s');
       let sub = await evaluate(subNow);
       if (sub?.id !== 'ch1.s3.ignite.mono' || !sub.locked) throw new Error('点灯后 1.0 s 应显示锁定的点灯独白 ' + JSON.stringify(sub));
       if (await evaluate(`__s3.game.ui.subtitles.track.advance()`)) throw new Error('点灯独白不应能点掉');
-      await ffTo(3.6);
+      if (!(await untilT(3.6))) throw new Error('演出时钟没走到 3.6 s');
       sub = await evaluate(subNow);
       if (sub?.id === 'ch1.s3.ignite.mono') throw new Error('点灯独白 3.5 s 后应消失');
       if (await evaluate(`__s3.game.scenes.current !== __s3`)) throw new Error('0:04 前不应离开 S3');
       if (!(await evaluate(`__s3.game.narrative.hasSeen('ch1.s3.ignite.mono')`))) throw new Error('点灯独白应记为已看过');
-      await ffTo(4.1);
-      if (!(await untilG(`__s3.game.scenes.current !== __s3`, 8))) throw new Error('0:04 后应进章节结束页');
-      out.push('点灯独白 0.5–3.5 s 锁定不可点掉、只一次，0:04 前消失 → 章节结束 ✓');
+      if (!(await untilT(5.0))) throw new Error('演出时钟没走到 5 s');
+      st = await evaluate(`({ cur: __s3.game.scenes.current === __s3, shot: __s3.endingCutscene.shot, cam: __s3.cameraFollow.cutsceneName })`);
+      if (!st.cur || st.shot !== 'far-exterior' || st.cam !== 'ch1-ending') throw new Error('035：0:04 后应切塔外远景、仍在 S3（不再进结束页）' + JSON.stringify(st));
+      // 推到演出尾：106 s 才进结束页
+      await evaluate(`__s3.endingCutscene.seek(104.5), 1`);
+      await sleep(300);
+      if (await evaluate(`__s3.game.scenes.current !== __s3`)) throw new Error('035：106 s 前不应进结束页');
+      if (!(await untilG(`__s3.game.scenes.current !== __s3`, 8))) throw new Error('035：演出 106 s 结束后应进章节结束页');
+      out.push('点灯独白 0.5–3.5 s 锁定不可点掉、只一次，0:04 前消失 → 0:04 切塔外远景（不进结束页）→ 106 s 演出结束才进章节结束页 ✓');
       await evaluate(`localStorage.removeItem('foglight.save.v1'); 1`);
       try { await cdp.goto(''); } catch (e) { throw new Error('回 S1 失败：' + e.message, { cause: e }); }
       return out.join('，');
@@ -3288,7 +3301,7 @@ CHECKS.push({
       await evaluate(anInstall);
       await evaluate(`window.__an1031.attach('bus', __game.audio.musicGain)`);
     };
-    // A) 点燃 → 结尾曲同帧起播 → 0:04 切章节结束页后继续放
+    // A) 点燃 → 结尾曲同帧起播；结束页接着放结尾曲、结束页上按住 Space 1 s 也能 0.75 s 淡掉（035）
     await enterS3();
     await waitClock(ac, 2.5);
     await evaluate(`__s3.lightTheLamp(); 1`);
@@ -3338,8 +3351,8 @@ CHECKS.push({
     const lv0 = await measure("bus", 3);
     if (!(lv0.rms > -90))
       throw new Error("结尾曲开头音乐总线没电平 " + JSON.stringify(lv0));
-    // 0:04 是游戏时间：软件渲染（swiftshader）下 S3 帧率很低，游戏时间 4 s 时音频时钟已走了 100+ s、结尾曲已放完 / 在 95 s 后的淡出里，
-    // 测不出「结束页接着放」。所以这里直接调 S3 在 0:04 调的同一个 flow.completeChapter()（不等游戏时间），音频时钟上就是点燃后几秒进结束页
+    // 035 起演出 106 s（结尾曲静音）才进结束页，测不出「结束页接着放」。所以这里直接调演出结束 / 跳过调的同一个 flow.completeChapter()，
+    // 音频时钟上就是点燃后几秒进结束页（= 结尾曲还在放时到了结束页）
     await evaluate(`void __game.flow.completeChapter(), 1`);
     if (!(await until(`__game.scenes.current?.name === 'chapter-end'`, 120000)))
       throw new Error("completeChapter 后没进章节结束页");
@@ -3367,18 +3380,38 @@ CHECKS.push({
             ),
           }),
       );
+    // 035：结束页上按住 Space 1 s → 结尾曲 0.75 s 淡出（跳过监听在 UI 层，不在 S3）
+    const space = (type) => `window.dispatchEvent(new KeyboardEvent('${type}', { code: 'Space', key: ' ', bubbles: true })), 1`;
+    const sk0 = await evaluate(`({ id: __game.ui.skip.id, n: __game.ui.skip.log.length })`);
+    if (sk0.id !== "ch1-ending-page")
+      throw new Error("结束页上结尾曲在放时应注册跳过 " + JSON.stringify(sk0));
+    await evaluate(space("keydown"));
+    await sleep(500);
+    const ring = await evaluate(`({ p: __game.ui.skip.progress(performance.now()), vis: __game.ui.skipHint.visible, k: __game.audio.musicKey })`);
+    if (!(ring.p > 0.2 && ring.p < 1) || !ring.vis || ring.k !== "mus-ending-ch1")
+      throw new Error("结束页按住 0.5 s：圆环进度应在 0–1 之间、结尾曲还在 " + JSON.stringify(ring));
+    if (!(await until(`__game.audio.musicKey === null`, 5000)))
+      throw new Error("结束页按住 Space 1 s 没淡掉结尾曲");
+    await evaluate(space("keyup"));
+    const pg = await evaluate(`({ l: __game.audio.musicLog.at(-1), log: __game.ui.skip.log.at(-1), scene: __game.scenes.current?.name })`);
+    if (pg.l.op !== "stop" || pg.l.from !== "mus-ending-ch1" || pg.l.fade !== 0.75 || pg.log.id !== "ch1-ending-page" || pg.scene !== "chapter-end")
+      throw new Error("结束页跳过应 0.75 s 淡出结尾曲、留在结束页 " + JSON.stringify(pg));
     out.push(
-      `点燃后 3 s 音乐总线 ${fmt(lv0)}；completeChapter（S3 0:04 调的同一入口）进章节结束页，结尾曲继续（位置 ${ce.pos.toFixed(2)} s = 点燃后 ${ce.el.toFixed(2)} s），结束页上 ${fmt(lv1)}`,
+      `点燃后 3 s 音乐总线 ${fmt(lv0)}；completeChapter（演出结束 / 跳过调的同一入口）进章节结束页，结尾曲继续（位置 ${ce.pos.toFixed(2)} s = 点燃后 ${ce.el.toFixed(2)} s），结束页上 ${fmt(lv1)}；结束页按住 Space（0.5 s 圆环 ${ring.p.toFixed(2)}）→ 结尾曲 stop fade ${pg.l.fade} s、留在结束页`,
     );
-    // B) 重进 S3：点燃 1.5 s 后跳过 → 0.75 s 淡出、之后总线静音
+    // B) 重进 S3：点燃 1.5 s 后按住 Space 1 s 跳过演出 → 结尾曲 0.75 s 淡出、黑场 0.75 s → 章节结束页；之后总线静音
     await enterS3();
     await waitClock(ac, 2.5);
     await evaluate(`__s3.lightTheLamp(); 1`);
     if (!(await until(`__game.audio.musicKey === 'mus-ending-ch1'`, 10000)))
       throw new Error("第二次点燃结尾曲没起");
-    await waitClock(ac, 1.5);
+    await waitClock(ac, 0.5);
+    await evaluate(space("keydown"));
+    if (!(await until(`__s3.endingCutscene.endedBy === 'skip'`, 5000)))
+      throw new Error("演出中按住 Space 1 s 没跳过 " + JSON.stringify(await evaluate(`({ id: __game.ui.skip.id, t: __s3.endingCutscene.t })`)));
+    await evaluate(space("keyup"));
     const sk = await evaluate(
-      `(() => { __game.events.emit('cutscene:skip', { id: 'ch1-ending' }); return { l: __game.audio.musicLog.at(-1), k: __game.audio.musicKey, now: __game.audio.context.currentTime }; })()`,
+      `(() => ({ l: __game.audio.musicLog.at(-1), k: __game.audio.musicKey, now: __game.audio.context.currentTime, t: __s3.endingCutscene.t, el: __game.audio.context.currentTime - __s3.endingMusic.ignitedAt }))()`,
     );
     if (
       sk.k !== null ||
@@ -3391,12 +3424,155 @@ CHECKS.push({
     const lv2 = await measure("bus", 2);
     if (lv2.rms !== -999 && lv2.rms > -100)
       throw new Error("跳过淡出后音乐总线应静音 " + JSON.stringify(lv2));
+    if (!(await until(`__game.scenes.current?.name === 'chapter-end'`, 20000)))
+      throw new Error("跳过后没进章节结束页");
     out.push(
-      `跳过（cutscene:skip ch1-ending）@点燃后 1.5 s → stop fade ${sk.l.fade} s；0.9 s 后音乐总线 ${fmt(lv2)}`,
+      `按住 Space 跳过 @演出 ${sk.t.toFixed(2)} s（点燃后 ${sk.el.toFixed(2)} s）→ stop fade ${sk.l.fade} s；0.9 s 后音乐总线 ${fmt(lv2)}；随后到章节结束页`,
     );
     await evaluate(`localStorage.clear(); 1`);
     await cdp.goto("");
     return out.join("；");
+  },
+});
+
+// ---------------------------------------------------------------- v0.1-035 结尾演出
+// 每个 cue 触发的那一帧（step 之后）记一份现场：演出 t / 时钟来源 / 结尾曲音频位置 / 镜头 / 字幕 / 汐姿势 / 父亲 / 雾 / 剪影 / 黑场 / 日志第 6 页
+const cut035Hook = `(() => {
+  const c = __s3.endingCutscene; if (!c || c.__hooked) return 0; c.__hooked = true;
+  window.__cut035 = { cues: [], frames: 0, end: null, sceneAt: null };
+  const step = c.step.bind(c); let n = 0;
+  const audioPos = () => { const a = __game.audio, em = __s3.endingMusic; return a.musicKey === 'mus-ending-ch1' && em?.ignitedAt != null ? a.context.currentTime - em.ignitedAt : null; };
+  c.step = (t) => { step(t); window.__cut035.frames++; const L = c.player.log;
+    while (n < L.length) { const l = L[n++]; const f = __s3.father, an = __s3.rig?.animator, sub = __game.ui.subtitles.current;
+      window.__cut035.cues.push({ id: l.id, at: l.at, firedAt: +l.firedAt.toFixed(3), src: l.source, audio: audioPos(), shot: c.shot, cam: __s3.cameraFollow.cutsceneName,
+        sub: sub?.id ?? null, xi: an?.posing ?? null, fMode: f?.mode ?? null, fT: f ? +f.time.toFixed(3) : null, fVis: f?.visible ?? null,
+        fog: +(__s3.scene.fog?.density ?? 0).toFixed(5), sil: c.silhouette?.visible ?? null, fade: +__game.ui.fade.opacity.toFixed(3), page6: __game.narrative.outroEntryUnlocked }); } };
+  __game.events.on('scene:change', () => { if (window.__cut035.sceneAt === null) window.__cut035.sceneAt = { t: c.t, audio: audioPos(), wall: performance.now(), endedBy: c.endedBy }; });
+  return 1; })()`;
+const cut035Row = (r) => `${r.id} 目标 ${r.at} s / 触发 ${r.firedAt.toFixed(2)} s（${r.src}${r.audio === null ? '' : `，曲 ${r.audio.toFixed(2)} s`}）镜头 ${r.shot}`;
+
+CHECKS.push({
+  name: 'v0.1-035 结尾演出 art=1：点燃 → 按音频时钟逐 cue（远景 / 雾口 / 剪影 / 眺望 / 父亲摸头同帧 / 那边没有亮 / 坐下写 / 日志 / 后拉 / 淡出）→ 106 s 才进结束页',
+  async run({ evaluate, cdp, sleep }) {
+    const { until, unlock, gotoLong } = music1031({ evaluate, sleep });
+    const out = [];
+    await evaluate(`localStorage.clear(); 1`);
+    await gotoLong(cdp, 'debug=1&scene=s3&art=1', 's3-lighthouse');
+    await unlock(cdp);
+    if (!(await until(`!!__s3.endingMusic?.buffer && !!__s3.father && !!__s3.rig?.animator`, 180000)))
+      throw new Error('结尾曲预取 / 父亲 / 汐没就绪 ' + JSON.stringify(await evaluate(`({ b: !!__s3.endingMusic?.buffer, f: !!__s3.father })`)));
+    await evaluate(cut035Hook);
+    const w0 = Date.now();
+    await evaluate(`__s3.lightTheLamp(); 1`);
+    if (!(await until(`__game.scenes.current?.name === 'chapter-end'`, 200000))) throw new Error('演出 200 s 墙钟内没进结束页 ' + JSON.stringify(await evaluate(`({ t: __s3.endingCutscene?.t, cues: window.__cut035.cues.length })`)));
+    const wall = (Date.now() - w0) / 1000;
+    const r = await evaluate(`window.__cut035`);
+    const want = ['lens', 'fog_open', 'silhouette', 'gaze', 'father_in', 'father_out', 'no_answer', 'sit_write', 'journal', 'pull_back', 'fade_out'];
+    if (r.cues.map((c) => c.id).join() !== want.join()) throw new Error('cue 顺序 / 缺失 ' + r.cues.map((c) => c.id).join());
+    const C = Object.fromEntries(r.cues.map((c) => [c.id, c]));
+    const bad = [];
+    for (const c of r.cues) {
+      if (c.src !== 'audio') bad.push(`${c.id} 时钟来源 ${c.src}`);
+      if (!(c.firedAt >= c.at && c.firedAt - c.at < 0.5)) bad.push(`${c.id} 触发 ${c.firedAt} vs ${c.at}`);
+      if (c.audio !== null && Math.abs(c.audio - c.firedAt) > 0.1) bad.push(`${c.id} 和曲子差 ${(c.audio - c.firedAt).toFixed(3)}`);
+    }
+    if (C.lens.shot !== 'far-exterior' || C.lens.cam !== 'ch1-ending') bad.push('0:04 应切塔外远景 ' + JSON.stringify(C.lens));
+    if (C.fog_open.shot !== 'fog-gap') bad.push('0:14 镜头 ' + C.fog_open.shot);
+    if (!(C.silhouette.fog < C.fog_open.fog)) bad.push(`雾口：24 s 雾密度 ${C.silhouette.fog} 应低于 14 s ${C.fog_open.fog}`);
+    if (C.silhouette.sil === false) bad.push('0:24 剪影应可见');
+    if (C.gaze.xi !== 'xi-stand-gaze') bad.push('0:30 汐应 xi-stand-gaze ' + C.gaze.xi);
+    if (C.father_in.fMode !== 'hand' || !C.father_in.fVis || C.father_in.xi !== 'xi-stand-gaze' || C.father_in.fT > 0.5) bad.push('0:36 父亲 hand-on-head 应同帧起 ' + JSON.stringify(C.father_in));
+    if (C.father_out.fMode !== null || C.father_out.fVis) bad.push('父亲应离场 ' + JSON.stringify(C.father_out));
+    if (C.no_answer.sub !== 'ch1.outro.no_answer') bad.push('0:50 字幕 ' + C.no_answer.sub);
+    if (C.sit_write.xi !== 'xi-sit-write' || C.sit_write.shot !== 'over-shoulder') bad.push('0:58 坐下写 ' + JSON.stringify(C.sit_write));
+    if (C.journal.sub !== 'ch1.outro.journal_entry' || !C.journal.page6) bad.push('1:06 日志 ' + JSON.stringify(C.journal));
+    if (!/^pull-/.test(C.pull_back.shot)) bad.push('1:14 后拉镜头 ' + C.pull_back.shot);
+    if (C.fade_out.fade > 0.05 || !C.fade_out.shot) bad.push('1:35 淡出起点 ' + JSON.stringify(C.fade_out));
+    const sa = r.sceneAt;
+    if (!sa || sa.endedBy !== 'end' || sa.t < 106 || sa.t > 106.6) bad.push('结束页时刻 ' + JSON.stringify(sa));
+    if (bad.length) throw new Error(bad.join('；'));
+    await sleep(1500);
+    const pg = await evaluate(`({ fade: __game.ui.fade.opacity, ctx: __game.input.context, save: JSON.parse(localStorage.getItem('foglight.save.v1') || 'null')?.chapterComplete })`);
+    if (pg.fade > 0.05 || !pg.save) throw new Error('结束页应从黑场淡入、存 chapterComplete ' + JSON.stringify(pg));
+    out.push(r.cues.map(cut035Row).join('；'));
+    out.push(`父亲 hand 起 @${C.father_in.firedAt.toFixed(2)} s 父亲时间 ${C.father_in.fT}、汐 ${C.father_in.xi}；雾 ${C.fog_open.fog} → ${C.silhouette.fog}；结束页 @演出 ${sa.t.toFixed(2)} s（曲 ${sa.audio === null ? '—' : sa.audio.toFixed(2)} s）墙钟 ${wall.toFixed(1)} s、${r.frames} 帧；结束页淡入后 fade ${pg.fade.toFixed(2)}`);
+    console.log('[035] cues ' + JSON.stringify(r.cues));
+    await evaluate(`localStorage.clear(); 1`);
+    await cdp.goto('');
+    return out.join('；');
+  },
+});
+
+CHECKS.push({
+  name: 'v0.1-035 跳过 art=1：演出 20 s 按住 Space 1 s（圆环）→ 结尾曲 0.75 s 淡出 + 0.75 s 黑场 → 结束页（日志第 6 页照样写）',
+  async run({ evaluate, cdp, sleep }) {
+    const { until, unlock, gotoLong } = music1031({ evaluate, sleep });
+    await evaluate(`localStorage.clear(); 1`);
+    await gotoLong(cdp, 'debug=1&scene=s3&art=1', 's3-lighthouse');
+    await unlock(cdp);
+    if (!(await until(`!!__s3.endingMusic?.buffer`, 180000))) throw new Error('结尾曲预取没到');
+    await evaluate(cut035Hook);
+    await evaluate(`__s3.lightTheLamp(); 1`);
+    await evaluate(`__s3.endingCutscene.seek(19.5), 1`);
+    if (!(await until(`__s3.endingCutscene.t >= 20`, 20000))) throw new Error('演出没走到 20 s');
+    const space = (type) => `window.dispatchEvent(new KeyboardEvent('${type}', { code: 'Space', key: ' ', bubbles: true })), 1`;
+    const p0 = await evaluate(`({ id: __game.ui.skip.id, t: __s3.endingCutscene.t, wall: performance.now() })`);
+    if (p0.id !== 'ch1-ending') throw new Error('演出中应注册跳过 ' + JSON.stringify(p0));
+    await evaluate(space('keydown'));
+    await sleep(500);
+    const mid = await evaluate(`({ p: __game.ui.skip.progress(performance.now()), vis: __game.ui.skipHint.visible, done: __s3.endingCutscene.endedBy })`);
+    if (!(mid.p > 0.2 && mid.p < 1) || !mid.vis || mid.done) throw new Error('按住 0.5 s：圆环进度应在 0–1、未跳过 ' + JSON.stringify(mid));
+    if (!(await until(`__s3.endingCutscene.endedBy === 'skip'`, 5000))) throw new Error('按住 1 s 没跳过');
+    const sk = await evaluate(`({ t: __s3.endingCutscene.t, wall: performance.now(), l: __game.audio.musicLog.at(-1), k: __game.audio.musicKey, log: __game.ui.skip.log.at(-1) })`);
+    await evaluate(space('keyup'));
+    const hold = (sk.log.at - (p0.wall)) / 1000;
+    if (sk.l.op !== 'stop' || sk.l.from !== 'mus-ending-ch1' || sk.l.fade !== 0.75 || sk.k !== null) throw new Error('跳过应 0.75 s 淡出结尾曲 ' + JSON.stringify(sk));
+    if (!(await until(`__game.scenes.current?.name === 'chapter-end'`, 30000))) throw new Error('跳过后没进结束页');
+    const r = await evaluate(`window.__cut035`);
+    const toPage = (r.sceneAt.wall - sk.log.at) / 1000;
+    if (toPage < 0.7) throw new Error('跳过后 0.75 s 黑场没走完就切页 ' + toPage);
+    await sleep(1500);
+    const pg = await evaluate(`({ fade: __game.ui.fade.opacity, page6: __game.narrative.outroEntryUnlocked, mono: __game.narrative.hasSeen('ch1.s3.ignite.mono'), sub: __game.ui.subtitles.current?.id ?? null })`);
+    if (pg.fade > 0.05 || !pg.page6 || !pg.mono || pg.sub) throw new Error('跳过后结束页：应淡入、日志第 6 页写上、无字幕 ' + JSON.stringify(pg));
+    const cues = r.cues.map((c) => c.id).join('/');
+    await evaluate(`localStorage.clear(); 1`);
+    await cdp.goto('');
+    return `演出 ${p0.t.toFixed(2)} s 按下 Space、0.5 s 圆环 ${mid.p.toFixed(2)}、${hold.toFixed(2)} s 后跳过（演出 ${sk.t.toFixed(2)} s；已触发 ${cues}）→ 结尾曲 stop fade ${sk.l.fade} s → ${toPage.toFixed(2)} s 后切结束页、淡入后 fade ${pg.fade.toFixed(2)}；日志第 6 页 ${pg.page6}`;
+  },
+});
+
+CHECKS.push({
+  name: 'v0.1-035 后备时钟 art=0：没有结尾曲 → performance.now 后备时钟逐 cue、106 s 进结束页',
+  async run({ evaluate, cdp, sleep }) {
+    const { until, gotoLong } = music1031({ evaluate, sleep });
+    await evaluate(`localStorage.clear(); 1`);
+    await gotoLong(cdp, 'debug=1&scene=s3&art=0', 's3-lighthouse');
+    if (!(await until(`!!window.__s3?.rig && !!__s3.endingCutscene`, 120000))) throw new Error('S3 art=0 没就绪');
+    await evaluate(cut035Hook);
+    await evaluate(`__s3.lightTheLamp(); 1`);
+    const w0 = await evaluate(`performance.now()`);
+    if (!(await until(`__s3.endingCutscene.t >= 15`, 40000))) throw new Error('后备时钟没走到 15 s ' + (await evaluate(`__s3.endingCutscene.t`)));
+    const a = await evaluate(`({ t: __s3.endingCutscene.t, wall: (performance.now() - ${w0}) / 1000, src: __s3.endingCutscene.clock.source, fr: __s3.endingCutscene.clock.frames, k: __game.audio.musicKey })`);
+    if (a.src !== 'fallback' || a.fr.audio !== 0 || a.k === 'mus-ending-ch1') throw new Error('art=0 应用后备时钟 ' + JSON.stringify(a));
+    // 中段推进：剩下的 cue 按序触发、照样到 106 s 才进结束页
+    await evaluate(`__s3.endingCutscene.seek(45), 1`);
+    if (!(await until(`__s3.endingCutscene.t >= 47`, 20000))) throw new Error('seek 后没走');
+    await evaluate(`__s3.endingCutscene.seek(80), 1`);
+    if (!(await until(`__s3.endingCutscene.t >= 81`, 20000))) throw new Error('seek 后没走');
+    await evaluate(`__s3.endingCutscene.seek(104), 1`);
+    await sleep(300);
+    if (await evaluate(`__game.scenes.current?.name === 'chapter-end'`)) throw new Error('106 s 前进了结束页');
+    if (!(await until(`__game.scenes.current?.name === 'chapter-end'`, 30000))) throw new Error('后备时钟到 106 s 没进结束页');
+    const r = await evaluate(`window.__cut035`);
+    const want = ['lens', 'fog_open', 'silhouette', 'gaze', 'father_in', 'father_out', 'no_answer', 'sit_write', 'journal', 'pull_back', 'fade_out'];
+    if (r.cues.map((c) => c.id).join() !== want.join()) throw new Error('cue 顺序 ' + r.cues.map((c) => c.id).join());
+    if (r.cues.some((c) => c.src !== 'fallback')) throw new Error('art=0 cue 时钟来源应全是 fallback');
+    const early = r.cues.filter((c) => c.at <= 14);
+    if (early.some((c) => c.firedAt - c.at > 0.5 || c.firedAt < c.at)) throw new Error('实时段 cue 偏差 ' + JSON.stringify(early));
+    if (!(r.sceneAt.t >= 106 && r.sceneAt.endedBy === 'end')) throw new Error('结束页时刻 ' + JSON.stringify(r.sceneAt));
+    await evaluate(`localStorage.clear(); 1`);
+    await cdp.goto('');
+    return `后备时钟：演出 ${a.t.toFixed(2)} s / 墙钟 ${a.wall.toFixed(2)} s（${a.fr.fallback} 帧 fallback、0 帧 audio）；实时段 ${early.map((c) => `${c.id} ${c.at}→${c.firedAt.toFixed(2)}`).join('、')}；seek 后 ${r.cues.length} 个 cue 按序（全部 fallback）；结束页 @演出 ${r.sceneAt.t.toFixed(2)} s`;
   },
 });
 
