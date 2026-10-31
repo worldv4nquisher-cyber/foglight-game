@@ -13,7 +13,7 @@ export const ASSET_RETRY_DELAY_MS = 150;
 
 export interface AssetLoadStat {
   url: string;
-  kind: 'glb' | 'ktx2' | 'img';
+  kind: 'glb' | 'ktx2' | 'img' | 'audio';
   /** 实际发起的请求次数（含重试） */
   attempts: number;
   ok: boolean;
@@ -32,6 +32,8 @@ export function isRetryableLoadError(err: unknown): boolean {
   if (err instanceof TypeError) return true;
   const e = err as { name?: string; response?: { status?: number } } | null;
   if (e?.name === 'AbortError') return true;
+  // batch17 D2：HTTP 已 200 但随后那一步被取消（<img> 的第二次请求被掐 → decode() EncodingError）由调用方标 retryable
+  if ((e as { retryable?: boolean } | null)?.retryable === true) return true;
   const status = e?.response?.status;
   if (typeof status === 'number') return status === 0 || status >= 500;
   return false;
@@ -133,4 +135,41 @@ export function stripFallbackTextures(root: THREE.Object3D): number {
     }
   });
   return n;
+}
+
+/**
+ * batch17 D2：UI 图片 = fetch（确认 200 + 读完字节）→ <img>.decode()（预热解码缓存，CSS / <img> 之后同 URL 命中）。
+ * 冷启动那一批请求取消（BUG-008 / 012 同源：托管扩展装进新 profile 时掐掉在飞的子资源请求）会落在两步中的任何一步：
+ * - fetch 被掐：TypeError → 照常重试
+ * - fetch 已 200、decode() 那次请求被掐：Chrome 报 EncodingError「The source image cannot be decoded」——字节其实是好的，也按可重试处理
+ * 真坏图（每次都 decode 失败）重试用完照样失败；4xx 不重试。
+ */
+export function loadImageWithRetry(
+  url: string,
+  deps: { fetch: (url: string) => Promise<{ ok: boolean; status: number; arrayBuffer(): Promise<ArrayBuffer> }>; decode?: (url: string) => Promise<void> } & RetryDeps,
+): Promise<string> {
+  return loadWithRetry(
+    url,
+    'img',
+    async () => {
+      const r = await deps.fetch(url);
+      if (!r.ok) throw Object.assign(new Error(`HTTP ${r.status}`), { response: { status: r.status } });
+      await r.arrayBuffer();
+      if (deps.decode) {
+        try {
+          await deps.decode(url);
+        } catch (err) {
+          const e = err as { name?: string; message?: string };
+          throw Object.assign(new Error(`decode: ${e?.name ?? 'Error'}: ${e?.message ?? String(err)}`), { name: e?.name ?? 'Error', retryable: true, cause: err });
+        }
+      }
+      return url;
+    },
+    deps,
+  );
+}
+
+/** batch17 D2：音频（THREE.AudioLoader 内部 fetch，原来不重试 → 被取消就整局 missing）按同一规则重试 */
+export function loadAudioWithRetry<T>(url: string, load: () => Promise<T>, deps: RetryDeps = {}): Promise<T> {
+  return loadWithRetry(url, 'audio', load, deps);
 }

@@ -18,7 +18,7 @@ import { LazyAudioCache, LAZY_AUDIO_TIMEOUT_MS } from './lazyAudio';
 import { ImageCache } from './imageCache';
 import { entriesForGroup, manifest, type AssetEntry, type AssetGroup } from './manifest';
 import { createPlaceholderModel, createPlaceholderTexture, createMissingTexture } from './placeholders';
-import { assetStats, createSharedKtx2, loadWithRetry, shareInflight, stripFallbackTextures } from './loadRetry';
+import { assetStats, createSharedKtx2, loadAudioWithRetry, loadImageWithRetry, loadWithRetry, shareInflight, stripFallbackTextures } from './loadRetry';
 
 const BASE = import.meta.env.BASE_URL;
 
@@ -74,6 +74,8 @@ export class AssetLoader {
       console.info(`[assets] UI 图片缺失，退回底色：${key} (${url})`, err);
     },
   });
+  /** batch17 D2：组加载里失败（记 missing）的资源和原因，冒烟 / QA 排查用：__game.assets.loadFailures */
+  readonly loadFailures: { key: string; url: string; error: string; wall: number }[] = [];
   /** 懒加载音频失败记录（原因 + performance.now()），冒烟 / QA 排查用：__game.assets.lazyAudioFailures */
   readonly lazyAudioFailures: { key: string; url: string; error: string; wall: number }[] = [];
   /** 懒加载音频（033 改：S1 场景曲等首帧后才请求；超时 LAZY_AUDIO_TIMEOUT_MS） */
@@ -83,7 +85,7 @@ export class AssetLoader {
       return e ? { url: e.url.startsWith('http') ? e.url : `${BASE}${e.url}`, art: e.art } : null;
     },
     artEnabled: () => this.artEnabled,
-    load: (url) => this.audioLoader.loadAsync(url),
+    load: (url) => loadAudioWithRetry(url, () => this.audioLoader.loadAsync(url)),
     timeoutMs: LAZY_AUDIO_TIMEOUT_MS,
     onLoaded: (key, buf) => {
       this.audio.set(key, buf);
@@ -262,6 +264,7 @@ export class AssetLoader {
           });
         } catch (err) {
           this.missing.add(entry.key);
+          this.loadFailures.push({ key: entry.key, url: entry.url, error: describeLoadError(err), wall: typeof performance !== 'undefined' ? performance.now() : 0 });
           if (entry.type === 'gltf' && !entry.optional) {
             if (typeof document !== 'undefined') document.documentElement.classList.add('assets-fallback');
             this.events.emit('assets:fallback', { url: entry.url, kind: 'glb' });
@@ -338,7 +341,8 @@ export class AssetLoader {
         break;
       }
       case 'audio': {
-        const buf = await this.audioLoader.loadAsync(url, prog);
+        // batch17 D2：被取消（TypeError Failed to fetch）重试；原来不重试 → 菜单曲 / UI 音效整局 missing
+        const buf = await loadAudioWithRetry(url, () => this.audioLoader.loadAsync(url, prog));
         this.audio.set(entry.key, buf);
         break;
       }
@@ -393,18 +397,19 @@ export class AssetLoader {
 
   /** 030 UI 图片：下载（网络失败 / 5xx 重试，同 GLB）+ 解码，成功返回 URL；之后 CSS / <img> 用同一 URL 命中缓存 */
   private async fetchImage(url: string): Promise<string> {
-    await loadWithRetry(url, 'img', async () => {
-      const r = await fetch(url);
-      if (!r.ok) throw Object.assign(new Error(`HTTP ${r.status}`), { response: { status: r.status } });
-      await r.arrayBuffer();
+    // batch17 D2：decode 放进重试里（原来在重试外面，冷启动那批取消落到 <img> 请求上就整局 missing）
+    return loadImageWithRetry(url, {
+      fetch: (u) => fetch(u),
+      decode:
+        typeof Image === 'undefined'
+          ? undefined
+          : (u) => {
+              const img = new Image();
+              img.decoding = 'async';
+              img.src = u;
+              return img.decode();
+            },
     });
-    if (typeof Image !== 'undefined') {
-      const img = new Image();
-      img.decoding = 'async';
-      img.src = url;
-      await img.decode();
-    }
-    return url;
   }
 
   /** 已加载的 UI 图片 URL（没有 / 没交付 / ?art=0 → null） */
@@ -515,4 +520,10 @@ export class AssetLoader {
     this.draco.dispose();
     this.ktx2.dispose();
   }
+}
+
+function describeLoadError(err: unknown): string {
+  const e = err as { name?: string; message?: string } | null;
+  if (e && typeof e === 'object') return `${e.name ?? 'Error'}: ${e.message ?? String(err)}`;
+  return String(err);
 }

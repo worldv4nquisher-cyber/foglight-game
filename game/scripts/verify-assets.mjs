@@ -480,6 +480,45 @@ try {
   ok('GLTFLoader 外部 KTX2：取消后重试 → 材质颜色 / 法线贴图都在；全部失败 → 颜色槽棋盘格占位、法线槽清空');
 }
 
+// ---- batch17 D2：冷启动那批请求取消落在 UI 音效 / 菜单曲 / UI 图片上 → 原来不重试、整局 missing
+{
+  const { loadImageWithRetry, loadAudioWithRetry, assetStats } = await import('../src/assets/loadRetry.ts');
+  const deps = { sleep: async () => {} };
+  const okRes = { ok: true, status: 200, arrayBuffer: async () => new ArrayBuffer(4) };
+  const encErr = () => Object.assign(new Error('The source image cannot be decoded.'), { name: 'EncodingError' });
+  // 图片：fetch 200、<img>.decode() 那次被掐（EncodingError）→ 重试成功
+  let dn = 0;
+  const u1 = await loadImageWithRetry('/d2/ui-icon-settings.svg', { ...deps, fetch: async () => okRes, decode: async () => { if (dn++ === 0) throw encErr(); } });
+  assert.equal(u1, '/d2/ui-icon-settings.svg');
+  assert.deepEqual([assetStats.get('/d2/ui-icon-settings.svg').attempts, assetStats.get('/d2/ui-icon-settings.svg').ok], [2, true], 'decode 被掐后重试成功');
+  // 图片：fetch 被取消 → 重试
+  let fn = 0;
+  await loadImageWithRetry('/d2/ui-illust-loading.webp', { ...deps, fetch: async () => { if (fn++ === 0) throw new TypeError('Failed to fetch'); return okRes; }, decode: async () => {} });
+  assert.equal(assetStats.get('/d2/ui-illust-loading.webp').attempts, 2);
+  // 真坏图：每次 decode 都失败 → 1+2 次后失败（不无限重试）
+  await assert.rejects(loadImageWithRetry('/d2/bad.webp', { ...deps, fetch: async () => okRes, decode: async () => { throw encErr(); } }), /EncodingError/);
+  assert.equal(assetStats.get('/d2/bad.webp').attempts, 3);
+  // 404 不重试、不 decode
+  let decoded = false;
+  await assert.rejects(loadImageWithRetry('/d2/none.webp', { ...deps, fetch: async () => ({ ok: false, status: 404, arrayBuffer: async () => new ArrayBuffer(0) }), decode: async () => void (decoded = true) }));
+  assert.deepEqual([assetStats.get('/d2/none.webp').attempts, decoded], [1, false]);
+  // 音频：AudioLoader 的 fetch 被取消（TypeError: Failed to fetch，batch17 复现原文）→ 重试成功
+  let an = 0;
+  const buf = await loadAudioWithRetry('/d2/mus-menu.ogg', async () => { if (an++ === 0) throw new TypeError('Failed to fetch'); return { duration: 106.67 }; }, deps);
+  assert.equal(buf.duration, 106.67);
+  assert.deepEqual([assetStats.get('/d2/mus-menu.ogg').attempts, assetStats.get('/d2/mus-menu.ogg').kind], [2, 'audio']);
+  // 音频解码错误（EncodingError 来自 decodeAudioData）不重试
+  let dn2 = 0;
+  await assert.rejects(loadAudioWithRetry('/d2/bad.ogg', async () => { dn2++; throw encErr(); }, deps));
+  assert.equal(dn2, 1);
+  // 接线：组加载的 audio / image、懒加载音频都走重试
+  const src = readFileSync(new URL('../src/assets/AssetLoader.ts', import.meta.url), 'utf8');
+  assert.ok(src.includes("loadAudioWithRetry(url, () => this.audioLoader.loadAsync(url, prog))"), '组加载音频重试');
+  assert.ok(src.includes("load: (url) => loadAudioWithRetry(url, () => this.audioLoader.loadAsync(url))"), '懒加载音频重试');
+  assert.ok(src.includes('return loadImageWithRetry(url, {'), 'UI 图片 fetch + decode 一起重试');
+  ok('batch17 D2：UI 图片 decode 被掐 / fetch 被取消、音频 fetch 被取消都重试（1+2 次），真坏图 / 解码错 / 404 不无限重试；组加载与懒加载都接上');
+}
+
 // ---- batch17 D4：check-size 140 MB 警戒线只警告、150 MB 以上才失败
 {
   const M = 1024 * 1024;
