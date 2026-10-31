@@ -47,7 +47,7 @@ try {
     if (m.type() === 'error') errors.push(`console.error（${lastStep} 之后，${((Date.now() - t0) / 1000).toFixed(1)}s）: ` + m.text());
     else if (m.type() === 'warning' || /\[assets\]|\[quality\]|\[render\]/.test(m.text())) infos.push(`${m.type()}: ${m.text()}`.slice(0, 300));
   });
-  page.on('pageerror', (e) => errors.push(`pageerror（${lastStep} 之后）: ` + (e.stack ?? e.message)));
+  page.on('pageerror', (e) => errors.push(`pageerror（${lastStep} 之后）: ` + (e.stack || e.message || `${e.name ?? ''} ${String(e)} ${JSON.stringify(e)}`)));
   const until = async (expr, ms, label) => {
     try {
       await page.waitForFunction(expr, null, { timeout: ms, polling: 200 });
