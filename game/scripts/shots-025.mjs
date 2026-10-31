@@ -4,6 +4,9 @@
 //   贴水面高度序列（相机离水 0.02 / 0.1 / 0.3 / 0.6 / 1.2 m）检查淡入不跳变。
 // 用法：npx vite build && node --import ./scripts/register-ts-paths.mjs scripts/shots-025.mjs [views,逗号分隔]
 //   SHOTS_WATCHDOG_MS（默认 20 min）到点强退并清理 Chrome 临时目录
+// 037 强度变体：SHOTS_VARIANT=strength → 输出 shots-025/strength/，RT 分辨率固定 high 默认（reflections.planar = 0.5），
+//   每机位四档强度 k0（= ?reflectK=0 = off）/ k05 / k1 / kdef（画质配置 PLANAR_REFLECTION_STRENGTH），运行时改 reflection.strength
+//   （与 URL ?reflectK= 同一入口，免得每档整页重进）；之后用 scripts/compose-025-strength.py 拼 1×4。
 import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -12,7 +15,8 @@ import { fileURLToPath } from 'node:url';
 import { preview } from 'vite';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const OUT = resolve(root, process.env.SHOTS_OUT ?? '../docs/tasks/shots-025');
+const VARIANT = process.env.SHOTS_VARIANT ?? '';
+const OUT = resolve(root, process.env.SHOTS_OUT ?? (VARIANT === 'strength' ? '../docs/tasks/shots-025/strength' : '../docs/tasks/shots-025'));
 mkdirSync(OUT, { recursive: true });
 if (!existsSync(join(root, 'dist/index.html'))) throw new Error('先 npm run build');
 const chromePath = process.env.CHROME ?? ['/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser'].find((p) => existsSync(p));
@@ -82,7 +86,7 @@ const waitFrames = async (n) => {
 
 const report = { atmo: ATMO || '(默认)', shots: [], failed: [], errors, loads: [], stats: [] };
 // 只拍部分（argv[2]）时报告另存，不覆盖全量报告
-const reportFile = join(OUT, `shots-025${process.argv[2] ? '-' + process.argv[2].replace(/,/g, '+') : ''}.json`);
+const reportFile = join(OUT, `shots-025${VARIANT ? '-' + VARIANT : ''}${process.argv[2] ? '-' + process.argv[2].replace(/,/g, '+') : ''}.json`);
 const save = () => writeFileSync(reportFile, JSON.stringify(report, null, 2));
 
 /** 进 S1 并等全部 GLB / KTX2 加载完：有失败 / 占位就整页重进（负载高时 vite preview 偶发 Failed to fetch） */
@@ -120,6 +124,8 @@ const VIEWS = {
 const SCALES = [['off', 0], ['q025', 0.25], ['q05', 0.5], ['q1', 1]].filter(([n]) => !process.env.SHOTS_SCALES || process.env.SHOTS_SCALES.split(',').includes(n));
 const SHOOT = new Set(['off', 'q05', 'q1']);
 const SET_SCALE = (s) => `(() => { const r = __s1.reflection; if (!r) return 'no-reflection'; r.enabled = ${s} > 0; if (${s} > 0) r.scale = ${s}; return 1; })()`;
+/** 037 强度变体：分辨率 = 画质档默认（high 0.5），只改强度；dist 里没有 strength 字段 = 旧 dist，直接报错 */
+const SET_STRENGTH = (k) => `(() => { const r = __s1.reflection; if (!r) return 'no-reflection'; if (!('strength' in r)) throw new Error('dist 没有 reflectK 改动，先重建'); r.enabled = true; r.scale = __game.quality.preset.reflections.planar; r.strength = ${k}; return 1; })()`;
 const frameMs = async (n) => evaluate(`new Promise((res) => { let k = 0; let t0 = 0; const f = (t) => { if (k === 0) t0 = t; if (++k > ${n}) return res(+((t - t0) / ${n}).toFixed(1)); requestAnimationFrame(f); }; requestAnimationFrame(f); })`);
 const cam = (eye, at, fov) => evaluate(`(() => { const c = __s1.camera; c.position.set(${eye}); c.fov = ${fov}; c.lookAt(${at.join(',')}); c.updateProjectionMatrix(); c.updateMatrixWorld(); return 1; })()`);
 
@@ -157,6 +163,32 @@ async function run(views) {
       continue;
     }
     const [eye, at, fov] = VIEWS[view];
+    if (VARIANT === 'strength') {
+      const def = await evaluate('__game.quality.preset.reflections.planarStrength');
+      report.defaultStrength = def;
+      report.planar = await evaluate('__game.quality.preset.reflections.planar');
+      for (const [kname, k] of [['k0', 0], ['k05', 0.5], ['k1', 1], ['kdef', def]]) {
+        const name = `s1-${view}-strength-${kname}`;
+        try {
+          await evaluate(SET_STRENGTH(k));
+          await cam(eye, at, fov);
+          await setView(W, H);
+          await until(`innerWidth === ${W}`, 60000);
+          await waitFrames(4);
+          const st = await evaluate('JSON.parse(JSON.stringify(__s1.reflectionStats))');
+          await shot(`${name}.png`);
+          report.shots.push({ name, view, strength: k, k: st?.k, rendered: st?.rendered, skip: st?.skip, rt: `${st?.width}x${st?.height}` });
+          console.log('  ✓', name, JSON.stringify(report.shots.at(-1)));
+          await setView(...SMALL);
+        } catch (e) {
+          report.failed.push({ name, error: String(e?.message ?? e) });
+          console.log('  ✗', name, e?.message ?? e);
+          await setView(...SMALL).catch(() => {});
+        }
+        save();
+      }
+      continue;
+    }
     for (const [sname, s] of SCALES) {
       const name = `s1-${view}-reflect-${sname}`;
       try {
@@ -180,6 +212,7 @@ async function run(views) {
       save();
     }
   }
+  if (VARIANT === 'strength') await evaluate(SET_STRENGTH('__game.quality.preset.reflections.planarStrength'));
   await evaluate(SET_SCALE(0.5));
   await evaluate('(() => { __game.time.timeScale = 1; return 1; })()');
 }
