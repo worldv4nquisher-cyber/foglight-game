@@ -74,7 +74,9 @@ const { send, evaluate, until } = cdp;
 const MB = (b) => +(b / 1048576).toFixed(1);
 
 // JS 堆里 V8 自己的代码区（字节码 / JIT 机器码 / 反馈向量，type = code 的节点）随「第一次跑到 S2 / S3 的函数」只增不减（有上限），
-// 不是游戏对象泄漏；拍一张堆快照把它分出来，±10% 比的是「对象堆」= 快照总量 − 代码区，总堆照样记。
+// 不是游戏对象泄漏；拍一张堆快照把它分出来，±10% 比的是「对象堆」= Runtime.getHeapUsage 的 usedSize − 代码区，总堆照样记。
+// 注意不能用「快照 self_size 总和 − 代码区」：快照把 ArrayBuffer 后备存储（贴图 mip / 几何体数组，S1 极致 ~500 MB）也算成 native 节点，
+// 那样 JS 对象的增减会被淹没（bad3643 第一版就是这么算的，00:32 那轮的 objHeapMB 509.7 → 509.9 不可用）。
 let snapChunks = [];
 cdp.on((msg) => { if (msg.method === 'HeapProfiler.addHeapSnapshotChunk') snapChunks.push(msg.params.chunk); });
 async function heapSplit() {
@@ -110,7 +112,7 @@ async function settle(label, sceneName) {
     const staleScenes = window.__sceneRefs.filter(([, r]) => r.deref() && r.deref() !== __game.scenes.current).map(([l]) => l);
     const big = [...window.__glTexLive.values()].sort((a, b) => b.w * b.h - a.w * a.h).slice(0, 6).map((e) => e.w + 'x' + e.h + ' 0x' + e.fmt.toString(16) + ' @' + e.phase);
     return { scene: __game.scenes.current?.name ?? null, staleScenes, geometries: i.memory.geometries, textures: i.memory.textures, programs: i.programs?.length ?? 0, glTextures: window.__glTexLive.size, bigTextures: big, gl: { ...window.__glMem } }; })()`);
-  const row = { label, ...m, glMB: MB(m.gl.tex + m.gl.buf + m.gl.rb), texMB: MB(m.gl.tex), bufMB: MB(m.gl.buf), rbMB: MB(m.gl.rb), heapMB: MB(heap.usedSize), objHeapMB: MB(split.total - split.code), codeHeapMB: MB(split.code) };
+  const row = { label, ...m, glMB: MB(m.gl.tex + m.gl.buf + m.gl.rb), texMB: MB(m.gl.tex), bufMB: MB(m.gl.buf), rbMB: MB(m.gl.rb), heapMB: MB(heap.usedSize), objHeapMB: MB(heap.usedSize - split.code), codeHeapMB: MB(split.code) };
   report.steps.push(row);
   save();
   console.log(`  ${label.padEnd(14)} ${String(row.scene).padEnd(16)} 估算显存 ${row.glMB} MB（贴图 ${row.texMB} / 缓冲 ${row.bufMB} / RB ${row.rbMB}）几何体 ${row.geometries} 贴图 ${row.textures}（GL ${row.glTextures}）着色器 ${row.programs} JS 堆 ${row.heapMB} MB（对象 ${row.objHeapMB} / 代码 ${row.codeHeapMB}）${row.staleScenes.length ? `（旧场景未回收：${row.staleScenes.join('、')}）` : ''}`);
