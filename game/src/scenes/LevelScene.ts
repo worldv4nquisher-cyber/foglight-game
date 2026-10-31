@@ -622,5 +622,9 @@ export abstract class LevelScene extends BaseScene {
     super.dispose();
     const keep = this.game.assets.sharedResources();
     for (const r of roots) disposeObject3D(r, { keep });
+    // 调试句柄 window.__s1 / __s2 / __s3（DEV 或 ?smoke 时挂）指向本场景：不摘掉的话整个旧关卡（场景图、物理、实体）
+    // 一直活到下次进同一关，JS 堆随通关只涨不落（v0.1-037 verify-memory 堆 ×1.47，堆快照保留路径唯一就是这个）
+    const w = window as unknown as Record<string, unknown>;
+    for (const k of Object.keys(w)) if (k.startsWith('__') && w[k] === this) delete w[k];
   }
 }
