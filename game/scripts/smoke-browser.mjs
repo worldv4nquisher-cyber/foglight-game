@@ -3760,6 +3760,283 @@ CHECKS.push({
   },
 });
 
+// ---------------------------------------------------------------- M7 存档读档全流程（程序 M7 自查，2026-11-01）
+// 主菜单新游戏 → 每个场景中途做出谜题进度 → 刷新（重新打开页面到主菜单）→「继续」→ 回到该场景入口、谜题全部复位（006：只存场景入口）
+// → 在读档后的场景里把谜题解完、走出口进下一场景（存档跟上）→ S3 点灯 → 按住 Space 跳过结尾 → 结束页 → 刷新 → 继续回结束页 → 新游戏覆盖确认清档。
+// 解谜步骤用各场景单项冒烟同样的捷径（传送 / interact 事件 / 机关按键 / beam.solve），这里只验「读档之后状态对、还能接着通关」。
+CHECKS.push({
+  name: 'v0.1-M7 存档读档全流程：S1 / S2 / S3 中途刷新 → 继续回场景入口且谜题复位 → 读档后解完谜题走出口 → 点灯 → 跳过结尾 → 结束页刷新后继续 → 新游戏清档',
+  async run({ evaluate, cdp, sleep }) {
+    const out = [];
+    // 等待一律按游戏时间（无头软件渲染负载高时帧率很低），墙钟只兜底
+    const untilG = async (expr, gameSec = 8, wallMs = 240000) => {
+      const end = Date.now() + wallMs;
+      let t0 = null;
+      let v;
+      while (Date.now() < end) {
+        const r = await evaluate(`(() => { let v; try { v = (${expr}); } catch { v = false; } return { v, tick: window.__game?.time?.fixedTick ?? 0, dt: window.__game?.time?.fixedDelta ?? 0.0167 }; })()`).catch(() => ({ v: false, tick: 0, dt: 0 }));
+        v = r.v;
+        if (v) return v;
+        t0 ??= r.tick;
+        if ((r.tick - t0) * r.dt >= gameSec) return v;
+        await sleep(100);
+      }
+      return v;
+    };
+    const untilW = async (expr, ms) => {
+      const end = Date.now() + ms;
+      while (Date.now() < end) {
+        if (await evaluate(expr).catch(() => false)) return true;
+        await sleep(150);
+      }
+      return false;
+    };
+    const visible = (sel) => `(() => { const e = document.querySelector(${JSON.stringify(sel)}); return !!e && e.checkVisibility(); })()`;
+    const clickSel = async (sel) => {
+      const r = await evaluate(`(() => { const e = document.querySelector(${JSON.stringify(sel)}); if (!e || !e.checkVisibility()) return null; const b = e.getBoundingClientRect(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 }; })()`);
+      if (!r) throw new Error('看不到 ' + sel);
+      await cdp.click(r.x, r.y);
+    };
+    const save = () => evaluate(`JSON.parse(localStorage.getItem('foglight.save.v1') || 'null')`);
+    const ready = (S) => `!!(window.${S} && ${S}.puzzles && ${S}.rig) && __game.input.context === 'explore' && !__game.isPaused && !__game.flow.transitioning && !${S}.rig.controller.busy`;
+    /** 刷新：重新打开游戏地址（不带 autostart → 主菜单），点「继续」，等场景可操作 */
+    const refreshContinue = async (scene, S) => {
+      await cdp.gotoMenu();
+      if (!(await untilW(visible('.main-menu [data-act="continue"]'), 10000))) throw new Error('刷新后主菜单没有「继续」');
+      await clickSel('.main-menu [data-act="continue"]');
+      if (!(await untilW(`__game.scenes.current?.name === '${scene}'`, LOAD_MS))) throw new Error(`继续没进 ${scene}：` + (await evaluate(`__game.scenes.current?.name`)));
+      if (S && !(await untilG(ready(S), 30, ESTAB_MS))) throw new Error(`继续后 ${scene} 没回到可操作`);
+    };
+    /** 走进当前场景出口（「外 → 内」触发：先放到外面一步，等两帧再放进去），等下一个场景可操作 */
+    const takeExit = async (nextScene, S) => {
+      await evaluate(`(async () => { const s = __game.scenes.current; const ex = s.exits[0]; const c = ex.opts.center.clone();
+        s.rig.body.teleport(c.clone().add(s.name === 's1-ebb-shore' ? new c.constructor(2.5, 0.02, 0) : new c.constructor(3, 0.02, 3)));
+        for (let k = 0; k < 3; k++) await new Promise((r) => requestAnimationFrame(r));
+        s.rig.body.teleport(c.clone().setY(c.y + 0.02)); return 1; })()`);
+      if (!(await untilW(`__game.scenes.current?.name === '${nextScene}'`, LOAD_MS))) throw new Error(`出口没进 ${nextScene}`);
+      if (!(await untilG(ready(S), 30, ESTAB_MS))) throw new Error(`${nextScene} 进场后没回到可操作`);
+    };
+
+    // ======================================================== 新游戏 → S1
+    await evaluate(`localStorage.removeItem('foglight.save.v1'); 1`);
+    await cdp.gotoMenu();
+    if (await evaluate(visible('.main-menu [data-act="continue"]'))) throw new Error('清档后不该有「继续」');
+    await clickSel('.main-menu [data-act="new"]');
+    if (!(await untilW(`__game.scenes.current?.name === 's1-ebb-shore'`, LOAD_MS))) throw new Error('新游戏没进 S1');
+    if (!(await untilG(ready('__s1'), 30, ESTAB_MS))) throw new Error('S1 开场后没回到可操作');
+    let sv = await save();
+    if (sv?.sceneId !== 's1' || sv.chapterComplete) throw new Error('新游戏进 S1 应自动存档 s1 ' + JSON.stringify(sv));
+
+    const S1T = `__s1.puzzles.tide`;
+    const tp1 = (x, y, z, facing) => evaluate(`(() => { const s = __s1; s.interaction.cancel?.(); s.rig.body.teleport(new s.rig.body.position.constructor(${x}, ${y}, ${z})); ${facing !== undefined ? `s.rig.controller.facing = ${facing};` : ''} return 1; })()`);
+    const ring1 = () => evaluate(`__game.events.emit('interact:used', { id: 'tide-bell-s1', kind: 'use' }); 1`);
+    const s1st = () => evaluate(`(() => { const s = __s1, p = s.puzzles, b = s.rig.body.position, r = p.raft.object.position; return { tide: p.tide.state, level: +p.tide.level.toFixed(3), raft: p.raft.state, raftX: +r.x.toFixed(2), pushT: p.raftPush.pushT, p1: p.p1Solved, p2: p.p2Solved, gate: s.physics.colliders.find((c) => c.name === 's1-reef-gate-wall')?.enabled, goal: __game.narrative.goal, pos: [b.x, b.y, b.z].map((v) => +v.toFixed(2)), journal: __game.narrative.readDocs.slice() }; })()`);
+    const solveP1 = async () => {
+      await tp1(-14.45, 2.42, -6.2, -Math.PI / 2);
+      await ring1();
+      if (!(await untilG(`${S1T}.state === 'low' && !${S1T}.transitioning`, 20))) throw new Error('S1 敲钟没退潮 ' + JSON.stringify(await s1st()));
+      await tp1(1.8, 0.14, 3.4);
+      if (!(await untilG(`__s1.puzzles.p1Solved`, 6))) throw new Error('S1 小径尽头没解开谜题 1 ' + JSON.stringify(await s1st()));
+    };
+    const s1Initial = await s1st();
+    // ---- S1 中途：谜题 1 解开 + 读邻居纸条 → 刷新
+    await solveP1();
+    await tp1(15.05, S1.sandY + 0.1, -1.1, Math.PI);
+    const readOk = await evaluate(`(() => { const s = __s1; const it = s.interaction.get?.('s1-neighbor-note') ?? s.interaction.items.find((i) => i.id === 's1-neighbor-note'); if (!it) return false; s.interaction.trigger(it); return true; })()`);
+    if (readOk && (await untilG(`__game.ui.reader.isOpen`, 4))) await evaluate(`__game.ui.reader.close(); 1`);
+    const midJournal = await evaluate(`__game.narrative.readDocs.slice()`);
+    const midSave = await save();
+    await refreshContinue('s1-ebb-shore', '__s1');
+    let s = await s1st();
+    const d0 = Math.hypot(s.pos[0] - s1Initial.pos[0], s.pos[2] - s1Initial.pos[2]);
+    if (s.tide !== 'high' || Math.abs(s.level - 1.6) > 1e-3 || s.p1 || s.p2 || s.raft === 'floating' || Math.abs(s.raftX - s1Initial.raftX) > 0.05 || s.pushT !== 0 || !s.gate || s.goal !== s1Initial.goal || d0 > 0.6)
+      throw new Error('S1 读档后应回入口、谜题复位（涨潮 1.6、谜题 1/2 未解、浮台原位、入口空气墙、初始目标）' + JSON.stringify({ s, s1Initial }));
+    if (JSON.stringify(s.journal) !== JSON.stringify((await save()).readDocs)) throw new Error('S1 读档后日志应等于存档 readDocs ' + JSON.stringify({ s, sv: await save() }));
+    out.push(`S1 中途（谜题 1 解开${readOk ? ' + 读纸条' : ''}）刷新 → 继续：回入口（偏 ${d0.toFixed(2)} m）、涨潮 1.6、谜题复位、目标 ${s.goal}、日志 ${s.journal.length} 条（中途内存里 ${midJournal.length} 条、存档 ${midSave.readDocs.length} 条）✓`);
+
+    // ---- 读档后解完 S1：谜题 1 → 浮台进石槽 → 涨潮浮起 → 两次跨越到远侧台阶（谜题 2）→ 出口
+    await solveP1();
+    await evaluate(`(() => { const p = __s1.puzzles; p.raft.object.position.set(-0.9, 0.4, 10.5); p.raft.object.updateMatrixWorld(true); p.raftPush.pushT = 1; p.raftPush.locked = true; return 1; })()`);
+    await tp1(-14.45, 2.42, -6.2, -Math.PI / 2);
+    await ring1();
+    if (!(await untilG(`${S1T}.state === 'high' && !${S1T}.transitioning && __s1.puzzles.raft.state === 'floating'`, 20))) throw new Error('S1 浮台石槽里涨潮没浮起 ' + JSON.stringify(await s1st()));
+    const links = s1StepLinks();
+    const cross = async (z, facing, label) => {
+      await tp1(-0.9, 1.87, z, facing);
+      if (!(await untilG(`!!__s1.rig.controller.nearLink`, 6))) throw new Error(label + '：没有跨越点 ' + JSON.stringify(await s1st()));
+      await evaluate(`__game.input.setRaw('smoke', 'KeyE', true); 1`);
+      await sleep(80);
+      await evaluate(`__game.input.setRaw('smoke', 'KeyE', false); 1`);
+      if (!(await untilG(`__s1.rig.controller.busy`, 4))) throw new Error(label + '：E 没开始跨越');
+      if (!(await untilG(`!__s1.rig.controller.busy`, 15))) throw new Error(label + '：跨越没结束');
+    };
+    await cross(links[0].start - 0.15, 0, '岸 → 浮台');
+    await cross(links[2].start - 0.25, 0, '浮台 → 远侧台阶');
+    if (!(await untilG(`__s1.puzzles.p2Solved`, 6))) throw new Error('读档后到远侧台阶没解开谜题 2 ' + JSON.stringify(await s1st()));
+    await takeExit('s2-keeper-house', '__s2');
+    sv = await save();
+    if (sv?.sceneId !== 's2' || sv.chapterComplete) throw new Error('进 S2 应存档 s2 ' + JSON.stringify(sv));
+    out.push('读档后 S1 谜题 1 + 2 解开 → 出口 → S2、存档 s2 ✓');
+
+    // ======================================================== S2
+    const trig2 = (id) => evaluate(`(() => { const s = __s2; const it = s.interaction.get('${id}'); if (!it) return 'no'; s.interaction.trigger(it); return 'ok'; })()`);
+    const tp2 = (x, y, z) => evaluate(`(() => { const s = __s2; s.rig.body.teleport(new s.rig.body.body.position.constructor(${x}, ${y}, ${z})); return 1; })()`);
+    const tpStand2 = (id) => evaluate(`(() => { const s = __s2; const st = s.interaction.get('${id}').standPoint(new s.rig.body.position.constructor()); const p = st.position; s.rig.body.teleport(p.clone().setY(p.y + 0.05)); s.rig.controller.facing = st.facing; return 1; })()`);
+    const idle2 = `!__s2.rig.controller.busy && !__s2.interaction.animState`;
+    const s2st = () => evaluate(`(() => { const s = __s2, p = s.puzzles, b = s.rig.body.position; return { ...p.state, holding: s.interaction.held.current?.id ?? null, glow: p.windowGlow.visible, A: p.beam.mirrorA.part.angles[0], B: p.beam.mirrorB.part.angles[0], lock: p.beam.lock.state, doorCol: s.colliderOf.get(s.greybox.cellarDoorLeaf).enabled, gateCol: s.colliderOf.get(s.greybox.dialGateLeaf).enabled, goal: __game.narrative.goal, ctx: __game.input.context, pos: [b.x, b.y, b.z].map((v) => +v.toFixed(2)) }; })()`);
+    const key2 = async (code) => {
+      await evaluate(`__game.input.setRaw('smoke', '${code}', true); 1`);
+      await untilG('false', 0.02);
+      await evaluate(`__game.input.setRaw('smoke', '${code}', false); 1`);
+      await untilG('false', 0.15);
+    };
+    const s2Initial = await s2st();
+    const s2Journal = async () => {
+      await tp2(-3.9, 3.05, -0.25);
+      await untilG('false', 0.3);
+      if ((await trig2('journal-s2')) !== 'ok') throw new Error('没有 journal-s2');
+      if (!(await untilG(`__game.ui.reader.isOpen`, 6))) throw new Error('S2 日志没打开 ' + JSON.stringify(await s2st()));
+      await evaluate(`__game.ui.reader.close(); 1`);
+      if (!(await untilG(`__s2.puzzles.state.journalRead && __game.narrative.goal === 'ch1.s2.goal.cellar' && ${idle2}`, 6))) throw new Error('S2 读完日志目标应为 cellar ' + JSON.stringify(await s2st()));
+    };
+    const s2Lock = async () => {
+      if ((await trig2('lantern-s2')) !== 'ok') throw new Error('没有 lantern-s2');
+      if (!(await untilG(`__s2.interaction.held.current?.id === 'lantern' && ${idle2}`, 8))) throw new Error('S2 没拿起风灯 ' + JSON.stringify(await s2st()));
+      await tpStand2('lamp-stand-east-s2');
+      await untilG('false', 0.2);
+      await trig2('lamp-stand-east-s2');
+      if (!(await untilG(`!__s2.interaction.held.current && ${idle2}`, 8))) throw new Error('S2 东灯台没放下风灯 ' + JSON.stringify(await s2st()));
+      await tp2(-12.2, 0.05, 2.0);
+      await untilG('false', 0.2);
+      await trig2('mirror-stand-s2-a');
+      if (!(await untilG(`__game.input.context === 'puzzle'`, 4))) throw new Error('S2 没进镜子机关');
+      await untilG('false', 1.2);
+      await key2('KeyD');
+      await key2('KeyD');
+      await key2('KeyE');
+      for (let i = 0; i < 3; i++) await key2('KeyA');
+      await key2('Tab');
+      if (!(await untilG(`__s2.puzzles.state.lockOpen && __s2.puzzles.state.doorOpen >= 1`, 8))) throw new Error('S2 光感锁 / 地窖门没开 ' + JSON.stringify(await s2st()));
+    };
+    // ---- S2 中途：读日志 → 东灯台 + 转镜开锁、地窖门开 → 刷新
+    await s2Journal();
+    await s2Lock();
+    await refreshContinue('s2-keeper-house', '__s2');
+    s = await s2st();
+    const d2 = Math.hypot(s.pos[0] - s2Initial.pos[0], s.pos[2] - s2Initial.pos[2]);
+    if (s.holding !== 'lantern' || s.glow || s.journalRead || s.lockOpen || s.doorOpen !== 0 || !s.doorCol || s.hasKey || s.gateOpen || !s.gateCol || s.A !== 0 || s.B !== 0 || s.goal !== s2Initial.goal)
+      throw new Error('S2 读档后应回入口、谜题复位（拿着风灯、窗不亮、锁 / 地窖门 / 铁门关、镜子 0°、初始目标）' + JSON.stringify({ s, s2Initial }));
+    out.push(`S2 中途（日志 + 开锁 + 地窖门）刷新 → 继续：入口${d2 > 0.6 ? `（默认入口，和从 S1 进来的入口差 ${d2.toFixed(1)} m）` : ''}、拿着风灯、锁 / 门 / 镜子复位、目标 ${s.goal} ✓`);
+
+    // ---- 读档后解完 S2：日志 → 开锁 → 钥匙 → 观察点 317 → 拨盘 317 → 出口
+    await s2Journal();
+    await s2Lock();
+    await tpStand2('cellar-key-s2');
+    await untilG('false', 0.3);
+    await trig2('cellar-key-s2');
+    if (!(await untilG(`__s2.puzzles.state.hasKey && ${idle2}`, 12))) throw new Error('S2 没拿到钥匙 ' + JSON.stringify(await s2st()));
+    await tp2(0.95, 3.05, 1.0);
+    await untilG('false', 0.4);
+    await evaluate(`__game.input.setRaw('smoke', 'Mouse2', true); 1`);
+    await untilG('false', 0.7);
+    for (let i = 0; i < 4; i++) {
+      await evaluate(`(() => { const s = __s2, c = s.camera; const p = c.getWorldPosition(c.position.clone()); const t = p.clone().set(18, 0.2, 1).sub(p).normalize(); s.cameraFollow.yaw = Math.atan2(-t.x, -t.z); s.cameraFollow.pitch = Math.asin(t.y); return 1; })()`);
+      await untilG('false', 0.25);
+    }
+    const seen = await untilG(`__s2.puzzles.state.digitsSeen`, 3);
+    await evaluate(`__game.input.setRaw('smoke', 'Mouse2', false); 1`);
+    if (!seen) throw new Error('S2 观察点对准后没显影 317 ' + JSON.stringify(await s2st()));
+    await untilG('false', 0.8);
+    await tpStand2('dial-gate-s2');
+    await untilG('false', 0.3);
+    await trig2('dial-gate-s2');
+    if (!(await untilG(`__game.input.context === 'puzzle' && ${idle2}`, 8))) throw new Error('S2 拨盘没进机关');
+    await untilG('false', 0.3);
+    for (let i = 0; i < 3; i++) await key2('KeyD');
+    await key2('KeyE');
+    await key2('KeyD');
+    await key2('KeyE');
+    for (let i = 0; i < 7; i++) await key2('KeyD');
+    if (!(await untilG(`__s2.puzzles.state.gateOpen && __game.input.context === 'explore' && !__s2.colliderOf.get(__s2.greybox.dialGateLeaf).enabled`, 8))) throw new Error('S2 拨盘 317 没开铁门 ' + JSON.stringify(await s2st()));
+    await takeExit('s3-lighthouse', '__s3');
+    sv = await save();
+    if (sv?.sceneId !== 's3' || sv.chapterComplete) throw new Error('进 S3 应存档 s3 ' + JSON.stringify(sv));
+    if (!sv.readDocs.includes('ch1.s2.journal.doc')) throw new Error('进 S3 时存档应记下读过父亲日志 ' + JSON.stringify(sv.readDocs));
+    out.push('读档后 S2 日志 → 开锁 → 钥匙 → 观察点 317 → 拨盘开门 → 出口 → S3、存档 s3（含父亲日志）✓');
+
+    // ======================================================== S3
+    const ff = (sec) => evaluate(`(() => { for (let i = 0; i < ${Math.round(sec / 0.05)}; i++) __s3.puzzles.fixedUpdate(0.05); return 1; })()`);
+    const s3st = () => evaluate(`(() => { const s = __s3, p = s.puzzles, b = s.rig.body.position; const c = s.colliderOf.get(s.greybox.doorLeaf); return { tide: p.tide.state, level: +p.tide.level.toFixed(3), rings: p.bell.rings, door: p.state.doorOpen, doorCol: c ? c.enabled : null, valve: p.state.valveOpen, ignited: p.state.ignited, ig: p.beam.igniter.state, lever: p.leverIx.enabled, sky: p.beam.sky.alwaysOn, goal: __game.narrative.goal, pos: [b.x, b.y, b.z].map((v) => +v.toFixed(2)) }; })()`);
+    const s3Initial = await s3st();
+    const s3BellDoor = async () => {
+      await evaluate(`__game.events.emit('interact:used', { id: 'tide-bell-s3', kind: 'use' }), 1`);
+      await evaluate(`__s3.tides.fixedUpdate(7), 1`);
+      if (!(await untilG(`__s3.puzzles.tide.state === 'low' && !__s3.puzzles.tide.transitioning`, 4))) throw new Error('S3 敲钟没退潮 ' + JSON.stringify(await s3st()));
+      await evaluate(`__game.events.emit('interact:used', { id: 'door-s3', kind: 'use' }), 1`);
+      await ff(1.5);
+      if (!(await untilG(`__s3.puzzles.state.doorOpen >= 1`, 3))) throw new Error('S3 门没开 ' + JSON.stringify(await s3st()));
+    };
+    // ---- S3 中途：敲钟退潮 + 开门 + 开阀 → 刷新
+    await s3BellDoor();
+    await evaluate(`__game.events.emit('interact:used', { id: 'oil-valve-s3', kind: 'hold' }), 1`);
+    if (!(await evaluate(`__s3.puzzles.state.valveOpen`))) throw new Error('S3 开阀没生效');
+    await refreshContinue('s3-lighthouse', '__s3');
+    s = await s3st();
+    if (s.tide !== s3Initial.tide || Math.abs(s.level - s3Initial.level) > 1e-3 || s.rings !== 0 || s.door !== 0 || s.doorCol !== true || s.valve || s.ignited || s.sky || s.lever || s.goal !== s3Initial.goal)
+      throw new Error('S3 读档后应回入口、谜题复位（涨潮、钟未敲、门关 + 碰撞、阀关、天光不常亮、拉杆不可点、初始目标）' + JSON.stringify({ s, s3Initial }));
+    out.push(`S3 中途（退潮 + 开门 + 开阀）刷新 → 继续：涨潮 ${s.level}、门 / 阀 / 拉杆复位、目标 ${s.goal} ✓`);
+
+    // ---- 读档后解完 S3：退潮开门 → 光路正解 → 开阀 → 可点灯 → 拉杆前真按 E → 点燃 → 按住 Space 跳过结尾 → 结束页
+    await s3BellDoor();
+    await evaluate(`__s3.puzzles.beam.solve(), 1`);
+    await evaluate(`__game.events.emit('interact:used', { id: 'oil-valve-s3', kind: 'hold' }), 1`);
+    await ff(2.2);
+    if (!(await untilG(`__s3.puzzles.beam.igniter.state === 'ready' && __s3.puzzles.leverIx.enabled`, 4))) throw new Error('S3 开阀后没进可点灯 ' + JSON.stringify(await s3st()));
+    await evaluate(`(() => { const s = __s3; const sp = s.puzzles.leverIx.standPoint(s.rig.body.position.clone()); s.rig.body.position.set(sp.position.x, sp.position.y + 0.02, sp.position.z); s.rig.body.velocity.set(0, 0, 0); s.rig.controller.facing = sp.facing; return 1; })()`);
+    if (!(await untilG(`__s3.interaction.current?.id === 'ignite-lever-s3' && !__s3.rig.controller.busy`, 4))) throw new Error('S3 拉杆前没选中拉杆 ' + JSON.stringify(await evaluate(`__s3.interaction.current?.id ?? null`)));
+    await evaluate(`__game.input.setRaw('smoke', 'KeyE', true); 1`);
+    const igniting = await untilG(`__s3.puzzles.state.igniting`, 3);
+    await evaluate(`__game.input.setRaw('smoke', 'KeyE', false); 1`);
+    if (!igniting) throw new Error('S3 按 E 没开始点灯');
+    if (!(await untilG(`__s3.puzzles.state.ignited && !!__s3.endingCutscene`, 6))) throw new Error('S3 没点燃 / 没进结尾演出');
+    await evaluate(`(window.__cM7 = __s3.endingCutscene, 1)`); // BUG-031 同理：跳过后 S3 释放，只读存下来的演出对象
+    if (!(await untilW(`__game.ui.skip.id === 'ch1-ending'`, 60000))) throw new Error('结尾演出没注册跳过 ' + JSON.stringify(await evaluate(`({ id: __game.ui.skip.id, t: __cM7.t })`)));
+    const space = (type) => `window.dispatchEvent(new KeyboardEvent('${type}', { code: 'Space', key: ' ', bubbles: true })), 1`;
+    await evaluate(space('keydown'));
+    const skipped = await untilW(`__cM7.endedBy === 'skip'`, 15000);
+    await evaluate(space('keyup'));
+    if (!skipped) throw new Error('按住 Space 没跳过结尾 ' + JSON.stringify(await evaluate(`({ t: __cM7.t, by: __cM7.endedBy })`)));
+    if (!(await untilW(`__game.scenes.current?.name === 'chapter-end' && ${visible('.chapter-end')}`, 30000))) throw new Error('跳过后没进章节结束页');
+    sv = await save();
+    if (!sv?.chapterComplete || !sv.readDocs.includes('ch1.s2.journal.doc')) throw new Error('结束页存档应 chapterComplete 且保留日志 ' + JSON.stringify(sv));
+    const endTime = await evaluate(`document.querySelector('[data-role="playtime"]')?.textContent ?? ''`);
+    out.push(`读档后 S3 退潮开门 → 光路 → 开阀 → 可点灯 → 真按 E 点燃 → 按住 Space 跳过结尾 → 结束页（用时 ${endTime.trim()}，存档 chapterComplete）✓`);
+
+    // ---- 结束页刷新 → 继续回结束页；新游戏覆盖确认 → 清档进 S1
+    await cdp.gotoMenu();
+    if (!(await untilW(visible('.main-menu [data-act="continue"]'), 10000))) throw new Error('通关后刷新主菜单没有「继续」');
+    await clickSel('.main-menu [data-act="continue"]');
+    if (!(await untilW(`__game.scenes.current?.name === 'chapter-end'`, 20000))) throw new Error('通关存档继续应回结束页');
+    await clickSel('.chapter-end [data-act="to-menu"]');
+    if (!(await untilW(`__game.scenes.current?.name === 'menu' && __game.ui.mainMenu.isOpen`, 20000))) throw new Error('结束页没回主菜单');
+    await clickSel('.main-menu [data-act="new"]');
+    if (!(await untilW(`__game.ui.mainMenu.view === 'confirm'`, 5000))) throw new Error('有存档新游戏没弹覆盖确认');
+    await clickSel('.main-menu .confirm-dialog [data-act="ok"], .main-menu .confirm-dialog [data-act="confirm"]');
+    if (!(await untilW(`__game.scenes.current?.name === 's1-ebb-shore'`, LOAD_MS))) throw new Error('覆盖确认后没进 S1');
+    if (!(await untilG(ready('__s1'), 30, ESTAB_MS))) throw new Error('新游戏 S1 没回到可操作');
+    sv = await save();
+    if (sv?.sceneId !== 's1' || sv.chapterComplete || sv.readDocs.length || sv.hintsUsed || (await evaluate(`__game.narrative.readDocs.length`))) throw new Error('新游戏应清档（s1、未完成、日志 / 提示清空）' + JSON.stringify(sv));
+    s = await s1st();
+    if (s.tide !== 'high' || s.p1 || s.p2) throw new Error('新游戏 S1 谜题应是初始状态 ' + JSON.stringify(s));
+    out.push('结束页刷新 → 继续回结束页 → 回主菜单 → 新游戏覆盖确认 → 清档进 S1（日志 / 提示 / 完成标记清空）✓');
+
+    await evaluate(`localStorage.removeItem('foglight.save.v1'); 1`);
+    await cdp.goto('');
+    return out.join('，');
+  },
+});
+
+
 const extra = process.env.SMOKE_ONLY ? CHECKS.filter((c) => process.env.SMOKE_ONLY.split('|').some((k) => c.name.includes(k))) : CHECKS;
 
 // ---------------------------------------------------------------- 起服务 + 浏览器
