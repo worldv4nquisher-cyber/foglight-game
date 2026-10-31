@@ -171,11 +171,38 @@ export class AudioSystem {
     }
   }
 
+  /**
+   * 首次手势解锁。BUG-033：resume() 会被拒（Firefox 离开 / 刷新页面时 InvalidStateError、Safari 非手势时 NotAllowedError）或一直挂起，
+   * 原来 `void` 不接 → 未处理的 rejection 进控制台；而且不管成没成功都撤监听 → 一次失败后整局没声音。
+   * 现在：接住 rejection；真的变成 running 才撤监听，没成功下次手势再试。
+   */
   private unlock = (): void => {
-    if (!this.context) return;
-    if (this.context.state === 'suspended') void this.context.resume();
-    if (typeof window !== 'undefined') for (const ev of this.unlockEvents) window.removeEventListener(ev, this.unlock);
+    const ctx = this.context;
+    if (!ctx) return;
+    if (ctx.state !== 'suspended') {
+      this.removeUnlockListeners();
+      return;
+    }
+    ctx.resume().then(
+      () => {
+        if (ctx.state === 'running') this.removeUnlockListeners();
+      },
+      () => {
+        /* 下次手势再试 */
+      },
+    );
   };
+
+  private removeUnlockListeners(): void {
+    if (typeof window !== 'undefined') for (const ev of this.unlockEvents) window.removeEventListener(ev, this.unlock);
+  }
+
+  /** BUG-033：suspend / resume 的 Promise 可能被拒（页面离开、上下文已关），接住不进控制台 */
+  private static quiet(p: Promise<void> | undefined): void {
+    p?.catch(() => {
+      /* 页面离开 / 上下文关闭：无需处理 */
+    });
+  }
 
   get muted(): boolean {
     return this._muted;
@@ -526,11 +553,11 @@ export class AudioSystem {
   }
 
   suspend(): void {
-    if (this.context?.state === 'running') void this.context.suspend();
+    if (this.context?.state === 'running') AudioSystem.quiet(this.context.suspend());
   }
 
   resume(): void {
-    if (this.context?.state === 'suspended') void this.context.resume();
+    if (this.context?.state === 'suspended') AudioSystem.quiet(this.context.resume());
   }
 
   dispose(): void {

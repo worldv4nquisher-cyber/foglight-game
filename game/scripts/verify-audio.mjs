@@ -1322,6 +1322,45 @@ test('033 改 主菜单曲电平：manifest gainDb 后 mus-menu 与 mus-s1-ebb-s
   if (remeasured.length) console.log(`    （ffmpeg 重测整条 RMS：${remeasured.join(', ')}）`);
 });
 
+test('BUG-033 解锁：resume 被拒不抛未处理 rejection、不撤监听，下次手势成功才撤；suspend / resume 被拒也接住', async () => {
+  const unhandled = [];
+  const onUR = (e) => unhandled.push(e);
+  process.on('unhandledRejection', onUR);
+  const listeners = new Map();
+  const prevWindow = globalThis.window;
+  globalThis.window = { addEventListener: (ev, fn) => listeners.set(ev, fn), removeEventListener: (ev, fn) => listeners.get(ev) === fn && listeners.delete(ev) };
+  try {
+    const ctx = new FakeContext();
+    ctx.state = 'suspended';
+    let fail = true;
+    ctx.resume = () => (fail ? Promise.reject(new Error('InvalidStateError: Navigated away from page')) : ((ctx.state = 'running'), Promise.resolve()));
+    ctx.suspend = () => Promise.reject(new Error('InvalidStateError'));
+    const a = new AudioSystem(ctx);
+    assert.deepEqual([...listeners.keys()].sort(), ['keydown', 'pointerdown', 'touchend']);
+    const mine = listeners.get('pointerdown'); // 别的异步测试并发 new AudioSystem 也会往桩里登记，只看自己这个实例的
+    globalThis.window.addEventListener = () => {};
+    const fire = () => mine();
+    const mineCount = () => [...listeners.values()].filter((f) => f === mine).length;
+    fire();
+    await new Promise((r) => setTimeout(r, 10));
+    assert.equal(ctx.state, 'suspended');
+    assert.equal(mineCount(), 3, 'resume 失败后监听还在');
+    a.resume(); // 被拒也接住
+    fail = false;
+    fire();
+    await new Promise((r) => setTimeout(r, 10));
+    assert.equal(ctx.state, 'running');
+    assert.equal(mineCount(), 0, '成功后撤监听');
+    a.suspend(); // suspend 被拒也接住
+    await new Promise((r) => setTimeout(r, 10));
+    assert.deepEqual(unhandled.map(String), [], '没有未处理的 rejection');
+  } finally {
+    process.off('unhandledRejection', onUR);
+    if (prevWindow === undefined) delete globalThis.window;
+    else globalThis.window = prevWindow;
+  }
+});
+
 await Promise.all(pending);
 let failed = 0;
 for (const [s, name, e] of results) {
