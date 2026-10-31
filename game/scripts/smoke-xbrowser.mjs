@@ -8,13 +8,15 @@
  *   GPU、内存、iOS 真 Safari 的限制都模拟不了；只看「能不能打开、给没给提示、能不能跑」。
  * XB_AUDIO_DECODE=reject：把 decodeAudioData 换成立即 EncodingError 拒绝。M7 装的 Linux WebKit（WPE）没有 GStreamer 解码插件，
  *   decodeAudioData 连 WAV 都永不返回，带 art=1 时卡在启动；用它绕过，顺带模拟 Safari 18.4 以前解不了 Ogg 的情况（音频全部缺失也要能玩）。
+ * BUG-035：手机模拟（XB_DEVICE）断言主菜单显示 ui.notice.desktop_only、菜单按钮隐藏，然后结束（v0.1 只做桌面，手机不进场）；
+ *   桌面断言不出这条提示。XB_DEV=1 用 vite 开发服务器代替 dist（QA 验收期间不能重建 dist 时用）。
  * WebKit 只是 Safari 的同引擎近似（Linux WPE/GTK 端口，GPU / 媒体栈 / 字体都不同），结论不能代替真 Safari。
  */
-import { mkdtempSync, rmSync, statSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { preview } from 'vite';
+import { createServer, preview } from 'vite';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const which = process.env.XB_BROWSER ?? 'firefox';
@@ -23,7 +25,12 @@ const LOAD_MS = Number(process.env.XB_LOAD_MS ?? 240000);
 const tag = `${which}${process.env.XB_DEVICE ? '-' + process.env.XB_DEVICE.replace(/\W+/g, '') : ''}`;
 const shotDir = process.env.XB_SHOTS ?? mkdtempSync(join(tmpdir(), `m7-xb-${tag}-`));
 
-const server = await preview({ root, preview: { host: '127.0.0.1', port: 0, strictPort: false, open: false }, logLevel: 'silent' });
+const TEXT = JSON.parse(readFileSync(resolve(root, '../docs/gdd/text-ch1.json'), 'utf8')).strings;
+const DEV_SERVER = process.env.XB_DEV === '1';
+const server = DEV_SERVER
+  ? await (await createServer({ root, server: { host: '127.0.0.1', port: 0, strictPort: false, open: false, hmr: false }, logLevel: 'silent' })).listen()
+  : await preview({ root, preview: { host: '127.0.0.1', port: 0, strictPort: false, open: false }, logLevel: 'silent' });
+if (DEV_SERVER) console.log('  ! XB_DEV=1：vite 开发服务器（src 现状），不是 dist');
 const port = server.httpServer.address().port;
 const base = `http://127.0.0.1:${port}/?smoke=1${process.env.XB_QUERY ? '&' + process.env.XB_QUERY : ''}`;
 
@@ -114,12 +121,36 @@ try {
 
   // ---- 主菜单
   await page.goto(base, { timeout: 60000 });
-  await until(() => !!window.__game && !!document.querySelector('.main-menu [data-act="new"]')?.getClientRects().length, LOAD_MS, '主菜单没出现');
+  await until(
+    () => !!window.__game && !!(document.querySelector('.main-menu [data-act="new"]')?.getClientRects().length || document.querySelector('.main-desktop-only')?.getClientRects().length),
+    LOAD_MS,
+    '主菜单没出现',
+  );
   step('主菜单', await shot('menu'));
   const e0 = await env();
+  // ---- BUG-035：手机出「仅支持电脑」提示（按钮隐藏）后结束，不进场；桌面不出提示，接着走全程
+  const notice = await page.evaluate(() => {
+    const vis = (sel) => !!document.querySelector(sel)?.getClientRects().length;
+    const n = document.querySelector('.main-desktop-only');
+    const r = n?.getBoundingClientRect();
+    const mm = (q) => matchMedia(q).matches;
+    return {
+      shown: vis('.main-desktop-only'), text: n?.textContent ?? null, newg: vis('.main-menu [data-act="new"]'), title: vis('.main-title'),
+      rect: r ? [r.left, r.top, r.right, r.bottom].map(Math.round) : null, vw: innerWidth, vh: innerHeight, scrollW: document.documentElement.scrollWidth,
+      coarse: mm('(pointer: coarse)'), hover: mm('(hover: hover)'), anyFine: mm('(any-pointer: fine)'), anyHover: mm('(any-hover: hover)'), touchPoints: navigator.maxTouchPoints,
+    };
+  });
+  if (dev) {
+    if (!notice.shown || notice.newg) throw new Error('手机模拟应显示「仅支持电脑」提示、隐藏菜单按钮 ' + JSON.stringify(notice));
+    if (notice.text !== TEXT['ui.notice.desktop_only']) throw new Error('提示文字与文本表 ui.notice.desktop_only 不一致：' + JSON.stringify(notice.text));
+    const [l, t, r, b] = notice.rect;
+    if (!notice.title || l < 0 || t < 0 || r > notice.vw || b > notice.vh || notice.scrollW > notice.vw) throw new Error('提示 / 标题不在竖屏视口内 ' + JSON.stringify(notice));
+    step('BUG-035 手机提示', `「${notice.text}」 框 [${notice.rect.join(', ')}] 视口 ${notice.vw}×${notice.vh} coarse ${notice.coarse} hover ${notice.hover} anyFine ${notice.anyFine}`);
+    console.log(JSON.stringify({ browser: which, version: browser.version(), device: process.env.XB_DEVICE, notice, env: e0 }, null, 1));
+  } else {
+  if (notice.shown) throw new Error('桌面不该出「仅支持电脑」提示 ' + JSON.stringify(notice));
   // ---- 新游戏 → S1 首帧
-  if (dev) await page.tap('.main-menu [data-act="new"]', { timeout: 20000 });
-  else await page.click('.main-menu [data-act="new"]', { timeout: 20000 });
+  await page.click('.main-menu [data-act="new"]', { timeout: 20000 });
   await until(() => window.__game.scenes.current?.name === 's1-ebb-shore', LOAD_MS, '新游戏没进 S1');
   await until(() => window.__game.input.context === 'explore' && !window.__game.flow.transitioning, LOAD_MS, 'S1 没回到可操作');
   // 实际出帧：等主循环再走 30 个 fixed tick
@@ -154,17 +185,18 @@ try {
   await page.goto(base, { timeout: 60000 });
   lastStep = '刷新后主菜单';
   await until(() => !!document.querySelector('.main-menu [data-act="continue"]')?.getClientRects().length, LOAD_MS, '刷新后没有「继续」');
-  if (dev) await page.tap('.main-menu [data-act="continue"]', { timeout: 20000 });
-  else await page.click('.main-menu [data-act="continue"]', { timeout: 20000 });
+  await page.click('.main-menu [data-act="continue"]', { timeout: 20000 });
   await until(() => window.__game.scenes.current?.name === 's3-lighthouse' && window.__game.input.context === 'explore' && !window.__game.flow.transitioning, LOAD_MS, '继续没回 S3');
   step('刷新 → 继续回 S3');
   const perf = await page.evaluate(() => ({ fps: window.__game.time?.fps ?? null, mem: performance.memory?.usedJSHeapSize ?? null }));
   console.log(JSON.stringify({ browser: which, version: browser.version(), device: process.env.XB_DEVICE ?? null, touchUi, env: e0, texFormats: fmt, audioAfterClick: audio1, perf }, null, 1));
+  }
 } catch (err) {
   errors.push('FAIL: ' + (err?.message ?? err));
 } finally {
   await browser?.close().catch(() => undefined);
-  server.httpServer.close();
+  if (DEV_SERVER) await server.close();
+  else server.httpServer.close();
 }
 if (infos.length) console.log('info/warn:\n  ' + [...new Set(infos)].slice(0, 30).join('\n  '));
 console.log(`screens: ${shotDir}`);

@@ -8,19 +8,22 @@ import { tmpdir } from 'node:os';
 import { inflateSync } from 'node:zlib';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { preview } from 'vite';
+import { createServer, preview } from 'vite';
 import { S1, s1StepLinks } from '@/levels/s1/layout';
 import { ENDING_CUES } from '@/systems/audio/endingMusic';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 /** 文本表原文（005 检查对照显示的文字） */
 const TEXT = JSON.parse(readFileSync(resolve(root, '../docs/gdd/text-ch1.json'), 'utf8')).strings;
-if (!existsSync(join(root, 'dist/index.html'))) {
+/** SMOKE_DEV=1：用 vite 开发服务器代替 dist（QA 验收期间不能重建 dist 时跑新改动用；跳过 dist 检查，结果不代表构建产物） */
+const DEV = process.env.SMOKE_DEV === '1';
+if (DEV) console.log('  ! SMOKE_DEV=1：vite 开发服务器（src 现状），不是 dist');
+if (!DEV && !existsSync(join(root, 'dist/index.html'))) {
   console.error('dist/ 不存在，先运行 npm run build');
   process.exit(1);
 }
 // 构建产物：DRACO 只应有 glTF 专用 wasm 一套（wrapper.js + .wasm），不应有通用版和纯 JS 回退
-{
+if (!DEV) {
   const { readdirSync } = await import('node:fs');
   const files = readdirSync(join(root, 'dist/static'));
   const draco = files.filter((f) => f.startsWith('draco_'));
@@ -4123,10 +4126,79 @@ CHECKS.push({
 });
 
 
+// BUG-035：手机 / 无精确指针的平板打开时，主菜单首页换成 ui.notice.desktop_only（按钮隐藏）；桌面、触屏笔记本照常。
+// 三种设备都只开主菜单（不带 autostart）：桌面原样 / 触屏笔记本（注入 maxTouchPoints=10 + ontouchstart，指针仍是鼠标）/
+// 手机（CDP 设备模拟：393×852 DPR 3 mobile + 触摸模拟 + Android UA）。设备判定在页面启动时算一次，所以每种都重新打开页面。
+CHECKS.push({
+  name: 'v0.1-BUG-035 仅支持电脑提示：桌面 / 触屏笔记本不出提示、手机模拟出提示且不显示菜单按钮',
+  async run() {
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const state = `(() => {
+      const vis = (sel) => { const e = document.querySelector(sel); return !!e && e.checkVisibility(); };
+      const n = document.querySelector('.main-desktop-only'); const r = n?.getBoundingClientRect();
+      const mm = (q) => matchMedia(q).matches;
+      return { scene: __game.scenes.current?.name, cls: document.querySelector('.main-menu').classList.contains('is-desktop-only'),
+        notice: vis('.main-desktop-only'), text: n?.textContent ?? null, newg: vis('.main-menu [data-act="new"]'), settings: vis('.main-menu [data-act="settings"]'),
+        title: vis('.main-title'), rect: r ? [Math.round(r.left), Math.round(r.top), Math.round(r.right), Math.round(r.bottom)] : null,
+        vw: innerWidth, vh: innerHeight, scrollW: document.documentElement.scrollWidth, font: n ? getComputedStyle(n).fontFamily.split(',')[0] : null,
+        coarse: mm('(pointer: coarse)'), hover: mm('(hover: hover)'), anyFine: mm('(any-pointer: fine)'), touch: navigator.maxTouchPoints, ontouch: 'ontouchstart' in window };
+    })()`;
+    const out = [];
+    const { userAgent } = await send('Browser.getVersion');
+    let initId = null;
+    try {
+      // ---- 1. 桌面
+      await cdp.gotoMenu();
+      await wait(300);
+      let m = await evaluate(state);
+      if (m.cls || m.notice || !m.newg || !m.settings) throw new Error('桌面不该出「仅支持电脑」提示、按钮应在 ' + JSON.stringify(m));
+      out.push(`桌面：无提示、菜单按钮在 ✓（coarse ${m.coarse} / hover ${m.hover} / 触点 ${m.touch}）`);
+
+      // ---- 2. 触屏笔记本：有触摸能力，但主指针仍是鼠标 / 触控板
+      ({ identifier: initId } = await send('Page.addScriptToEvaluateOnNewDocument', {
+        source: `Object.defineProperty(Navigator.prototype, 'maxTouchPoints', { get: () => 10, configurable: true }); window.ontouchstart = null;`,
+      }, sessionId));
+      await cdp.gotoMenu();
+      await wait(300);
+      m = await evaluate(state);
+      if (m.touch !== 10 || !m.ontouch) throw new Error('触屏笔记本模拟没生效 ' + JSON.stringify(m));
+      if (m.cls || m.notice || !m.newg) throw new Error('触屏笔记本被误判成手机 ' + JSON.stringify(m));
+      out.push(`触屏笔记本（触点 10、ontouchstart、指针 fine）：无提示 ✓`);
+      await send('Page.removeScriptToEvaluateOnNewDocument', { identifier: initId }, sessionId);
+      initId = null;
+
+      // ---- 3. 手机
+      await send('Emulation.setDeviceMetricsOverride', { width: 393, height: 852, deviceScaleFactor: 3, mobile: true }, sessionId);
+      await send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 }, sessionId);
+      await send('Emulation.setUserAgentOverride', { userAgent: 'Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36' }, sessionId);
+      await cdp.gotoMenu();
+      await wait(500);
+      m = await evaluate(state);
+      if (!m.cls || !m.notice) throw new Error('手机模拟没出「仅支持电脑」提示 ' + JSON.stringify(m));
+      if (m.text !== TEXT['ui.notice.desktop_only']) throw new Error(`提示文字应为文本表 ui.notice.desktop_only「${TEXT['ui.notice.desktop_only']}」：` + JSON.stringify(m.text));
+      if (m.newg || m.settings) throw new Error('手机上菜单按钮应隐藏 ' + JSON.stringify(m));
+      if (!m.title) throw new Error('手机上标题应保留 ' + JSON.stringify(m));
+      const [l, t, r, b] = m.rect;
+      if (l < 0 || t < 0 || r > m.vw || b > m.vh || m.scrollW > m.vw) throw new Error('提示超出竖屏视口 ' + JSON.stringify(m));
+      out.push(`手机（393×852 mobile + 触摸，coarse ${m.coarse} / hover ${m.hover}）：提示「${m.text}」✓、按钮隐藏 ✓、标题在 ✓、提示框 [${m.rect.join(', ')}] 在视口内 ✓（字体 ${m.font}）`);
+    } finally {
+      if (initId) await send('Page.removeScriptToEvaluateOnNewDocument', { identifier: initId }, sessionId).catch(() => {});
+      await send('Emulation.setTouchEmulationEnabled', { enabled: false }, sessionId).catch(() => {});
+      await send('Emulation.clearDeviceMetricsOverride', {}, sessionId).catch(() => {});
+      await send('Emulation.setUserAgentOverride', { userAgent }, sessionId).catch(() => {});
+    }
+    // 回到桌面主场景（后面的项默认在 S1）
+    await cdp.goto('');
+    return out.join('；');
+  },
+});
+
 const extra = process.env.SMOKE_ONLY ? CHECKS.filter((c) => process.env.SMOKE_ONLY.split('|').some((k) => c.name.includes(k))) : CHECKS;
 
 // ---------------------------------------------------------------- 起服务 + 浏览器
-const server = await preview({ root, preview: { host: '127.0.0.1', port: 0, strictPort: false, open: false }, logLevel: 'silent' });
+const server = DEV
+  ? await (await createServer({ root, server: { host: '127.0.0.1', port: 0, strictPort: false, open: false, hmr: false }, logLevel: 'silent' })).listen()
+  : await preview({ root, preview: { host: '127.0.0.1', port: 0, strictPort: false, open: false }, logLevel: 'silent' });
 const addr = server.httpServer.address();
 const url = `http://127.0.0.1:${addr.port}/?smoke=1&autostart=1${process.env.SMOKE_QUERY ? '&' + process.env.SMOKE_QUERY : ''}`;
 const profile = mkdtempSync(join(tmpdir(), 'smoke-chrome-'));
@@ -4439,7 +4511,8 @@ failed += realErrors.length;
 
 ws.close();
 chrome.kill('SIGKILL');
-await new Promise((r) => server.httpServer.close(r));
+if (DEV) await server.close();
+else await new Promise((r) => server.httpServer.close(r));
 try {
   rmSync(profile, { recursive: true, force: true });
 } catch {
