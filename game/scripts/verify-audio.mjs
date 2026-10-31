@@ -940,7 +940,7 @@ test('1031 结尾曲 EndingMusic：manifest s3 lazy；预取后 lighthouse:ignit
     ctx.currentTime = 0.08533;
     ev.emit('lighthouse:ignited', undefined);
     let t = 14.45333 - 512 / 48000;
-    Object.defineProperty(ctx, 'currentTime', { get: () => (t += 512 / 48000), set: (v) => (t = v), configurable: true });
+    Object.defineProperty(ctx, 'currentTime', { get: () => (t += 512 / 48000), set: (v) => { t = v; }, configurable: true });
     release(buf);
     for (let i = 0; i < 5; i++) await Promise.resolve();
     assert.equal(em.result, 'late');
