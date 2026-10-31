@@ -326,7 +326,7 @@ const CHECKS = [
           const sun = scene.scene.getObjectByProperty('isDirectionalLight', true);
           const rain = scene.scene.getObjectByName('rain');
           res.push({ t, same: g.scenes.current === scene, worst: Math.round(worst), shadow: sun.shadow.mapSize.width, shadowMap: sun.shadow.map ? sun.shadow.map.width : null,
-            wantShadow: p.shadowType.mapSize, rain: rain.dropCount ?? rain.geometry.drawRange.count / 2, // 028 起 Rain 是 Group（线 / quad 两种形式），数量读 dropCount wantRain: p.rainParticles.count,
+            wantShadow: p.shadowType.mapSize, rain: rain.dropCount /* 028 起 Rain 是 Group，数量读 dropCount */, wantRain: p.rainParticles.count,
             pr: g.renderer.getPixelRatio(), wantPr: Math.min(devicePixelRatio, p.maxPixelRatio, 2) * p.renderScale });
         }
         off();
