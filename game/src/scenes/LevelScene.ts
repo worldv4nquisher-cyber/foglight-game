@@ -369,7 +369,7 @@ export abstract class LevelScene extends BaseScene {
         return water === null ? ground : Math.max(ground, water);
       });
       this.scene.add(this.rain);
-      // 025 平面反射：雨、水面自身不进倒影
+      // 025 平面反射：雨、水面自身不进反射
       this.reflection = new PlanarReflection();
       this.reflection.hide.push(this.water, this.rain);
       this.water.setReflection(this.reflection);
@@ -466,7 +466,7 @@ export abstract class LevelScene extends BaseScene {
     this.rain?.setTier(q.tier, q.rainParticles.count);
     this.qualityTier = q.tier;
     this.water?.setRipples(ATMO028.rainTiers[q.tier].ripples);
-    // 025：倒影分辨率 = 画质档 reflections.planar（极致 1.0 / 高 0.5 / 标准 0.25）；?reflect= 调试覆盖
+    // 025：反射分辨率 = 画质档 reflections.planar（极致 1.0 / 高 0.5 / 标准 0.25）；?reflect= 调试覆盖
     if (this.reflection) this.reflection.scale = this.reflectOverride ?? q.reflections.planar;
     // 阴影贴图尺寸 = §8 shadowType.mapSize（CSM 级数 / PCSS / 接触阴影在 023 做）；尺寸变了就丢掉旧贴图，下一帧按新尺寸重建
     const s = this.sun.shadow;
@@ -552,12 +552,12 @@ export abstract class LevelScene extends BaseScene {
   override beforeRender(halted: boolean): void {
     const r = this.reflection;
     if (!r) return;
-    // 暂停 / 冻结：相机不动，沿用上一帧的倒影
+    // 暂停 / 冻结：相机不动，沿用上一帧的反射
     if (!halted) r.update(this.game.renderer, this.scene, this.camera, this.water, this.water?.halfExtent ?? 0);
-    if (this.game.ui.debug.visible) this.game.ui.debug.set('倒影', r.debugLine());
+    if (this.game.ui.debug.visible) this.game.ui.debug.set('反射', r.debugLine());
   }
 
-  /** 025 冒烟 / 量测：倒影状态 */
+  /** 025 冒烟 / 量测：反射状态 */
   get reflectionStats(): PlanarReflection['stats'] | null {
     return this.reflection?.stats ?? null;
   }

@@ -5,23 +5,23 @@ import * as THREE from 'three';
  *
  * 做法（同 three/examples Reflector 的镜像相机，但不自带材质：Water 在自己的 MeshStandardMaterial 里采样）：
  * - 镜像相机 = 主相机关于水平面 y = level（平均水位，不含浪）的镜像；投影 = 主相机投影 + Lengyel 斜裁剪（近平面换成水面，
- *   水面以下的东西不进倒影；clipBias 往下让一点，浪谷附近的岸石不被切掉一条缝）。
+ *   水面以下的东西不进反射；clipBias 往下让一点，浪谷附近的岸石不被切掉一条缝）。
  * - 渲染到 HalfFloat 线性 RT（后处理之前的辐亮度，色调映射 / LUT 在主画面统一做）；不重算阴影贴图（沿用上一帧）。
  * - 只在可见时更新：水面不可见 / 不在视锥里（水面平板 ±浪高的包围盒）/ 相机在水面以下 → 不渲染，强度 k = 0。
  * - 相机贴近水面：k = smoothstep(fadeIn[0], fadeIn[1], 相机离水面高度)，从水面下到上平滑淡入，不跳变（斜裁剪在相机贴着平面时退化，正好被淡掉）。
  * - 雾：镜像相机到物体的距离 = 真实光路（相机 → 水面 → 物体），所以 RT 里的雾就是对的；Water 在自己的雾之后再混反射（不重复上雾）。
- * - 雨（镜头附近的粒子）和水面自身不进倒影（hide 列表）；角色 / 灯束 / 雾卡照常画。
+ * - 雨（镜头附近的粒子）和水面自身不进反射（hide 列表）；角色 / 灯束 / 雾卡照常画。
  * 分辨率 = 画布 × scale（画质档）；?reflect=off|0.25|0.5|1 调试覆盖。
  */
 export interface ReflectionStats {
-  /** 本帧是否渲染了倒影 */
+  /** 本帧是否渲染了反射 */
   rendered: boolean;
   /** 没渲染的原因 */
   skip: string | null;
-  /** 倒影 pass 的 draw call / 三角形（renderer.info，单 pass） */
+  /** 反射 pass 的 draw call / 三角形（renderer.info，单 pass） */
   calls: number;
   triangles: number;
-  /** 倒影 pass 的 CPU 提交时间（ms，含 swiftshader 下的光栅化，GPU 计时没有） */
+  /** 反射 pass 的 CPU 提交时间（ms，含 swiftshader 下的光栅化，GPU 计时没有） */
   ms: number;
   width: number;
   height: number;
@@ -38,7 +38,7 @@ export interface ReflectionUniforms {
 }
 
 export const REFLECTION = Object.freeze({
-  /** 相机离平均水面多高时倒影从 0 淡到全（m） */
+  /** 相机离平均水面多高时反射从 0 淡到全（m） */
   fadeIn: [0.05, 0.6] as readonly [number, number],
   /** 斜裁剪平面往水面下让多少（裁剪空间 z 偏移，同 Reflector.clipBias） */
   clipBias: 0.003,
@@ -46,7 +46,7 @@ export const REFLECTION = Object.freeze({
   waveBand: 0.4,
   /** RT 最小边长 */
   minSize: 64,
-  /** 水面被挡住（遮挡查询 0 样本，如塔内）时每隔几帧补画一次，免得重新露出来的第一帧是很旧的倒影 */
+  /** 水面被挡住（遮挡查询 0 样本，如塔内）时每隔几帧补画一次，免得重新露出来的第一帧是很旧的反射 */
   occludedEvery: 8,
 });
 
@@ -55,7 +55,7 @@ const smoothstep = (a: number, b: number, x: number): number => {
   return k * k * (3 - 2 * k);
 };
 
-/** 相机离水面 h 米时的倒影强度（单测 / 着色同式） */
+/** 相机离水面 h 米时的反射强度（单测 / 着色同式） */
 export function reflectionFade(h: number): number {
   return smoothstep(REFLECTION.fadeIn[0], REFLECTION.fadeIn[1], h);
 }
@@ -81,7 +81,7 @@ export class PlanarReflection {
   };
   /** 画质档倍率（0 = 关） */
   scale = 0.5;
-  /** 倒影里不画的东西（雨、水面自身） */
+  /** 反射里不画的东西（雨、水面自身） */
   readonly hide: THREE.Object3D[] = [];
   enabled = true;
   readonly stats: ReflectionStats = { rendered: false, skip: 'init', calls: 0, triangles: 0, ms: 0, width: 0, height: 0, renders: 0, skips: 0, k: 0 };
@@ -130,7 +130,7 @@ export class PlanarReflection {
 
   /**
    * 在水面主画面那次绘制上挂遮挡查询（onBeforeRender / onAfterRender 夹住 draw call）。
-   * 只认主相机 + 水面自己的材质（后处理的法线 / ID pass 用 overrideMaterial，不算）+ 不是在画倒影。
+   * 只认主相机 + 水面自己的材质（后处理的法线 / ID pass 用 overrideMaterial，不算）+ 不是在画反射。
    */
   attachOcclusion(renderer: THREE.WebGLRenderer, water: THREE.Mesh, mainCamera: THREE.Camera): void {
     const gl = renderer.getContext();
@@ -188,7 +188,7 @@ export class PlanarReflection {
     if (!this.frustum.intersectsBox(this.box)) return this.skip('frustum');
     this.frame++;
     if (this.occluded === true && this.frame % REFLECTION.occludedEvery !== 0) {
-      // 挡住：不画，k 不变（重新露出来那一帧用最多 8 帧前的倒影，不闪）
+      // 挡住：不画，k 不变（重新露出来那一帧用最多 8 帧前的反射，不闪）
       this.stats.rendered = false;
       this.stats.skip = 'occluded';
       this.stats.skips++;
@@ -219,7 +219,7 @@ export class PlanarReflection {
     vc.projectionMatrix.copy(camera.projectionMatrix);
     vc.layers.mask = camera.layers.mask;
 
-    // 世界坐标 → 倒影贴图投影坐标
+    // 世界坐标 → 反射贴图投影坐标
     this.uniforms.uReflMatrix.value.set(0.5, 0, 0, 0.5, 0, 0.5, 0, 0.5, 0, 0, 0.5, 0.5, 0, 0, 0, 1).multiply(vc.projectionMatrix).multiply(vc.matrixWorldInverse);
 
     // 斜裁剪：近平面 = 水面（镜像相机空间）
@@ -279,7 +279,7 @@ export class PlanarReflection {
 
   debugLine(): string {
     const s = this.stats;
-    return s.rendered ? `倒影${this.occluded ? '（挡住，补画）' : ''} ${s.width}×${s.height} ×${this.scale} · ${s.calls} dc · ${(s.triangles / 1000).toFixed(0)}k tri · ${s.ms.toFixed(1)} ms · k ${s.k.toFixed(2)}` : `倒影 跳过（${s.skip}）`;
+    return s.rendered ? `反射${this.occluded ? '（挡住，补画）' : ''} ${s.width}×${s.height} ×${this.scale} · ${s.calls} dc · ${(s.triangles / 1000).toFixed(0)}k tri · ${s.ms.toFixed(1)} ms · k ${s.k.toFixed(2)}` : `反射 跳过（${s.skip}）`;
   }
 
   dispose(): void {
