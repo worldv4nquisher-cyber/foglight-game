@@ -26,7 +26,7 @@ export const SEABED = Object.freeze({
   maxRes: 512,
   /** 没覆盖到 = 深水 */
   empty: -10,
-  /** 压浪：水深 ≤ x 振幅 0，≥ y 全振幅（smoothstep）。浪合计振幅 0.375，在 [0, 0.8] 内 a·0.375 < 水深，浪峰不高过海床 */
+  /** 压浪：水深 ≤ x 振幅 0，≥ y 全振幅（smoothstep）。浪合计振幅 0.375，在 (0, 0.8) 内 a·0.375 < 水深，浪谷不露底；露沙处 0，浪峰不漫上沙面 */
   shoal: Object.freeze([0.0, 0.8] as const),
 });
 

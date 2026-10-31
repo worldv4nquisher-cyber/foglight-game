@@ -1265,7 +1265,7 @@ await test('025 水面平面反射（纯数学，假 renderer）：贴近水面 
   return `淡入 0.05–0.6 m · 斜裁剪 / uv 一致 · 跳过 below / frustum / off`;
 });
 
-await test('1031 S1 沙斑（裁定 23 a）：海床高度图烘焙（合成斜坡）双线性采样误差 < 1 cm；压浪系数 0.375·s(d) < d（浪峰不高过海床）、露沙 0', () => {
+await test('1031 S1 沙斑（裁定 23 a）：海床高度图烘焙（合成斜坡）双线性采样误差 < 1 cm；压浪系数 0.375·s(d) < d（浪谷不露底）、露沙 0', () => {
   // 合成：x∈[0,10]、z∈[0,6] 的斜面 y = 0.1·x − 0.5（两个三角形）
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute([0, -0.5, 0, 10, 0.5, 0, 10, 0.5, 6, 0, -0.5, 0, 10, 0.5, 6, 0, -0.5, 6], 3));
@@ -1279,14 +1279,14 @@ await test('1031 S1 沙斑（裁定 23 a）：海床高度图烘焙（合成斜�
   for (let d = -1; d <= 2; d += 0.01) {
     const a = 0.375 * shoalFactor(d);
     if (d <= 0) assert.equal(a, 0, `露沙 d=${d}`);
-    else assert.ok(a < d, `d=${d.toFixed(2)} 浪峰 ${a.toFixed(3)}`);
+    else assert.ok(a < d, `d=${d.toFixed(2)} 振幅 ${a.toFixed(3)} 浪谷露底`);
   }
   assert.equal(shoalFactor(SEABED.shoal[1]), 1);
   return `res ${map.res.x}×${map.res.z} · 误差 ${(worst * 1000).toFixed(1)} mm`;
 });
 
 if (hasArt) {
-  await test('1031 S1 沙斑（裁定 23 a）：env-tidal-flat-s1 LOD0 烘的高度图 = 射线海床（新礁石南侧 x 6–12、z −6…−11，±3 cm）；退潮水位 −0.6 时这片露沙压浪系数 0（原来浪峰 −0.225 会盖过 −0.30 的沙面）', async () => {
+  await test('1031 S1 沙斑（裁定 23 a）：env-tidal-flat-s1 LOD0 烘的高度图 = 射线海床（新礁石一带 x 4–14、z −2…−11，±3 cm）；退潮水位（S1.tide.low）下露沙处压浪系数 0（原来浪峰最高 +0.375 会盖过）、水下处浪谷不露底', async () => {
     const { S1 } = await import('@/levels/s1/layout');
     const flat = await loadGlb('models/env/env-tidal-flat-s1.glb');
     const n = S1.artNodes['env-tidal-flat-s1'];
@@ -1302,24 +1302,29 @@ if (hasArt) {
     const down = new THREE.Vector3(0, -1, 0);
     for (const o of meshes) o.material.side = THREE.DoubleSide;
     const H = (x, z) => { rc.set(new THREE.Vector3(x, 20, z), down); const h = rc.intersectObjects(meshes, false); return h.length ? Math.max(...h.map((q) => q.point.y)) : NaN; };
-    let worst = 0, exposed = 0, flooded = 0, nPts = 0;
-    for (let x = 6.1; x <= 12; x += 0.7) {
-      for (let z = -6.1; z >= -11; z -= 0.7) {
+    const level = S1.tide.low;
+    let worst = 0, exposed = 0, flooded = 0, under = 0, nPts = 0;
+    for (let x = 4.1; x <= 14; x += 0.7) {
+      for (let z = -2.1; z >= -11; z -= 0.7) {
         const h = H(x, z);
         if (Number.isNaN(h)) continue;
         nPts++;
         const b = sampleSeabed(map, x, z);
         worst = Math.max(worst, Math.abs(b - h));
-        if (b > -0.6) {
+        const d = level - b;
+        if (d <= 0) {
           exposed++;
-          if (b < -0.225) flooded++;
-          assert.equal(shoalFactor(-0.6 - b), 0, `(${x.toFixed(1)}, ${z.toFixed(1)}) 露沙应压平`);
+          if (b < level + 0.375) flooded++;
+          assert.equal(shoalFactor(d), 0, `(${x.toFixed(1)}, ${z.toFixed(1)}) 露沙应压平`);
+        } else {
+          under++;
+          assert.ok(0.375 * shoalFactor(d) < d, `(${x.toFixed(1)}, ${z.toFixed(1)}) 浪谷露底`);
         }
       }
     }
-    assert.ok(nPts > 40, `点数 ${nPts}`);
+    assert.ok(nPts > 100, `点数 ${nPts}`);
     assert.ok(worst < 0.03, `高度图 vs 射线 ${worst}`);
-    return `${map.res.x}×${map.res.z}（${map.sizeX.toFixed(0)}×${map.sizeZ.toFixed(0)} m）· ${map.triangles} 三角形 · ${ms.toFixed(0)} ms · 抽样 ${nPts} 点误差 ≤ ${(worst * 100).toFixed(1)} cm · 露沙 ${exposed} 点（其中 ${flooded} 点原来会被浪峰盖住）全部压平`;
+    return `${map.res.x}×${map.res.z}（${map.sizeX.toFixed(0)}×${map.sizeZ.toFixed(0)} m）· ${map.triangles} 三角形 · ${ms.toFixed(0)} ms · 抽样 ${nPts} 点误差 ≤ ${(worst * 100).toFixed(1)} cm · 退潮水位 ${level}：露沙 ${exposed} 点（其中 ${flooded} 点原来会被浪峰盖住）全部压平、水下 ${under} 点浪谷不露底（振幅 < 水深）`;
   });
 }
 

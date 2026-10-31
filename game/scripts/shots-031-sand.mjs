@@ -10,7 +10,11 @@ import { fileURLToPath } from 'node:url';
 import { preview } from 'vite';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const OUT = resolve(root, '../docs/tasks/shots-031/sand');
+// 1031：SHOTS_OUT 另存目录、SHOTS_EXTRA 追加 URL 参数（如 &seabed=0）、SHOTS_TAG 文件名后缀、SHOTS_VARIANTS 只拍部分变体（逗号分隔）
+const OUT = resolve(root, process.env.SHOTS_OUT ?? '../docs/tasks/shots-031/sand');
+const URL_EXTRA = process.env.SHOTS_EXTRA ?? '';
+const TAG = process.env.SHOTS_TAG ?? '';
+const ONLY = process.env.SHOTS_VARIANTS ? new Set(process.env.SHOTS_VARIANTS.split(',')) : null;
 mkdirSync(OUT, { recursive: true });
 if (!existsSync(join(root, 'dist/index.html'))) throw new Error('先 npm run build');
 const chromePath = process.env.CHROME ?? ['/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser'].find((p) => existsSync(p));
@@ -20,6 +24,7 @@ let EXTRA = '';
 
 const server = await preview({ root, preview: { host: '127.0.0.1', port: 0, strictPort: false, open: false }, logLevel: 'silent' });
 const base = `http://127.0.0.1:${server.httpServer.address().port}/?smoke=1&art=1&quality=high${ATMO ? '&atmo=' + ATMO : ''}`;
+const WATCHDOG = setTimeout(() => { console.log('  ! 看门狗到点，强退'); try { chrome.kill('SIGKILL'); } catch { /* */ } try { rmSync(profile, { recursive: true, force: true }); } catch { /* */ } process.exit(2); }, +(process.env.SHOTS_WATCHDOG_MS ?? 1800000));
 const profile = mkdtempSync(join(tmpdir(), 'shots031sand-chrome-'));
 const chrome = spawn(chromePath, ['--headless=new', '--no-sandbox', '--no-first-run', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', `--window-size=${W},${H}`, '--hide-scrollbars', '--remote-debugging-port=0', `--user-data-dir=${profile}`, 'about:blank'], { stdio: ['ignore', 'ignore', 'pipe'] });
 const wsUrl = await new Promise((res, rej) => {
@@ -76,13 +81,13 @@ const waitFrames = async (n) => {
 
 const report = { atmo: ATMO || '(默认)', shots: [], failed: [], errors, loads: [], probes: {} };
 // 只拍部分（argv[2]）时报告另存，不覆盖全量报告
-const reportFile = join(OUT, `sand-compare${process.argv[2] ? '-' + process.argv[2].replace(/,/g, '+') : ''}.json`);
+const reportFile = join(OUT, `sand-compare${process.argv[2] ? '-' + process.argv[2].replace(/,/g, '+') : ''}${TAG}.json`);
 const save = () => writeFileSync(reportFile, JSON.stringify(report, null, 2));
 
 /** 进 S1 并等全部 GLB / KTX2 加载完：有失败 / 占位就整页重进（负载高时 vite preview 偶发 Failed to fetch） */
 async function enterS1() {
   for (let attempt = 1; attempt <= 3; attempt++) {
-    await send('Page.navigate', { url: `${base}${EXTRA}&autostart=1` }, sessionId);
+    await send('Page.navigate', { url: `${base}${EXTRA}${URL_EXTRA}&autostart=1` }, sessionId);
     await sleep(500);
     if (!(await until(`!!window.__s1?.rig && window.__game.scenes.current.name === 's1-ebb-shore'`, 400000))) throw new Error('S1 没就绪');
     await until('!!__s1.art && !!__s1.dressing', 200000);
@@ -130,9 +135,12 @@ async function pass(tag, variants) {
   report.probes[tag] = await evaluate(PROBE_FN).catch((e) => ({ err: String(e) }));
   // 冻住游戏时间：水面波浪 / 雨停在同一刻，各变体只差开关
   await evaluate('(() => { __game.time.timeScale = 0; return 1; })()');
+  // SHOTS_WATER_T：把海面相位钉在同一时刻（不同页面加载之间前后对比用）
+  if (process.env.SHOTS_WATER_T) await evaluate(`(() => { const u = __s1.water?.uniforms; if (u) u.uTime.value = ${+process.env.SHOTS_WATER_T}; return 1; })()`);
   for (const [view, eye, at, fov] of VIEWS) {
     for (const [vname, fn] of variants) {
-      const name = `sand-${view}-${tag}-${vname}`;
+      if (ONLY && !ONLY.has(vname)) continue;
+      const name = `sand-${view}-${tag}-${vname}${TAG}`;
       try {
         await evaluate(RESET);
         await evaluate(`(${fn})()`);
@@ -172,5 +180,6 @@ ws.close();
 chrome.kill('SIGKILL');
 await new Promise((r) => server.httpServer.close(r));
 try { rmSync(profile, { recursive: true, force: true }); } catch { /* */ }
+clearTimeout(WATCHDOG);
 console.log('完成 →', OUT, report.failed.length ? `（${report.failed.length} 张失败）` : '');
 process.exit(0);
