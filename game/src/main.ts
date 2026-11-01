@@ -1,3 +1,5 @@
+// batch26：全局 polyfill 必须是第一个 import（ES 模块按 import 顺序求值，早于下面所有模块）
+import '@/platform/polyfills';
 import './ui/styles.css';
 import { Game } from '@/core/Game';
 import { t } from '@/content/text';

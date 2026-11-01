@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { SAVE_KEY, SAVE_TEXT, SaveSystem, parseSave } from '@/systems/save/SaveSystem';
 import { formatPlayTime } from '@/ui/format';
 import { cloneFallback, deepClone } from '@/platform/clone';
+import { installStructuredClonePolyfill } from '@/platform/polyfills';
 import { OVER_SHOULDER } from '@/content/cutscenes/ending';
 import { DEFAULT_SETTINGS, LEGACY_QUALITY_KEY, SETTINGS_KEY, Settings } from '@/systems/save/Settings';
 
@@ -357,6 +358,33 @@ test('batch26 ②：降级拷贝和原生 structuredClone 结果一致（存档 
   const cc = cloneFallback(cyc);
   assert.equal(cc.self, cc);
   withoutStructuredClone(() => assert.deepEqual(deepClone(save), save));
+});
+
+test('batch26 ②（追加）：全局 polyfill——有原生不覆盖；删掉原生后装上，直接调 structuredClone 和 deepClone 都是深拷贝，存读档照常', () => {
+  const native = globalThis.structuredClone;
+  assert.equal(installStructuredClonePolyfill(), false, '有原生时不该装');
+  assert.equal(globalThis.structuredClone, native, '有原生时不能覆盖');
+  const fake = {};
+  assert.equal(installStructuredClonePolyfill(fake), true);
+  assert.equal(typeof fake.structuredClone, 'function');
+  withoutStructuredClone(() => {
+    assert.equal(installStructuredClonePolyfill(), true, '删掉原生后应装上');
+    assert.equal(installStructuredClonePolyfill(), false, '装过一次不重复装');
+    assert.notEqual(globalThis.structuredClone, native);
+    const o = { a: [1, { b: 2 }], d: new Date(7) };
+    const c = structuredClone(o);
+    assert.deepEqual(c, o);
+    assert.notEqual(c.a[1], o.a[1]);
+    const sh = structuredClone(OVER_SHOULDER);
+    assert.deepEqual(sh, OVER_SHOULDER);
+    assert.notEqual(sh.from, OVER_SHOULDER.from);
+    const st = new MemStorage('ok', { [SAVE_KEY]: validSave({}) });
+    const s = new SaveSystem(st);
+    assert.equal(s.status, 'ok');
+    assert.equal(s.save({ chapterId: 'ch1', sceneId: 'end', chapterComplete: true }), true);
+    assert.equal(new SaveSystem(st).load().sceneId, 'end');
+  });
+  assert.equal(globalThis.structuredClone, native, '测试结束要还原原生');
 });
 
 let failed = 0;

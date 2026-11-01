@@ -4284,6 +4284,52 @@ CHECKS.push({
   },
 });
 
+// batch26 ②（制作人追加）：没有原生 structuredClone（Safari 15.0–15.3）——页面任何脚本之前删掉全局，验全局 polyfill 早于所有模块装好、
+// 结尾演出（ending.ts 的过肩参数 deepClone）→ 结束页存档 → 刷新后读档都不报错
+CHECKS.push({
+  name: 'v0.1-batch26-② 无原生 structuredClone：页面脚本前删掉全局 → polyfill 在模块求值前装上 → S3 点灯、结尾演出到结束页、存 chapterComplete → 刷新后读档无报错',
+  async run({ evaluate, cdp, sleep }) {
+    const { until, gotoLong } = music1031({ evaluate, sleep });
+    const errBefore = errors.length;
+    const id = await cdp.initScript(`(() => { delete window.structuredClone; try { delete Window.prototype.structuredClone; } catch {} window.__scAtStart = typeof window.structuredClone; })()`);
+    try {
+      await evaluate(`localStorage.clear(); 1`);
+      await gotoLong(cdp, 'debug=1&scene=s3&art=0', 's3-lighthouse');
+      if (!(await until(`!!window.__s3?.rig && !!__s3.endingCutscene`, 120000))) throw new Error('S3 art=0 没就绪');
+      const probe = `({ start: window.__scAtStart, now: typeof structuredClone, native: /\\[native code\\]/.test(String(window.structuredClone)), status: __game.save.status })`;
+      const pf = await evaluate(probe);
+      if (pf.start !== 'undefined') throw new Error('initScript 没删掉原生 structuredClone ' + JSON.stringify(pf));
+      if (pf.now !== 'function' || pf.native) throw new Error('全局 polyfill 没装上 ' + JSON.stringify(pf));
+      const sh = await evaluate(`(() => { const o = __s3.endingCutscene.overShoulder; return { ok: !!o && typeof o === 'object', keys: Object.keys(o ?? {}).length }; })()`);
+      if (!sh.ok) throw new Error('结尾过肩参数没拷出来 ' + JSON.stringify(sh));
+      await evaluate(cut035Hook);
+      await evaluate(`(window.__c035 = __s3.endingCutscene, __s3.lightTheLamp(), 1)`);
+      if (!(await until(`__s3.endingCutscene.t >= ${ENDING_CUES.lens + 1}`, 60000))) throw new Error('点灯后演出没走');
+      // 中段按 cue 相对位置推进（同 035 后备时钟那项）
+      for (const s of [ENDING_CUES.no_answer - 5, ENDING_CUES.pull_back + 6, ENDING_CUES.silence - 2]) {
+        await evaluate(`__s3.endingCutscene.seek(${s}), 1`);
+        if (s < ENDING_CUES.silence - 2 && !(await until(`__s3.endingCutscene.t >= ${s + 1}`, 30000))) throw new Error('seek 后没走 ' + s);
+      }
+      if (!(await until(`__game.scenes.current?.name === 'chapter-end'`, 60000))) throw new Error('演出完没进结束页');
+      if (!(await until(`__game.ui.fade.opacity <= 0.05`, 15000))) throw new Error('结束页没淡入');
+      const pg = await evaluate(`({ raw: JSON.parse(localStorage.getItem('foglight.save.v1') || 'null'), last: __game.save.lastSave, endedBy: window.__c035.endedBy })`);
+      if (!pg.raw?.chapterComplete || !pg.last?.chapterComplete || pg.endedBy !== 'end') throw new Error('结束页应存 chapterComplete ' + JSON.stringify(pg));
+      // 刷新（initScript 照样先删全局）→ SaveSystem 构造里读档、lastSave / load() 都走拷贝
+      await cdp.goto('');
+      const after = await evaluate(`(() => { const a = __game.save.load(); const b = __game.save.lastSave; const same = a && b && a !== b && JSON.stringify(a) === JSON.stringify(b); return { ...${probe}, same, chapterId: a?.chapterId ?? null }; })()`);
+      if (after.start !== 'undefined' || after.now !== 'function' || after.native) throw new Error('刷新后 polyfill 状态不对 ' + JSON.stringify(after));
+      if (after.status !== 'ok' || !after.same) throw new Error('刷新后读档不对（应 ok、load() 与 lastSave 是两份相同副本）' + JSON.stringify(after));
+      const gameErrors = errors.slice(errBefore).filter((e) => !/GPU stall due to ReadPixels|WebGL.*performance/i.test(e));
+      if (gameErrors.length) throw new Error('无 structuredClone 时报错：' + gameErrors.join(' | '));
+      return `页面脚本前 typeof structuredClone = ${pf.start} → 模块求值后 ${pf.now}（非原生 = polyfill）、存档 ${pf.status}；结尾过肩参数 ${sh.keys} 项已拷；点灯 → 演出到 ${ENDING_CUES.silence} s（endedBy ${pg.endedBy}）→ 结束页淡入、存 chapterComplete；刷新后 polyfill 照样先装、读档 ${after.status}、load() / lastSave 为独立副本；无报错`;
+    } finally {
+      await cdp.removeInitScript(id);
+      await evaluate(`localStorage.clear(); 1`).catch(() => {});
+      await cdp.goto('');
+    }
+  },
+});
+
 // batch26 ⑥：像素比变化（CDP 改 deviceScaleFactor，视口 CSS 尺寸不变 → ResizeObserver 不触发）也要重设画布和后处理渲染目标
 CHECKS.push({
   name: 'v0.1-batch26-⑥ DPR 变化：matchMedia(resolution) 触发、视口不变也按新像素比重设画布 / 后处理 RT，变回来再跟一次',
@@ -4766,7 +4812,12 @@ const cdp = {
   },
   /** 之后每次导航都先跑的脚本（诊断用：长任务 / rAF 断档记录） */
   async initScript(source) {
-    await send('Page.addScriptToEvaluateOnNewDocument', { source }, sessionId);
+    const r = await send('Page.addScriptToEvaluateOnNewDocument', { source }, sessionId);
+    return r?.identifier ?? null;
+  },
+  /** batch26：撤掉 initScript 装的脚本（之后的导航不再跑） */
+  async removeInitScript(identifier) {
+    if (identifier != null) await send('Page.removeScriptToEvaluateOnNewDocument', { identifier }, sessionId);
   },
   async key(code, key = code, keyCode = 0) {
     const base = { code, key, windowsVirtualKeyCode: keyCode, nativeVirtualKeyCode: keyCode };

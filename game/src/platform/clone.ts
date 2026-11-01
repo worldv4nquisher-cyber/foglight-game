@@ -2,7 +2,8 @@
  * batch26 ②：深拷贝。Safari 15.0–15.3（及更老的 WebView）没有 structuredClone（15.4 才有），
  * 直接调用会在第一次存档 / 读档（SaveSystem 构造里 load）时抛 ReferenceError。
  * 有原生就用原生；没有就走降级：递归拷贝普通对象 / 数组 / Date / Map / Set（存档和参数表都是纯 JSON 数据，够用）。
- * 不覆盖全局（不做全局 polyfill），调用方统一用 deepClone。
+ * 制作人追加：另有全局 polyfill（platform/polyfills.ts，main.ts 第一个 import，早于所有模块求值），
+ * 所以直接写 structuredClone 也安全；仓库代码仍统一用 deepClone（Node 校验脚本里不经过 main.ts 也能用）。
  */
 export function deepClone<T>(value: T): T {
   const sc = (globalThis as { structuredClone?: <V>(v: V) => V }).structuredClone;
