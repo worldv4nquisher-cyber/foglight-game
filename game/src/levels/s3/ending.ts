@@ -1,3 +1,4 @@
+import { deepClone } from '@/platform/clone';
 import * as THREE from 'three';
 import type { Game } from '@/core/Game';
 import type { PlayerRig } from '@/entities/createPlayer';
@@ -104,7 +105,7 @@ export class S3Ending {
   /** 结束方式（冒烟读） */
   endedBy: CutsceneEnd | null = null;
   /** 05 过肩机位参数（相对日志节点；截图 / 调参可改后 rebuildShots()） */
-  overShoulder: OverShoulderParams = structuredClone(OVER_SHOULDER);
+  overShoulder: OverShoulderParams = deepClone(OVER_SHOULDER);
   private readonly pose = makePose();
 
   constructor(private readonly h: S3EndingHost) {

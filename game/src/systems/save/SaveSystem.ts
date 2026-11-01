@@ -1,4 +1,5 @@
 import { t } from '@/content/text';
+import { deepClone } from '@/platform/clone';
 import { defaultStorage, probeWritable, safeGet, safeRemove, safeSet, type StorageLike } from './storage';
 
 /**
@@ -124,7 +125,7 @@ export class SaveSystem {
 
   /** 最近一次读到 / 写入的存档（只读副本） */
   get lastSave(): SaveData | null {
-    return this._lastSave ? structuredClone(this._lastSave) : null;
+    return this._lastSave ? deepClone(this._lastSave) : null;
   }
 
   /** 从 localStorage 重新读取。失败返回 null 并把 status 设为 corrupt */
@@ -138,7 +139,7 @@ export class SaveSystem {
     const data = parseSave(text);
     this._status = data ? 'ok' : 'corrupt';
     this._lastSave = data;
-    return data ? structuredClone(data) : null;
+    return data ? deepClone(data) : null;
   }
 
   /** 新游戏：清空存档（设置不动），从给定场景开始计进度 */
@@ -278,7 +279,7 @@ export class SaveSystem {
     const ok = this.writable && safeSet(this.storage, SAVE_KEY, JSON.stringify(data));
     this._lastSave = data;
     this._status = 'ok';
-    this.onSaved?.(structuredClone(data), ok);
+    this.onSaved?.(deepClone(data), ok);
     return ok;
   }
 }

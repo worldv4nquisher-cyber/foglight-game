@@ -3,6 +3,8 @@
 import assert from 'node:assert/strict';
 import { SAVE_KEY, SAVE_TEXT, SaveSystem, parseSave } from '@/systems/save/SaveSystem';
 import { formatPlayTime } from '@/ui/format';
+import { cloneFallback, deepClone } from '@/platform/clone';
+import { OVER_SHOULDER } from '@/content/cutscenes/ending';
 import { DEFAULT_SETTINGS, LEGACY_QUALITY_KEY, SETTINGS_KEY, Settings } from '@/systems/save/Settings';
 
 /** 内存版 localStorage；mode: ok / readonly（setItem 抛 QuotaExceededError，模拟 Safari 隐私模式）/ broken（全部抛错） */
@@ -295,6 +297,66 @@ test('008：章节完成时把不满 10 秒的零头记进用时；之后不再�
   s.save({ chapterId: 'ch1', sceneId: 'end', chapterComplete: true });
   assert.ok(Math.abs(JSON.parse(st.getItem(SAVE_KEY)).playTimeSec - 25.5) < 1e-6, '再次保存不应重复累计');
   assert.deepEqual([0, 9.9, 59, 60, 61, 754, 3600, -3, NaN].map(formatPlayTime), ['0:00', '0:09', '0:59', '1:00', '1:01', '12:34', '60:00', '0:00', '0:00']);
+});
+
+// batch26 ②：Safari 15.0–15.3 没有 structuredClone（15.4 才有）——删掉全局后存读档整套流程照常、不抛 ReferenceError
+function withoutStructuredClone(fn) {
+  const had = Object.getOwnPropertyDescriptor(globalThis, 'structuredClone');
+  delete globalThis.structuredClone;
+  try {
+    assert.equal(typeof globalThis.structuredClone, 'undefined', '模拟环境没删掉 structuredClone');
+    fn();
+  } finally {
+    if (had) Object.defineProperty(globalThis, 'structuredClone', had);
+  }
+}
+
+test('batch26 ②：无 structuredClone 时 构造（读档）→ 新游戏 → 存档 → 继续 → lastSave / onSaved 都不报错，拿到的是副本', () => {
+  withoutStructuredClone(() => {
+    const st = new MemStorage('ok', { [SAVE_KEY]: validSave({ seenLines: ['line.a'] }) });
+    const saved = [];
+    const s = new SaveSystem(st); // 构造里就 load()：修前这里抛 ReferenceError
+    assert.equal(s.status, 'ok');
+    const d = s.load();
+    assert.equal(d.sceneId, 's2');
+    d.readDocs.push('mutated');
+    assert.deepEqual(s.lastSave.readDocs, ['doc.letter1'], 'load() 返回的必须是副本');
+    s.onSaved = (data, ok) => saved.push([data, ok]);
+    s.newGame('ch1', 's1');
+    assert.equal(s.save({ chapterId: 'ch1', sceneId: 's3' }), true);
+    assert.equal(saved.length, 1);
+    assert.equal(saved[0][0].sceneId, 's3');
+    saved[0][0].sceneId = 'mutated';
+    assert.equal(s.lastSave.sceneId, 's3', 'onSaved 拿到的必须是副本');
+    const c = s.continueGame();
+    assert.equal(c.sceneId, 's3');
+    const again = new SaveSystem(st);
+    assert.equal(again.status, 'ok');
+    assert.equal(again.load().sceneId, 's3');
+  });
+});
+
+test('batch26 ②：降级拷贝和原生 structuredClone 结果一致（存档 / 过肩机位参数 / 嵌套 / Date / Map / Set / 环引用），且是深拷贝', () => {
+  const save = JSON.parse(validSave({ seenLines: ['x'], extra: { a: [1, { b: 2 }] } }));
+  for (const v of [save, OVER_SHOULDER, [1, 'a', null, true, [2, [3]]], 0, 'str', null, undefined]) {
+    assert.deepEqual(cloneFallback(v), structuredClone(v));
+  }
+  const fc = cloneFallback(OVER_SHOULDER);
+  assert.notEqual(fc.from, OVER_SHOULDER.from);
+  fc.from.back = 99;
+  assert.notEqual(OVER_SHOULDER.from.back, 99, '降级拷贝改副本不能影响原表');
+  const d = new Date(5);
+  const m = new Map([['k', { v: 1 }]]);
+  const set = new Set([1, 2]);
+  const r = cloneFallback({ d, m, set });
+  assert.ok(r.d instanceof Date && r.d.getTime() === 5 && r.d !== d);
+  assert.ok(r.m instanceof Map && r.m.get('k').v === 1 && r.m.get('k') !== m.get('k'));
+  assert.ok(r.set instanceof Set && r.set.has(2) && r.set !== set);
+  const cyc = { n: 1 };
+  cyc.self = cyc;
+  const cc = cloneFallback(cyc);
+  assert.equal(cc.self, cc);
+  withoutStructuredClone(() => assert.deepEqual(deepClone(save), save));
 });
 
 let failed = 0;
