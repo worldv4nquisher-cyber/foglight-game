@@ -4287,7 +4287,16 @@ CHECKS.push({
 // batch26 ⑥：像素比变化（CDP 改 deviceScaleFactor，视口 CSS 尺寸不变 → ResizeObserver 不触发）也要重设画布和后处理渲染目标
 CHECKS.push({
   name: 'v0.1-batch26-⑥ DPR 变化：matchMedia(resolution) 触发、视口不变也按新像素比重设画布 / 后处理 RT，变回来再跟一次',
-  async run({ evaluate, sleep }) {
+  async run({ evaluate, cdp, sleep }) {
+    // 无头 Chrome 的 Emulation.setDeviceMetricsOverride 会改 devicePixelRatio 和 resolution 媒体查询的结果，但**不通知** MediaQueryList 的 change 监听
+    // （batch26 实测：新建的 (resolution: 1dppx) 已经 matches=false，旧的监听一次都没收到）。所以先装一个只记录的 matchMedia 包装（不改行为），
+    // 改完 DPR 等 2 s，原生没通知就在游戏注册的那个查询上派发一次 change（等同浏览器的通知），后面的重新注册 / 重设画布 / RT 都是真实代码路径。
+    await cdp.initScript(`(() => { const mm = window.matchMedia.bind(window); window.__dprMql = []; window.matchMedia = (q) => { const m = mm(q); if (/resolution/.test(q)) window.__dprMql.push(m); return m; }; })()`);
+    await cdp.goto('');
+    const q0 = await evaluate(`__game.settings.get('quality')`);
+    // 标准档像素比上限 1：DPR 1 → 1.5 渲染像素比不变，验证不出重设；固定极致档（上限 2）
+    await evaluate(`__game.settings.update({ quality: 'ultra' }), 1`);
+    await sleep(500);
     const st = () =>
       evaluate(`(() => { const g = __game, c = g.renderer.domElement, ib = g.postfx?.composer?.inputBuffer;
         return { dpr: devicePixelRatio, n: g.debugStats.dprChanges, black: g.debugStats.resizeAfterRender, pr: g.renderer.getPixelRatio(), want: g.pixelRatio,
@@ -4301,13 +4310,20 @@ CHECKS.push({
       for (const dsf of [1.5, 1]) {
         const before = await st();
         await send('Emulation.setDeviceMetricsOverride', { width: before.css[0], height: before.css[1], deviceScaleFactor: dsf, mobile: false }, sessionId);
-        const s = await until((x) => x.dpr === dsf && x.n > before.n && ok(x));
+        let s = await until((x) => x.dpr === dsf && x.n > before.n && ok(x), 2000);
+        let how = '原生通知';
+        if (s.dpr === dsf && s.n <= before.n) {
+          const fired = await evaluate(`(() => { const m = [...window.__dprMql].reverse().find((x) => !x.matches); if (!m) return null; m.dispatchEvent(new MediaQueryListEvent('change', { media: m.media, matches: false })); return m.media; })()`);
+          if (!fired) throw new Error('DPR 变了，但游戏没有注册 (resolution) 查询 / 当前查询仍成立 ' + JSON.stringify(await evaluate(`__dprMql.map((m) => [m.media, m.matches])`)));
+          how = `无头 Chrome 不通知，补派发 ${fired} change`;
+          s = await until((x) => x.n > before.n && ok(x));
+        }
         if (s.dpr !== dsf) throw new Error(`CDP 改 deviceScaleFactor=${dsf} 没生效 ` + JSON.stringify(s));
         if (s.n <= before.n) throw new Error('DPR 变了但没收到 matchMedia(resolution) 变化 ' + JSON.stringify(s));
         if (!ok(s)) throw new Error('DPR 变了画布没按新像素比重设 ' + JSON.stringify(s));
         if (s.css[0] !== before.css[0] || s.css[1] !== before.css[1]) throw new Error('视口 CSS 尺寸不该变（这项要验证的是不靠 resize）' + JSON.stringify([before.css, s.css]));
         if (s.rt && before.rt && s.pr !== before.pr && s.rt[0] === before.rt[0]) throw new Error('后处理 RT 尺寸没跟着变 ' + JSON.stringify([before.rt, s.rt]));
-        out.push(`DPR ${before.dpr} → ${dsf}：回调 ${s.n - before.n} 次，像素比 ${before.pr.toFixed(2)} → ${s.pr.toFixed(2)}（${s.tier}），画布 ${before.cw}×${before.ch} → ${s.cw}×${s.ch}${s.rt ? `，RT ${before.rt.join('×')} → ${s.rt.join('×')}` : ''} ✓`);
+        out.push(`DPR ${before.dpr} → ${dsf}（${how}）：回调 ${s.n - before.n} 次，像素比 ${before.pr.toFixed(2)} → ${s.pr.toFixed(2)}（${s.tier}），画布 ${before.cw}×${before.ch} → ${s.cw}×${s.ch}${s.rt ? `，RT ${before.rt.join('×')} → ${s.rt.join('×')}` : ''} ✓`);
       }
     } finally {
       await send('Emulation.clearDeviceMetricsOverride', {}, sessionId).catch(() => {});
@@ -4315,6 +4331,10 @@ CHECKS.push({
     await sleep(500);
     const s = await st();
     if (s.black !== s0.black) throw new Error(`DPR 变化时出现渲染后重设画布（黑帧）${s0.black} → ${s.black}`);
+    const armed = await evaluate(`__dprMql.length`);
+    if (armed < 3) throw new Error('每次变化后应按新值重新注册查询，只注册了 ' + armed + ' 次');
+    out.push(`重新注册 ${armed} 次 ✓`);
+    if (q0) await evaluate(`__game.settings.update({ quality: ${JSON.stringify(q0)} }), 1`);
     out.push('渲染后重设画布 0 次 ✓');
     return out.join('；');
   },
@@ -4381,7 +4401,7 @@ CHECKS.push({
 // 这里全部用 CDP Input.dispatchKeyEvent / dispatchMouseEvent（和玩家按键同一路径：浏览器事件 → KeyboardMouseInput → InputManager → PuzzleMode）。
 // 只有「站到镜前」用传送（走路另有覆盖），进 / 出机关、转镜、精调、复位都是真实输入。
 CHECKS.push({
-  name: 'v0.1-batch26-S3 导光镜真实键鼠：E 进窗口镜 → A/D 偏航、W/S 俯仰各一档 15° → Shift 精调 7.5° → 鼠标右移 / 上移按档转 → R 复位 → Tab 退出；再 E 进 → 右键退出',
+  name: 'v0.1-batch26-S3 导光镜真实键鼠：E 进窗口镜 → A/D 偏航、W/S 俯仰各一档 15° → Shift 精调 7.5° → R 复位 → 鼠标右移 / 上移按档转 → R 复位 → Tab 退出；再 E 进 → 右键退出',
   async run({ evaluate, cdp, sleep }) {
     const out = [];
     const until = async (expr, ms = 8000) => { const end = Date.now() + ms; let v; while (!(v = await evaluate(expr)) && Date.now() < end) await sleep(100); return v; };
@@ -4446,13 +4466,24 @@ CHECKS.push({
     const dF = await holdStep('KeyD', 0, true);
     if (!isMult(dF[0], 7.5) || isMult(dF[0], 15)) throw new Error('Shift+D 应是 7.5° 精调档 ' + JSON.stringify(dF));
     out.push(`Shift+D 精调 ${dF[0]}° ✓`);
-    // 鼠标：指针锁定下右移 / 上移（右 = 正、上 = 第二轴正），按 mouseStepRad 累计到一档才转
+    // R 复位（精调后偏航停在 7.5° 半档上，先回 0 再测鼠标，整档好判断）
+    const pressR = async () => {
+      let reset = false;
+      for (let t = 0; t < 3 && !reset; t++) {
+        await cdp.key('KeyR', 'r', 82);
+        reset = await until(`__s3.puzzles.beam.mirrors.window.part.atInitial`, 4000);
+      }
+      if (!reset) throw new Error('R 没复位 ' + JSON.stringify(await angles()));
+    };
+    await pressR();
+    out.push('R 复位 ✓');
+    // 鼠标：指针锁定下右移 / 上移（右 = 正、上 = 第二轴正），按 mouseStepRad 累计到一档才转；各移 100 px（默认灵敏度约 3 档，俯仰在上限 30° 内）
     const sens = await evaluate(`__game.input.lookSensitivity`);
     const m0 = await angles();
     let x = 640, y = 400;
-    for (let i = 0; i < 12; i++) { x += 25; await cdp.move(x, y); await sleep(40); }
+    for (let i = 0; i < 4; i++) { x += 25; await cdp.move(x, y); await sleep(40); }
     await until(`Math.abs(${ANG}[0] - ${m0[0]}) > 1e-6`, 6000);
-    for (let i = 0; i < 12; i++) { y -= 25; await cdp.move(x, y); await sleep(40); }
+    for (let i = 0; i < 4; i++) { y -= 25; await cdp.move(x, y); await sleep(40); }
     await until(`Math.abs(${ANG}[1] - ${m0[1]}) > 1e-6`, 6000);
     await sleep(300);
     const m1 = await angles();
@@ -4460,15 +4491,9 @@ CHECKS.push({
     const my = m1[1] - m0[1];
     if (!(mx > 0) || !isMult(mx, 15)) throw new Error('鼠标右移应正向转偏航整档 ' + JSON.stringify({ m0, m1, sens }));
     if (!(my > 0) || !isMult(my, 15)) throw new Error('鼠标上移应正向转俯仰整档 ' + JSON.stringify({ m0, m1, sens }));
-    out.push(`鼠标右移 300 px 偏航 +${mx}°、上移 300 px 俯仰 +${my}°（灵敏度 ${sens}）✓`);
-    // R 复位
-    let reset = false;
-    for (let t = 0; t < 3 && !reset; t++) {
-      await cdp.key('KeyR', 'r', 82);
-      reset = await until(`__s3.puzzles.beam.mirrors.window.part.atInitial`, 4000);
-    }
-    if (!reset) throw new Error('R 没复位 ' + JSON.stringify(await angles()));
-    out.push('R 复位 ✓');
+    out.push(`鼠标右移 100 px 偏航 +${mx}°、上移 100 px 俯仰 +${my}°（灵敏度 ${sens}）✓`);
+    await pressR();
+    out.push('鼠标转后 R 再复位 ✓');
     let exited = false;
     for (let t = 0; t < 3 && !exited; t++) {
       await cdp.key('Tab', 'Tab', 9);
