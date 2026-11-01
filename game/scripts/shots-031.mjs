@@ -3,14 +3,14 @@
 //   art/models/characters/preview/char-xi-hem-polish-closeup.png、char-xi-cuff-polish-closeup.png。
 //   另做遮挡检查：018 新加的 9 块前景礁石（rocks.ts 第 156–164 项）在 开场 / 小径尽头 / 初始跟随 三个机位里，相机 → 脚印 T1–T4（包围盒角点 + 中心）
 //   和 小径尽头 → 浮台 路线（地面 + 身体高度）的视线是否被挡（逐三角形求交，LOD0）→ shots-031.json 的 occlusion。
-// 用法：npm run build && node --import ./scripts/register-ts-paths.mjs scripts/shots-031.mjs [名字前缀,…]；SHOTS_ATMO=预设名 → 加 &atmo=，文件名加后缀
+// 用法：node --import ./scripts/register-ts-paths.mjs scripts/shots-031.mjs [名字前缀,…]；SHOTS_ATMO=预设名 → 加 &atmo=，文件名加后缀
 // 只进一次场景，机位挨个摆；截图前等 GLB / KTX2 全部加载完且无占位（有占位就整页重进，最多 3 次）；场景内等待按游戏时间 / 帧数；平时小窗，截图时切 1600×900。
 import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { preview } from 'vite';
+import { startGameServer } from './lib/test-server.mjs';
 import { S1_ROCKS } from '../src/levels/s1/rocks.ts';
 import { S1 } from '../src/levels/s1/layout.ts';
 import { RAMP_PROBE } from './lib/ramp-probe.mjs';
@@ -19,7 +19,6 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 // SHOTS_OUT=目录（相对仓库上一级，如 docs/tasks/shots-r4）改输出目录；SHOTS_QUERY='&hull=0' 追加 URL 参数；SHOTS_SUFFIX 文件名后缀
 const OUT = resolve(root, '..', process.env.SHOTS_OUT ?? 'docs/tasks/shots-031');
 mkdirSync(OUT, { recursive: true });
-if (!existsSync(join(root, 'dist/index.html'))) throw new Error('先 npm run build');
 const chromePath = process.env.CHROME ?? ['/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser'].find((p) => existsSync(p));
 const W = 1600, H = 900;
 const only = process.argv[2]?.split(',').filter(Boolean) ?? null;
@@ -59,7 +58,9 @@ const VIEWS = [
   ['s1-xi-cuff-side-031cam', 'high', [1.569, 3.144, -11.849], [2.116, 3.094, -11.79], 35, true],
 ];
 
-const server = await preview({ root, preview: { host: '127.0.0.1', port: 0, strictPort: false, open: false }, logLevel: 'silent' });
+// batch25：生产 dist 不含 __game 等钩子 → 用测试构建（--mode smoke，临时建在 /tmp、跑完删；SMOKE_DIST=已建好的测试构建 可复用）
+const game = await startGameServer(root);
+const server = game.server;
 const base = `http://127.0.0.1:${server.httpServer.address().port}/?smoke=1&art=1&quality=high${ATMO ? '&atmo=' + ATMO : ''}${EXTRA_Q}`;
 const profile = mkdtempSync(join(tmpdir(), 'shots031-chrome-'));
 const chrome = spawn(chromePath, ['--headless=new', '--no-sandbox', '--no-first-run', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', `--window-size=${W},${H}`, '--hide-scrollbars', '--remote-debugging-port=0', `--user-data-dir=${profile}`, 'about:blank'], { stdio: ['ignore', 'ignore', 'pipe'] });
@@ -279,7 +280,7 @@ save();
 if (errors.length) console.log('  页面错误：', errors.slice(0, 5));
 ws.close();
 chrome.kill('SIGKILL');
-await new Promise((r) => server.httpServer.close(r));
+await game.close();
 try { rmSync(profile, { recursive: true, force: true }); } catch { /* */ }
 console.log('完成 →', OUT, report.failed.length ? `（${report.failed.length} 张失败）` : '');
 process.exit(0); // vite preview 留着句柄，不显式退出会一直挂着

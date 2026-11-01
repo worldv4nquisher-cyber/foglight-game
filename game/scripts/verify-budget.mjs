@@ -1,4 +1,4 @@
-// 037 预算校验（npm run check:release 的一环；需要先 npm run build）：
+// 037 预算校验（npm run check:release 的一环；用测试构建 --mode smoke，见 scripts/lib/test-server.mjs）：
 //   三个场景 × src/config/perf-spots.ts 里的机位 × 三档（极致 / 高 / 标准），无头 Chrome（swiftshader）里量：
 //   - 主 pass（当前场景 scene + 场景相机那一次 renderer.render，扣掉其中的阴影贴图渲染）的三角面 / draw call ≤ style-guide §8（sceneVisibleTris / maxDrawCalls）；
 //     整帧合计（含阴影、水面反射、后处理法线 / 深度 pass）只列出来，不判（§8 的是「可见场景总面数」）；
@@ -12,10 +12,10 @@
 //   node --import ./scripts/register-ts-paths.mjs scripts/verify-budget.mjs [s1,s2,s3]       校验（结果 → ../docs/releases/perf/verify-budget.json）
 //   node --import ./scripts/register-ts-paths.mjs scripts/verify-budget.mjs --scan [s1,s2,s3] 扫最差机位（极致档；结果 → ../docs/releases/perf/scan-<场景>.json，挑 3 个抄进 perf-spots.ts）
 //   BUDGET_SHOTS=1 每个机位极致档存一张 1280×720 截图；BUDGET_TIERS=ultra,high 只跑部分档位；BUDGET_WATCHDOG_MS 总超时（默认 60 min）
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { preview } from 'vite';
+import { startGameServer } from './lib/test-server.mjs';
 import { launchChrome, sleep } from './lib/cdp.mjs';
 import { PERF_SPOTS } from '../src/config/perf-spots.ts';
 import { QUALITY_PRESETS } from '../src/config/quality.ts';
@@ -24,7 +24,6 @@ import { LEVELS } from '../src/scenes/levels.ts';
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = resolve(root, process.env.BUDGET_OUT ?? '../docs/releases/perf');
 mkdirSync(OUT, { recursive: true });
-if (!existsSync(join(root, 'dist/index.html'))) throw new Error('先 npm run build');
 const args = process.argv.slice(2);
 const SCAN = args.includes('--scan');
 const scenes = (args.find((a) => !a.startsWith('--')) ?? 's1,s2,s3').split(',').filter((s) => s in LEVELS);
@@ -37,7 +36,9 @@ const KNOWN = [
 ];
 const knownTris = (sid, tier, m, q) => KNOWN.find((k) => k.scene === sid && k.tier === tier && !!m.main && m.main.tris > q.sceneVisibleTris && m.main.tris <= k.maxTris && m.main.calls <= q.maxDrawCalls);
 
-const server = await preview({ root, preview: { host: '127.0.0.1', port: 0, strictPort: false, open: false }, logLevel: 'silent' });
+// batch25：生产 dist 不含 __game 等钩子 → 用测试构建（--mode smoke，临时建在 /tmp、跑完删；SMOKE_DIST=已建好的测试构建 可复用）
+const game = await startGameServer(root);
+const server = game.server;
 const base = `http://127.0.0.1:${server.httpServer.address().port}/?smoke=1&debug=1&art=1`;
 const report = { at: new Date().toISOString(), mode: SCAN ? 'scan' : 'verify', view: VIEW, tiers: TIERS, scenes: {}, failures: [], warnings: [], errors: [] };
 const reportFile = join(OUT, SCAN ? `scan-${scenes.join('+')}.json` : `verify-budget${process.argv[2] && !process.argv[2].startsWith('--') ? '-' + scenes.join('+') : ''}.json`);
@@ -320,7 +321,7 @@ try {
   report.errors = cdp.errors.slice(0, 20);
   save();
   cdp.close();
-  await new Promise((r) => server.httpServer.close(r));
+  await game.close();
 }
 console.log(`\n${SCAN ? '扫描' : '预算校验'}${report.failures.length ? `：${report.failures.length} 项不通过` : '通过'} → ${reportFile}`);
 for (const f of report.failures) console.log('  ✗', f);

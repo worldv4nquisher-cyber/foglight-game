@@ -5,7 +5,7 @@ import type { PerspectiveCamera } from 'three';
 /**
  * 037 真 GPU 实测用：控制台 `__perfSpot('s1-raft-back')` 把相机钉到 perf-spots.ts 的预算机位（和 verify-budget 同一套 eye / at / fov），
  * 时间照走（水面 / 雾 / 灯束都在动，量出来的才是真实帧时间），只停掉跟随相机；`__perfSpot()` 松开，`__perfSpot('?')` 列出当前场景的机位。
- * 只在 dev 或 ?smoke=1 下挂（和 __game 一样），不进正式玩家路径。
+ * 只在 dev 或测试构建（vite build --mode smoke）下挂（和 __game 一样）；生产构建里整个模块被摇树删掉（batch25）。
  */
 export function installPerfSpot(game: Game): void {
   let restore: (() => void) | null = null;

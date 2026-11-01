@@ -2,7 +2,7 @@
 //   同一机位、同一游戏时刻（timeScale=0）：倒影关（reflection.enabled=false = 025 之前）vs 档位倍率 0.25 / 0.5（high 默认）/ 1.0；
 //   每档记倒影 pass 的 draw call / 三角形 / CPU ms，以及 30 帧平均整帧墙钟（swiftshader，只看相对值）。
 //   贴水面高度序列（相机离水 0.02 / 0.1 / 0.3 / 0.6 / 1.2 m）检查淡入不跳变。
-// 用法：npx vite build && node --import ./scripts/register-ts-paths.mjs scripts/shots-025.mjs [views,逗号分隔]
+// 用法：node --import ./scripts/register-ts-paths.mjs scripts/shots-025.mjs [views,逗号分隔]
 //   SHOTS_WATCHDOG_MS（默认 20 min）到点强退并清理 Chrome 临时目录
 // 037 强度变体：SHOTS_VARIANT=strength → 输出 shots-025/strength/，RT 分辨率固定 high 默认（reflections.planar = 0.5），
 //   每机位三档强度 k0（= ?reflectK=0 = off）/ k05（= 默认 PLANAR_REFLECTION_STRENGTH 0.5）/ k1，运行时改 reflection.strength；另拍 k05-q1（强度 0.5 + RT 倍率 1）比清晰度
@@ -12,19 +12,20 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:
 import { tmpdir } from 'node:os';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { preview } from 'vite';
+import { startGameServer } from './lib/test-server.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const VARIANT = process.env.SHOTS_VARIANT ?? '';
 const OUT = resolve(root, process.env.SHOTS_OUT ?? (VARIANT === 'strength' ? '../docs/tasks/shots-025/strength' : '../docs/tasks/shots-025'));
 mkdirSync(OUT, { recursive: true });
-if (!existsSync(join(root, 'dist/index.html'))) throw new Error('先 npm run build');
 const chromePath = process.env.CHROME ?? ['/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser'].find((p) => existsSync(p));
 const W = 1600, H = 900;
 const ATMO = process.env.SHOTS_ATMO ?? '';
 let EXTRA = '';
 
-const server = await preview({ root, preview: { host: '127.0.0.1', port: 0, strictPort: false, open: false }, logLevel: 'silent' });
+// batch25：生产 dist 不含 __game 等钩子 → 用测试构建（--mode smoke，临时建在 /tmp、跑完删；SMOKE_DIST=已建好的测试构建 可复用）
+const game = await startGameServer(root);
+const server = game.server;
 const base = `http://127.0.0.1:${server.httpServer.address().port}/?smoke=1&art=1&quality=high${ATMO ? '&atmo=' + ATMO : ''}`;
 const WATCHDOG = setTimeout(() => { console.log('  ! 看门狗到点，强退'); try { chrome.kill('SIGKILL'); } catch { /* */ } try { rmSync(profile, { recursive: true, force: true }); } catch { /* */ } process.exit(2); }, +(process.env.SHOTS_WATCHDOG_MS ?? 1200000));
 const profile = mkdtempSync(join(tmpdir(), 'smoke-chrome-shots025-'));
@@ -230,7 +231,7 @@ save();
 if (errors.length) console.log('  页面错误：', errors.slice(0, 5));
 ws.close();
 chrome.kill('SIGKILL');
-await new Promise((r) => server.httpServer.close(r));
+await game.close();
 try { rmSync(profile, { recursive: true, force: true }); } catch { /* */ }
 clearTimeout(WATCHDOG);
 console.log('完成 →', OUT, report.failed.length ? `（${report.failed.length} 张失败）` : '');

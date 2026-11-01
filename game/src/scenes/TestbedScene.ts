@@ -185,7 +185,7 @@ export class TestbedScene extends BaseScene {
     };
     window.addEventListener('keydown', onKey);
     this.cleanups.push(() => window.removeEventListener('keydown', onKey));
-    if (import.meta.env.DEV || new URLSearchParams(location.search).has('smoke')) {
+    if (import.meta.env.DEV || import.meta.env.MODE === 'smoke') {
       Object.assign(window, { __testbed: this });
     }
   }

@@ -55,8 +55,9 @@ function bootstrap(): void {
   game.start();
   void game.scenes.change('boot');
 
-  // 开发模式（或冒烟测试 ?smoke=1）下暴露到 window，方便控制台调试：__game.quality.set('ultra')
-  if (import.meta.env.DEV || new URLSearchParams(location.search).has('smoke')) {
+  // 开发服务器或测试构建（vite build --mode smoke）下暴露到 window，方便控制台调试：__game.quality.set('ultra')。
+  // batch25：条件全是构建期常量，生产构建（mode production）整段连同 qaHooks / perfSpot 模块被摇树删掉，线上加 ?smoke=1 也没有这些钩子
+  if (import.meta.env.DEV || import.meta.env.MODE === 'smoke') {
     (window as unknown as { __game: Game }).__game = game;
     installQaHooks(game); // M7：__qa.puzzles() / save() / saveData() / diff() / scene()
     installPerfSpot(game); // 037：__perfSpot('<机位 id>') 钉相机到预算机位（真 GPU 实测）

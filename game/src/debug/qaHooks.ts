@@ -5,7 +5,7 @@ import { SAVE_KEY } from '@/systems/save/SaveSystem';
  * M7 QA 钩子（控制台）：`__qa.puzzles()` 当前场景每道谜题的状态快照（只含确定性的字段，可直接 JSON 比较），
  * `__qa.save()` localStorage 里的存档原文解析、`__qa.saveData()` 存档系统内存里最近一次写入的存档、
  * `__qa.diff(a, b)` 两份快照的差异（相同返回 []）、`__qa.scene()` 当前场景名 / 输入上下文 / 目标 / 玩家位置。
- * 只在 dev 或 ?smoke=1 下挂（和 __game / __perfSpot 一样），不进正式玩家路径。返回值只给控制台，不上屏。
+ * 只在 dev 或测试构建（vite build --mode smoke）下挂（和 __game / __perfSpot 一样）；生产构建里整个模块被摇树删掉（batch25）。返回值只给控制台，不上屏。
  */
 type Num3 = [number, number, number];
 interface Part {

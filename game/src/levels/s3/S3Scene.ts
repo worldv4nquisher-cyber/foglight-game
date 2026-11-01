@@ -247,7 +247,7 @@ export class S3Scene extends LevelScene {
     this.endingCutscene = cut;
     this.cleanups.push(() => cut.dispose());
     const q = new URLSearchParams(location.search);
-    if (import.meta.env.DEV || q.has('smoke')) Object.assign(window, { __s3: this });
+    if (import.meta.env.DEV || import.meta.env.MODE === 'smoke') Object.assign(window, { __s3: this }); // 测试构建 / dev 才有（batch25）
     // dev 预览：?father=gaze|walk|hand（dev / ?debug / ?smoke 才认）
     const preview = parseFatherMode(q.get('father'));
     if (preview && (debugEnabled || q.has('smoke'))) void this.playFather(preview);

@@ -3,25 +3,25 @@
 //   记录相机到头部跟随点（脚底 + pivotHeight 1.35）的距离、相机偏移 / 抬高 / 淡出不透明度（新 dist 才有）。
 //   同一份 dist、同一次会话：before = 运行时把 BUG-028 新参数关掉模拟修前（shoulderSkin 0、不换肩、不抬高、不淡出；
 //   Node 量测与修前代码逐行一致，见 measure-before.json），after = 默认参数。
-// 用法：npx vite build && node --import ./scripts/register-ts-paths.mjs scripts/shots-bug028.mjs
+// 用法：node --import ./scripts/register-ts-paths.mjs scripts/shots-bug028.mjs
 import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { preview } from 'vite';
+import { startGameServer } from './lib/test-server.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const DIST = resolve(root, process.env.SHOTS_DIST ?? 'dist');
 const OUT = resolve(root, process.env.SHOTS_OUT ?? '../docs/tasks/shots-bug028');
 mkdirSync(OUT, { recursive: true });
-if (!existsSync(join(DIST, 'index.html'))) throw new Error('先 npm run build');
 const chromePath = process.env.CHROME ?? ['/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser'].find((p) => existsSync(p));
 const W = 1600, H = 900;
 const ATMO = process.env.SHOTS_ATMO ?? '';
 let EXTRA = '';
 
-const server = await preview({ root, build: { outDir: DIST }, preview: { host: '127.0.0.1', port: 0, strictPort: false, open: false }, logLevel: 'silent' });
+// batch25：生产 dist 不含 __game 等钩子 → 用测试构建（--mode smoke，临时建在 /tmp、跑完删；SMOKE_DIST=已建好的测试构建 可复用）
+const game = await startGameServer(root);
+const server = game.server;
 const base = `http://127.0.0.1:${server.httpServer.address().port}/?smoke=1&art=1&quality=high${ATMO ? '&atmo=' + ATMO : ''}`;
 const WATCHDOG = setTimeout(() => { console.log('  ! 看门狗到点，强退'); try { chrome.kill('SIGKILL'); } catch { /* */ } try { rmSync(profile, { recursive: true, force: true }); } catch { /* */ } process.exit(2); }, +(process.env.SHOTS_WATCHDOG_MS ?? 1200000));
 const profile = mkdtempSync(join(tmpdir(), 'smoke-chrome-shotsbug028-'));
@@ -174,6 +174,6 @@ try { ws.close(); } catch { /* */ }
 chrome.kill('SIGKILL');
 await new Promise((r) => setTimeout(r, 500));
 rmSync(profile, { recursive: true, force: true });
-await new Promise((r) => server.httpServer.close(r));
+await game.close();
 console.log(report.failed.length ? `失败 ${report.failed.length} 项` : `完成 ${report.shots.length} 张 → ${OUT}`);
 process.exit(report.failed.length ? 1 : 0);

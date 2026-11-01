@@ -1,13 +1,13 @@
 // batch15 B：S1 沙地「新礁石背后的深色多边形斑」排查对比图 → ../docs/tasks/shots-031/sand/
 //   同一机位、同一游戏时刻（timeScale=0 冻住水面 / 雨）逐项关：基准、关贴花、关阴影（sun.castShadow=false）、关水面（water.visible=false）；
 //   再整页重进 ?lightmap=0 拍基准 / 关水面。另记沙面高度 vs 水面高度探针（probes）。
-// 用法：npm run build && node --import ./scripts/register-ts-paths.mjs scripts/shots-031-sand.mjs
+// 用法：node --import ./scripts/register-ts-paths.mjs scripts/shots-031-sand.mjs
 import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { preview } from 'vite';
+import { startGameServer } from './lib/test-server.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 // 1031：SHOTS_OUT 另存目录、SHOTS_EXTRA 追加 URL 参数（如 &seabed=0）、SHOTS_TAG 文件名后缀、SHOTS_VARIANTS 只拍部分变体（逗号分隔）
@@ -16,13 +16,14 @@ const URL_EXTRA = process.env.SHOTS_EXTRA ?? '';
 const TAG = process.env.SHOTS_TAG ?? '';
 const ONLY = process.env.SHOTS_VARIANTS ? new Set(process.env.SHOTS_VARIANTS.split(',')) : null;
 mkdirSync(OUT, { recursive: true });
-if (!existsSync(join(root, 'dist/index.html'))) throw new Error('先 npm run build');
 const chromePath = process.env.CHROME ?? ['/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser'].find((p) => existsSync(p));
 const W = 1600, H = 900;
 const ATMO = process.env.SHOTS_ATMO ?? '';
 let EXTRA = '';
 
-const server = await preview({ root, preview: { host: '127.0.0.1', port: 0, strictPort: false, open: false }, logLevel: 'silent' });
+// batch25：生产 dist 不含 __game 等钩子 → 用测试构建（--mode smoke，临时建在 /tmp、跑完删；SMOKE_DIST=已建好的测试构建 可复用）
+const game = await startGameServer(root);
+const server = game.server;
 const base = `http://127.0.0.1:${server.httpServer.address().port}/?smoke=1&art=1&quality=high${ATMO ? '&atmo=' + ATMO : ''}`;
 const WATCHDOG = setTimeout(() => { console.log('  ! 看门狗到点，强退'); try { chrome.kill('SIGKILL'); } catch { /* */ } try { rmSync(profile, { recursive: true, force: true }); } catch { /* */ } process.exit(2); }, +(process.env.SHOTS_WATCHDOG_MS ?? 1800000));
 const profile = mkdtempSync(join(tmpdir(), 'shots031sand-chrome-'));
@@ -178,7 +179,7 @@ save();
 if (errors.length) console.log('  页面错误：', errors.slice(0, 5));
 ws.close();
 chrome.kill('SIGKILL');
-await new Promise((r) => server.httpServer.close(r));
+await game.close();
 try { rmSync(profile, { recursive: true, force: true }); } catch { /* */ }
 clearTimeout(WATCHDOG);
 console.log('完成 →', OUT, report.failed.length ? `（${report.failed.length} 张失败）` : '');

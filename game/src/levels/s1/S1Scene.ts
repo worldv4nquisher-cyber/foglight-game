@@ -156,7 +156,7 @@ export class S1Scene extends LevelScene {
     };
     window.addEventListener('keydown', onKey);
     this.cleanups.push(() => window.removeEventListener('keydown', onKey));
-    if (import.meta.env.DEV || new URLSearchParams(location.search).has('smoke')) Object.assign(window, { __s1: this });
+    if (import.meta.env.DEV || import.meta.env.MODE === 'smoke') Object.assign(window, { __s1: this });
     // 首次启动后第一次进入 S1：画质自动检测（009）
     this.game.benchmark.start();
   }

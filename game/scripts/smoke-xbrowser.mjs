@@ -3,20 +3,20 @@
  * 不进 npm 依赖：playwright 装在仓库外，用 PW_MODULE 指过去（M7 时装在 /workspace/pw-tools，浏览器在 /workspace/pw-browsers）。
  *   PW_MODULE=/workspace/pw-tools/node_modules/playwright/index.mjs PLAYWRIGHT_BROWSERS_PATH=/workspace/pw-browsers \
  *   XB_BROWSER=firefox|webkit|chromium npm run smoke:xb
- * 用 dist（vite preview），?smoke=1 暴露 __game；任一 console.error / 未捕获异常记为失败（与 smoke-browser 同口径）。
+ * 用测试构建（vite build --mode smoke，临时建在 /tmp、跑完删；SMOKE_DIST=已建好的测试构建 可复用），?smoke=1；生产 dist 不含 __game 钩子（batch25）。任一 console.error / 未捕获异常记为失败（与 smoke-browser 同口径）。
  * 手机模拟：XB_DEVICE='iPhone 15'（webkit）/ 'Pixel 7'（chromium，XB_CHROMIUM_PATH 指系统 Chrome）——只模拟视口 / UA / 触摸 / DPR，
  *   GPU、内存、iOS 真 Safari 的限制都模拟不了；只看「能不能打开、给没给提示、能不能跑」。
  * XB_AUDIO_DECODE=reject：把 decodeAudioData 换成立即 EncodingError 拒绝。M7 装的 Linux WebKit（WPE）没有 GStreamer 解码插件，
  *   decodeAudioData 连 WAV 都永不返回，带 art=1 时卡在启动；用它绕过，顺带模拟 Safari 18.4 以前解不了 Ogg 的情况（音频全部缺失也要能玩）。
  * BUG-035：手机模拟（XB_DEVICE）断言主菜单显示 ui.notice.desktop_only、菜单按钮隐藏，然后结束（v0.1 只做桌面，手机不进场）；
- *   桌面断言不出这条提示。XB_DEV=1 用 vite 开发服务器代替 dist（QA 验收期间不能重建 dist 时用）。
+ *   桌面断言不出这条提示。XB_DEV=1 用 vite 开发服务器代替测试构建。
  * WebKit 只是 Safari 的同引擎近似（Linux WPE/GTK 端口，GPU / 媒体栈 / 字体都不同），结论不能代替真 Safari。
  */
 import { mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { createServer, preview } from 'vite';
+import { startGameServer } from './lib/test-server.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const which = process.env.XB_BROWSER ?? 'firefox';
@@ -27,11 +27,10 @@ const shotDir = process.env.XB_SHOTS ?? mkdtempSync(join(tmpdir(), `m7-xb-${tag}
 
 const TEXT = JSON.parse(readFileSync(resolve(root, '../docs/gdd/text-ch1.json'), 'utf8')).strings;
 const DEV_SERVER = process.env.XB_DEV === '1';
-const server = DEV_SERVER
-  ? await (await createServer({ root, server: { host: '127.0.0.1', port: 0, strictPort: false, open: false, hmr: false }, logLevel: 'silent' })).listen()
-  : await preview({ root, preview: { host: '127.0.0.1', port: 0, strictPort: false, open: false }, logLevel: 'silent' });
-if (DEV_SERVER) console.log('  ! XB_DEV=1：vite 开发服务器（src 现状），不是 dist');
-const port = server.httpServer.address().port;
+// batch25：生产 dist 不含 __game 钩子 → 测试构建（--mode smoke，临时建在 /tmp、跑完删；SMOKE_DIST 可复用），XB_DEV=1 用开发服务器
+const game = await startGameServer(root, { dev: DEV_SERVER });
+if (DEV_SERVER) console.log('  ! XB_DEV=1：vite 开发服务器（src 现状），不是构建产物');
+const port = game.port;
 const base = `http://127.0.0.1:${port}/?smoke=1${process.env.XB_QUERY ? '&' + process.env.XB_QUERY : ''}`;
 
 const errors = [];
@@ -195,8 +194,7 @@ try {
   errors.push('FAIL: ' + (err?.message ?? err));
 } finally {
   await browser?.close().catch(() => undefined);
-  if (DEV_SERVER) await server.close();
-  else server.httpServer.close();
+  await game.close();
 }
 if (infos.length) console.log('info/warn:\n  ' + [...new Set(infos)].slice(0, 30).join('\n  '));
 console.log(`screens: ${shotDir}`);

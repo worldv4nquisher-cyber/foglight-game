@@ -1,13 +1,13 @@
 // batch15 D（BUG-023 / 031）：父亲接入 S3 的截图 —— 每段动画一张 + hand-on-head 摸头特写，art=1、quality=high、1600×900 → ../docs/tasks/shots-031/
 //   每段都用 dev 开关 ?father=gaze|walk|hand 进 S3（同时验开关生效），等资源全部加载、建立镜头交还 explore 后再 __s3.playFather(mode) 从头播一次对时；
 //   hand：在 strokeA–strokeB 之间（第 80 帧）定格两人（timeScale 不动，按游戏时间等到帧）拍全身侧面 + 头部特写，并量父亲掌心到汐头顶的距离。
-// 用法：npm run build && node --import ./scripts/register-ts-paths.mjs scripts/shots-031-father.mjs [gaze,walk,hand]
+// 用法：node --import ./scripts/register-ts-paths.mjs scripts/shots-031-father.mjs [gaze,walk,hand]
 import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { preview } from 'vite';
+import { startGameServer } from './lib/test-server.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 // 汐头顶点：char-father-anims.glb extras.align.handOnHead.xiCrownRest（汐根局部、静止姿势）——不写死，随美术资源走
@@ -20,11 +20,12 @@ const XI_CROWN_REST = (() => {
 })();
 const OUT = resolve(root, '../docs/tasks/shots-031');
 mkdirSync(OUT, { recursive: true });
-if (!existsSync(join(root, 'dist/index.html'))) throw new Error('先 npm run build');
 const chromePath = process.env.CHROME ?? ['/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser'].find((p) => existsSync(p));
 const W = 1600, H = 900;
 const only = process.argv[2]?.split(',').filter(Boolean) ?? null;
-const server = await preview({ root, preview: { host: '127.0.0.1', port: 0, strictPort: false, open: false }, logLevel: 'silent' });
+// batch25：生产 dist 不含 __game 等钩子 → 用测试构建（--mode smoke，临时建在 /tmp、跑完删；SMOKE_DIST=已建好的测试构建 可复用）
+const game = await startGameServer(root);
+const server = game.server;
 const base = `http://127.0.0.1:${server.httpServer.address().port}/?smoke=1&art=1&quality=high&debug=1&scene=s3`;
 const profile = mkdtempSync(join(tmpdir(), 'shots031f-chrome-'));
 const chrome = spawn(chromePath, ['--headless=new', '--no-sandbox', '--no-first-run', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', `--window-size=${W},${H}`, '--hide-scrollbars', '--remote-debugging-port=0', `--user-data-dir=${profile}`, 'about:blank'], { stdio: ['ignore', 'ignore', 'pipe'] });
@@ -207,7 +208,7 @@ save();
 if (errors.length) console.log('  页面错误：', errors.slice(0, 5));
 ws.close();
 chrome.kill('SIGKILL');
-await new Promise((r) => server.httpServer.close(r));
+await game.close();
 try { rmSync(profile, { recursive: true, force: true }); } catch { /* */ }
 console.log('完成 →', OUT, report.failed.length ? `（${report.failed.length} 段失败）` : '');
 process.exit(0);

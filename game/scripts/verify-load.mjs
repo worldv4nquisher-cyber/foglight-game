@@ -1,24 +1,25 @@
-// 037 加载时间（npm run check:release 的一环；需要先 npm run build）：本地生产构建（vite preview）+ 无头 Chrome，全新 profile、禁用缓存（= 清缓存），量
+// 037 加载时间（npm run check:release 的一环；用测试构建 --mode smoke，见 scripts/lib/test-server.mjs）：本地测试构建（vite preview；与生产构建同配置，只多调试钩子）+ 无头 Chrome，全新 profile、禁用缓存（= 清缓存），量
 //   - 主菜单出现：从导航开始到主菜单「新游戏」按钮可见（页面里 performance.now()）—— 验收 ≤ 3000 ms；
 //   - 首场景：点「新游戏」→ S1 首帧（scene:firstFrame）、S1 资源全部下载完（assets.loadStats 全 done），各自的耗时和下载字节数。
 // 网络：默认本机回环不限速；LOAD_MBPS=50 LOAD_LATENCY_MS=40 用 CDP 模拟带宽 / 延迟（写进报告）。
 // 注意：box 上是 swiftshader 软渲染，首帧 / 着色器编译偏慢，数字是上限参考；实机数字由制作人桌面复测（见 v0.1-perf-report.md）。
 // 用法：node --import ./scripts/register-ts-paths.mjs scripts/verify-load.mjs    结果 → ../docs/releases/perf/verify-load.json
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { preview } from 'vite';
+import { startGameServer } from './lib/test-server.mjs';
 import { launchChrome, sleep } from './lib/cdp.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = resolve(root, process.env.LOAD_OUT ?? '../docs/releases/perf');
 mkdirSync(OUT, { recursive: true });
-if (!existsSync(join(root, 'dist/index.html'))) throw new Error('先 npm run build');
 const MENU_BUDGET_MS = 3000;
 const MBPS = +(process.env.LOAD_MBPS ?? 0);
 const LATENCY = +(process.env.LOAD_LATENCY_MS ?? 0);
 
-const server = await preview({ root, preview: { host: '127.0.0.1', port: 0, strictPort: false, open: false }, logLevel: 'silent' });
+// batch25：生产 dist 不含 __game 等钩子 → 用测试构建（--mode smoke，临时建在 /tmp、跑完删；SMOKE_DIST=已建好的测试构建 可复用）
+const game = await startGameServer(root);
+const server = game.server;
 // 生产构建只有 ?smoke 才暴露 window.__game（读加载记录要用）；smoke 默认关美术，所以显式 art=1 —— 其余和玩家打开一样走主菜单
 const url = `http://127.0.0.1:${server.httpServer.address().port}/?smoke=1&art=1`;
 const network = MBPS ? `CDP 模拟 ${MBPS} Mbps 下行 / ${LATENCY} ms 延迟` : '本机回环（vite preview 127.0.0.1），不限速';
@@ -71,7 +72,7 @@ try {
   report.errors = cdp.errors.slice(0, 20);
   save();
   cdp.close();
-  await new Promise((r) => server.httpServer.close(r));
+  await game.close();
 }
 console.log(`\n加载校验${ok ? '通过' : '不通过'}（${network}）→ ${reportFile}`);
 process.exit(ok ? 0 : 1);

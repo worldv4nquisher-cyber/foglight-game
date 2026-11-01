@@ -1,19 +1,18 @@
 // v0.1-029 截图：光照贴图前后对比（?lightmap=0 = 烘焙前，照旧半球光；默认 = 烘焙后），机位照美术预览页
 //   art/tools/preview/lightmap029.html（S1）/ lightmap029-s23.html（S2 / S3），1600×900 → ../docs/tasks/shots-029/
 //   另：地窖钥匙从入口看（cellarentry：下楼梯第 9 级眼高，钥匙描边 + 点光开着）、S3 塔门关着的塔底（门角压暗 ×0.6）。
-// 用法：npm run build && node --import ./scripts/register-ts-paths.mjs scripts/shots-029.mjs [s1,s2,s3] [lm0,lm1] [机位,…]
+// 用法：node --import ./scripts/register-ts-paths.mjs scripts/shots-029.mjs [s1,s2,s3] [lm0,lm1] [机位,…]
 // 每个场景 × 模式只进一次场景，机位挨个摆（盒子上 SwiftShader 很慢）；单张失败只记进 shots-029.json。
 import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { preview } from 'vite';
+import { startGameServer } from './lib/test-server.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = resolve(root, '../docs/tasks/shots-029');
 mkdirSync(OUT, { recursive: true });
-if (!existsSync(join(root, 'dist/index.html'))) throw new Error('先 npm run build');
 const chromePath = process.env.CHROME ?? ['/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser'].find((p) => existsSync(p));
 const W = 1600, H = 900;
 
@@ -62,7 +61,9 @@ const onlyModes = process.argv[3]?.split(',').filter(Boolean) ?? ['lm0', 'lm1'];
 // 可选第 4 个参数：只截这些机位（逗号分隔，如 floor,room,islet）；有依赖的机位（room 开门、cellar 开地窖门）在自己那张里做，单截也成立
 const onlyViews = process.argv[4]?.split(',').filter(Boolean) ?? null;
 
-const server = await preview({ root, preview: { host: '127.0.0.1', port: 0, strictPort: false, open: false }, logLevel: 'silent' });
+// batch25：生产 dist 不含 __game 等钩子 → 用测试构建（--mode smoke，临时建在 /tmp、跑完删；SMOKE_DIST=已建好的测试构建 可复用）
+const game = await startGameServer(root);
+const server = game.server;
 const base = `http://127.0.0.1:${server.httpServer.address().port}/?smoke=1&art=1&quality=high`;
 const profile = mkdtempSync(join(tmpdir(), 'shots029-chrome-'));
 const chrome = spawn(chromePath, ['--headless=new', '--no-sandbox', '--no-first-run', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', `--window-size=${W},${H}`, '--hide-scrollbars', '--remote-debugging-port=0', `--user-data-dir=${profile}`, 'about:blank'], { stdio: ['ignore', 'ignore', 'pipe'] });
@@ -206,7 +207,7 @@ writeFileSync(reportFile, JSON.stringify(report, null, 2));
 if (errors.length) console.log('  页面错误：', errors.slice(0, 5));
 ws.close();
 chrome.kill('SIGKILL');
-await new Promise((r) => server.httpServer.close(r));
+await game.close();
 try { rmSync(profile, { recursive: true, force: true }); } catch { /* */ }
 console.log('完成 →', OUT);
 process.exit(0); // vite preview 留着句柄，不显式退出会一直挂着

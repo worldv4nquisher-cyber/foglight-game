@@ -1,6 +1,7 @@
-// 无头 Chrome 冒烟测试：构建产物（dist/）用 vite preview 起服务 → 无头 Chrome 打开 ?smoke=1 →
+// 无头 Chrome 冒烟测试：测试构建（vite build --mode smoke，带 __game / __qa 钩子；临时建在 /tmp、跑完删）用 vite preview 起服务 → 无头 Chrome 打开 ?smoke=1 →
 // 等主场景就绪 → 跑下面的 CHECKS → 汇总控制台错误 / 未捕获异常。任何一项失败退出码 1。
-// 用法：npm run build && npm run smoke（需要本机有 Chrome/Chromium；路径可用 CHROME=/path 指定）
+// 用法：npm run smoke（需要本机有 Chrome/Chromium；路径可用 CHROME=/path 指定）。生产 dist/ 不含钩子，不能拿来冒烟（batch25）；
+// SMOKE_DIST=<已建好的测试构建> 复用（scripts/with-smoke-build.mjs），SMOKE_DEV=1 用 vite 开发服务器。
 // 依赖：只用 Node 内置（child_process、WebSocket），不额外装 puppeteer。
 import { spawn } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
@@ -8,33 +9,32 @@ import { tmpdir } from 'node:os';
 import { inflateSync } from 'node:zlib';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createServer, preview } from 'vite';
+import { startGameServer } from './lib/test-server.mjs';
 import { S1, s1StepLinks } from '@/levels/s1/layout';
 import { ENDING_CUES } from '@/systems/audio/endingMusic';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 /** 文本表原文（005 检查对照显示的文字） */
 const TEXT = JSON.parse(readFileSync(resolve(root, '../docs/gdd/text-ch1.json'), 'utf8')).strings;
-/** SMOKE_DEV=1：用 vite 开发服务器代替 dist（QA 验收期间不能重建 dist 时跑新改动用；跳过 dist 检查，结果不代表构建产物） */
+/** SMOKE_DEV=1：用 vite 开发服务器代替测试构建（跳过构建产物检查，结果不代表构建产物） */
 const DEV = process.env.SMOKE_DEV === '1';
-if (DEV) console.log('  ! SMOKE_DEV=1：vite 开发服务器（src 现状），不是 dist');
-if (!DEV && !existsSync(join(root, 'dist/index.html'))) {
-  console.error('dist/ 不存在，先运行 npm run build');
-  process.exit(1);
-}
+if (DEV) console.log('  ! SMOKE_DEV=1：vite 开发服务器（src 现状），不是构建产物');
+// batch25：服务先起（非 DEV 时这一步会建测试构建）；测试构建和生产构建同一份 vite.config，解码器 / 美术拷贝一样
+const game = await startGameServer(root, { dev: DEV });
+const server = game.server;
 // 构建产物：DRACO 只应有 glTF 专用 wasm 一套（wrapper.js + .wasm），不应有通用版和纯 JS 回退
 if (!DEV) {
   const { readdirSync } = await import('node:fs');
-  const files = readdirSync(join(root, 'dist/static'));
+  const files = readdirSync(join(game.dir, 'static'));
   const draco = files.filter((f) => f.startsWith('draco_'));
   const basis = files.filter((f) => f.startsWith('basis_'));
   const okDraco = draco.length === 2 && draco.some((f) => /^draco_wasm_wrapper-.*\.js$/.test(f)) && draco.some((f) => /^draco_decoder-.*\.wasm$/.test(f));
   const okBasis = basis.length === 2 && basis.some((f) => f.endsWith('.js')) && basis.some((f) => f.endsWith('.wasm'));
   if (!okDraco || !okBasis) {
-    console.error(`  ✗ dist 解码器文件不对：${[...draco, ...basis].join(', ')}`);
+    console.error(`  ✗ 构建产物解码器文件不对：${[...draco, ...basis].join(', ')}`);
     process.exit(1);
   }
-  console.log(`  ✓ dist 解码器各一套：${[...draco, ...basis].join(', ')}`);
+  console.log(`  ✓ 构建产物解码器各一套：${[...draco, ...basis].join(', ')}`);
 }
 /**
  * 建立镜头（进场演出）结束、交还 explore 的等待上限（ms，墙钟）。镜头按游戏时间走（单帧截断 0.25 s），
@@ -4196,9 +4196,6 @@ CHECKS.push({
 const extra = process.env.SMOKE_ONLY ? CHECKS.filter((c) => process.env.SMOKE_ONLY.split('|').some((k) => c.name.includes(k))) : CHECKS;
 
 // ---------------------------------------------------------------- 起服务 + 浏览器
-const server = DEV
-  ? await (await createServer({ root, server: { host: '127.0.0.1', port: 0, strictPort: false, open: false, hmr: false }, logLevel: 'silent' })).listen()
-  : await preview({ root, preview: { host: '127.0.0.1', port: 0, strictPort: false, open: false }, logLevel: 'silent' });
 const addr = server.httpServer.address();
 const url = `http://127.0.0.1:${addr.port}/?smoke=1&autostart=1${process.env.SMOKE_QUERY ? '&' + process.env.SMOKE_QUERY : ''}`;
 const profile = mkdtempSync(join(tmpdir(), 'smoke-chrome-'));
@@ -4511,8 +4508,7 @@ failed += realErrors.length;
 
 ws.close();
 chrome.kill('SIGKILL');
-if (DEV) await server.close();
-else await new Promise((r) => server.httpServer.close(r));
+await game.close();
 try {
   rmSync(profile, { recursive: true, force: true });
 } catch {

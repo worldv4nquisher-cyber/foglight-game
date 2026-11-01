@@ -1,6 +1,6 @@
 // v0.1-028 截图：无头 Chrome（SwiftShader）按预览机位 / 预设 / 档位出 1600×900 图到 ../docs/tasks/shots-028/，
 // 另外：GPU 侧 LUT identity 对比（?lut=0 + 中性 grade vs lut-identity，同一帧冻结）、ultra 帧率（仅参考，SwiftShader）。
-// 用法：npm run build && node --import ./scripts/register-ts-paths.mjs scripts/shots-028.mjs [job 名前缀,逗号分隔]
+// 用法：node --import ./scripts/register-ts-paths.mjs scripts/shots-028.mjs [job 名前缀,逗号分隔]
 // 单张失败（盒子高负载下 SwiftShader GPU 进程崩 / 超时）只记进报告、接着跑下一张；shots-028.json 按 job 名合并（分批跑不丢前面的结果）。
 // 机位照 art/tools/preview/env.html：opening / opening-low (-0.9,4.2,9.5) 朝 (0.187,0,-0.982) fov 40；channel (3.5,5.2,4.2)→(-3.5,1.2,11.5) fov 50。
 import { spawn } from 'node:child_process';
@@ -8,12 +8,11 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { preview } from 'vite';
+import { startGameServer } from './lib/test-server.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = resolve(root, '../docs/tasks/shots-028');
 mkdirSync(OUT, { recursive: true });
-if (!existsSync(join(root, 'dist/index.html'))) throw new Error('先 npm run build');
 const chromePath = process.env.CHROME ?? ['/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser'].find((p) => existsSync(p));
 const W = 1600, H = 900;
 
@@ -40,7 +39,9 @@ const JOBS = [
 // 只跑部分：逗号分隔的 job 名前缀（例 s1-channel,lut）
 const only = process.argv[2]?.split(',').filter(Boolean);
 
-const server = await preview({ root, preview: { host: '127.0.0.1', port: 0, strictPort: false, open: false }, logLevel: 'silent' });
+// batch25：生产 dist 不含 __game 等钩子 → 用测试构建（--mode smoke，临时建在 /tmp、跑完删；SMOKE_DIST=已建好的测试构建 可复用）
+const game = await startGameServer(root);
+const server = game.server;
 const base = `http://127.0.0.1:${server.httpServer.address().port}/?smoke=1&autostart=1&art=1`;
 const profile = mkdtempSync(join(tmpdir(), 'shots-chrome-'));
 const chrome = spawn(chromePath, ['--headless=new', '--no-sandbox', '--no-first-run', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', `--window-size=${W},${H}`, '--hide-scrollbars', '--remote-debugging-port=0', `--user-data-dir=${profile}`, 'about:blank'], { stdio: ['ignore', 'ignore', 'pipe'] });
@@ -161,6 +162,6 @@ writeFileSync(reportFile, JSON.stringify(report, null, 2));
 if (errors.length) console.log('  页面错误：', errors.slice(0, 5));
 ws.close();
 chrome.kill('SIGKILL');
-await new Promise((r) => server.httpServer.close(r));
+await game.close();
 try { rmSync(profile, { recursive: true, force: true }); } catch { /* */ }
 console.log('完成 →', OUT);

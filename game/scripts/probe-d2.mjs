@@ -5,7 +5,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { preview } from 'vite';
+import { startGameServer } from './lib/test-server.mjs';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const RUNS = Number(process.env.PROBE_RUNS ?? 10);
@@ -13,7 +13,9 @@ const extraFlags = (process.env.PROBE_FLAGS ?? '').split(' ').filter(Boolean);
 const query = process.env.PROBE_QUERY ?? 'smoke=1&debug=1&art=1&scene=s3';
 const chromePath = process.env.CHROME ?? '/usr/bin/google-chrome';
 const MENU = ['ui-title-logo','ui-title-logo-svg','ui-panel-frame','ui-button-primary','ui-button-secondary','ui-icon-interact','ui-icon-hint-lantern','ui-icon-journal','ui-icon-read','ui-icon-settings','ui-icon-app-512','ui-illust-loading','sfx-ui-back','sfx-ui-confirm','sfx-ui-journal','mus-menu','font-sans','font-serif'];
-const server = await preview({ root, preview: { host: '127.0.0.1', port: 0, open: false }, logLevel: 'silent' });
+// batch25：生产 dist 不含 __game 等钩子 → 用测试构建（--mode smoke，临时建在 /tmp、跑完删；SMOKE_DIST=已建好的测试构建 可复用）
+const game = await startGameServer(root);
+const server = game.server;
 const base = `http://127.0.0.1:${server.httpServer.address().port}/`;
 const results = [];
 for (let run = 1; run <= RUNS; run++) {
@@ -66,5 +68,5 @@ for (let run = 1; run <= RUNS; run++) {
   console.log(`#${run} load ${rec.load} boot ${rec.bootMs}ms menuMissing=${JSON.stringify(rec.missing)} injected=${rec.injected.length} canceled=${rec.canceled.length} [${rec.canceled.map((c)=>c.url.split('/').pop()+'@'+c.tFail).join(' ')}] loadFailures=${JSON.stringify(rec.loadFailures)} ${rec.err??''}`);
 }
 writeFileSync(process.env.PROBE_OUT ?? '/tmp/probe-d2.json', JSON.stringify(results,null,1));
-await server.close();
+await game.close();
 process.exit(0);

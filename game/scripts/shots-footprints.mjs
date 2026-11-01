@@ -1,18 +1,17 @@
 // 033 S1 脚印贴花截图：退潮，S1 开场（跟随相机）/ 码头俯看 / 小径尽头往浮台看（开 / 关贴花）/ 近景 / 俯视 T1–T4，
 // 1600×900 → ../docs/tasks/shots-030/footprints-*.png，对照 art/models/props/preview/033-footprints-proposed-path.jpg。
-// 用法：npm run build && node --import ./scripts/register-ts-paths.mjs scripts/shots-footprints.mjs [机位,…]
+// 用法：node --import ./scripts/register-ts-paths.mjs scripts/shots-footprints.mjs [机位,…]
 // 只进一次场景，截完显式退出（vite preview 句柄 + Chrome 一起关）。
 import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { preview } from 'vite';
+import { startGameServer } from './lib/test-server.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = resolve(root, '../docs/tasks/shots-030');
 mkdirSync(OUT, { recursive: true });
-if (!existsSync(join(root, 'dist/index.html'))) throw new Error('先 npm run build');
 const chromePath = process.env.CHROME ?? ['/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser'].find((p) => existsSync(p));
 const W = 1600, H = 900;
 
@@ -32,7 +31,9 @@ const VIEWS = {
 };
 const onlyViews = process.argv[2]?.split(',').filter(Boolean) ?? null;
 
-const server = await preview({ root, preview: { host: '127.0.0.1', port: 0, strictPort: false, open: false }, logLevel: 'silent' });
+// batch25：生产 dist 不含 __game 等钩子 → 用测试构建（--mode smoke，临时建在 /tmp、跑完删；SMOKE_DIST=已建好的测试构建 可复用）
+const game = await startGameServer(root);
+const server = game.server;
 const base = `http://127.0.0.1:${server.httpServer.address().port}/?smoke=1&art=1&quality=high&autostart=1`;
 const profile = mkdtempSync(join(tmpdir(), 'shotsfp-chrome-'));
 const chrome = spawn(chromePath, ['--headless=new', '--no-sandbox', '--no-first-run', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', `--window-size=${W},${H}`, '--hide-scrollbars', '--remote-debugging-port=0', `--user-data-dir=${profile}`, 'about:blank'], { stdio: ['ignore', 'ignore', 'pipe'] });
@@ -142,7 +143,7 @@ writeFileSync(reportFile, JSON.stringify(report, null, 2));
 if (errors.length) console.log('  页面错误：', errors.slice(0, 5));
 ws.close();
 chrome.kill('SIGKILL');
-await new Promise((r) => server.httpServer.close(r));
+await game.close();
 try { rmSync(profile, { recursive: true, force: true }); } catch { /* */ }
 console.log('完成 →', OUT, report.failed.length ? `（${report.failed.length} 张失败）` : '');
 process.exit(report.failed.length ? 1 : 0); // vite preview 留着句柄，不显式退出会一直挂着

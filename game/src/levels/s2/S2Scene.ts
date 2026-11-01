@@ -173,7 +173,7 @@ export class S2Scene extends LevelScene {
   }
 
   protected override afterEnter(): void {
-    if (import.meta.env.DEV || new URLSearchParams(location.search).has('smoke')) Object.assign(window, { __s2: this });
+    if (import.meta.env.DEV || import.meta.env.MODE === 'smoke') Object.assign(window, { __s2: this });
   }
 
   /** 建立镜头（3 s）：院墙外东南低机位 → 扫过院墙看向小屋二层窗口 → 角色身后 */

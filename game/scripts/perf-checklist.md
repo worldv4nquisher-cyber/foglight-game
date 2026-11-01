@@ -1,7 +1,7 @@
 > box 上是无头 Chrome + swiftshader 软件渲染，帧率 / 帧时间 / GPU 开销 / 着色器编译卡顿 / 真实显存都量不准。下面是**制作人桌面真 GPU 实测清单**：**RTX 3060 · 2560×1440 · 极致档 · 目标 60 fps**（GDD §14）。结果填到下面「记录表」，帧率栏最终由用户 M8 实机复填到第 1 节；发现问题记 `docs/bugs/`。
 
 ### 0 准备（一次）
-- 本地自检包（**不是发布版**，发布须用户确认）：`cd /workspace/game-studio/game && npm run build && npx vite preview`，打开 `http://localhost:4173/`（或测试包地址）。
+- 本地自检包（**不是发布版**，发布须用户确认）：`cd /workspace/game-studio/game && npm run preview:smoke`（batch25 起生产 dist 不含 `__game` / `__perfSpot` 钩子；这条命令临时建一份带钩子的测试构建到 /tmp——和生产构建同配置、同样压缩——在 4173 起服务，Ctrl+C 退出时删掉），打开 `http://localhost:4173/`。
 - 浏览器全屏（F11）到 2560×1440，Windows 缩放 100%（不是 100% 时实际渲染分辨率会变，记下来）；关掉其它标签页 / 录屏软件；笔记本插电、独显。
 - `chrome://gpu` 确认「WebGL2: Hardware accelerated」，记下 GPU 型号、驱动版本、Chrome 版本。
 
@@ -10,7 +10,7 @@
 | 参数 | 作用 |
 |---|---|
 | `quality=ultra` / `high` / `standard` | 锁定画质档（URL 优先，跳过 S1 自动检测降档） |
-| `smoke=1&art=1` | 控制台挂出 `__game` / `__s3` / `__perfSpot`。**`smoke=1` 必须配 `art=1`**，否则是白盒（数字无效） |
+| `smoke=1&art=1` | 测试构建（`npm run preview:smoke`）下控制台有 `__game` / `__s3` / `__perfSpot`（生产 dist 里没有，batch25）。**`smoke=1` 必须配 `art=1`**，否则是白盒（数字无效） |
 | `debug=1` | 打开 F3 详细面板（FPS · 帧时间 · draw call / 三角面对照 §8 预算 · 显存估算），并允许 `scene=` 直接进场景 |
 | `scene=s1` / `s2` / `s3` | 跳过主菜单直接进场景（要 `debug=1`） |
 | `reflect=off` / `0.5` / `1` | S1 水面平面反射：关 / 反射 RT 分辨率倍率（不加 = 按档：极致 0.5、高 0.5、标准 0.25）。**注意：这是分辨率，不是反射强度**，强度用 `reflectK=` |

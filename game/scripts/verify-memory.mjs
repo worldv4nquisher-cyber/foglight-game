@@ -1,4 +1,4 @@
-// 037 内存 / 显存（npm run check:release 的一环；需要先 npm run build）：模拟一次完整通关的场景切换，看资源有没有持续增长。
+// 037 内存 / 显存（npm run check:release 的一环；用测试构建 --mode smoke，见 scripts/lib/test-server.mjs）：模拟一次完整通关的场景切换，看资源有没有持续增长。
 //   主菜单 → 进 S1 → S2 → S3 → 回主菜单 → 新进 S1（都走 GameFlow.goToLevel / toMenu，和玩家一样的切换路径）
 //   每站：加载完、停 3 s、强制 GC 后量 ——
 //     - renderer.info.memory（几何体 / 贴图数）、renderer.info.programs 数；
@@ -9,16 +9,15 @@
 //   每站另记活着的 GL 纹理数和最大的几张（尺寸 / 格式 / 创建于哪一站），以及 GC 后仍活着的旧场景对象，泄漏时直接看是谁没释放。
 //   box 上是 swiftshader，显存是「WebGL 分配量」的估算；实机显存（任务管理器 / about:gpu）由制作人桌面复测。
 // 用法：node --import ./scripts/register-ts-paths.mjs scripts/verify-memory.mjs    结果 → ../docs/releases/perf/verify-memory.json
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { preview } from 'vite';
+import { startGameServer } from './lib/test-server.mjs';
 import { launchChrome, sleep } from './lib/cdp.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = resolve(root, process.env.MEMORY_OUT ?? '../docs/releases/perf');
 mkdirSync(OUT, { recursive: true });
-if (!existsSync(join(root, 'dist/index.html'))) throw new Error('先 npm run build');
 const TIER = process.env.MEMORY_TIER ?? 'ultra';
 const TOL = 0.1;
 const MENU_MAX = 0.5;
@@ -63,7 +62,9 @@ const GL_TRACK = `(() => {
   wrap('deleteRenderbuffer', function ([r]) { const s = r && sizes.get(r); if (s) { M[s.kind] -= s.bytes; sizes.delete(r); } });
 })();`;
 
-const server = await preview({ root, preview: { host: '127.0.0.1', port: 0, strictPort: false, open: false }, logLevel: 'silent' });
+// batch25：生产 dist 不含 __game 等钩子 → 用测试构建（--mode smoke，临时建在 /tmp、跑完删；SMOKE_DIST=已建好的测试构建 可复用）
+const game = await startGameServer(root);
+const server = game.server;
 const base = `http://127.0.0.1:${server.httpServer.address().port}/?smoke=1&debug=1&art=1&quality=${TIER}`;
 const report = { at: new Date().toISOString(), tier: TIER, renderer: 'headless Chrome + swiftshader', tolerance: TOL, steps: [], failures: [] };
 const reportFile = join(OUT, 'verify-memory.json');
@@ -158,7 +159,7 @@ try {
   report.errors = cdp.errors.slice(0, 20);
   save();
   cdp.close();
-  await new Promise((r) => server.httpServer.close(r));
+  await game.close();
 }
 console.log(`\n内存校验${ok ? '通过' : `：${report.failures.length} 项不通过`} → ${reportFile}`);
 for (const f of report.failures) console.log('  ✗', f);

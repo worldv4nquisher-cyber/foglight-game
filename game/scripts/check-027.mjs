@@ -1,24 +1,24 @@
 // v0.1-027 剧情物件运行时检查（真浏览器 + 美术）：S1 / S2 / S3 各进一次，读 dressing 挂载结果（挂点、桌面实测偏差）、交互焦点是否改读美术 -interact、
 // 白盒载体是否隐身、脚印贴花 / 海鸟；每件物件拍一张近景（960×540，standard 档）到 docs/tasks/shots-027/。
-// 用法：npm run build && node --import ./scripts/register-ts-paths.mjs scripts/check-027.mjs（DIST=别的输出目录 可选）
+// 用法：node --import ./scripts/register-ts-paths.mjs scripts/check-027.mjs（自动建临时测试构建；SMOKE_DIST=已建好的测试构建 可选）
 import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { preview } from 'vite';
+import { startGameServer } from './lib/test-server.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = resolve(root, '../docs/tasks/shots-027');
-const DIST = process.env.DIST ?? 'dist';
 mkdirSync(OUT, { recursive: true });
-if (!existsSync(join(root, DIST, 'index.html'))) throw new Error('先 npm run build');
 const chromePath = process.env.CHROME ?? ['/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser'].find((p) => existsSync(p));
 const W = 960, H = 540;
 
 const only = process.argv[2]; // 只跑名字以此开头的场景，例：s2
 
-const server = await preview({ root, build: { outDir: DIST }, preview: { host: '127.0.0.1', port: 0, strictPort: false, open: false }, logLevel: 'silent' });
+// batch25：生产 dist 不含 __game 等钩子 → 用测试构建（--mode smoke，临时建在 /tmp、跑完删；SMOKE_DIST=已建好的测试构建 可复用）
+const game = await startGameServer(root);
+const server = game.server;
 const base = `http://127.0.0.1:${server.httpServer.address().port}/?smoke=1&autostart=1&art=1&quality=standard`;
 const profile = mkdtempSync(join(tmpdir(), 'shots-chrome-'));
 const chrome = spawn(chromePath, ['--headless=new', '--no-sandbox', '--no-first-run', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', `--window-size=${W},${H}`, '--hide-scrollbars', '--remote-debugging-port=0', `--user-data-dir=${profile}`, 'about:blank'], { stdio: ['ignore', 'ignore', 'pipe'] });
@@ -142,6 +142,6 @@ writeFileSync(join(OUT, 'check-027.json'), JSON.stringify(report, null, 2));
 if (errors.length) console.log('  页面错误：', errors.slice(0, 8));
 ws.close();
 chrome.kill('SIGKILL');
-await new Promise((r) => server.httpServer.close(r));
+await game.close();
 try { rmSync(profile, { recursive: true, force: true }); } catch { /* */ }
 console.log('完成 →', OUT);

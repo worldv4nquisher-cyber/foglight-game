@@ -1,7 +1,7 @@
 // v0.1-035 结尾演出截图：art=1、quality=high、1600×900 → ../docs/tasks/shots-035/
 //   进 S3 等资源全部到、点燃，演出时钟换成可停的后备时钟（截图时停住，画面 / 姿势 / 镜头都定在目标 t），按 t 从前往后 seek 拍：
 //   雾口 / 剪影 / 父亲摸头（hand 第 80 帧）/ 「那边没有亮。」/ 写日志 / 后拉。
-// 用法：npm run build && node --import ./scripts/register-ts-paths.mjs scripts/shots-035.mjs
+// 用法：node --import ./scripts/register-ts-paths.mjs scripts/shots-035.mjs
 //   SHOTS_ONLY=03,04      只拍编号匹配的几张
 //   SHOTS_BEAM_COMPARE=1  每张另拍一张 *-beam-before.png（同帧旧灯束），另加 00 点火后 3 s；SHOTS_REPORT 改报告文件名
 //   SHOTS_FAR=1           另拍镜头 02 塔外远景（far-exterior，lens 4 s → fog_open 14 s）t = 8 / 12 s 两张（文件名带 -02-，SHOTS_ONLY=02 时一起拍）
@@ -14,17 +14,18 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:
 import { tmpdir } from 'node:os';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { preview } from 'vite';
+import { startGameServer } from './lib/test-server.mjs';
 import { RAMP_PROBE } from './lib/ramp-probe.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 // SHOTS_OUT=目录（相对仓库上一级）改输出目录（默认 docs/tasks/shots-035）；SHOTS_QUERY='&hull=0' 追加 URL 参数
 const OUT = resolve(root, '..', process.env.SHOTS_OUT ?? (process.env.SHOTS_PEN === '1' ? 'docs/tasks/shots-035/pen' : 'docs/tasks/shots-035'));
 mkdirSync(OUT, { recursive: true });
-if (!existsSync(join(root, 'dist/index.html'))) throw new Error('先 npm run build');
 const chromePath = process.env.CHROME ?? ['/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser'].find((p) => existsSync(p));
 const W = 1600, H = 900;
-const server = await preview({ root, preview: { host: '127.0.0.1', port: 0, strictPort: false, open: false }, logLevel: 'silent' });
+// batch25：生产 dist 不含 __game 等钩子 → 用测试构建（--mode smoke，临时建在 /tmp、跑完删；SMOKE_DIST=已建好的测试构建 可复用）
+const game = await startGameServer(root);
+const server = game.server;
 const base = `http://127.0.0.1:${server.httpServer.address().port}/?smoke=1&art=1&quality=high&debug=1&scene=s3${process.env.SHOTS_QUERY ?? ''}`;
 const profile = mkdtempSync(join(tmpdir(), 'smoke-chrome-shots035-'));
 const chrome = spawn(chromePath, ['--headless=new', '--no-sandbox', '--no-first-run', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', `--window-size=${W},${H}`, '--hide-scrollbars', '--remote-debugging-port=0', `--user-data-dir=${profile}`, 'about:blank'], { stdio: ['ignore', 'ignore', 'pipe'] });
@@ -242,7 +243,7 @@ try {
   try { chrome.kill('SIGKILL'); } catch { /* */ }
   await new Promise((r) => setTimeout(r, 500));
   rmSync(profile, { recursive: true, force: true });
-  await new Promise((r) => server.httpServer.close(r));
+  await game.close();
   console.log(`shots-035：${report.shots.length} 张、失败 ${report.failed.length}、页面错误 ${errors.length} → ${OUT}`);
   process.exit(report.failed.length ? 1 : 0);
 }
