@@ -1361,6 +1361,108 @@ test('BUG-033 解锁：resume 被拒不抛未处理 rejection、不撤监听，�
   }
 });
 
+test('batch25-2 Safari interrupted：解锁时也去 resume（不直接撤监听）、被拒重试；解锁后被系统打断会重新挂监听；游戏暂停期间手势不恢复', async () => {
+  // 测试是并发跑的，上面 BUG-033 那项也换 globalThis.window：等前面的异步项都结束再换，免得互相踩桩
+  await Promise.allSettled([...pending]);
+  const unhandled = [];
+  const onUR = (e) => unhandled.push(e);
+  process.on('unhandledRejection', onUR);
+  const prevWindow = globalThis.window;
+  // 每个实例单独一个 window 桩（按函数登记，能数出挂了几种事件）
+  const listeners = new Set();
+  globalThis.window = { addEventListener: (ev, fn) => listeners.add(`${ev}`) && (globalThis.window.fns[ev] = fn), removeEventListener: (ev, fn) => globalThis.window.fns[ev] === fn && (listeners.delete(ev), delete globalThis.window.fns[ev]), fns: {} };
+  const tick = () => new Promise((r) => setTimeout(r, 10));
+  try {
+    const ctx = new FakeContext();
+    const stateFns = [];
+    ctx.addEventListener = (ev, fn) => ev === 'statechange' && stateFns.push(fn);
+    ctx.removeEventListener = (ev, fn) => ev === 'statechange' && stateFns.splice(stateFns.indexOf(fn), 1);
+    const setState = (st) => {
+      ctx.state = st;
+      for (const fn of [...stateFns]) fn();
+    };
+    let resumeCalls = 0;
+    let mode = 'reject'; // reject | stay（resolve 但还是 interrupted）| ok
+    ctx.resume = () => {
+      resumeCalls++;
+      if (mode === 'reject') return Promise.reject(new Error('NotAllowedError'));
+      if (mode === 'ok') ctx.state = 'running';
+      return Promise.resolve();
+    };
+    ctx.state = 'interrupted'; // 页面一打开就是 interrupted（WebKit 无头 / Safari 来电中）
+    const a = new AudioSystem(ctx);
+    assert.equal(stateFns.length, 1, '挂了 statechange');
+    const fire = () => globalThis.window.fns.pointerdown?.();
+    const armed = () => listeners.size === 3;
+    assert.ok(armed(), '构造时挂手势监听');
+    // ① interrupted + resume 被拒：调了 resume、监听还在（修前：不调 resume 直接撤监听）
+    fire();
+    await tick();
+    assert.equal(resumeCalls, 1, 'interrupted 时也调 resume');
+    assert.ok(armed(), '被拒后监听还在');
+    // ② resolve 了但还是 interrupted（中断没结束）：监听还在
+    mode = 'stay';
+    fire();
+    await tick();
+    assert.equal(resumeCalls, 2);
+    assert.equal(ctx.state, 'interrupted');
+    assert.ok(armed(), '没到 running 监听还在');
+    // ③ 下次手势成功 → running → 撤监听
+    mode = 'ok';
+    fire();
+    await tick();
+    assert.equal(ctx.state, 'running');
+    assert.ok(!armed(), 'running 后撤监听');
+    // ④ 玩到一半被系统打断（切后台 / 锁屏 / 来电）→ statechange interrupted → 重新挂监听 → 手势恢复
+    setState('interrupted');
+    assert.ok(armed(), '解锁后被打断会重新挂监听');
+    fire();
+    await tick();
+    assert.equal(ctx.state, 'running', '手势后恢复');
+    assert.ok(!armed());
+    // ⑤ 游戏自己暂停（suspend → suspended）：不挂监听，手势也不恢复；游戏 resume() 才恢复
+    a.suspend();
+    setState('suspended');
+    assert.ok(!armed(), '自己 suspend 的不挂监听');
+    const n = resumeCalls;
+    globalThis.window.fns.pointerdown = undefined;
+    a.resume();
+    await tick();
+    assert.equal(resumeCalls, n + 1, 'resume() 调了 context.resume');
+    assert.equal(ctx.state, 'running');
+    // ⑥ 暂停期间被打断成 interrupted：监听挂上但手势不擅自恢复；resume() 恢复（interrupted 也算）
+    a.suspend();
+    setState('interrupted');
+    assert.ok(armed());
+    const m = resumeCalls;
+    fire();
+    await tick();
+    assert.equal(resumeCalls, m, '暂停中手势不恢复');
+    a.resume();
+    await tick();
+    assert.equal(ctx.state, 'running', 'resume() 对 interrupted 也生效');
+    assert.ok(!armed());
+    // ⑦ resume() 被拒（Safari 不在手势里）→ 挂监听等下次手势
+    a.suspend();
+    setState('interrupted');
+    mode = 'reject';
+    a.resume();
+    await tick();
+    assert.ok(armed(), 'resume() 被拒后挂监听');
+    mode = 'ok';
+    fire();
+    await tick();
+    assert.equal(ctx.state, 'running');
+    a.dispose();
+    assert.equal(stateFns.length, 0, 'dispose 摘掉 statechange');
+    assert.deepEqual(unhandled.map(String), [], '没有未处理的 rejection');
+  } finally {
+    process.off('unhandledRejection', onUR);
+    if (prevWindow === undefined) delete globalThis.window;
+    else globalThis.window = prevWindow;
+  }
+});
+
 await Promise.all(pending);
 let failed = 0;
 for (const [s, name, e] of results) {

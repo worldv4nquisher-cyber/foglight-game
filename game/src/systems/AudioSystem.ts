@@ -147,6 +147,10 @@ export class AudioSystem {
   /** 0–1，来自玩家设置（主音量 / 音乐 / 音效） */
   private levels = { master: 1, music: 1, sfx: 1 };
   private unlockEvents = ['pointerdown', 'keydown', 'touchend'] as const;
+  /** 手势解锁监听当前是否挂着 */
+  private unlockArmed = false;
+  /** 游戏自己暂停了音频（暂停菜单 / 切后台）：这期间手势不擅自恢复，等 resume() */
+  private pausedByGame = false;
   private loops = new Map<string, LoopVoice>();
 
   /** context：测试时注入假的 AudioContext；不传 = 按浏览器创建 */
@@ -167,33 +171,58 @@ export class AudioSystem {
       this.musicGain = this.context.createGain();
       this.musicGain.gain.value = MUSIC_BUS_GAIN;
       this.musicGain.connect(this.master);
-      if (typeof window !== 'undefined') for (const ev of this.unlockEvents) window.addEventListener(ev, this.unlock, { once: false });
+      this.armUnlock();
+      // batch25-2：Safari 切后台 / 锁屏 / 来电会把 context 变成 'interrupted'（解锁之后也会）；状态变了就重新挂手势监听
+      this.context.addEventListener?.('statechange', this.onStateChange);
     }
   }
 
   /**
-   * 首次手势解锁。BUG-033：resume() 会被拒（Firefox 离开 / 刷新页面时 InvalidStateError、Safari 非手势时 NotAllowedError）或一直挂起，
+   * 手势解锁。BUG-033：resume() 会被拒（Firefox 离开 / 刷新页面时 InvalidStateError、Safari 非手势时 NotAllowedError）或一直挂起，
    * 原来 `void` 不接 → 未处理的 rejection 进控制台；而且不管成没成功都撤监听 → 一次失败后整局没声音。
    * 现在：接住 rejection；真的变成 running 才撤监听，没成功下次手势再试。
+   * batch25-2：'interrupted'（Safari / WebKit）原来走「不是 suspended 就撤监听」分支，不调 resume → 中断后可能一直没声音；
+   * 现在除了 running / closed，其余状态（suspended、interrupted）都去 resume，重试规则同上。游戏自己暂停时不擅自恢复。
    */
   private unlock = (): void => {
+    if (this.pausedByGame) return;
+    this.tryResume();
+  };
+
+  /** resume 到 running 为止：成功撤手势监听；被拒 / 还没 running（Safari 中断未结束）就挂着监听，下次手势再试 */
+  private tryResume(): void {
     const ctx = this.context;
     if (!ctx) return;
-    if (ctx.state !== 'suspended') {
+    const state = ctx.state as string;
+    if (state === 'running' || state === 'closed') {
       this.removeUnlockListeners();
       return;
     }
     ctx.resume().then(
       () => {
-        if (ctx.state === 'running') this.removeUnlockListeners();
+        if ((ctx.state as string) === 'running') this.removeUnlockListeners();
+        else this.armUnlock();
       },
-      () => {
-        /* 下次手势再试 */
-      },
+      () => this.armUnlock(),
     );
+  }
+
+  /** context 状态变化：被系统打断（interrupted，或不是我们自己 suspend 的 suspended）→ 重新挂手势监听，下次点击 / 按键恢复 */
+  private onStateChange = (): void => {
+    const state = this.context?.state as string | undefined;
+    if (state === 'interrupted' || (state === 'suspended' && !this.pausedByGame)) this.armUnlock();
+    else if (state === 'running' || state === 'closed') this.removeUnlockListeners();
   };
 
+  private armUnlock(): void {
+    if (this.unlockArmed || typeof window === 'undefined') return;
+    this.unlockArmed = true;
+    for (const ev of this.unlockEvents) window.addEventListener(ev, this.unlock, { once: false });
+  }
+
   private removeUnlockListeners(): void {
+    if (!this.unlockArmed) return;
+    this.unlockArmed = false;
     if (typeof window !== 'undefined') for (const ev of this.unlockEvents) window.removeEventListener(ev, this.unlock);
   }
 
@@ -552,18 +581,23 @@ export class AudioSystem {
     }
   }
 
+  /** 游戏暂停（暂停菜单 / 切后台） */
   suspend(): void {
+    this.pausedByGame = true;
     if (this.context?.state === 'running') AudioSystem.quiet(this.context.suspend());
   }
 
+  /** 游戏继续：suspended 或 interrupted 都去 resume（batch25-2），没成功就挂手势监听等下次点击 */
   resume(): void {
-    if (this.context?.state === 'suspended') AudioSystem.quiet(this.context.resume());
+    this.pausedByGame = false;
+    this.tryResume();
   }
 
   dispose(): void {
     this.stopMusic();
     this.stopAllLoops(0);
-    if (typeof window !== 'undefined') for (const ev of this.unlockEvents) window.removeEventListener(ev, this.unlock);
+    this.removeUnlockListeners();
+    this.context?.removeEventListener?.('statechange', this.onStateChange);
     void this.context?.close();
   }
 }
