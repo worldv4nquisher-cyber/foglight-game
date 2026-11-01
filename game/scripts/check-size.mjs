@@ -195,7 +195,7 @@ if (json) {
   for (const f of ktx) {
     const sz = readKtx2Size(readFileSync(f));
     if (!sz) { bad++; fail(`dist/${relative(DIST, f)}：不是合法 KTX2`); continue; }
-    const why = ktx2AlignmentVerdict({ name: `dist/${relative(DIST, f)}`, ...sz, ramp: isRamp(relative(DIST, f)) });
+    const why = ktx2AlignmentVerdict({ name: f, ...sz, ramp: isRamp(relative(DIST, f)), twin: isRamp.twin(relative(DIST, f)) }); // batch25-5：完整路径 + 同名 ramp 位置
     if (why) { bad++; fail(why); } else if (sz.width % 4 || sz.height % 4) whitelisted++;
   }
   if (!json) console.log(`  ${bad ? '✗' : '✓'} KTX2 块对齐：${ktx.length} 张，非 4 倍数 ${whitelisted} 张均为清单 ramp（运行时转 RGBA）${bad ? `，${bad} 张不合规` : ''}`);

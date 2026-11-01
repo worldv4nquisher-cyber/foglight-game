@@ -743,7 +743,18 @@ try {
     assert.equal(m('tex-xi-ramp.ktx2'), false, '只有文件名不豁免');
     assert.equal(m('assets/art/textures/tex-other.ktx2'), false, '清单里没标 ramp 的不豁免');
     assert.match(ktx2AlignmentVerdict({ name: 'models/tex-xi-ramp.ktx2', width: 256, height: 1, ramp: m('models/tex-xi-ramp.ktx2') }), /ramp: true/);
-    ok('KTX2 ramp 豁免按清单完整路径匹配：别的目录 / 子目录同名、只有文件名、清单未标 ramp 都不豁免');
+    // batch25-5：同名拒绝时报错带完整路径（含目录）并指出清单里那张 ramp 在哪
+    assert.equal(m.twin('assets/art/models/tex-xi-ramp.ktx2'), 'textures/tex-xi-ramp.ktx2', '别的目录同名 → twin');
+    assert.equal(m.twin('/abs/art/textures/sub/tex-xi-ramp.ktx2'.replace('/abs/art/', '')), 'textures/tex-xi-ramp.ktx2', '子目录同名 → twin');
+    assert.equal(m.twin('assets/art/textures/tex-xi-ramp.ktx2'), null, '清单 ramp 本身不是 twin');
+    assert.equal(m.twin('textures/tex-unknown.ktx2'), null, '不同名 → null');
+    const full = '/workspace/game-studio/art/models/props/tex-xi-ramp.ktx2';
+    const msg = ktx2AlignmentVerdict({ name: full, width: 256, height: 1, ramp: m('models/props/tex-xi-ramp.ktx2'), twin: m.twin('models/props/tex-xi-ramp.ktx2') });
+    assert.ok(msg.startsWith(full + ' 256×1'), '报错以完整路径开头：' + msg);
+    assert.match(msg, /与清单 ramp「textures\/tex-xi-ramp\.ktx2」同名但不在同一目录/);
+    const msgDist = ktx2AlignmentVerdict({ name: '/x/dist/assets/art/textures/sub/tex-xi-ramp.ktx2', width: 250, height: 1, ramp: false, twin: m.twin('assets/art/textures/sub/tex-xi-ramp.ktx2') });
+    assert.match(msgDist, /^\/x\/dist\/assets\/art\/textures\/sub\/tex-xi-ramp\.ktx2 250×1：与清单 ramp「textures\/tex-xi-ramp\.ktx2」/);
+    ok('KTX2 ramp 豁免按清单完整路径匹配：别的目录 / 子目录同名、只有文件名、清单未标 ramp 都不豁免；同名拒绝时报错带完整路径 + 清单 ramp 位置（batch25-5）');
   }
   // 真文件：../art 里全部 KTX2
   const isRamp = rampMatcher(manifest);
@@ -755,7 +766,8 @@ try {
   for (const f of files) {
     const sz = readKtx2Size(readFileSync(f));
     assert.ok(sz, `${f} 是 KTX2`);
-    const why = ktx2AlignmentVerdict({ name: basename(f), ...sz, ramp: isRamp(relative(artRoot, f)) });
+    const rel = relative(artRoot, f);
+    const why = ktx2AlignmentVerdict({ name: f, ...sz, ramp: isRamp(rel), twin: isRamp.twin(rel) }); // batch25-5：报完整路径
     if (why) problems.push(why);
     if (sz.width % 4 || sz.height % 4) unaligned.push(basename(f));
   }
