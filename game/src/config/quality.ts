@@ -3,6 +3,7 @@ import type { EventBus } from '@/core/EventBus';
 import type { LodDistances } from '@/render/lod';
 import type { Settings } from '@/systems/save/Settings';
 import type { TextId } from '@/content/text';
+import { TEST_BUILD, testParam, testSearch } from '@/config/debug';
 
 /**
  * 画质档位（纯桌面），参数以 `art/style/style-guide.md` §8 为准（v0.1-009）。
@@ -267,12 +268,20 @@ export type QualityChangeSource = 'user' | 'auto' | 'settings';
  * - URL ?quality=xx 临时覆盖（不写盘，也不跑检测）。
  * - 运行时切换不重载场景：发布 `quality:changed`，Game / PostFX / 场景各自重建阴影贴图与渲染目标。
  */
+/** 解析 search 里的 ?quality=（纯函数，单测用；运行时只在 dev / 测试构建里调用，生产构建摇树删掉） */
+export function qualityFromSearch(search: string): string | null {
+  return search ? new URLSearchParams(search).get('quality') : null;
+}
+
+/** ?postfx=0：只在 dev / 测试构建里读（生产构建恒为 false） */
+const postfxOff: boolean = TEST_BUILD && testParam('postfx') === '0';
+
 export class QualityManager {
   private current: QualityTier;
   readonly gpu: string;
   /** batch26 ⑤：GPU 名看起来是软件渲染（主菜单显示「建议开启硬件加速」提示） */
   readonly softwareRender: boolean;
-  /** URL ?quality= 临时覆盖中（不写盘、不跑自动检测） */
+  /** URL ?quality= 临时覆盖中（不写盘、不跑自动检测；batch27：只在 dev / 测试构建，生产构建画质只走游戏内设置） */
   readonly urlOverride: boolean;
 
   private events: EventBus;
@@ -280,12 +289,13 @@ export class QualityManager {
   private offSettings: () => void;
 
   // 不用参数属性写法：本文件会被 Node（strip-types）直接导入做校验
-  constructor(events: EventBus, renderer: THREE.WebGLRenderer | null, settings: Settings, search = globalThis.location?.search ?? '') {
+  // urlTier：?quality= 的值（batch27：默认只在 dev / 测试构建里读，生产构建恒为 null；单测直接传 qualityFromSearch(search)）
+  constructor(events: EventBus, renderer: THREE.WebGLRenderer | null, settings: Settings, urlTier: string | null = TEST_BUILD ? qualityFromSearch(testSearch()) : null) {
     this.events = events;
     this.settings = settings;
     this.gpu = renderer ? getGpuName(renderer) : 'unknown';
     this.softwareRender = isSoftwareRenderer(this.gpu);
-    const fromUrl = new URLSearchParams(search).get('quality');
+    const fromUrl = urlTier;
     this.urlOverride = isTier(fromUrl);
     this.current = isTier(fromUrl) ? fromUrl : settings.get('quality');
     console.info(`[quality] GPU：${this.gpu}；档位 ${this.current}（${this.urlOverride ? 'URL 覆盖' : settings.get('qualitySource')}）`);
@@ -302,8 +312,8 @@ export class QualityManager {
 
   get preset(): QualityPreset {
     const p = QUALITY_PRESETS[this.current];
-    // ?postfx=0 可临时关闭后处理，便于排查渲染问题
-    if (new URLSearchParams(globalThis.location?.search ?? '').get('postfx') === '0') return { ...p, postprocessing: false };
+    // ?postfx=0 可临时关闭后处理，便于排查渲染问题（batch27：只在 dev / 测试构建）
+    if (postfxOff) return { ...p, postprocessing: false };
     return p;
   }
 

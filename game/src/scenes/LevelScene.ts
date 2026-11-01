@@ -21,7 +21,7 @@ import { ATMO028, type Atmo028Tier } from '@/config/atmosphere028';
 import { Rain, RAIN_STREAK_KEY, RAIN_SPLASH_KEY, collectIndoorShapes } from '@/world/Rain';
 import { applyCharLodCaps, applyLodDistances } from '@/render/lod';
 import { applySceneLightmaps, presetLightmapScale, type LightmapHandle } from '@/render/lightmap';
-import { lightmapEnabled } from '@/config/debug';
+import { TEST_BUILD, lightmapEnabled, testParam, testSearch } from '@/config/debug';
 import { manifest } from '@/assets/manifest';
 import { applySkyLayerAtmosphere, type SkyLayerHandle } from '@/render/skyLayer';
 import type { ObjectFogHandle } from '@/render/objectFog';
@@ -74,8 +74,9 @@ export abstract class LevelScene extends BaseScene {
   protected water: Water | null = null;
   /** 025 水面平面反射（室外场景才有） */
   protected reflection: PlanarReflection | null = null;
-  private readonly reflectOverride = typeof location === 'undefined' ? null : reflectionOverride(location.search);
-  private readonly reflectKOverride = typeof location === 'undefined' ? null : reflectionStrengthOverride(location.search);
+  // batch27：?reflect= / ?reflectK= 只在 dev / 测试构建里读
+  private readonly reflectOverride = TEST_BUILD ? reflectionOverride(testSearch()) : null;
+  private readonly reflectKOverride = TEST_BUILD ? reflectionStrengthOverride(testSearch()) : null;
   protected rain: Rain | null = null;
   /**
    * 028 远景（README-028 §3）：天空层剪影按预设换色；fog 'none' = 不吃雾（S1 天空层小灯塔），'mid' = 用预设主岛 hint（S2 远景 S3 灯塔）。
@@ -93,7 +94,7 @@ export abstract class LevelScene extends BaseScene {
   private qualityTier: Atmo028Tier = 'high';
   /** 028 镜头水滴：ultra + 下雨 + 过场（cutsceneOnly）才开，fadeIn 0.6 s；?lens=1 强制（截图 / 调试） */
   private lensAmt = 0;
-  private readonly lensForced = typeof location !== 'undefined' && new URLSearchParams(location.search).get('lens') === '1';
+  private readonly lensForced = TEST_BUILD && testParam('lens') === '1';
   protected sun = new THREE.DirectionalLight();
   protected hemi = new THREE.HemisphereLight();
   interaction!: InteractionSystem;

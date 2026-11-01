@@ -4,7 +4,7 @@ import { missingGreyboxNodes, mountArtSlots, snapToArt, type ArtSlots } from '..
 import { S1_ART_SLOTS } from './artSlots';
 import type { Game } from '@/core/Game';
 import { gameplay } from '@/config/gameplay';
-import { greyboxVisible } from '@/config/debug';
+import { TEST_BUILD, greyboxVisible, testParam } from '@/config/debug';
 import { LevelScene, type SpawnPoint } from '@/scenes/LevelScene';
 import { LEVELS } from '@/scenes/levels';
 import { CameraTrack } from '@/systems/CameraFollowSystem';
@@ -85,7 +85,7 @@ export class S1Scene extends LevelScene {
    */
   private bakeSeabed(): void {
     if (!this.water || !this.art.loaded) return;
-    if (typeof location !== 'undefined' && new URLSearchParams(location.search).get('seabed') === '0') return;
+    if (TEST_BUILD && testParam('seabed') === '0') return; // batch27：只在 dev / 测试构建
     const flat = this.art.root.getObjectByName('env-tidal-flat-s1');
     if (!flat) return;
     const meshes: THREE.Mesh[] = [];

@@ -1,6 +1,6 @@
 import type * as THREE from 'three';
 import type { Game } from '@/core/Game';
-import { debugEnabled, smokeQuery, TEST_BUILD } from '@/config/debug';
+import { debugEnabled, smokeQuery, TEST_BUILD, testSearch } from '@/config/debug';
 import { HintSystem, hintScaleFromUrl } from '@/systems/HintSystem';
 import type { InteractionSystem } from '@/systems/interaction/InteractionSystem';
 
@@ -10,9 +10,8 @@ import type { InteractionSystem } from '@/systems/interaction/InteractionSystem'
  * `?hintScale=0.05` 只在开发服务器 / 测试构建的 ?debug=1 / ?smoke=1 时生效；生产构建里提示倍率恒为 1、不读这个参数（batch26）。
  */
 export function createSceneHints(game: Game, interaction: InteractionSystem, root: THREE.Object3D): [HintSystem, () => void] {
-  const search = typeof location !== 'undefined' ? location.search : '';
   const hints = new HintSystem({
-    scale: TEST_BUILD ? hintScaleFromUrl(search, debugEnabled || smokeQuery) : 1,
+    scale: TEST_BUILD ? hintScaleFromUrl(testSearch(), debugEnabled || smokeQuery) : 1,
     onUsed: () => {
       game.save.addHintUsed();
       game.save.flush();

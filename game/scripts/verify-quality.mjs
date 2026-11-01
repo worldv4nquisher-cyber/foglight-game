@@ -5,7 +5,7 @@
 // 3) QualityBenchmark：simulateFps 降档 / 重测 / 最多连降两档、只跑一次、手动改后不再自动改、恢复默认回到检测结果
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { QUALITY_PRESETS, QualityManager, isSoftwareRenderer } from '@/config/quality';
+import { QUALITY_PRESETS, QualityManager, isSoftwareRenderer, qualityFromSearch } from '@/config/quality';
 import { EventBus } from '@/core/EventBus';
 import { watchDevicePixelRatio } from '@/platform/dprWatch';
 import { QualityBenchmark, parseSimulateFps } from '@/systems/QualityBenchmark';
@@ -113,7 +113,7 @@ function boot(storage, { search = '', simulate = null, warmupFrames = 0 } = {}) 
   const detected = [];
   events.on('quality:detected', (e) => detected.push(e));
   const settings = new Settings(storage);
-  const quality = new QualityManager(events, null, settings, search);
+  const quality = new QualityManager(events, null, settings, qualityFromSearch(search));
   const bench = new QualityBenchmark(quality, settings, events, { simulateFps: simulate ?? parseSimulateFps(search), warmupFrames });
   return { events, settings, quality, bench, changes, detected };
 }

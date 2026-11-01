@@ -1,4 +1,4 @@
-import { lutKeepSat } from '@/config/debug';
+import { TEST_BUILD, lutKeepSat, testParam } from '@/config/debug';
 import * as THREE from 'three';
 import {
   BlendFunction,
@@ -25,9 +25,9 @@ import { ATMO028 } from '@/config/atmosphere028';
 /** 调色 LUT 来源（Game 注入 AssetLoader；文件名 → manifest key = 去掉 .png） */
 export type LutSource = (key: string) => THREE.Texture | null;
 
-/** URL ?lut=0 关掉 LUT（回到 026 的色相 / 饱和度 / 亮度 / 对比度调色）；?lut=identity 换成 lut-identity（校验方向用） */
+/** URL ?lut=0（batch27：只在 dev / 测试构建）关掉 LUT（回到 026 的色相 / 饱和度 / 亮度 / 对比度调色）；?lut=identity 换成 lut-identity（校验方向用） */
 function lutOverride(): string | null {
-  return typeof location === 'undefined' ? null : new URLSearchParams(location.search).get('lut');
+  return TEST_BUILD ? testParam('lut') : null;
 }
 
 /**

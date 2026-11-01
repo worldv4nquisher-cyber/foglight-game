@@ -1,4 +1,5 @@
 import { ATMO028, type Atmo028PresetName } from './atmosphere028';
+import { TEST_BUILD, testParam } from '@/config/debug';
 
 /**
  * 气氛预设（Atmosphere Preset）：一个场景「情绪」需要的全部可调参数集中在这里，
@@ -143,8 +144,8 @@ export function resolveAtmosphereName(name: string | null | undefined): Atmosphe
   return ALIASES[name] ?? null;
 }
 
-/** 当前使用的预设。可用 URL ?atmo=rain-night 临时切换对比 */
+/** 当前使用的预设。可用 URL ?atmo=rain-night 临时切换对比（batch27：只在 dev / 测试构建） */
 export function getAtmosphere(): AtmospherePreset {
-  const fromUrl = resolveAtmosphereName(new URLSearchParams(location.search).get('atmo'));
+  const fromUrl = (TEST_BUILD ? resolveAtmosphereName(testParam('atmo')) : null);
   return ATMOSPHERE_PRESETS[fromUrl ?? DEFAULT_ATMOSPHERE];
 }

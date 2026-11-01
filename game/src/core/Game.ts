@@ -19,6 +19,7 @@ import { nativeBridge } from '@/platform/native';
 import { PostFX } from '@/render/PostFX';
 import { QualityBenchmark, parseSimulateFps } from '@/systems/QualityBenchmark';
 import { NarrativeState } from '@/systems/NarrativeState';
+import { TEST_BUILD, testSearch } from '@/config/debug';
 
 /**
  * 游戏根对象：持有渲染器与各全局服务，驱动主循环。
@@ -90,7 +91,8 @@ export class Game {
     this.narrative = new NarrativeState(this.events, this.save);
     this.quality = new QualityManager(this.events, this.renderer, this.settings);
     this.benchmark = new QualityBenchmark(this.quality, this.settings, this.events, {
-      simulateFps: parseSimulateFps(location.search),
+      // batch27：?simulateFps= 只在 dev / 测试构建里读（生产构建摇树删掉）
+      simulateFps: TEST_BUILD ? parseSimulateFps(testSearch()) : null,
     });
     this.postfx = new PostFX(this.renderer, this.quality.preset);
     this.postfx.setLutSource((k) => (this.assets.has(k) ? this.assets.getTexture(k) : null));

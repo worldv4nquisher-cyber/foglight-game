@@ -7,7 +7,7 @@ import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js
 import type { EventBus } from '@/core/EventBus';
 import { disposeObject3D } from '@/core/dispose';
 import { gameConfig } from '@/config/gameConfig';
-import { artEnabled, rampFixEnabled } from '@/config/debug';
+import { TEST_BUILD, artEnabled, rampFixEnabled, testSearch } from '@/config/debug';
 import { createKtx2Router, disableCompressedTargets, stripToBaseLevel, type Ktx2Router, type Ktx2WorkerConfig } from './ktx2Route';
 import { applyExtrasVisibility } from './extrasVisibility';
 import { applyMaterialHints } from '@/render/materialHints';
@@ -118,7 +118,7 @@ export class AssetLoader {
   /** 模拟慢网速（?slowLoad=ms），见 parseSlowLoad */
   /** 是否加载清单里 art: true 的美术资源（v0.1-013，?art=0 / 冒烟测试默认关） */
   artEnabled: boolean = artEnabled;
-  simulateLoadMs = typeof location === 'undefined' ? 0 : parseSlowLoad(location.search);
+  simulateLoadMs = TEST_BUILD ? parseSlowLoad(testSearch()) : 0; // batch27：只在 dev / 测试构建
 
   constructor(
     renderer: THREE.WebGLRenderer,
