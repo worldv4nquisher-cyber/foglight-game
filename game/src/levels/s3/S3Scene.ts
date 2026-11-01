@@ -6,7 +6,7 @@ import { interactNode, mountDressing, type MountedDressing } from '../dressing';
 import { s3DressingSpecs } from './dressing';
 import type { Game } from '@/core/Game';
 import { gameplay } from '@/config/gameplay';
-import { beamDebugEnabled, debugEnabled, greyboxVisible } from '@/config/debug';
+import { beamDebugEnabled, debugEnabled, greyboxVisible, smokeQuery, TEST_BUILD } from '@/config/debug';
 import { FatherActor, FATHER_ANIMS_KEY, FATHER_MODEL_KEY } from '@/entities/father/FatherActor';
 import { ClipProp } from '@/entities/xi/clipProp';
 import { parseFatherMode, type FatherMode } from '@/entities/father/clips';
@@ -246,11 +246,12 @@ export class S3Scene extends LevelScene {
     });
     this.endingCutscene = cut;
     this.cleanups.push(() => cut.dispose());
-    const q = new URLSearchParams(location.search);
     if (import.meta.env.DEV || import.meta.env.MODE === 'smoke') Object.assign(window, { __s3: this }); // 测试构建 / dev 才有（batch25）
-    // dev 预览：?father=gaze|walk|hand（dev / ?debug / ?smoke 才认）
-    const preview = parseFatherMode(q.get('father'));
-    if (preview && (debugEnabled || q.has('smoke'))) void this.playFather(preview);
+    // dev 预览：?father=gaze|walk|hand（dev / 测试构建的 ?debug / ?smoke 才认；生产构建里整段摇树删掉，batch26）
+    if (TEST_BUILD && (debugEnabled || smokeQuery)) {
+      const preview = parseFatherMode(new URLSearchParams(location.search).get('father'));
+      if (preview) void this.playFather(preview);
+    }
   }
 
   /**

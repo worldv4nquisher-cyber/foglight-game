@@ -1,6 +1,6 @@
 import type { Game } from '@/core/Game';
 import { gameConfig } from '@/config/gameConfig';
-import { debugEnabled } from '@/config/debug';
+import { debugEnabled, smokeQuery } from '@/config/debug';
 import { DebugPanel } from './DebugPanel';
 import { estimateVram } from '@/render/vram';
 import { SAVE_TEXT } from '@/systems/save/SaveSystem';
@@ -65,8 +65,8 @@ export class UIManager {
     private game: Game,
   ) {
     // 正式版按设置「显示帧率」（默认关）；开发模式默认显示
-    // 开发模式 / ?debug=1 / ?smoke=1 显示完整性能面板（009：draw call、三角面、显存估算，对照 §8 预算）
-    const detailed = debugEnabled || new URLSearchParams(location.search).has('smoke');
+    // 开发模式 / ?debug=1 / ?smoke=1 显示完整性能面板（009：draw call、三角面、显存估算，对照 §8 预算）；后两者只在测试构建里认（batch26）
+    const detailed = debugEnabled || smokeQuery;
     this.fps = new FpsCounter(root, gameConfig.showFpsByDefault || game.settings.get('showFps'), {
       detailed,
       label: () => t(this.game.quality.preset.labelId),

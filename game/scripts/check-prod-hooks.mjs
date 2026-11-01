@@ -20,11 +20,19 @@ export const FORBIDDEN = ['__qa', '__game', '__perfSpot', '__testbed', '__s1', '
  */
 export const FORBIDDEN_RE = [
   [/\.(?:has|get)\(\s*[`'"](?:debug|scene)[`'"]\s*\)/, '读 ?debug / ?scene 参数'],
+  // batch26 追加：?smoke 的 4 处行为（默认关美术、帧率面板详细模式、?hintScale、S3 ?father= 预览）也只在 dev / 测试构建里
+  [/\.(?:has|get)\(\s*[`'"]smoke[`'"]\s*\)/, '读 ?smoke 参数'],
+  [/\.(?:has|get)\(\s*[`'"]hintScale[`'"]\s*\)/, '读 ?hintScale 参数'],
+  [/\.(?:has|get)\(\s*[`'"]father[`'"]\s*\)/, '读 ?father= 预览参数'],
   [/startLoading\(\s*[`'"](?:testbed|sandbox)[`'"]\s*\)/, '?scene=testbed / sandbox 直进分支'],
 ];
 
 const walk = (d) => readdirSync(d).flatMap((n) => (statSync(join(d, n)).isDirectory() ? walk(join(d, n)) : [join(d, n)]));
-const files = [join(DIST, 'index.html'), ...walk(join(DIST, 'static')).filter((f) => /\.(js|mjs|html|css)$/.test(f))];
+// batch26：除了 static/，dist/assets/ 下所有 JS（含以后放进去的 worker / 解码器等）也扫；目录不存在就跳过
+const scan = (d, re) => (existsSync(d) ? walk(d).filter((f) => re.test(f)) : []);
+const staticFiles = scan(join(DIST, 'static'), /\.(js|mjs|html|css)$/);
+const assetJs = scan(join(DIST, 'assets'), /\.(js|mjs|cjs)$/);
+const files = [join(DIST, 'index.html'), ...staticFiles, ...assetJs];
 const hits = [];
 for (const f of files) {
   const s = readFileSync(f, 'utf8');
@@ -42,4 +50,4 @@ if (hits.length) {
   for (const h of hits) console.error('  ' + h);
   process.exit(1);
 }
-console.log(`✓ 生产构建不含调试 / QA 钩子：${files.length} 个文件（index.html + static/*.js|css）里没有 ${FORBIDDEN.join(' / ')}；也没有 ${FORBIDDEN_RE.map(([, w]) => w).join(' / ')}`);
+console.log(`✓ 生产构建不含调试 / QA 钩子：${files.length} 个文件（index.html + static/*.js|css ${staticFiles.length} 个 + assets/**/*.js ${assetJs.length} 个）里没有 ${FORBIDDEN.join(' / ')}；也没有 ${FORBIDDEN_RE.map(([, w]) => w).join(' / ')}`);

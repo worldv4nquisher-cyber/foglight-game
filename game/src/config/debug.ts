@@ -15,6 +15,12 @@ export const TEST_BUILD: boolean = typeof import.meta.env === 'undefined' ? fals
 export const debugEnabled: boolean =
   TEST_BUILD && (isDev || (typeof location !== 'undefined' && new URLSearchParams(location.search).has('debug')));
 
+/**
+ * batch26：?smoke=1（冒烟 / 截图 / 量测脚本带的参数）也只在开发服务器 / 测试构建里认。生产构建里恒为 false，
+ * 下面四处依赖它的行为（默认关美术、帧率面板详细模式、?hintScale、S3 ?father= 预览）连同读参数的代码一起被摇树删掉。
+ */
+export const smokeQuery: boolean = TEST_BUILD && typeof location !== 'undefined' && new URLSearchParams(location.search).has('smoke');
+
 /** batch26：?scene=s1|s2|s3|sandbox|testbed 直进场景，只在开发服务器 / 测试构建里读（生产构建里恒为 null） */
 export const sceneParam: string | null = TEST_BUILD && typeof location !== 'undefined' ? new URLSearchParams(location.search).get('scene') : null;
 
@@ -25,7 +31,7 @@ export const beamDebugEnabled: boolean =
 /**
  * 美术资源开关（v0.1-013）：清单里 `art: true` 的条目（../art 交付的 GLB / KTX2）是否加载。
  * - 默认加载；`?art=0` 不加载（只看白盒，等同美术没交付）。
- * - 冒烟测试（?smoke=1）默认不加载：无头 SwiftShader 下 S1 美术 LOD0 近 300 万面，一帧要数秒，会拖垮所有交互检查；
+ * - 冒烟测试（?smoke=1，只在 dev / 测试构建里认，batch26）默认不加载：无头 SwiftShader 下 S1 美术 LOD0 近 300 万面，一帧要数秒，会拖垮所有交互检查；
  *   专门的美术检查用 `?smoke=1&art=1` 打开。
  * - `?greybox=1`：美术加载时也显示白盒几何（对位用）。
  */
@@ -35,7 +41,7 @@ export const artEnabled: boolean = (() => {
   const v = q.get('art');
   if (v === '0' || v === 'false') return false;
   if (v === '1' || v === 'true' || v === '') return true;
-  return !q.has('smoke');
+  return !smokeQuery;
 })();
 
 export const greyboxVisible: boolean = typeof location !== 'undefined' && ['1', 'true', ''].includes(new URLSearchParams(location.search).get('greybox') ?? 'x');

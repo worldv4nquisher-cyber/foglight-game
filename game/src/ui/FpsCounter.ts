@@ -1,7 +1,7 @@
 /**
  * 帧率显示 / 开发性能面板（左上角，F3 切换；v0.1-009 扩展）。
  * - 正式版（设置「显示帧率」）：一行 FPS · 帧时间。
- * - 开发模式 / ?debug=1 / ?smoke=1（detailed）：再加 draw call、三角面、显存估算（renderer.info），
+ * - 开发模式 / ?debug=1 / ?smoke=1（detailed；后两者只在测试构建里认，batch26）：再加 draw call、三角面、显存估算（renderer.info），
  *   并对照当前画质档的 §8 预算（maxDrawCalls / sceneVisibleTris），超预算标 ⚠。
  * 每 0.5 秒刷新一次文字（显存估算每 2 秒），避免频繁改 DOM。
  */
