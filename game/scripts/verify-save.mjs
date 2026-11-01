@@ -1,6 +1,8 @@
 // v0.1-006 存档与设置校验（纯逻辑，无 DOM）：正常读写、版本不匹配、非法 JSON、写入失败、游玩时间、设置迁移。
 // 运行：node --import ./scripts/register-ts-paths.mjs scripts/verify-save.mjs
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import vm from 'node:vm';
 import { SAVE_KEY, SAVE_TEXT, SaveSystem, parseSave } from '@/systems/save/SaveSystem';
 import { formatPlayTime } from '@/ui/format';
 import { cloneFallback, deepClone } from '@/platform/clone';
@@ -385,6 +387,36 @@ test('batch26 ②（追加）：全局 polyfill——有原生不覆盖；删掉
     assert.equal(new SaveSystem(st).load().sceneId, 'end');
   });
   assert.equal(globalThis.structuredClone, native, '测试结束要还原原生');
+});
+
+test('batch26 ②（追加）：index.html 内联 polyfill（早于所有模块）——没有 structuredClone 的环境里装上、结果与 cloneFallback 一致、深拷贝；有原生不覆盖', () => {
+  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  const m = /<script id="polyfill-structured-clone">([\s\S]*?)<\/script>/.exec(html);
+  assert.ok(m, 'index.html 里没有 <script id="polyfill-structured-clone">');
+  assert.ok(html.indexOf(m[0]) < html.indexOf('<script type="module"'), '内联 polyfill 必须在入口模块脚本之前');
+  assert.doesNotMatch(m[0], /type="module"|\bsrc=/, '必须是普通内联脚本');
+  // 新的 vm 上下文里没有 structuredClone（它是 Node / 浏览器宿主提供的，不是 JS 内建）
+  const ctx = vm.createContext({});
+  vm.runInContext('var window = this;', ctx);
+  assert.equal(vm.runInContext('typeof structuredClone', ctx), 'undefined');
+  vm.runInContext(m[1], ctx);
+  assert.equal(vm.runInContext('typeof structuredClone', ctx), 'function');
+  const save = validSave({ seenLines: ['x'], extra: { a: [1, { b: 2 }] } });
+  const r = JSON.parse(
+    vm.runInContext(
+      `(() => { const s = JSON.parse(${JSON.stringify(save)}); const c = structuredClone(s); const d = new Date(5), mp = new Map([['k', { v: 1 }]]), st = new Set([1, 2]); const x = structuredClone({ d, mp, st });
+        const cyc = { n: 1 }; cyc.self = cyc; const cc = structuredClone(cyc); const desc = Object.getOwnPropertyDescriptor(window, 'structuredClone');
+        return JSON.stringify({ c, deep: c !== s && c.extra.a[1] !== s.extra.a[1], date: x.d instanceof Date && x.d.getTime() === 5 && x.d !== d, map: x.mp instanceof Map && x.mp.get('k').v === 1 && x.mp.get('k') !== mp.get('k'), set: x.st instanceof Set && x.st.has(2) && x.st !== st, cyc: cc.self === cc && cc !== cyc, enumerable: desc.enumerable, prim: [structuredClone(0), structuredClone('s'), structuredClone(null)] }); })()`,
+      ctx,
+    ),
+  );
+  assert.deepEqual(r.c, cloneFallback(JSON.parse(save)), '内联 polyfill 与 cloneFallback 结果不一致');
+  assert.deepEqual({ ...r, c: undefined }, { c: undefined, deep: true, date: true, map: true, set: true, cyc: true, enumerable: false, prim: [0, 's', null] });
+  // 有原生：不覆盖
+  const ctx2 = vm.createContext({});
+  vm.runInContext('var window = this; var mark = function structuredClone() { return 42; }; window.structuredClone = mark;', ctx2);
+  vm.runInContext(m[1], ctx2);
+  assert.equal(vm.runInContext('structuredClone === mark', ctx2), true, '有原生时不能覆盖');
 });
 
 let failed = 0;

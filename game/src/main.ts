@@ -1,4 +1,5 @@
-// batch26：全局 polyfill 必须是第一个 import（ES 模块按 import 顺序求值，早于下面所有模块）
+// batch26：structuredClone 全局 polyfill 在 index.html 的内联脚本里（早于所有模块，含 three / vendor 分包）；
+// 这里第一个 import 再兜一次（index.html 被改坏 / 嵌到别的页面时），有了就不装
 import '@/platform/polyfills';
 import './ui/styles.css';
 import { Game } from '@/core/Game';
