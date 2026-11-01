@@ -5,6 +5,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { POLYFILL_PLACEHOLDER, polyfillInlineScript } from './lib/inline-polyfill.mjs';
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const DIST = resolve(root, process.env.DIST ?? 'dist');
@@ -114,9 +115,19 @@ for (const f of files) {
     if (m) hits.push(`${relative(root, f)}：${what}「${m[0]}」…${s.slice(Math.max(0, m.index - 40), m.index + 60).replace(/\s+/g, ' ')}…`);
   }
 }
+// batch27 第 2 项：dist/index.html 的 structuredClone 内联 polyfill 必须由插件从 src/platform/structuredClonePolyfill.js 生成（同一份源码）、在入口模块之前
+{
+  const html = readFileSync(join(DIST, 'index.html'), 'utf8');
+  const m = /<script id="polyfill-structured-clone">([\s\S]*?)<\/script>/.exec(html);
+  const mod = html.indexOf('<script type="module"');
+  if (!m) hits.push('index.html：没有 <script id="polyfill-structured-clone">');
+  else if (m[1].includes(POLYFILL_PLACEHOLDER)) hits.push('index.html：polyfill 占位没被替换（vite 插件没生效）');
+  else if (m[1].trim() !== polyfillInlineScript().trim()) hits.push('index.html：内联 polyfill 与 src/platform/structuredClonePolyfill.js 不一致（dist 过期？）');
+  else if (mod >= 0 && m.index > mod) hits.push('index.html：内联 polyfill 在入口模块之后');
+}
 if (hits.length) {
   console.error(`✗ 生产构建里还有调试 / QA 钩子（${hits.length} 处）——是不是用 --mode smoke 建的 dist，或新加的钩子没用构建期条件？`);
   for (const h of hits) console.error('  ' + h);
   process.exit(1);
 }
-console.log(`✓ 生产构建不含调试 / QA 钩子：${files.length} 个文件（index.html + static/*.js|css ${staticFiles.length} 个 + assets/**/*.js ${assetJs.length} 个）里没有 ${FORBIDDEN.join(' / ')}；也没有 ${FORBIDDEN_RE.map(([, w]) => w).join(' / ')}；URL 参数白名单 ${Object.keys(URL_PARAM_WHITELIST).length ? Object.entries(URL_PARAM_WHITELIST).map(([k, r]) => `${k}（${r}）`).join('、') : '为空'}，生产包里没有其它 URLSearchParams / location.search / searchParams 用法（含变量传参）`);
+console.log(`✓ index.html 内联 structuredClone polyfill 与 src/platform/structuredClonePolyfill.js 一致、在入口模块之前\n✓ 生产构建不含调试 / QA 钩子：${files.length} 个文件（index.html + static/*.js|css ${staticFiles.length} 个 + assets/**/*.js ${assetJs.length} 个）里没有 ${FORBIDDEN.join(' / ')}；也没有 ${FORBIDDEN_RE.map(([, w]) => w).join(' / ')}；URL 参数白名单 ${Object.keys(URL_PARAM_WHITELIST).length ? Object.entries(URL_PARAM_WHITELIST).map(([k, r]) => `${k}（${r}）`).join('、') : '为空'}，生产包里没有其它 URLSearchParams / location.search / searchParams 用法（含变量传参）`);

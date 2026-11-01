@@ -7,6 +7,8 @@ import { SAVE_KEY, SAVE_TEXT, SaveSystem, parseSave } from '@/systems/save/SaveS
 import { formatPlayTime } from '@/ui/format';
 import { cloneFallback, deepClone } from '@/platform/clone';
 import { installStructuredClonePolyfill } from '@/platform/polyfills';
+import { cloneFallback as sharedCloneFallback } from '@/platform/structuredClonePolyfill.js';
+import { POLYFILL_PLACEHOLDER, POLYFILL_SRC, inlinePolyfillIntoHtml, polyfillInlineScript } from './lib/inline-polyfill.mjs';
 import { OVER_SHOULDER } from '@/content/cutscenes/ending';
 import { DEFAULT_SETTINGS, LEGACY_QUALITY_KEY, SETTINGS_KEY, Settings } from '@/systems/save/Settings';
 
@@ -389,12 +391,32 @@ test('batch26 ②（追加）：全局 polyfill——有原生不覆盖；删掉
   assert.equal(globalThis.structuredClone, native, '测试结束要还原原生');
 });
 
+test('batch27 第 2 项：内联 polyfill 与 cloneFallback 是同一份实现——index.html 只有占位，vite 插件从 structuredClonePolyfill.js 生成；clone.ts / polyfills.ts 也导入它', () => {
+  const raw = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  const m = /<script id="polyfill-structured-clone">([\s\S]*?)<\/script>/.exec(raw);
+  assert.ok(m, 'index.html 里没有 <script id="polyfill-structured-clone">');
+  assert.equal(m[1], POLYFILL_PLACEHOLDER, 'index.html 里不能手写 polyfill，只放占位');
+  const src = readFileSync(POLYFILL_SRC, 'utf8');
+  const inline = polyfillInlineScript(src);
+  // 内联正文 = 源文件去掉 export（同一份源码，逐字）
+  assert.ok(inline.includes(src.replace(/^export\s+(?=function\s)/gm, '')), '内联正文应逐字来自 structuredClonePolyfill.js');
+  for (const f of ['../src/platform/clone.ts', '../src/platform/polyfills.ts']) {
+    const t = readFileSync(new URL(f, import.meta.url), 'utf8');
+    assert.match(t, /from '\.\/structuredClonePolyfill\.js'/, `${f} 应导入 structuredClonePolyfill.js`);
+    assert.doesNotMatch(t, /instanceof Map|seen\.set\(/, `${f} 里不能再有第二份拷贝实现`);
+  }
+  assert.equal(cloneFallback, sharedCloneFallback, 'clone.ts 导出的 cloneFallback 就是共享实现');
+  assert.throws(() => inlinePolyfillIntoHtml('<html></html>'), /占位/);
+  assert.throws(() => polyfillInlineScript("import x from 'y';\nexport function f() {}"), /import/);
+});
+
 test('batch26 ②（追加）：index.html 内联 polyfill（早于所有模块）——没有 structuredClone 的环境里装上、结果与 cloneFallback 一致、深拷贝；有原生不覆盖', () => {
-  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  // batch27：用 vite 插件同一个函数生成实际 HTML（dev / 构建产物里的样子）
+  const html = inlinePolyfillIntoHtml(readFileSync(new URL('../index.html', import.meta.url), 'utf8'));
   const m = /<script id="polyfill-structured-clone">([\s\S]*?)<\/script>/.exec(html);
   assert.ok(m, 'index.html 里没有 <script id="polyfill-structured-clone">');
   assert.ok(html.indexOf(m[0]) < html.indexOf('<script type="module"'), '内联 polyfill 必须在入口模块脚本之前');
-  assert.doesNotMatch(m[0], /type="module"|\bsrc=/, '必须是普通内联脚本');
+  assert.equal(m[0].slice(0, m[0].indexOf('>') + 1), '<script id="polyfill-structured-clone">', '必须是普通内联脚本（无 type / src）');
   // 新的 vm 上下文里没有 structuredClone（它是 Node / 浏览器宿主提供的，不是 JS 内建）
   const ctx = vm.createContext({});
   vm.runInContext('var window = this;', ctx);

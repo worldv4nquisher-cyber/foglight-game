@@ -14,7 +14,7 @@ export default tseslint.config(
       globals: { ...globals.browser },
       parserOptions: {
         // vite.config.ts 属于 tsconfig.node.json（Node 环境），用默认项目方式纳入类型检查
-        projectService: { allowDefaultProject: ['vite.config.ts'], defaultProject: 'tsconfig.node.json' },
+        projectService: { allowDefaultProject: ['vite.config.ts', 'scripts/lib/inline-polyfill.d.mts'], defaultProject: 'tsconfig.node.json' },
         tsconfigRootDir: import.meta.dirname,
       },
     },

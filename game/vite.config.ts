@@ -2,6 +2,7 @@ import { fileURLToPath, URL } from 'node:url';
 import { copyFileSync, createReadStream, existsSync, mkdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, normalize, posix, relative, resolve, sep } from 'node:path';
 import { defineConfig, type Plugin } from 'vite';
+import { inlinePolyfillIntoHtml } from './scripts/lib/inline-polyfill.mjs';
 
 /**
  * three 的 DRACOLoader 用 `new URL('../libs/draco/…', import.meta.url)` 静态引用了三套解码器，
@@ -130,10 +131,21 @@ function artAssets(): Plugin {
   };
 }
 
+/**
+ * batch27 第 2 项：index.html 的 structuredClone 内联 polyfill 从 src/platform/structuredClonePolyfill.js 生成（与模块版同一份源码）。
+ * dev 和构建都走 transformIndexHtml；占位不在就报错。
+ */
+function inlineStructuredClonePolyfill(): Plugin {
+  return {
+    name: 'foglight-inline-structured-clone',
+    transformIndexHtml: { order: 'pre', handler: (html) => inlinePolyfillIntoHtml(html) },
+  };
+}
+
 export default defineConfig({
   // 相对路径，方便以后 Capacitor / Electron 以 file:// 或本地 webview 加载
   base: './',
-  plugins: [threeDecodersWasmOnly(), artAssets()],
+  plugins: [inlineStructuredClonePolyfill(), threeDecodersWasmOnly(), artAssets()],
   // 021 / 022 未交付道具：只把 ../art 里已有的 pending 文件告诉运行时（其余不请求）；交付后重新 build / 重启 dev
   define: { __FOGLIGHT_PENDING_ART__: JSON.stringify(pendingArtUrls().present) },
   resolve: {

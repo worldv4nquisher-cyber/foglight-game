@@ -16,48 +16,10 @@
     <title>雾灯</title>
     <!--
       batch26：structuredClone 全局 polyfill（Safari 15.0–15.3 没有，15.4 才有）。普通内联脚本，在所有 type="module"（含 three / vendor 分包）之前执行；
-      有原生不覆盖。只拷数据：普通对象 / 数组 / Date / Map / Set / 环引用，与 src/platform/clone.ts 的 cloneFallback 同口径（npm run test:save 比对）。
+      有原生不覆盖。只拷数据：普通对象 / 数组 / Date / Map / Set / 环引用。
+      batch27：正文由 vite 插件（scripts/lib/inline-polyfill.mjs）在 dev / 构建时从 src/platform/structuredClonePolyfill.js 内联——与模块版 cloneFallback 是同一份源码，不要在这里手写。
     -->
-    <script id="polyfill-structured-clone">
-      (function (g) {
-        if (typeof g.structuredClone === 'function') return;
-        function c(v, seen) {
-          if (v === null || typeof v !== 'object') return v;
-          if (seen.has(v)) return seen.get(v);
-          var o, i, k;
-          if (v instanceof Date) return new Date(v.getTime());
-          if (Array.isArray(v)) {
-            o = [];
-            seen.set(v, o);
-            for (i = 0; i < v.length; i++) o.push(c(v[i], seen));
-            return o;
-          }
-          if (v instanceof Map) {
-            o = new Map();
-            seen.set(v, o);
-            v.forEach(function (x, key) { o.set(c(key, seen), c(x, seen)); });
-            return o;
-          }
-          if (v instanceof Set) {
-            o = new Set();
-            seen.set(v, o);
-            v.forEach(function (x) { o.add(c(x, seen)); });
-            return o;
-          }
-          o = {};
-          seen.set(v, o);
-          k = Object.keys(v);
-          for (i = 0; i < k.length; i++) o[k[i]] = c(v[k[i]], seen);
-          return o;
-        }
-        Object.defineProperty(g, 'structuredClone', {
-          value: function structuredClone(v) { return c(v, new Map()); },
-          writable: true,
-          configurable: true,
-          enumerable: false,
-        });
-      })(window);
-    </script>
+    <script id="polyfill-structured-clone">/* @inline src/platform/structuredClonePolyfill.js */</script>
   </head>
   <body>
     <div id="app">
