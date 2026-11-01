@@ -4320,6 +4320,63 @@ CHECKS.push({
   },
 });
 
+// batch26 ⑤：无头 QA 本身就是 SwiftShader（软件渲染）——主菜单要出「建议开启硬件加速」提示，但不能挡按钮 / 拦输入（真实 CDP 点击验证）
+CHECKS.push({
+  name: 'v0.1-batch26-⑤ 软件渲染提示：SwiftShader 下主菜单常驻 ui.notice.software_render、文案与文本表一致、不遮按钮、菜单真实点击可用',
+  async run({ evaluate, cdp, sleep }) {
+    const out = [];
+    await cdp.gotoMenu();
+    await sleep(300);
+    const st = () =>
+      evaluate(`(() => { const n = document.querySelector('.main-render-notice'); const r = n?.getBoundingClientRect();
+        const box = (e) => { const b = e.getBoundingClientRect(); return [b.left, b.top, b.right, b.bottom]; };
+        const btns = [...document.querySelectorAll('.main-menu .main-btn')].filter((b) => b.checkVisibility()).map((b) => {
+          const [l, t, rr, bb] = box(b); const hit = document.elementFromPoint((l + rr) / 2, (t + bb) / 2);
+          return { act: b.dataset.act, box: [l, t, rr, bb].map(Math.round), hitOk: !!hit && (hit === b || b.contains(hit)) }; });
+        return { gpu: __game.quality.gpu, sw: __game.quality.softwareRender, view: __game.ui.mainMenu.view, menuOpen: __game.ui.mainMenu.isOpen,
+          shown: !!n && n.checkVisibility(), text: n?.textContent ?? null, pe: n ? getComputedStyle(n).pointerEvents : null,
+          rect: r ? [r.left, r.top, r.right, r.bottom].map(Math.round) : null, vw: innerWidth, vh: innerHeight, btns, focus: document.activeElement === n }; })()`);
+    let m = await st();
+    if (!m.sw) throw new Error('无头 Chrome 的 GPU 名应判成软件渲染：' + m.gpu);
+    if (!m.shown) throw new Error('SwiftShader 下主菜单没显示软件渲染提示 ' + JSON.stringify(m));
+    if (m.text !== TEXT['ui.notice.software_render']) throw new Error(`提示文字应为文本表 ui.notice.software_render「${TEXT['ui.notice.software_render']}」：` + JSON.stringify(m.text));
+    if (m.pe !== 'none') throw new Error('提示应点击穿透（pointer-events: none）：' + m.pe);
+    const [l, t, r, b] = m.rect;
+    if (l < 0 || t < 0 || r > m.vw || b > m.vh) throw new Error('提示超出视口 ' + JSON.stringify(m.rect));
+    if (m.btns.length < 3) throw new Error('主菜单按钮不全 ' + JSON.stringify(m.btns));
+    for (const x of m.btns) {
+      const [bl, bt, br, bb] = x.box;
+      if (bl < r && br > l && bt < b && bb > t) throw new Error(`提示和按钮「${x.act}」重叠 ` + JSON.stringify([m.rect, x.box]));
+      if (!x.hitOk) throw new Error(`按钮「${x.act}」中心点被别的元素挡住`);
+    }
+    out.push(`GPU「${m.gpu.slice(0, 60)}」判为软件渲染 ✓；提示「${m.text}」✓ 位于 [${m.rect.join(', ')}]，与 ${m.btns.length} 个按钮不重叠、按钮中心可点 ✓、点击穿透 ✓`);
+    // 点在提示上的真实点击穿透到下面（不被提示吃掉），然后真实点击「设置」→ 设置打开、提示仍在（主菜单打开期间常驻）
+    const hitUnder = await evaluate(`(() => { const r = document.querySelector('.main-render-notice').getBoundingClientRect(); const e = document.elementFromPoint(r.left + 4, (r.top + r.bottom) / 2); return e ? e.className || e.tagName : null; })()`);
+    if (/main-render-notice/.test(String(hitUnder))) throw new Error('提示区域命中了提示本身（没穿透）');
+    await cdp.click(l + 4, (t + b) / 2);
+    await sleep(200);
+    const set = m.btns.find((x) => x.act === 'settings');
+    await cdp.click((set.box[0] + set.box[2]) / 2, (set.box[1] + set.box[3]) / 2);
+    m = await st();
+    for (let i = 0; i < 20 && m.view !== 'settings'; i++) { await sleep(100); m = await st(); }
+    if (m.view !== 'settings') throw new Error('真实点击「设置」没打开设置 ' + JSON.stringify({ view: m.view }));
+    if (!m.shown) throw new Error('设置打开时提示应仍在（主菜单打开期间常驻）');
+    const back = await evaluate(`(() => { const b = document.querySelector('.main-menu .settings-panel [data-act="back"]').getBoundingClientRect(); const e = document.elementFromPoint(b.x + b.width / 2, b.y + b.height / 2); return { x: b.x + b.width / 2, y: b.y + b.height / 2, ok: !!e && !!e.closest('[data-act="back"]') }; })()`);
+    if (!back.ok) throw new Error('设置里「返回」被挡住');
+    await cdp.click(back.x, back.y);
+    m = await st();
+    for (let i = 0; i < 20 && m.view !== 'home'; i++) { await sleep(100); m = await st(); }
+    if (m.view !== 'home' || !m.shown) throw new Error('返回首页后提示应仍在 ' + JSON.stringify({ view: m.view, shown: m.shown }));
+    out.push('提示上点击穿透 ✓、真实点击 设置 → 返回 ✓、设置页里提示仍在 ✓');
+    // 进游戏后（主菜单关）提示跟着消失
+    await cdp.goto('');
+    const inGame = await evaluate(`(() => { const n = document.querySelector('.main-render-notice'); return !!n && n.checkVisibility(); })()`);
+    if (inGame) throw new Error('进 S1 后提示应随主菜单隐藏');
+    out.push('进 S1 后不显示 ✓');
+    return out.join('；');
+  },
+});
+
 const extra = process.env.SMOKE_ONLY ? CHECKS.filter((c) => process.env.SMOKE_ONLY.split('|').some((k) => c.name.includes(k))) : CHECKS;
 
 // ---------------------------------------------------------------- 起服务 + 浏览器

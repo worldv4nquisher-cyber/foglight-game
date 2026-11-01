@@ -245,6 +245,18 @@ export function getGpuName(renderer: THREE.WebGLRenderer): string {
   }
 }
 
+/**
+ * batch26 ⑤：按 GPU 名（UNMASKED_RENDERER_WEBGL）判断是不是软件渲染——浏览器关了硬件加速 / 显卡被拉黑时的兜底光栅器：
+ * Chrome / Edge 的 SwiftShader（「Google SwiftShader」「ANGLE (Google, Vulkan … (SwiftShader Device …))」）、
+ * Windows 的 Microsoft Basic Render Driver（WARP）、Linux Mesa 的 llvmpipe / softpipe / lavapipe、
+ * 以及名字里直接带 Software 的（Apple Software Renderer、Firefox 的 Software WebRender 等）。只用来显示提示，不参与判档。
+ */
+export const SOFTWARE_RENDERER_RE = /swiftshader|llvmpipe|softpipe|lavapipe|basic render|software/i;
+
+export function isSoftwareRenderer(gpuName: string): boolean {
+  return SOFTWARE_RENDERER_RE.test(gpuName);
+}
+
 /** quality:changed 的来源：user = 玩家手动；auto = 自动检测；settings = 设置变化（如恢复默认） */
 export type QualityChangeSource = 'user' | 'auto' | 'settings';
 
@@ -258,6 +270,8 @@ export type QualityChangeSource = 'user' | 'auto' | 'settings';
 export class QualityManager {
   private current: QualityTier;
   readonly gpu: string;
+  /** batch26 ⑤：GPU 名看起来是软件渲染（主菜单显示「建议开启硬件加速」提示） */
+  readonly softwareRender: boolean;
   /** URL ?quality= 临时覆盖中（不写盘、不跑自动检测） */
   readonly urlOverride: boolean;
 
@@ -270,6 +284,7 @@ export class QualityManager {
     this.events = events;
     this.settings = settings;
     this.gpu = renderer ? getGpuName(renderer) : 'unknown';
+    this.softwareRender = isSoftwareRenderer(this.gpu);
     const fromUrl = new URLSearchParams(search).get('quality');
     this.urlOverride = isTier(fromUrl);
     this.current = isTier(fromUrl) ? fromUrl : settings.get('quality');

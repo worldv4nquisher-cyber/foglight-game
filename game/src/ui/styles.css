@@ -1245,6 +1245,20 @@ body {
   opacity: 0.7;
 }
 
+/* batch26 ⑤：软件渲染提示——左下角一行小字，和左侧按钮列对齐、在版本号左边；只是告知，点击穿透、不挡任何按钮 */
+.main-render-notice {
+  position: absolute;
+  left: 10vw;
+  bottom: 14px;
+  max-width: min(36em, 60vw);
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--ui-text-2);
+  text-shadow: var(--ui-shadow-text);
+  pointer-events: none;
+}
+
 .main-version {
   position: absolute;
   right: 18px;

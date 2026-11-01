@@ -5,7 +5,7 @@
 // 3) QualityBenchmark：simulateFps 降档 / 重测 / 最多连降两档、只跑一次、手动改后不再自动改、恢复默认回到检测结果
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { QUALITY_PRESETS, QualityManager } from '@/config/quality';
+import { QUALITY_PRESETS, QualityManager, isSoftwareRenderer } from '@/config/quality';
 import { EventBus } from '@/core/EventBus';
 import { watchDevicePixelRatio } from '@/platform/dprWatch';
 import { QualityBenchmark, parseSimulateFps } from '@/systems/QualityBenchmark';
@@ -437,6 +437,30 @@ for (const legacy of [false, true]) {
 test('batch26 ⑥：没有 matchMedia 的环境不报错，返回空解绑', () => {
   const off = watchDevicePixelRatio(() => assert.fail('不该回调'), { devicePixelRatio: 2 });
   off();
+});
+
+test('batch26 ⑤：软件渲染判定——SwiftShader / WARP / llvmpipe / softpipe / lavapipe / Software 命中，真显卡和读不到名字不命中', () => {
+  for (const n of [
+    'Google SwiftShader',
+    'ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)',
+    'ANGLE (Microsoft, Microsoft Basic Render Driver Direct3D11 vs_5_0 ps_5_0, D3D11)',
+    'llvmpipe (LLVM 15.0.7, 256 bits)',
+    'softpipe',
+    'llvmpipe',
+    'Apple Software Renderer',
+    'Software WebRender',
+  ]) assert.ok(isSoftwareRenderer(n), n);
+  for (const n of [
+    'ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 (0x00002503) Direct3D11 vs_5_0 ps_5_0, D3D11)',
+    'ANGLE (Intel, Intel(R) UHD Graphics 620 Direct3D11 vs_5_0 ps_5_0, D3D11)',
+    'Apple GPU',
+    'ANGLE (Apple, ANGLE Metal Renderer: Apple M2, Unspecified Version)',
+    'Mesa Intel(R) Xe Graphics (TGL GT2)',
+    'AMD Radeon RX 6600',
+    'unknown',
+    '',
+  ]) assert.ok(!isSoftwareRenderer(n), n);
+  assert.equal(boot(new MemStorage()).quality.softwareRender, false, '没有渲染器（unknown）不提示');
 });
 
 let failed = 0;

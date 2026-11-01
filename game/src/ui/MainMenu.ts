@@ -40,6 +40,7 @@ export class MainMenu {
         </nav>
         <p class="main-notice" role="status" hidden></p>
       </div>
+      <p class="main-render-notice" role="note" hidden></p>
       <div class="main-version"></div>
     `;
     parent.appendChild(this.el);
@@ -55,6 +56,14 @@ export class MainMenu {
       p.textContent = t('ui.notice.desktop_only');
       p.hidden = false;
       this.el.querySelector<HTMLElement>('.main-buttons')!.hidden = true;
+    }
+    // batch26 ⑤：软件渲染（浏览器关了硬件加速，SwiftShader / WARP / llvmpipe…）→ 主菜单打开期间常驻一句提示（文本表 ui.notice.software_render）。
+    // 不挡操作：放在左下角、和按钮列不重叠，pointer-events: none（点击穿透），不抢焦点；首页 / 设置 / 制作名单都在（设置面板盖在它上面）。
+    // 手机已整页换成「仅支持电脑」，不再叠这条。
+    if (this.game.quality.softwareRender && !device.desktopOnlyBlocked) {
+      const p = this.el.querySelector<HTMLParagraphElement>('.main-render-notice')!;
+      p.textContent = t('ui.notice.software_render');
+      p.hidden = false;
     }
     const btn = (act: string, text: Parameters<typeof t>[0], fn: () => void): HTMLButtonElement => {
       const b = this.el.querySelector<HTMLButtonElement>(`[data-act="${act}"]`)!;
