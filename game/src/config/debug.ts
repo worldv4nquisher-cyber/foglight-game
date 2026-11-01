@@ -21,6 +21,12 @@ export const debugEnabled: boolean =
  */
 export const smokeQuery: boolean = TEST_BUILD && typeof location !== 'undefined' && new URLSearchParams(location.search).has('smoke');
 
+/**
+ * batch26（制作人追加，同裁决 31）：?autostart=1 跳过主菜单直接进场（冒烟 / 截图脚本用）也只在开发服务器 / 测试构建里认；
+ * 生产构建里恒为 false，读参数的代码摇树删掉，线上永远先进主菜单。
+ */
+export const autostartQuery: boolean = TEST_BUILD && typeof location !== 'undefined' && new URLSearchParams(location.search).has('autostart');
+
 /** batch26：?scene=s1|s2|s3|sandbox|testbed 直进场景，只在开发服务器 / 测试构建里读（生产构建里恒为 null） */
 export const sceneParam: string | null = TEST_BUILD && typeof location !== 'undefined' ? new URLSearchParams(location.search).get('scene') : null;
 

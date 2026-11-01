@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type { Game } from './Game';
 import { LEVEL_GROUPS, type AssetGroup } from '@/assets/manifest';
-import { debugEnabled, sceneParam } from '@/config/debug';
+import { autostartQuery, debugEnabled, sceneParam } from '@/config/debug';
 import { LEVELS, LEVEL_LIST, levelByScene, levelForSave, type LevelDef, type LevelId, type LevelSceneName } from '@/scenes/levels';
 
 /** 可玩场景：第一章三个场景 + 测试场地 + 沙盒（dev 用的 demo 岛） */
@@ -93,10 +93,10 @@ export class GameFlow {
 
   /**
    * 启动场景加载完：默认进主菜单；?autostart=1（冒烟 / 开发）和 ?scene=… 跳过主菜单直接进场。
-   * batch26：?scene= 只在开发服务器 / 测试构建里有（sceneParam，生产构建恒为 null）；s1–s3 / sandbox 另要 debugEnabled（dev 或测试构建 + ?debug=1）
+   * batch26：?scene= 只在开发服务器 / 测试构建里有（sceneParam，生产构建恒为 null）；s1–s3 / sandbox 另要 debugEnabled（dev 或测试构建 + ?debug=1）；
+   * ?autostart 同样只在开发服务器 / 测试构建里认（autostartQuery，生产构建恒为 false → 永远进主菜单）
    */
   afterBoot(): void {
-    const q = new URLSearchParams(location.search);
     const scene = sceneParam;
     if (scene === 'testbed') {
       if (!this.game.save.continueGame()) this.game.save.newGame('ch1', 's1');
@@ -108,7 +108,7 @@ export class GameFlow {
       // 直接进某个场景（开发服务器或 ?debug=1）：进场即在该场景入口存档
       if (!this.game.save.continueGame()) this.game.save.newGame('ch1', scene);
       this.startLoading(LEVELS[scene].scene);
-    } else if (q.has('autostart')) {
+    } else if (autostartQuery) {
       const data = this.game.save.continueGame();
       if (!data) this.game.save.newGame('ch1', 's1');
       this.startLoading(data ? sceneForSave(data.sceneId) : 's1-ebb-shore');

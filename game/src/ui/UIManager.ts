@@ -117,7 +117,7 @@ export class UIManager {
     );
 
     // 自动存档完成：右下角「已保存」2.5s（写不进去时不显示）。
-    // 启动时的存档提示（存档无法读取 / 无法保存进度）显示在主菜单（008）；跳过主菜单直接进场（?autostart=1）时在第一次进场显示 8s
+    // 启动时的存档提示（存档无法读取 / 无法保存进度）显示在主菜单（008）；跳过主菜单直接进场（?autostart=1，只在 dev / 测试构建里）时在第一次进场显示 8s
     let notice = game.save.startupNotice;
     this.offs.push(
       game.events.on('scene:change', ({ to }) => {

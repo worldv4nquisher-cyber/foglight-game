@@ -15,7 +15,7 @@ export class BootScene extends BaseScene {
     await this.game.assets.loadGroups(['boot', 'menu']);
     // 030：主菜单包里的 UI 图（标题字、面板框、按钮光效、图标、加载插画、应用图标）写成 CSS 变量
     if (typeof document !== 'undefined') applyUiArt(this.game.assets);
-    // 默认进主菜单（v0.1-008）；?autostart=1 / ?scene=… 直接进场
+    // 默认进主菜单（v0.1-008）；?autostart=1 / ?scene=… 直接进场（只在 dev / 测试构建里，batch26）
     this.game.flow.afterBoot();
   }
 }

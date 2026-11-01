@@ -24,6 +24,8 @@ export const FORBIDDEN_RE = [
   [/\.(?:has|get)\(\s*[`'"]smoke[`'"]\s*\)/, '读 ?smoke 参数'],
   [/\.(?:has|get)\(\s*[`'"]hintScale[`'"]\s*\)/, '读 ?hintScale 参数'],
   [/\.(?:has|get)\(\s*[`'"]father[`'"]\s*\)/, '读 ?father= 预览参数'],
+  // batch26 再追加（同裁决 31）：?autostart 跳过主菜单也只在 dev / 测试构建里
+  [/\.(?:has|get)\(\s*[`'"]autostart[`'"]\s*\)/, '读 ?autostart 参数'],
   [/startLoading\(\s*[`'"](?:testbed|sandbox)[`'"]\s*\)/, '?scene=testbed / sandbox 直进分支'],
 ];
 
