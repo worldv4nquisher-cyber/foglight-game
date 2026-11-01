@@ -41,6 +41,22 @@ export const FORBIDDEN_RE = [
  */
 export const URL_PARAM_WHITELIST = Object.freeze({});
 const URL_TOKENS = /URLSearchParams|location\s*\.\s*search|searchParams/g;
+/**
+ * batch27 QA 回归（给程序 2）：不经 URLSearchParams / location.search 也能拿到查询串的写法，同样一律拦（与白名单无关）：
+ * - 方括号取属性：location[`search`]、x['searchParams']、document["URL"] 等（压缩器不会产出，只可能是手写绕过）；
+ * - 整个地址自己切：location.href.split(`?`)、xxx.href.indexOf('?') / slice / match …；
+ * - URL 对象的 .search（new URL(location.href).search），只认属性读取、不认 String#search(…) 调用；
+ * - document.URL / documentURI / baseURI（等于整个地址），location.toString()。
+ * 现有 dist 里这些写法都是 0 处（资源解析用的 new URL(x, location.href) 不受影响）。
+ */
+const URL_BYPASS_RE = [
+  [/\blocation\s*\[/g, 'location[…] 方括号取属性'],
+  [/\[\s*[\x60'"](?:search|searchParams|URL|documentURI|baseURI)[\x60'"]\s*\]/g, '方括号读 search / URL 属性'],
+  [/\bhref\s*\.\s*(?:split|indexOf|lastIndexOf|slice|substring|substr|match|matchAll|replace|search)\s*\(/g, '切 / 解析整个 href 取查询串'],
+  [/(?<!location\s*)\.\s*search\b(?!\s*\()/g, 'URL 对象的 .search（new URL(…).search 等）'],
+  [/\bdocument\s*\.\s*(?:URL|documentURI|baseURI)\b/g, 'document.URL / documentURI / baseURI 读整个地址'],
+  [/\blocation\s*\.\s*toString\s*\(/g, 'location.toString() 读整个地址'],
+];
 const quoteKeys = (wl) => Object.keys(wl).map((k) => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
 /** 返回违规列表：[{ what, index, text }] */
 export function urlParamViolations(src, whitelist = URL_PARAM_WHITELIST) {
@@ -54,6 +70,7 @@ export function urlParamViolations(src, whitelist = URL_PARAM_WHITELIST) {
     s = s.replace(allowed, (m) => ' '.repeat(m.length));
   }
   const out = [];
+  const tokenSpans = [];
   let consumed = -1;
   for (const m of s.matchAll(URL_TOKENS)) {
     if (m.index < consumed) continue; // 同一个表达式里的 location.search（URLSearchParams(location.search)）只报一次
@@ -67,8 +84,19 @@ export function urlParamViolations(src, whitelist = URL_PARAM_WHITELIST) {
     const varArg = /^URLSearchParams\([^()]*(?:\([^()]*\))?[^()]*\)\s*\.\s*(?:get|has|getAll)\(\s*[^\x60'"\s)]/.test(tail);
     const what = lit ? `读非白名单 URL 参数 ?${lit[3]}` : varArg ? 'URLSearchParams 变量传参（get(k) 之类）' : `${m[0]} 的其它用法（存进变量再读 / 解析 search 等）`;
     out.push({ what, index: m.index, text: src.slice(Math.max(0, m.index - 40), m.index + 80).replace(/\s+/g, ' ') });
+    tokenSpans.push([m.index, consumed]);
   }
-  return out;
+  // 绕过写法：同一处被多条规则命中只报一次（按区间去重，也不和上面已报的重叠）
+  const extra = [];
+  for (const [re, what] of URL_BYPASS_RE) for (const m of s.matchAll(re)) extra.push({ what, index: m.index, end: m.index + m[0].length });
+  extra.sort((a, b) => a.index - b.index);
+  let until = -1;
+  for (const v of extra) {
+    if (v.index < until || tokenSpans.some(([a, b]) => v.index >= a && v.index < b)) continue;
+    until = v.end;
+    out.push({ what: v.what, index: v.index, text: src.slice(Math.max(0, v.index - 40), v.index + 80).replace(/\s+/g, ' ') });
+  }
+  return out.sort((a, b) => a.index - b.index);
 }
 // 自检：规则本身不能失效（每次都跑，几毫秒）
 {
@@ -82,6 +110,23 @@ export function urlParamViolations(src, whitelist = URL_PARAM_WHITELIST) {
     ['new URL(location.href).searchParams.get(`lang`)', 1],
     ['/quality=(\\w+)/.exec(location.search)', 1],
     ['new URLSearchParams(e).has(`lang`)', 1],
+    // batch27 QA 回归：4 种原来拦不住的写法（及同族变体）
+    ['location[`search`]', 1],
+    ["const q=location['search'].slice(1)", 1],
+    ['location.href.split(`?`)[1]', 1],
+    ["location.href.indexOf('?')", 1],
+    ['new URL(location.href).search', 1],
+    ['const u=new URL(location.href);u.search.slice(1)', 1],
+    ['document.URL', 1],
+    ['document.URL.split("?")[1]', 1],
+    ['document["URL"]', 1],
+    ['document.documentURI', 1],
+    ['location.toString()', 1],
+    // 不该误报：资源解析、String#search 调用、单纯读 href
+    ['new URL(e, location.href)', 0],
+    ['n.search(/^image\\/jpe?g$/)', 0],
+    ['const a=location.href', 0],
+    ['x.research=1;y.searchable=2', 0],
   ];
   for (const [src, n] of cases) {
     const got = urlParamViolations(src, wl).length;
@@ -130,4 +175,4 @@ if (hits.length) {
   for (const h of hits) console.error('  ' + h);
   process.exit(1);
 }
-console.log(`✓ index.html 内联 structuredClone polyfill 与 src/platform/structuredClonePolyfill.js 一致、在入口模块之前\n✓ 生产构建不含调试 / QA 钩子：${files.length} 个文件（index.html + static/*.js|css ${staticFiles.length} 个 + assets/**/*.js ${assetJs.length} 个）里没有 ${FORBIDDEN.join(' / ')}；也没有 ${FORBIDDEN_RE.map(([, w]) => w).join(' / ')}；URL 参数白名单 ${Object.keys(URL_PARAM_WHITELIST).length ? Object.entries(URL_PARAM_WHITELIST).map(([k, r]) => `${k}（${r}）`).join('、') : '为空'}，生产包里没有其它 URLSearchParams / location.search / searchParams 用法（含变量传参）`);
+console.log(`✓ index.html 内联 structuredClone polyfill 与 src/platform/structuredClonePolyfill.js 一致、在入口模块之前\n✓ 生产构建不含调试 / QA 钩子：${files.length} 个文件（index.html + static/*.js|css ${staticFiles.length} 个 + assets/**/*.js ${assetJs.length} 个）里没有 ${FORBIDDEN.join(' / ')}；也没有 ${FORBIDDEN_RE.map(([, w]) => w).join(' / ')}；URL 参数白名单 ${Object.keys(URL_PARAM_WHITELIST).length ? Object.entries(URL_PARAM_WHITELIST).map(([k, r]) => `${k}（${r}）`).join('、') : '为空'}，生产包里没有其它 URLSearchParams / location.search / searchParams 用法（含变量传参），也没有 location[…] / 切 href / URL.search / document.URL 之类的绕过读法`);
