@@ -14,6 +14,14 @@ if (!existsSync(join(DIST, 'index.html'))) {
 }
 /** 只在钩子代码里出现的字符串（游戏代码自己的属性名如 puzzles 不算） */
 export const FORBIDDEN = ['__qa', '__game', '__perfSpot', '__testbed', '__s1', '__s2', '__s3', '__lods', 'installQaHooks', 'unparsable'];
+/**
+ * batch26：?debug=1 和 ?scene= 直进场景也只在 dev / 测试构建里（src/config/debug.ts 的 TEST_BUILD 是构建期常量）。
+ * 生产构建里不能还有读这两个 URL 参数的代码，也不能还有直进 testbed / sandbox 的分支（压缩后引号可能是 ` ' "）。
+ */
+export const FORBIDDEN_RE = [
+  [/\.(?:has|get)\(\s*[`'"](?:debug|scene)[`'"]\s*\)/, '读 ?debug / ?scene 参数'],
+  [/startLoading\(\s*[`'"](?:testbed|sandbox)[`'"]\s*\)/, '?scene=testbed / sandbox 直进分支'],
+];
 
 const walk = (d) => readdirSync(d).flatMap((n) => (statSync(join(d, n)).isDirectory() ? walk(join(d, n)) : [join(d, n)]));
 const files = [join(DIST, 'index.html'), ...walk(join(DIST, 'static')).filter((f) => /\.(js|mjs|html|css)$/.test(f))];
@@ -24,10 +32,14 @@ for (const f of files) {
     const i = s.indexOf(w);
     if (i >= 0) hits.push(`${relative(root, f)}：「${w}」…${s.slice(Math.max(0, i - 30), i + 40).replace(/\s+/g, ' ')}…`);
   }
+  for (const [re, what] of FORBIDDEN_RE) {
+    const m = re.exec(s);
+    if (m) hits.push(`${relative(root, f)}：${what}「${m[0]}」…${s.slice(Math.max(0, m.index - 40), m.index + 60).replace(/\s+/g, ' ')}…`);
+  }
 }
 if (hits.length) {
   console.error(`✗ 生产构建里还有调试 / QA 钩子（${hits.length} 处）——是不是用 --mode smoke 建的 dist，或新加的钩子没用构建期条件？`);
   for (const h of hits) console.error('  ' + h);
   process.exit(1);
 }
-console.log(`✓ 生产构建不含调试 / QA 钩子：${files.length} 个文件（index.html + static/*.js|css）里没有 ${FORBIDDEN.join(' / ')}`);
+console.log(`✓ 生产构建不含调试 / QA 钩子：${files.length} 个文件（index.html + static/*.js|css）里没有 ${FORBIDDEN.join(' / ')}；也没有 ${FORBIDDEN_RE.map(([, w]) => w).join(' / ')}`);

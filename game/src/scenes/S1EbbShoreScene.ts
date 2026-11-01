@@ -302,7 +302,7 @@ export class S1EbbShoreScene extends LevelScene {
   }
 }
 
-/** 沙盒（dev 专用，?scene=sandbox；正式版要 ?debug=1）：原 v0.1 demo 岛，不存档、不跑画质检测、没有出口 */
+/** 沙盒（?scene=sandbox：开发服务器，或测试构建加 ?debug=1；生产构建进不去，batch26）：原 v0.1 demo 岛，不存档、不跑画质检测、没有出口 */
 export class SandboxScene extends S1EbbShoreScene {
   override readonly name: string = 'sandbox';
   constructor(game: Game) {

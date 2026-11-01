@@ -49,7 +49,7 @@ function bootstrap(): void {
     .register('s1-ebb-shore', (g) => new S1Scene(g))
     .register('s2-keeper-house', (g) => new S2Scene(g))
     .register('s3-lighthouse', (g) => new S3Scene(g))
-    // 沙盒（v0.1 demo 岛，dev 专用：?scene=sandbox，正式版要加 ?debug=1）
+    // 沙盒（v0.1 demo 岛：?scene=sandbox，开发服务器，或测试构建加 ?debug=1；batch26 起生产构建进不去）
     .register('sandbox', (g) => new SandboxScene(g))
     .register('testbed', (g) => new TestbedScene(g));
   game.start();

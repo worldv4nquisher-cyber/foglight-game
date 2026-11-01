@@ -1,14 +1,22 @@
 /**
- * 开发调试开关：开发服务器（vite dev）或 URL 带 ?debug=1 时开启。
- * 开启后：F3 帧率、F4 调试面板（输入上下文 / 最近 action / 速度等）、window.__game。
+ * 开发调试开关：开发服务器（vite dev）默认开；测试构建（vite build --mode smoke）里 URL 带 ?debug=1 时开。
+ * 开启后：F3 详细面板、F4 调试面板（输入上下文 / 最近 action / 速度等）、?scene=sandbox。
+ * batch26：生产构建（mode production）里 ?debug=1 和 ?scene= 直进场景都不存在——下面的 TEST_BUILD 是构建期常量 false，
+ * 读 URL 的代码整段被摇树删掉（npm run verify:prod-hooks 断言 dist 里没有读 debug / scene 参数的代码）。
  * 写法兼容 Node 校验脚本（Node 里没有 import.meta.env / location）。
  */
 const env = (import.meta as ImportMeta & { env?: { DEV?: boolean } }).env;
 
 export const isDev: boolean = env?.DEV ?? false;
 
+/** 开发服务器或测试构建（--mode smoke，见 scripts/lib/test-server.mjs）。生产构建里是常量 false；Node 里 false */
+export const TEST_BUILD: boolean = typeof import.meta.env === 'undefined' ? false : import.meta.env.DEV || import.meta.env.MODE === 'smoke';
+
 export const debugEnabled: boolean =
-  isDev || (typeof location !== 'undefined' && new URLSearchParams(location.search).has('debug'));
+  TEST_BUILD && (isDev || (typeof location !== 'undefined' && new URLSearchParams(location.search).has('debug')));
+
+/** batch26：?scene=s1|s2|s3|sandbox|testbed 直进场景，只在开发服务器 / 测试构建里读（生产构建里恒为 null） */
+export const sceneParam: string | null = TEST_BUILD && typeof location !== 'undefined' ? new URLSearchParams(location.search).get('scene') : null;
 
 /** ?beamDebug=1：画出光线、镜面法线与接收器半径（v0.1-012；只读 URL，不需要 debug=1） */
 export const beamDebugEnabled: boolean =

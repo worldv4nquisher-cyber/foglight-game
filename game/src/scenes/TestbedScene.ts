@@ -21,7 +21,7 @@ import { buildBeamTestArea, type BeamTestArea } from '@/world/beamTestArea';
 import { beamDebugEnabled } from '@/config/debug';
 
 /**
- * 角色控制器 / 相机测试场地（v0.1-002、003）：地址栏加 ?scene=testbed 进入。不存档。
+ * 角色控制器 / 相机测试场地（v0.1-002、003）：地址栏加 ?scene=testbed 进入（开发服务器 / 测试构建；batch26 起生产构建进不去）。不存档。
  * 30° / 45° 坡、0.25 / 0.4 m 台阶、螺旋楼梯、长墙、可开关闸门（G）、升降台、自动跨越点、强制送回（T）。
  * 相机（003）：东南角带窄门的小屋（室内距离 ≤ 2 m）、西侧测试机关（004 起是 puzzle 交互：E 进机位、右键 / Tab 退出）、
  * 观察点地面标记（站上去看向立柱顶，F4 显示对准度）、C 播放 5 s 测试镜头。

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type { Game } from './Game';
 import { LEVEL_GROUPS, type AssetGroup } from '@/assets/manifest';
-import { debugEnabled } from '@/config/debug';
+import { debugEnabled, sceneParam } from '@/config/debug';
 import { LEVELS, LEVEL_LIST, levelByScene, levelForSave, type LevelDef, type LevelId, type LevelSceneName } from '@/scenes/levels';
 
 /** 可玩场景：第一章三个场景 + 测试场地 + 沙盒（dev 用的 demo 岛） */
@@ -91,10 +91,13 @@ export class GameFlow {
     });
   }
 
-  /** 启动场景加载完：默认进主菜单；?autostart=1（冒烟 / 开发）和 ?scene=… 跳过主菜单直接进场 */
+  /**
+   * 启动场景加载完：默认进主菜单；?autostart=1（冒烟 / 开发）和 ?scene=… 跳过主菜单直接进场。
+   * batch26：?scene= 只在开发服务器 / 测试构建里有（sceneParam，生产构建恒为 null）；s1–s3 / sandbox 另要 debugEnabled（dev 或测试构建 + ?debug=1）
+   */
   afterBoot(): void {
     const q = new URLSearchParams(location.search);
-    const scene = q.get('scene');
+    const scene = sceneParam;
     if (scene === 'testbed') {
       if (!this.game.save.continueGame()) this.game.save.newGame('ch1', 's1');
       this.startLoading('testbed');

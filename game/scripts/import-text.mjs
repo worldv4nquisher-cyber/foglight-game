@@ -128,8 +128,8 @@ export function hardcodedStory(dir = join(root, 'src')) {
  * 返回 [文件:行, 字面量][]
  */
 export const DEV_ONLY = {
-  'src/scenes/TestbedScene.ts': '测试场地（?scene=testbed，正式版要 debug）',
-  'src/ui/DebugPanel.ts': 'F4 调试面板（仅 dev / ?debug=1）',
+  'src/scenes/TestbedScene.ts': '测试场地（?scene=testbed，只在 dev / 测试构建）',
+  'src/ui/DebugPanel.ts': 'F4 调试面板（仅 dev / 测试构建 + ?debug=1）',
   'src/config/atmosphere.ts': '氛围预设内部名，只在代码里区分预设',
   'src/config/atmosphere028.ts': '美术 atmosphere-028.json 原样副本（gen-atmo028 生成），中文只在节点名 / note 里，不上屏',
   'src/assets/vertexColors.ts': '资源检查结果，只进控制台日志',

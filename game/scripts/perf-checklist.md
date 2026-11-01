@@ -11,8 +11,8 @@
 |---|---|
 | `quality=ultra` / `high` / `standard` | 锁定画质档（URL 优先，跳过 S1 自动检测降档） |
 | `smoke=1&art=1` | 测试构建（`npm run preview:smoke`）下控制台有 `__game` / `__s3` / `__perfSpot`（生产 dist 里没有，batch25）。**`smoke=1` 必须配 `art=1`**，否则是白盒（数字无效） |
-| `debug=1` | 打开 F3 详细面板（FPS · 帧时间 · draw call / 三角面对照 §8 预算 · 显存估算），并允许 `scene=` 直接进场景 |
-| `scene=s1` / `s2` / `s3` | 跳过主菜单直接进场景（要 `debug=1`） |
+| `debug=1` | 打开 F3 详细面板（FPS · 帧时间 · draw call / 三角面对照 §8 预算 · 显存估算），并允许 `scene=` 直接进场景。**batch26 起只在测试构建（`npm run preview:smoke`）/ 开发服务器里有，生产 dist 加了也无效** |
+| `scene=s1` / `s2` / `s3` | 跳过主菜单直接进场景（要 `debug=1`；同样只在测试构建 / 开发服务器里有） |
 | `reflect=off` / `0.5` / `1` | S1 水面平面反射：关 / 反射 RT 分辨率倍率（不加 = 按档：极致 0.5、高 0.5、标准 0.25）。**注意：这是分辨率，不是反射强度**，强度用 `reflectK=` |
 | `reflectK=0` / `0.5` / `1` | S1 水面平面反射**强度**（混合权重倍率，乘在菲涅尔混合上；0 = 不渲染反射 RT，画面同 `reflect=off`）。不加 = 画质配置 `PLANAR_REFLECTION_STRENGTH`（src/config/quality.ts，三档共用，现为 0.5 = 用户选的一半强度，要改只改这一个数）。**`reflect=` 是分辨率，`reflectK=` 是强度**，两者可叠加（例：`reflect=1&reflectK=0.5`） |
 | `postfx=0` | 关后处理（只用于排查是否后处理吃帧，不进结论） |
