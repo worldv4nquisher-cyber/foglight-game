@@ -3751,13 +3751,16 @@ CHECKS.push({
       if (F.some((f) => f.key === 'mus-ending-ch1' || f.src !== 'fallback')) throw new Error('演出期间放过结尾曲 / 用过音频时钟');
       if (!(r.sceneAt.t >= ENDING_CUES.silence && r.sceneAt.endedBy === 'end')) throw new Error('结束页时刻 ' + JSON.stringify(r.sceneAt));
       if (hits.length !== 1) throw new Error('结尾曲应只请求 1 次（404）：' + hits.length);
-      await sleep(1000);
+      // batch26：原来固定 sleep(1000) 后读 fade，负载高时淡入没走完会误报；改为轮询 fade ≤ 0.05（上限 15 s）
+      const fadeWall = Date.now();
+      if (!(await until(`__game.ui.fade.opacity <= 0.05`, 15000))) throw new Error('结束页 15 s 内没淡入 ' + JSON.stringify(await evaluate(`({ fade: __game.ui.fade.opacity })`)));
+      const fadeMs = Date.now() - fadeWall;
       const pg = await evaluate(`({ fade: __game.ui.fade.opacity, page6: __game.narrative.outroEntryUnlocked, k: __game.audio.musicKey })`);
       if (pg.fade > 0.05 || !pg.page6 || pg.k !== null) throw new Error('结束页 ' + JSON.stringify(pg));
       const gameErrors = errors.slice(errBefore).filter((e) => !/^浏览器: Failed to load resource: .*404.*mus-ending-ch1\.ogg/.test(e) && !/GPU stall due to ReadPixels|WebGL.*performance/i.test(e));
       if (gameErrors.length) throw new Error('404 时游戏报错：' + gameErrors.join(' | '));
       const early = r.cues.filter((c) => c.at <= ENDING_CUES.fog_open); // 实时段 = 雾口及以前（原写死 14）
-      return `404 ×${hits.length}（S3 首帧后预取）→ isMissing、点燃后 result=${st.res}、musicKey=${st.k}（场景曲 ${st.l?.op} fade ${st.l?.fade} s）；演出后备时钟 ${a.t.toFixed(2)} s 时 ${a.fr.fallback} 帧 fallback / 0 帧 audio；实时段 ${early.map((c) => `${c.id} ${c.at}→${c.firedAt.toFixed(2)}`).join('、')}；seek 后 ${r.cues.length} 个 cue 全部 fallback、${F.length} 帧没放过结尾曲；结束页 @演出 ${r.sceneAt.t.toFixed(2)} s（endedBy end）、淡入后 fade ${pg.fade.toFixed(2)}、日志第 6 页 ${pg.page6}；除 Chrome 那条 404 网络日志外无报错`;
+      return `404 ×${hits.length}（S3 首帧后预取）→ isMissing、点燃后 result=${st.res}、musicKey=${st.k}（场景曲 ${st.l?.op} fade ${st.l?.fade} s）；演出后备时钟 ${a.t.toFixed(2)} s 时 ${a.fr.fallback} 帧 fallback / 0 帧 audio；实时段 ${early.map((c) => `${c.id} ${c.at}→${c.firedAt.toFixed(2)}`).join('、')}；seek 后 ${r.cues.length} 个 cue 全部 fallback、${F.length} 帧没放过结尾曲；结束页 @演出 ${r.sceneAt.t.toFixed(2)} s（endedBy end）、淡入后 fade ${pg.fade.toFixed(2)}（轮询 ${fadeMs} ms）、日志第 6 页 ${pg.page6}；除 Chrome 那条 404 网络日志外无报错`;
     } finally {
       await cdp.unroute();
       await evaluate(`localStorage.clear(); 1`).catch(() => {});
