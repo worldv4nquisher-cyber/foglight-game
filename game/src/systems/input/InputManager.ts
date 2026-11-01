@@ -55,6 +55,11 @@ export interface InputDebugEntry {
  */
 export class InputManager implements InputSink {
   private rawHeld = new Map<string, Set<string>>();
+  /**
+   * BUG-037：本帧（上次 endFrame 之后）按下过的键。轴向是按帧采样「是否按住」，按下和松开落在同一帧间隔里（轻点比一帧短：
+   * 低帧率 / 快速轻点）时采样不到 → 机关转镜、走路的一下轻点被吞。轴向把「本帧按下过」也算按住一帧，endFrame 清掉。
+   */
+  private tappedThisFrame = new Set<string>();
   private directAxes = new Map<string, number>();
   private directHeld = new Map<ButtonAction, Set<string>>();
   private pressed = new Map<ButtonAction, number>();
@@ -87,6 +92,7 @@ export class InputManager implements InputSink {
     this.contexts = new InputContextStack((cur, prev) => {
       // 切换上下文：清掉未消费的按下和按住计时，避免 explore 里的 E 漏到 puzzle 变成 partNext
       this.pressed.clear();
+      this.tappedThisFrame.clear();
       this.holdStart.clear();
       this.look.x = this.look.y = 0;
       this.zoom = 0;
@@ -156,6 +162,7 @@ export class InputManager implements InputSink {
     this._enabled = v;
     if (!v) {
       this.directAxes.clear();
+      this.tappedThisFrame.clear();
       for (const set of this.directHeld.values()) set.clear();
       this.look.x = this.look.y = 0;
       this.zoom = 0;
@@ -174,6 +181,7 @@ export class InputManager implements InputSink {
     const wasDown = set.size > 0;
     if (down) set.add(source);
     else set.delete(source);
+    if (down && !wasDown && this._enabled) this.tappedThisFrame.add(code);
     if (!down || wasDown) {
       if (!down && set.size === 0) {
         for (const a of actionsForCode(this.context, code)) if (HOLD_SECONDS[a]) this.holdStart.delete(a);
@@ -225,8 +233,8 @@ export class InputManager implements InputSink {
     let v = 0;
     for (const [key, val] of this.directAxes) if (key.endsWith(`:${axis}`)) v += val;
     const b = axisBindings[axis];
-    if (b.positive.some((c) => this.rawDown(c))) v += 1;
-    if (b.negative.some((c) => this.rawDown(c))) v -= 1;
+    if (b.positive.some((c) => this.rawDown(c) || this.tappedThisFrame.has(c))) v += 1;
+    if (b.negative.some((c) => this.rawDown(c) || this.tappedThisFrame.has(c))) v -= 1;
     return Math.max(-1, Math.min(1, v));
   }
 
@@ -290,6 +298,7 @@ export class InputManager implements InputSink {
   }
 
   endFrame(): void {
+    this.tappedThisFrame.clear();
     this.look.x = this.look.y = 0;
     this.zoom = 0;
     for (const [action, t] of this.pressed) {
@@ -303,6 +312,7 @@ export class InputManager implements InputSink {
       if (source) set.delete(source);
       else set.clear();
     }
+    this.tappedThisFrame.clear();
     this.holdStart.clear();
   }
 

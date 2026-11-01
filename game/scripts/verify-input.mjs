@@ -275,6 +275,58 @@ test('BUG-035 仅支持电脑提示：手机 / 纯触屏平板提示，桌面 / 
   for (const [name, p, want] of cases) assert.equal(isDesktopOnlyBlocked(p), want, name);
 });
 
+test('BUG-037 轴向轻点：按下松开落在同一帧间隔里也算按住一帧，下一帧清掉', () => {
+  const { input } = fresh();
+  input.pushContext('puzzle');
+  input.endFrame();
+  // 帧间：按下立刻松开（轻点比一帧短）
+  input.setRaw('kbm', 'KeyD', true);
+  input.setRaw('kbm', 'KeyD', false);
+  input.beginFrame();
+  assert.equal(input.getAxis('moveX'), 1, '本帧应读到一次 +1');
+  input.endFrame();
+  input.beginFrame();
+  assert.equal(input.getAxis('moveX'), 0, '下一帧应回 0（不是一直按住）');
+  input.endFrame();
+  // 负向
+  input.setRaw('kbm', 'KeyA', true);
+  input.setRaw('kbm', 'KeyA', false);
+  input.beginFrame();
+  assert.equal(input.getAxis('moveX'), -1);
+  input.endFrame();
+  // 按住照旧：一直是 1，松开后的那一帧不再算（松开不是新的按下）
+  input.setRaw('kbm', 'KeyW', true);
+  for (let i = 0; i < 3; i++) {
+    input.beginFrame();
+    assert.equal(input.getAxis('moveY'), 1);
+    input.endFrame();
+  }
+  input.setRaw('kbm', 'KeyW', false);
+  input.beginFrame();
+  assert.equal(input.getAxis('moveY'), 0);
+  input.endFrame();
+});
+
+test('BUG-037 轻点不跨上下文 / 关闭输入 / 失焦', () => {
+  const { input } = fresh();
+  input.setRaw('kbm', 'KeyD', true);
+  input.setRaw('kbm', 'KeyD', false);
+  const pop = input.pushContext('puzzle'); // 上下文切换清掉
+  input.beginFrame();
+  assert.equal(input.getAxis('moveX'), 0);
+  input.endFrame();
+  input.setRaw('kbm', 'KeyD', true);
+  input.setRaw('kbm', 'KeyD', false);
+  input.releaseAll();
+  assert.equal(input.getAxis('moveX'), 0, '失焦 releaseAll 清掉');
+  input.enabled = false;
+  input.setRaw('kbm', 'KeyD', true);
+  input.setRaw('kbm', 'KeyD', false);
+  input.enabled = true;
+  assert.equal(input.getAxis('moveX'), 0, '关闭期间的轻点不算');
+  pop();
+});
+
 let failed = 0;
 for (const [s, name, e] of results) {
   console.log(`${s === 'ok' ? '✓' : '✗'} ${name}`);
