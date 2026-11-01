@@ -3812,6 +3812,13 @@ CHECKS.push({
       const sv2 = await evaluate(`__qa.save()`);
       if (sv2?.sceneId !== at.sv?.sceneId || JSON.stringify(sv2.readDocs) !== JSON.stringify(at.sv.readDocs)) throw new Error(label + ' 读档后存档内容变了 ' + JSON.stringify({ before: at.sv, after: sv2 }));
     };
+    // batch25-3：GL 错误断言覆盖所有「进场景」——走出口、刷新后继续、新游戏（含覆盖确认）、S3 点灯 → 结束页、结束页继续
+    const glClear = `(() => { const gl = __game.renderer.getContext(); for (let k = 0; k < 16 && gl.getError() !== gl.NO_ERROR; k++); return 1; })()`;
+    const glErrs = `(() => { const gl = __game.renderer.getContext(); const e = []; for (let x = gl.getError(), k = 0; x !== gl.NO_ERROR && k < 8; x = gl.getError(), k++) e.push('0x' + x.toString(16)); return e; })()`;
+    const glCheck = async (label) => {
+      const ge = await evaluate(glErrs);
+      if (ge.length) throw new Error(`${label} 期间有 GL 错误 ${ge.join(',')}`);
+    };
     const ready = (S) => `!!(window.${S} && ${S}.puzzles && ${S}.rig) && __game.input.context === 'explore' && !__game.isPaused && !__game.flow.transitioning && !${S}.rig.controller.busy`;
     /** 刷新：重新打开游戏地址（不带 autostart → 主菜单），点「继续」，等场景可操作 */
     const refreshContinue = async (scene, S) => {
@@ -3820,10 +3827,10 @@ CHECKS.push({
       await clickSel('.main-menu [data-act="continue"]');
       if (!(await untilW(`__game.scenes.current?.name === '${scene}'`, LOAD_MS))) throw new Error(`继续没进 ${scene}：` + (await evaluate(`__game.scenes.current?.name`)));
       if (S && !(await untilG(ready(S), 30, ESTAB_MS))) throw new Error(`继续后 ${scene} 没回到可操作`);
+      // 刷新 = 新页面新上下文：错误队列从页面加载开始累计，覆盖菜单 + 继续读档进场全程
+      await glCheck(`刷新后继续进 ${scene}`);
     };
     /** 走进当前场景出口（「外 → 内」触发：先放到外面一步，等两帧再放进去），等下一个场景可操作 */
-    const glClear = `(() => { const gl = __game.renderer.getContext(); for (let k = 0; k < 16 && gl.getError() !== gl.NO_ERROR; k++); return 1; })()`;
-    const glErrs = `(() => { const gl = __game.renderer.getContext(); const e = []; for (let x = gl.getError(), k = 0; x !== gl.NO_ERROR && k < 8; x = gl.getError(), k++) e.push('0x' + x.toString(16)); return e; })()`;
     const takeExit = async (nextScene, S) => {
       await evaluate(glClear);
       await evaluate(`(async () => { const s = __game.scenes.current; const ex = s.exits[0]; const c = ex.opts.center.clone();
@@ -3833,17 +3840,18 @@ CHECKS.push({
       if (!(await untilW(`__game.scenes.current?.name === '${nextScene}'`, LOAD_MS))) throw new Error(`出口没进 ${nextScene}`);
       if (!(await untilG(ready(S), 30, ESTAB_MS))) throw new Error(`${nextScene} 进场后没回到可操作`);
       // BUG-034：换场第一帧反射 pass 在阴影贴图建好前画受阴影物体 → INVALID_OPERATION（Chrome 只打警告，WebKit 记 console.error）
-      const ge = await evaluate(glErrs);
-      if (ge.length) throw new Error(`走出口进 ${nextScene} 期间有 GL 错误 ${ge.join(',')}`);
+      await glCheck(`走出口进 ${nextScene}`);
     };
 
     // ======================================================== 新游戏 → S1
     await evaluate(`localStorage.removeItem('foglight.save.v1'); 1`);
     await cdp.gotoMenu();
     if (await evaluate(visible('.main-menu [data-act="continue"]'))) throw new Error('清档后不该有「继续」');
+    await evaluate(glClear);
     await clickSel('.main-menu [data-act="new"]');
     if (!(await untilW(`__game.scenes.current?.name === 's1-ebb-shore'`, LOAD_MS))) throw new Error('新游戏没进 S1');
     if (!(await untilG(ready('__s1'), 30, ESTAB_MS))) throw new Error('S1 开场后没回到可操作');
+    await glCheck('主菜单新游戏进 S1');
     let sv = await save();
     if (sv?.sceneId !== 's1' || sv.chapterComplete) throw new Error('新游戏进 S1 应自动存档 s1 ' + JSON.stringify(sv));
 
@@ -4021,6 +4029,7 @@ CHECKS.push({
     if (!(await untilG(`__s3.puzzles.beam.igniter.state === 'ready' && __s3.puzzles.leverIx.enabled`, 4))) throw new Error('S3 开阀后没进可点灯 ' + JSON.stringify(await s3st()));
     await evaluate(`(() => { const s = __s3; const sp = s.puzzles.leverIx.standPoint(s.rig.body.position.clone()); s.rig.body.position.set(sp.position.x, sp.position.y + 0.02, sp.position.z); s.rig.body.velocity.set(0, 0, 0); s.rig.controller.facing = sp.facing; return 1; })()`);
     if (!(await untilG(`__s3.interaction.current?.id === 'ignite-lever-s3' && !__s3.rig.controller.busy`, 4))) throw new Error('S3 拉杆前没选中拉杆 ' + JSON.stringify(await evaluate(`__s3.interaction.current?.id ?? null`)));
+    await evaluate(glClear); // 点灯 → 结尾演出 → 跳过 → 结束页 全程
     await evaluate(`__game.input.setRaw('smoke', 'KeyE', true); 1`);
     const igniting = await untilG(`__s3.puzzles.state.igniting`, 3);
     await evaluate(`__game.input.setRaw('smoke', 'KeyE', false); 1`);
@@ -4034,6 +4043,7 @@ CHECKS.push({
     await evaluate(space('keyup'));
     if (!skipped) throw new Error('按住 Space 没跳过结尾 ' + JSON.stringify(await evaluate(`({ t: __cM7.t, by: __cM7.endedBy })`)));
     if (!(await untilW(`__game.scenes.current?.name === 'chapter-end' && ${visible('.chapter-end')}`, 30000))) throw new Error('跳过后没进章节结束页');
+    await glCheck('S3 点灯 → 结尾演出 → 跳过 → 结束页');
     sv = await save();
     if (!sv?.chapterComplete || !sv.readDocs.includes('ch1.s2.journal.doc')) throw new Error('结束页存档应 chapterComplete 且保留日志 ' + JSON.stringify(sv));
     const endTime = await evaluate(`document.querySelector('[data-role="playtime"]')?.textContent ?? ''`);
@@ -4044,18 +4054,22 @@ CHECKS.push({
     if (!(await untilW(visible('.main-menu [data-act="continue"]'), 10000))) throw new Error('通关后刷新主菜单没有「继续」');
     await clickSel('.main-menu [data-act="continue"]');
     if (!(await untilW(`__game.scenes.current?.name === 'chapter-end'`, 20000))) throw new Error('通关存档继续应回结束页');
+    await glCheck('刷新后继续进结束页');
     await clickSel('.chapter-end [data-act="to-menu"]');
     if (!(await untilW(`__game.scenes.current?.name === 'menu' && __game.ui.mainMenu.isOpen`, 20000))) throw new Error('结束页没回主菜单');
+    await evaluate(glClear);
     await clickSel('.main-menu [data-act="new"]');
     if (!(await untilW(`__game.ui.mainMenu.view === 'confirm'`, 5000))) throw new Error('有存档新游戏没弹覆盖确认');
     await clickSel('.main-menu .confirm-dialog [data-act="ok"], .main-menu .confirm-dialog [data-act="confirm"]');
     if (!(await untilW(`__game.scenes.current?.name === 's1-ebb-shore'`, LOAD_MS))) throw new Error('覆盖确认后没进 S1');
     if (!(await untilG(ready('__s1'), 30, ESTAB_MS))) throw new Error('新游戏 S1 没回到可操作');
+    await glCheck('结束页 → 主菜单 → 新游戏覆盖确认进 S1');
     sv = await save();
     if (sv?.sceneId !== 's1' || sv.chapterComplete || sv.readDocs.length || sv.hintsUsed || (await evaluate(`__game.narrative.readDocs.length`))) throw new Error('新游戏应清档（s1、未完成、日志 / 提示清空）' + JSON.stringify(sv));
     s = await s1st();
     if (s.tide !== 'high' || s.p1 || s.p2) throw new Error('新游戏 S1 谜题应是初始状态 ' + JSON.stringify(s));
     out.push('结束页刷新 → 继续回结束页 → 回主菜单 → 新游戏覆盖确认 → 清档进 S1（日志 / 提示 / 完成标记清空）✓');
+    out.push('GL 错误 0：新游戏进 S1 ×2、走出口 ×2、刷新继续 ×4（S1 / S2 / S3 / 结束页）、S3 点灯 → 结束页 ✓');
 
     await evaluate(`localStorage.removeItem('foglight.save.v1'); 1`);
     await cdp.goto('');
@@ -4065,11 +4079,11 @@ CHECKS.push({
 
 
 // ---------------------------------------------------------------- M7 每个场景里切画质（制作人 M7 用）
-// S1 / S2 / S3（art=1，真模型）各切 ultra → high → standard → ultra：每次切完等画面走几帧，断言
+// S1 / S2 / S3（art=1，真模型）各切 ultra → high → standard → high → ultra（batch25-3 加 standard → high 这一步）：每次切完等画面走几帧，断言
 // ① 没有 GL 错误（切前先清 gl.getError，切后读）② 截图不是黑屏 / 纯色（平均亮度、亮像素占比、颜色数）
 // ③ 没丢实体：场景对象没换、所有可交互物 / 出口 / 汐都还挂在场景树上且整条父链可见、可交互物数量不变；网格总数变化只记录（雾片 / 草 / 雨跟档位走）
 CHECKS.push({
-  name: 'v0.1-M7 切画质：S1 / S2 / S3 每个场景三档来回切，无 GL 错误、不黑屏、不丢实体',
+  name: 'v0.1-M7 切画质：S1 / S2 / S3 每个场景三档来回切（极致 → 高 → 标准 → 高 → 极致），无 GL 错误、不黑屏、不丢实体',
   async run({ evaluate, cdp, sleep }) {
     const out = [];
     const scenes = [
@@ -4102,7 +4116,7 @@ CHECKS.push({
       const base = await evaluate(`(() => { const c = ${census}; delete c.scene; return c; })()`);
       if (base.xi !== 'ok') throw new Error(`${id} 切档前汐就不在场景里 / 不可见 ` + JSON.stringify(base)); // 可交互物本来就隐藏的（触发体等）记在 base.bad，切档后要一样
       const rows = [];
-      for (const tier of ['ultra', 'high', 'standard', 'ultra']) {
+      for (const tier of ['ultra', 'high', 'standard', 'high', 'ultra']) {
         await evaluate(`(() => { const gl = __game.renderer.getContext(); while (gl.getError() !== gl.NO_ERROR); return 1; })()`);
         await evaluate(`__game.quality.set('${tier}'); 1`);
         await gameWait(0.6);
