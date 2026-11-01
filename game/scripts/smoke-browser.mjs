@@ -4676,6 +4676,12 @@ CHECKS.push({
     const release = (x, y) => send('Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'left', buttons: 0, clickCount: 1 }, sessionId);
     const dragTo = (x, y) => send('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y, button: 'left', buttons: 1 }, sessionId);
     const st = `({ locked: !!document.pointerLockElement, ctx: __game.input.context, paused: __game.isPaused, b38: window.__b38 })`;
+    /** 等进场完全交还给玩家：建立镜头 / 开场过场放完（上下文回到 explore、镜头模式 explore 且不在混合）、不暂停、不在切场景、角色不忙。
+     * cdp.goto 只等场景名，开场过场里 cutscene 上下文本来就不接视角输入（QA batch27 冒烟 0/3 都卡在这）。写法同 v0.1-003 / 跨场景检查的就绪等待 */
+    const ready = async (S, label) => {
+      const expr = `(() => { const cf = __game.scenes.current?.cameraFollow; return !!(window.${S}?.rig && cf) && __game.input.context === 'explore' && cf.modeName === 'explore' && !cf.blending && !__game.isPaused && !__game.flow.transitioning && !${S}.rig.controller.busy; })()`;
+      if (!(await until(expr, ESTAB_MS))) throw new Error(`${label}：${ESTAB_MS / 1000} s 内没回到探索状态（建立镜头 / 开场过场没放完）` + JSON.stringify(await evaluate(`({ ctx: __game.input.context, cam: __game.scenes.current?.cameraFollow?.modeName ?? null, blending: __game.scenes.current?.cameraFollow?.blending ?? null, paused: __game.isPaused, tr: __game.flow.transitioning })`)));
+    };
     /** 按下（被拒那一下）不松开直接拖，再松开；之后单独按住再拖一次 */
     const dragYaw = async (label) => {
       const y0 = await yaw();
@@ -4708,7 +4714,9 @@ CHECKS.push({
     };
 
     for (const mode of ['throw', 'event']) {
+      await evaluate(`localStorage.removeItem('foglight.save.v1'); 1`);
       await cdp.goto('');
+      await ready('__s1', `S1 ${mode}`);
       await deny(mode);
       out.push(await dragYaw(`S1 ${mode === 'throw' ? '同步抛错' : 'pointerlockerror'}`));
     }
@@ -4717,7 +4725,7 @@ CHECKS.push({
     await evaluate(`localStorage.removeItem('foglight.save.v1'); 1`);
     await cdp.goto('debug=1&scene=s3', 's3-lighthouse');
     if (!(await until(`!!window.__s3?.puzzles?.beam`, 60000))) throw new Error('?scene=s3 没进 S3');
-    if (!(await until(`__game.input.context === 'explore' && !__s3.rig.controller.busy`, ESTAB_MS))) throw new Error('S3 建立镜头后没回到 explore');
+    await ready('__s3', 'S3');
     await evaluate(`__s3.puzzles.tide.set('low', { instant: true }), 1`);
     await deny('reject');
     out.push(await dragYaw('S3 Promise reject'));
