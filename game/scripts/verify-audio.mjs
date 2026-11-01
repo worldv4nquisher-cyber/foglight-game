@@ -740,10 +740,10 @@ test('036 交叉淡化：菜单 → S1 时长 2 s，旧曲淡出到 0 后 stop�
 test('BUG-025 没有上一首时（结尾曲放完 / 跳过停掉 → 结束页 → 主菜单）菜单曲从 0 淡入 2 s，不满音量硬切入；boot 第一首照旧不淡入', () => {
   const ctx = new FakeContext();
   const a = new AudioSystem(ctx);
-  const bufs = { 'mus-menu': { duration: 106.67 }, 'mus-ending-ch1': { duration: 107 } };
+  const bufs = { 'mus-menu': { duration: 106.67 }, 'mus-ending-ch1': { duration: ENDING_CUES.length } };
   // 结尾曲（不循环）放完 → musicKey = null
   a.playMusic(bufs['mus-ending-ch1'], { key: 'mus-ending-ch1', loop: false });
-  ctx.currentTime = 107;
+  ctx.currentTime = ENDING_CUES.length;
   ctx.sources[0].onended?.();
   assert.equal(a.musicKey, null, '结尾曲放完没有当前曲');
   ctx.currentTime = 110;
@@ -839,7 +839,7 @@ test('1031 结尾曲 AudioSystem：loop = false 单次、offset 起播、fadeOut
   const a = new AudioSystem(ctx);
   a.playMusic({ duration: 150 }, { key: 'mus-s3-lighthouse' });
   ctx.currentTime = 100;
-  const end = { duration: 107 };
+  const end = { duration: ENDING_CUES.length };
   assert.equal(a.playMusic(end, { key: ENDING_MUSIC, loop: false, fadeOutPrev: 2, fadeIn: 0 }), true);
   const [base, e] = ctx.sources;
   assert.equal(e.loop, false);
@@ -860,7 +860,7 @@ test('1031 结尾曲 AudioSystem：loop = false 单次、offset 起播、fadeOut
   a.playMusic(end, { key: ENDING_MUSIC, loop: false, offset: 3, fadeIn: 0.5, fadeOutPrev: 2 });
   assert.deepEqual([ctx.sources.at(-1).started, ctx.sources.at(-1).offset, a.musicStartAt, a.musicLog.at(-1).offset], [300, 3, 297, 3]);
   a.stopMusic();
-  assert.equal(a.playMusic(end, { key: ENDING_MUSIC, loop: false, offset: 107 }), false, '过头不起播');
+  assert.equal(a.playMusic(end, { key: ENDING_MUSIC, loop: false, offset: ENDING_CUES.length }), false, '过头不起播');
   // loop 曲 offset 取模
   a.playMusic({ duration: 150 }, { key: 'x', offset: 160 });
   assert.equal(ctx.sources.at(-1).offset, 10);
@@ -873,7 +873,7 @@ test('1031 结尾曲 EndingMusic：manifest s3 lazy；预取后 lighthouse:ignit
   assert.equal(ENDING_SCENE_FADE_SEC, 2, 'README 没写场景曲淡出时长 → 2 s');
   assert.ok(ENDING_SKIP_FADE_SEC >= 0.5 && ENDING_SKIP_FADE_SEC <= 1);
   assert.deepEqual([ENDING_CUES.fog_open, ENDING_CUES.motif_resolve, ENDING_CUES.no_answer, ENDING_CUES.journal, ENDING_CUES.close_chord, ENDING_CUES.fade_out, ENDING_CUES.silence, ENDING_CUES.length], [14, 21.78, 50, 66, 88, 95, 106, 107]);
-  const buf = { duration: 107 };
+  const buf = { duration: ENDING_CUES.length };
   const mk = () => {
     const ctx = new FakeContext();
     const a = new AudioSystem(ctx);
@@ -1001,10 +1001,10 @@ test('1031 S3 两层 AudioSystem：layers 和底层同一时刻同一 offset sta
   assert.equal(up.started, 77.7, '改增益不重启、不 seek');
   // 换曲（结尾曲）：两层一起淡出、同一时刻停
   ctx.currentTime = 90;
-  a.playMusic({ duration: 107 }, { key: ENDING_MUSIC, loop: false, fadeOutPrev: 2 });
+  a.playMusic({ duration: ENDING_CUES.length }, { key: ENDING_MUSIC, loop: false, fadeOutPrev: 2 });
   assert.deepEqual([base.stopped, up.stopped], [92, 92]);
   assert.equal(a.setMusicLayerGain(S3_MUSIC_UPPER, 1), false, '结尾曲接管后不再有上层');
-  assert.equal(a.addMusicLayer({ name: S3_MUSIC_UPPER, buffer: { duration: 107 } }), false, '不循环的曲子不加层');
+  assert.equal(a.addMusicLayer({ name: S3_MUSIC_UPPER, buffer: { duration: ENDING_CUES.length } }), false, '不循环的曲子不加层');
 });
 
 test('1031 S3 两层 addMusicLayer：上层晚到 → when = now + lead、offset = 底层当前播放位置（取模），换算的文件 0 s 和底层 startAt 同余；不同曲 / 已有 / 时长不同拒绝', () => {
