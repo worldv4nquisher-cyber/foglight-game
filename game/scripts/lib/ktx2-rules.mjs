@@ -17,7 +17,7 @@ export function ktx2AlignmentVerdict(f) {
   if (isBlockAligned(f.width, f.height)) return null;
   const dims = `${f.width}×${f.height}`;
   if (!f.ramp && f.twin)
-    return `${f.name} ${dims}：与清单 ramp「${f.twin}」同名但不在同一目录，不豁免（豁免按完整路径匹配）；KTX2 宽高须为 4 的倍数——放错目录就挪回去，真是另一张查找表就在 manifest 按这个路径登记 ramp: true`;
+    return `${f.name} ${dims}：与清单 ramp「${f.twin}」${f.twin.includes('」「') ? `（共 ${f.twin.split('」「').length} 张）` : ''}同名但不在同一目录，不豁免（豁免按完整路径匹配）；KTX2 宽高须为 4 的倍数——放错目录就挪回去，真是另一张查找表就在 manifest 按这个路径登记 ramp: true`;
   if (!f.ramp) return `${f.name} ${dims}：KTX2 宽高须为 4 的倍数（桌面 BC7 / BC3 上传会 0x502、采样为黑）；查找表请在 manifest 标 ramp: true`;
   if (f.width * f.height > KTX2_UNALIGNED_MAX_TEXELS)
     return `${f.name} ${dims}：非 4 倍数的 ramp 运行时转未压缩 RGBA，限 ≤ ${KTX2_UNALIGNED_MAX_TEXELS} texel`;
@@ -34,17 +34,28 @@ export function artRelPath(p) {
 /**
  * 豁免（ramp: true）按清单的完整路径匹配（M7：原来按文件名，别的目录里同名文件也会被放过）。
  * @param {Array<{ url: string, ramp?: boolean }>} manifest
- * @returns {((path: string) => boolean) & { twin: (path: string) => string | null }} path = dist 相对路径（assets/art/…）或 ../art 相对路径；
- *   `.twin(path)`：path 不是清单 ramp、但文件名和某个清单 ramp 相同时返回那个 ramp 的路径（相对 art 根），否则 null（batch25-5 报错用）
+ * @returns {((path: string) => boolean) & { twin: (path: string) => string | null, twins: (path: string) => string[] }} path = dist 相对路径（assets/art/…）或 ../art 相对路径；
+ *   `.twin(path)`：path 不是清单 ramp、但文件名和某个清单 ramp 相同时返回那个 ramp 的路径（相对 art 根），否则 null（batch25-5 报错用）；
+ *   同名 ramp 有多张时全部列出（batch26，`.twins(path)` 给数组）
  */
 export function rampMatcher(manifest) {
   const set = new Set(manifest.filter((e) => e.ramp).map((e) => artRelPath(e.url)));
-  const byName = new Map([...set].map((p) => [p.split('/').pop(), p]));
+  // batch26：清单里两张以上同文件名的 ramp（不同目录）要全部列出，不能只报最后登记的那张
+  const byName = new Map();
+  for (const p of [...set].sort()) {
+    const n = p.split('/').pop();
+    byName.set(n, [...(byName.get(n) ?? []), p]);
+  }
   const m = (path) => set.has(artRelPath(path));
-  m.twin = (path) => {
+  m.twins = (path) => {
     const rel = artRelPath(path);
-    if (set.has(rel)) return null;
-    return byName.get(rel.split('/').pop()) ?? null;
+    if (set.has(rel)) return [];
+    return byName.get(rel.split('/').pop()) ?? [];
+  };
+  /** 报错用：同名 ramp 路径；多张时用「」」「」连起来，ktx2AlignmentVerdict 里正好显示成「a」「b」 */
+  m.twin = (path) => {
+    const t = m.twins(path);
+    return t.length ? t.join('」「') : null;
   };
   return m;
 }

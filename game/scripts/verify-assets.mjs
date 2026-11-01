@@ -754,7 +754,18 @@ try {
     assert.match(msg, /与清单 ramp「textures\/tex-xi-ramp\.ktx2」同名但不在同一目录/);
     const msgDist = ktx2AlignmentVerdict({ name: '/x/dist/assets/art/textures/sub/tex-xi-ramp.ktx2', width: 250, height: 1, ramp: false, twin: m.twin('assets/art/textures/sub/tex-xi-ramp.ktx2') });
     assert.match(msgDist, /^\/x\/dist\/assets\/art\/textures\/sub\/tex-xi-ramp\.ktx2 250×1：与清单 ramp「textures\/tex-xi-ramp\.ktx2」/);
-    ok('KTX2 ramp 豁免按清单完整路径匹配：别的目录 / 子目录同名、只有文件名、清单未标 ramp 都不豁免；同名拒绝时报错带完整路径 + 清单 ramp 位置（batch25-5）');
+    // batch26：清单里两张以上同名 ramp（不同目录）→ 报错全部列出
+    const m2 = rampMatcher([
+      { url: 'assets/art/textures/tex-xi-ramp.ktx2', ramp: true },
+      { url: 'assets/art/textures/alt/tex-xi-ramp.ktx2', ramp: true },
+      { url: 'assets/art/characters/tex-xi-ramp.ktx2', ramp: true },
+    ]);
+    assert.deepEqual(m2.twins('models/tex-xi-ramp.ktx2'), ['characters/tex-xi-ramp.ktx2', 'textures/alt/tex-xi-ramp.ktx2', 'textures/tex-xi-ramp.ktx2']);
+    assert.deepEqual(m2.twins('textures/alt/tex-xi-ramp.ktx2'), [], '清单 ramp 本身没有 twin');
+    const msg3 = ktx2AlignmentVerdict({ name: 'models/tex-xi-ramp.ktx2', width: 256, height: 1, ramp: false, twin: m2.twin('models/tex-xi-ramp.ktx2') });
+    assert.match(msg3, /与清单 ramp「characters\/tex-xi-ramp\.ktx2」「textures\/alt\/tex-xi-ramp\.ktx2」「textures\/tex-xi-ramp\.ktx2」（共 3 张）同名但不在同一目录/, msg3);
+    assert.doesNotMatch(msg, /共 \d 张/, '只有一张时不加张数');
+    ok('KTX2 ramp 豁免按清单完整路径匹配：别的目录 / 子目录同名、只有文件名、清单未标 ramp 都不豁免；同名拒绝时报错带完整路径 + 清单 ramp 位置（batch25-5）；同名 ramp 多张时全部列出（batch26）');
   }
   // 真文件：../art 里全部 KTX2
   const isRamp = rampMatcher(manifest);
