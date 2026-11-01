@@ -4377,6 +4377,123 @@ CHECKS.push({
   },
 });
 
+// batch26 S3 导光镜键鼠覆盖：原来 015 / 017 里镜子都是直接调 beam.solve() / part.step()，没有走真实按键。
+// 这里全部用 CDP Input.dispatchKeyEvent / dispatchMouseEvent（和玩家按键同一路径：浏览器事件 → KeyboardMouseInput → InputManager → PuzzleMode）。
+// 只有「站到镜前」用传送（走路另有覆盖），进 / 出机关、转镜、精调、复位都是真实输入。
+CHECKS.push({
+  name: 'v0.1-batch26-S3 导光镜真实键鼠：E 进窗口镜 → A/D 偏航、W/S 俯仰各一档 15° → Shift 精调 7.5° → 鼠标右移 / 上移按档转 → R 复位 → Tab 退出；再 E 进 → 右键退出',
+  async run({ evaluate, cdp, sleep }) {
+    const out = [];
+    const until = async (expr, ms = 8000) => { const end = Date.now() + ms; let v; while (!(v = await evaluate(expr)) && Date.now() < end) await sleep(100); return v; };
+    const kc = { KeyA: ['a', 65], KeyD: ['d', 68], KeyW: ['w', 87], KeyS: ['s', 83], ShiftLeft: ['Shift', 16] };
+    const keyEv = (type, code, modifiers = 0) => send('Input.dispatchKeyEvent', { type, code, key: kc[code][0], windowsVirtualKeyCode: kc[code][1], nativeVirtualKeyCode: kc[code][1], modifiers }, sessionId);
+    const ANG = `__s3.puzzles.beam.mirrors.window.part.angles`;
+    const angles = () => evaluate(`[...${ANG}]`);
+    // 按住一个键直到镜子转了一档就松开（连发要再按住 0.35 s 游戏时间，无头低帧率下也只会多出整档，按整档判断）
+    const holdStep = async (code, axis, shift = false) => {
+      const a0 = await angles();
+      if (shift) await keyEv('rawKeyDown', 'ShiftLeft', 8);
+      await keyEv('rawKeyDown', code, shift ? 8 : 0);
+      const moved = await until(`Math.abs(${ANG}[${axis}] - ${a0[axis]}) > 1e-6`, 15000);
+      await keyEv('keyUp', code, shift ? 8 : 0);
+      if (shift) await keyEv('keyUp', 'ShiftLeft');
+      await sleep(300);
+      const a1 = await angles();
+      if (!moved) throw new Error(`按住 ${shift ? 'Shift+' : ''}${code} 15 s 镜子没转 ` + JSON.stringify({ a0, a1, ctx: await evaluate('__game.input.context') }));
+      return a1.map((v, i) => v - a0[i]);
+    };
+    const isMult = (d, step) => Math.abs(d) >= step - 1e-6 && Math.abs(d / step - Math.round(d / step)) < 1e-6;
+    const ctxState = `({ ctx: __game.input.context, active: __s3.interaction.puzzle.active?.id ?? null, locked: document.pointerLockElement === document.querySelector('canvas'), paused: __game.isPaused })`;
+
+    await evaluate(`localStorage.removeItem('foglight.save.v1'); 1`);
+    await cdp.goto('debug=1&scene=s3', 's3-lighthouse');
+    if (!(await until(`!!window.__s3?.puzzles?.beam`, 60000))) throw new Error('?scene=s3 没进 S3');
+    if (!(await until(`__game.input.context === 'explore' && !__s3.rig.controller.busy`, ESTAB_MS))) throw new Error('S3 建立镜头后没回到 explore');
+    // 进场涨潮（底层机房有水，会被送回桥尾）：直接退潮
+    await evaluate(`__s3.puzzles.tide.set('low', { instant: true }), 1`);
+    // 真实点击锁定指针（鼠标转镜靠 pointer lock 的 movementX/Y）
+    await cdp.click(640, 400);
+    if (!(await until(`document.pointerLockElement === document.querySelector('canvas')`, 3000))) throw new Error('点画面没锁定指针');
+    const toStand = `(() => { const s = __s3, ix = s.puzzles.mirrorIx.window; s.interaction.cancel(); const sp = ix.standPoint(s.rig.body.position.clone()); s.rig.body.teleport(sp.position.clone().setY(sp.position.y + 0.05)); s.rig.controller.facing = sp.facing; return 1; })()`;
+    const enter = async (label) => {
+      let cand = null;
+      for (let t = 0; t < 2 && !cand; t++) {
+        await evaluate(toStand);
+        cand = await until(`__s3.interaction.current === __s3.puzzles.mirrorIx.window`, 8000);
+      }
+      if (!cand) throw new Error(`${label}：站到窗口镜前交互候选不是它 ` + JSON.stringify(await evaluate(`({ cur: __s3.interaction.current?.id ?? null, en: __s3.puzzles.mirrorIx.window.enabled })`)));
+      // 无头低帧率偶发吞键：没进去再补按（最多 3 次）
+      let inPuzzle = false;
+      for (let t = 0; t < 3 && !inPuzzle; t++) {
+        await cdp.key('KeyE', 'e', 69);
+        inPuzzle = await until(`__game.input.context === 'puzzle' && __s3.interaction.puzzle.active?.id === 'guide-mirror-s3-window-puzzle'`, 6000);
+      }
+      if (!inPuzzle) throw new Error(`${label}：真实 E 没进窗口镜机关 ` + JSON.stringify(await evaluate(ctxState)));
+    };
+
+    await enter('第一次');
+    const a0 = await angles();
+    if (a0.some((v) => Math.abs(v) > 1e-6)) throw new Error('窗口镜初始角不是 0 ' + JSON.stringify(a0));
+    const dD = await holdStep('KeyD', 0);
+    if (!isMult(dD[0], 15) || Math.abs(dD[1]) > 1e-6) throw new Error('D 应只转偏航整档 15° ' + JSON.stringify(dD));
+    const dA = await holdStep('KeyA', 0);
+    if (!isMult(dA[0], 15) || Math.sign(dA[0]) === Math.sign(dD[0])) throw new Error('A 应反向转偏航 ' + JSON.stringify({ dD, dA }));
+    const dW = await holdStep('KeyW', 1);
+    if (!isMult(dW[1], 15) || Math.abs(dW[0]) > 1e-6) throw new Error('W 应只转俯仰整档 ' + JSON.stringify(dW));
+    const dS = await holdStep('KeyS', 1);
+    if (!isMult(dS[1], 15) || Math.sign(dS[1]) === Math.sign(dW[1])) throw new Error('S 应反向转俯仰 ' + JSON.stringify({ dW, dS }));
+    out.push(`E 进窗口镜 ✓，D ${dD[0]}° / A ${dA[0]}°（偏航）、W ${dW[1]}° / S ${dS[1]}°（俯仰）✓`);
+    const dF = await holdStep('KeyD', 0, true);
+    if (!isMult(dF[0], 7.5) || isMult(dF[0], 15)) throw new Error('Shift+D 应是 7.5° 精调档 ' + JSON.stringify(dF));
+    out.push(`Shift+D 精调 ${dF[0]}° ✓`);
+    // 鼠标：指针锁定下右移 / 上移（右 = 正、上 = 第二轴正），按 mouseStepRad 累计到一档才转
+    const sens = await evaluate(`__game.input.lookSensitivity`);
+    const m0 = await angles();
+    let x = 640, y = 400;
+    for (let i = 0; i < 12; i++) { x += 25; await cdp.move(x, y); await sleep(40); }
+    await until(`Math.abs(${ANG}[0] - ${m0[0]}) > 1e-6`, 6000);
+    for (let i = 0; i < 12; i++) { y -= 25; await cdp.move(x, y); await sleep(40); }
+    await until(`Math.abs(${ANG}[1] - ${m0[1]}) > 1e-6`, 6000);
+    await sleep(300);
+    const m1 = await angles();
+    const mx = m1[0] - m0[0];
+    const my = m1[1] - m0[1];
+    if (!(mx > 0) || !isMult(mx, 15)) throw new Error('鼠标右移应正向转偏航整档 ' + JSON.stringify({ m0, m1, sens }));
+    if (!(my > 0) || !isMult(my, 15)) throw new Error('鼠标上移应正向转俯仰整档 ' + JSON.stringify({ m0, m1, sens }));
+    out.push(`鼠标右移 300 px 偏航 +${mx}°、上移 300 px 俯仰 +${my}°（灵敏度 ${sens}）✓`);
+    // R 复位
+    let reset = false;
+    for (let t = 0; t < 3 && !reset; t++) {
+      await cdp.key('KeyR', 'r', 82);
+      reset = await until(`__s3.puzzles.beam.mirrors.window.part.atInitial`, 4000);
+    }
+    if (!reset) throw new Error('R 没复位 ' + JSON.stringify(await angles()));
+    out.push('R 复位 ✓');
+    let exited = false;
+    for (let t = 0; t < 3 && !exited; t++) {
+      await cdp.key('Tab', 'Tab', 9);
+      exited = await until(`__game.input.context === 'explore' && !__s3.interaction.puzzle.active`, 4000);
+    }
+    if (!exited) throw new Error('Tab 没退出机关 ' + JSON.stringify(await evaluate(ctxState)));
+    out.push('Tab 退出 ✓');
+    // 再进一次，右键退出（指针仍锁定）
+    await enter('第二次');
+    let rOut = false;
+    for (let t = 0; t < 3 && !rOut; t++) {
+      await cdp.click(640, 400, 'right');
+      rOut = await until(`__game.input.context === 'explore' && !__s3.interaction.puzzle.active`, 4000);
+    }
+    if (!rOut) throw new Error('右键没退出机关 ' + JSON.stringify(await evaluate(ctxState)));
+    out.push('再 E 进 → 右键退出 ✓');
+    await evaluate(`document.exitPointerLock(); 1`);
+    await sleep(400);
+    if (await evaluate('__game.isPaused')) await evaluate('__game.resume()');
+    await evaluate(`localStorage.removeItem('foglight.save.v1'); 1`);
+    try { await cdp.goto(''); } catch (e) { throw new Error('回 S1 失败：' + e.message, { cause: e }); }
+    return out.join('，');
+  },
+});
+
 const extra = process.env.SMOKE_ONLY ? CHECKS.filter((c) => process.env.SMOKE_ONLY.split('|').some((k) => c.name.includes(k))) : CHECKS;
 
 // ---------------------------------------------------------------- 起服务 + 浏览器
