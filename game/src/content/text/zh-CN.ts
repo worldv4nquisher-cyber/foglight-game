@@ -1,5 +1,5 @@
 // 自动生成：node scripts/import-text.mjs（来源 docs/gdd/text-ch1.json），不要手改。
-// 章节 ch1 · zh-CN · v1 · 178 条
+// 章节 ch1 · zh-CN · v1 · 179 条
 
 export const TEXT_ZH_CN = {
   "ch1.common.journal_updated": "日志已更新",
@@ -131,6 +131,7 @@ export const TEXT_ZH_CN = {
   "ui.menu.settings": "设置",
   "ui.menu.version": "v0.1",
   "ui.notice.desktop_only": "目前只支持电脑浏览器。请在电脑上用 Chrome、Edge、Firefox 或 Safari 打开。",
+  "ui.notice.software_render": "浏览器的硬件加速没有打开，画面可能会卡顿。可以在浏览器设置里开启硬件加速，再重新打开游戏。",
   "ui.pause.esc_hint": "Esc 继续",
   "ui.pause.resume": "继续",
   "ui.pause.settings": "设置",
@@ -321,6 +322,7 @@ export const TEXT_META: Record<keyof typeof TEXT_ZH_CN, TextMeta> = {
   "ui.menu.settings": {"type":"ui","speaker":"system"},
   "ui.menu.version": {"type":"ui","speaker":"system"},
   "ui.notice.desktop_only": {"type":"ui","speaker":"system"},
+  "ui.notice.software_render": {"type":"ui","speaker":"system"},
   "ui.pause.esc_hint": {"type":"ui","speaker":"system"},
   "ui.pause.resume": {"type":"ui","speaker":"system"},
   "ui.pause.settings": {"type":"ui","speaker":"system"},
