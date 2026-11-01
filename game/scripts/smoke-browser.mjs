@@ -3013,6 +3013,11 @@ CHECKS.push({
 // ---------------------------------------------------------------- 1031 配乐 2：S2 场景曲 / S3 两层 + 爬塔 / 点燃 → 结尾曲
 // 证据：__game.audio.musicLog（AudioContext 时钟）+ AnalyserNode 挂在音乐总线 / 上层 GainNode 上按音频时钟采样（getFloatTimeDomainData）。
 // 等待一律按 AudioContext 时钟或游戏时间（__game.time.elapsed），不按墙钟。
+// batch26：035 各项 seek 的目标按 cue 相对位置算（原写死 19.5 / 45 / 80），ENDING_CUES 调整后仍落在同一段里
+/** 跳过那项：剪影前 4.5 s（= 19.5 s，雾口与剪影之间） */
+const SEEK_SKIP = ENDING_CUES.silhouette - 4.5;
+/** 中段推进：「那边没有亮」前 5 s（= 45 s，眺望段）、后拉后 6 s（= 80 s，后拉段） */
+const SEEK_MID = [ENDING_CUES.no_answer - 5, ENDING_CUES.pull_back + 6];
 const music1031 = ({ evaluate, sleep }) => {
   const until = async (expr, ms = 60000) => {
     const end = Date.now() + ms;
@@ -3557,8 +3562,9 @@ CHECKS.push({
     if (!(await until(`!!__s3.endingMusic?.buffer`, 180000))) throw new Error('结尾曲预取没到');
     await evaluate(cut035Hook);
     await evaluate(`(window.__c035 = __s3.endingCutscene, window.__em035 = __s3.endingMusic, __s3.lightTheLamp(), 1)`); // BUG-031：跳过 / 结束后 S3 会释放，演出 / 结尾曲对象先存
-    await evaluate(`__s3.endingCutscene.seek(19.5), 1`);
-    if (!(await until(`__s3.endingCutscene.t >= 20`, 20000))) throw new Error('演出没走到 20 s');
+    // batch26：相对 cue 定位（剪影前 4.5 s = 19.5 s），cue 表改了也落在雾口与剪影之间
+    await evaluate(`__s3.endingCutscene.seek(${SEEK_SKIP}), 1`);
+    if (!(await until(`__s3.endingCutscene.t >= ${SEEK_SKIP + 0.5}`, 20000))) throw new Error(`演出没走到 ${SEEK_SKIP + 0.5} s`);
     const space = (type) => `window.dispatchEvent(new KeyboardEvent('${type}', { code: 'Space', key: ' ', bubbles: true })), 1`;
     const p0 = await evaluate(`({ id: __game.ui.skip.id, t: __s3.endingCutscene.t, wall: performance.now() })`);
     if (p0.id !== 'ch1-ending') throw new Error('演出中应注册跳过 ' + JSON.stringify(p0));
@@ -3604,10 +3610,10 @@ CHECKS.push({
     const a = await evaluate(`({ t: __s3.endingCutscene.t, wall: (performance.now() - ${w0}) / 1000, src: __s3.endingCutscene.clock.source, fr: __s3.endingCutscene.clock.frames, k: __game.audio.musicKey })`);
     if (a.src !== 'fallback' || a.fr.audio !== 0 || a.k === 'mus-ending-ch1') throw new Error('art=0 应用后备时钟 ' + JSON.stringify(a));
     // 中段推进：剩下的 cue 按序触发、照样到 106 s 才进结束页
-    await evaluate(`__s3.endingCutscene.seek(45), 1`);
-    if (!(await until(`__s3.endingCutscene.t >= 47`, 20000))) throw new Error('seek 后没走');
-    await evaluate(`__s3.endingCutscene.seek(80), 1`);
-    if (!(await until(`__s3.endingCutscene.t >= 81`, 20000))) throw new Error('seek 后没走');
+    await evaluate(`__s3.endingCutscene.seek(${SEEK_MID[0]}), 1`);
+    if (!(await until(`__s3.endingCutscene.t >= ${SEEK_MID[0] + 2}`, 20000))) throw new Error('seek 后没走');
+    await evaluate(`__s3.endingCutscene.seek(${SEEK_MID[1]}), 1`);
+    if (!(await until(`__s3.endingCutscene.t >= ${SEEK_MID[1] + 1}`, 20000))) throw new Error('seek 后没走');
     await evaluate(`__s3.endingCutscene.seek(${ENDING_CUES.silence - 2}), 1`);
     await sleep(300);
     if (await evaluate(`__game.scenes.current?.name === 'chapter-end'`)) throw new Error(`${ENDING_CUES.silence} s 前进了结束页`);
@@ -3738,7 +3744,7 @@ CHECKS.push({
       await waitClock(ac, 0.2);
       const a = await evaluate(`({ t: __s3.endingCutscene.t, src: __s3.endingCutscene.clock.source, fr: __s3.endingCutscene.clock.frames, k: __game.audio.musicKey })`);
       if (a.src !== 'fallback' || a.fr.audio !== 0 || a.k !== null) throw new Error('404 后演出应走后备时钟、没有音乐 ' + JSON.stringify(a));
-      for (const s of [45, 80, ENDING_CUES.silence - 2]) {
+      for (const s of [...SEEK_MID, ENDING_CUES.silence - 2]) {
         await evaluate(`__s3.endingCutscene.seek(${s}), 1`);
         if (s < ENDING_CUES.silence - 2 && !(await until(`__s3.endingCutscene.t >= ${s + 1}`, 30000))) throw new Error('seek 后没走 ' + s);
       }
@@ -4309,7 +4315,7 @@ CHECKS.push({
       await evaluate(`(window.__c035 = __s3.endingCutscene, __s3.lightTheLamp(), 1)`);
       if (!(await until(`__s3.endingCutscene.t >= ${ENDING_CUES.lens + 1}`, 60000))) throw new Error('点灯后演出没走');
       // 中段按 cue 相对位置推进（同 035 后备时钟那项）
-      for (const s of [ENDING_CUES.no_answer - 5, ENDING_CUES.pull_back + 6, ENDING_CUES.silence - 2]) {
+      for (const s of [...SEEK_MID, ENDING_CUES.silence - 2]) {
         await evaluate(`__s3.endingCutscene.seek(${s}), 1`);
         if (s < ENDING_CUES.silence - 2 && !(await until(`__s3.endingCutscene.t >= ${s + 1}`, 30000))) throw new Error('seek 后没走 ' + s);
       }
