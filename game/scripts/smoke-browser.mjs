@@ -4659,6 +4659,101 @@ CHECKS.push({
   },
 });
 
+// BUG-038：指针锁定被拒（Promise reject / 同步抛错 / pointerlockerror）→ 自动回退拖拽：探索视角按住左键拖拽转视角、S3 窗口镜拖拽转出精确 1 档。
+// 页面里改写 requestPointerLock 模拟被拒（goto 刷新页面后才改，不影响其它检查）；真实 CDP 鼠标按下 → mouseMoved(buttons:1) → 松开。
+CHECKS.push({
+  name: 'BUG-038 指针锁定被拒回退拖拽：reject / 抛错 / pointerlockerror 三种都能左键拖拽转视角，S3 窗口镜拖拽精确 1 档',
+  async run({ evaluate, cdp, sleep }) {
+    const out = [];
+    const until = async (expr, ms = 8000) => { const end = Date.now() + ms; let v; while (!(v = await evaluate(expr)) && Date.now() < end) await sleep(80); return v; };
+    const deny = (mode) => evaluate(`(() => { window.__b38 = { req: 0, err: 0 }; document.addEventListener('pointerlockerror', () => window.__b38.err++);
+      HTMLCanvasElement.prototype.requestPointerLock = function () { window.__b38.req++;
+        if (${JSON.stringify(mode)} === 'throw') throw new DOMException('smoke: denied', 'SecurityError');
+        if (${JSON.stringify(mode)} === 'event') { setTimeout(() => document.dispatchEvent(new Event('pointerlockerror')), 0); return undefined; }
+        return Promise.reject(new DOMException('smoke: denied', 'NotAllowedError')); }; return 1; })()`);
+    const yaw = () => evaluate(`__game.scenes.current.cameraFollow?.yaw ?? null`);
+    const press = (x, y) => send('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', buttons: 1, clickCount: 1 }, sessionId);
+    const release = (x, y) => send('Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'left', buttons: 0, clickCount: 1 }, sessionId);
+    const dragTo = (x, y) => send('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y, button: 'left', buttons: 1 }, sessionId);
+    const st = `({ locked: !!document.pointerLockElement, ctx: __game.input.context, paused: __game.isPaused, b38: window.__b38 })`;
+    /** 按下（被拒那一下）不松开直接拖，再松开；之后单独按住再拖一次 */
+    const dragYaw = async (label) => {
+      const y0 = await yaw();
+      if (y0 === null) throw new Error(`${label}：当前场景没暴露 cameraFollow.yaw`);
+      await cdp.move(640, 400);
+      await press(640, 400);
+      if (!(await until(`window.__b38.req >= 1`, 3000))) throw new Error(`${label}：点击没有请求锁定 ` + JSON.stringify(await evaluate(st)));
+      await sleep(150);
+      for (let i = 1; i <= 6; i++) { await dragTo(640 + i * 20, 400); await sleep(30); }
+      await release(760, 400);
+      await sleep(300);
+      const y1 = await yaw();
+      const s1 = await evaluate(st);
+      if (s1.locked) throw new Error(`${label}：模拟被拒却锁上了 ` + JSON.stringify(s1));
+      if (s1.paused) throw new Error(`${label}：被拒不该暂停 ` + JSON.stringify(s1));
+      if (!(Math.abs(y1 - y0) > 1e-3)) throw new Error(`${label}：被拒那一下按住拖拽视角没转 ` + JSON.stringify({ y0, y1, ...s1 }));
+      // 松开后移动不转
+      for (let i = 1; i <= 4; i++) { await cdp.move(760 - i * 20, 400); await sleep(30); }
+      await sleep(200);
+      const y2 = await yaw();
+      if (Math.abs(y2 - y1) > 1e-6) throw new Error(`${label}：松开左键后移动不该转视角 ` + JSON.stringify({ y1, y2 }));
+      // 再按住拖一次（回退已生效，不用等锁定结果）
+      await press(680, 400);
+      for (let i = 1; i <= 6; i++) { await dragTo(680 - i * 20, 400); await sleep(30); }
+      await release(560, 400);
+      await sleep(300);
+      const y3 = await yaw();
+      if (!(Math.abs(y3 - y2) > 1e-3) || Math.sign(y3 - y2) === Math.sign(y1 - y0)) throw new Error(`${label}：第二次反向拖拽视角没反向转 ` + JSON.stringify({ y0, y1, y2, y3 }));
+      return `${label}：请求 ${(await evaluate('window.__b38.req'))} 次、被拒后按住拖拽 ${(y1 - y0).toFixed(3)} rad、反向 ${(y3 - y2).toFixed(3)} rad`;
+    };
+
+    for (const mode of ['throw', 'event']) {
+      await cdp.goto('');
+      await deny(mode);
+      out.push(await dragYaw(`S1 ${mode === 'throw' ? '同步抛错' : 'pointerlockerror'}`));
+    }
+
+    // S3：reject（Chrome 现行形态）→ 探索拖拽 + 窗口镜拖拽 1 档
+    await evaluate(`localStorage.removeItem('foglight.save.v1'); 1`);
+    await cdp.goto('debug=1&scene=s3', 's3-lighthouse');
+    if (!(await until(`!!window.__s3?.puzzles?.beam`, 60000))) throw new Error('?scene=s3 没进 S3');
+    if (!(await until(`__game.input.context === 'explore' && !__s3.rig.controller.busy`, ESTAB_MS))) throw new Error('S3 建立镜头后没回到 explore');
+    await evaluate(`__s3.puzzles.tide.set('low', { instant: true }), 1`);
+    await deny('reject');
+    out.push(await dragYaw('S3 Promise reject'));
+    const ANG = `__s3.puzzles.beam.mirrors.window.part.angles`;
+    await evaluate(`(() => { const s = __s3, ix = s.puzzles.mirrorIx.window; s.interaction.cancel(); const sp = ix.standPoint(s.rig.body.position.clone()); s.rig.body.teleport(sp.position.clone().setY(sp.position.y + 0.05)); s.rig.controller.facing = sp.facing; return 1; })()`);
+    if (!(await until(`__s3.interaction.current === __s3.puzzles.mirrorIx.window`, 8000))) throw new Error('站到窗口镜前交互候选不是它');
+    await cdp.key('KeyE', 'e', 69);
+    const inPuzzle = `__game.input.context === 'puzzle' && __s3.interaction.puzzle.active?.id === 'guide-mirror-s3-window-puzzle'`;
+    if (!(await until(inPuzzle, 8000))) throw new Error('E 没进窗口镜机关 ' + JSON.stringify(await evaluate(st)));
+    const a0 = await evaluate(`[...${ANG}]`);
+    if (a0[0] !== 0 || a0[1] !== 0) throw new Error('窗口镜初始角不是 [0,0] ' + JSON.stringify(a0));
+    // 机关里点一下（仍被拒）→ 按住右拖，转出第一档就松开
+    let x = 640, px = 0;
+    await cdp.move(x, 400);
+    await press(x, 400);
+    for (let i = 0; i < 80; i++) {
+      x += 4; px += 4;
+      await dragTo(x, 400);
+      await sleep(40);
+      const a = await evaluate(`[...${ANG}]`);
+      if (a[0] !== a0[0] || a[1] !== a0[1]) break;
+    }
+    await release(x, 400);
+    await sleep(400);
+    const a1 = await evaluate(`[...${ANG}]`);
+    if (a1[0] !== 15 || a1[1] !== 0) throw new Error(`锁定被拒时窗口镜拖拽应精确 1 档到 [15,0]，实际 ${JSON.stringify(a1)}（拖了 ${px} px）` + JSON.stringify(await evaluate(st)));
+    if (!(await evaluate(inPuzzle))) throw new Error('拖拽把机关点没了 ' + JSON.stringify(await evaluate(st)));
+    out.push(`S3 窗口镜：锁定被拒下按住右拖 ${px} px 精确转出 1 档 [15,0]、仍在机关 ✓`);
+    await cdp.key('Tab', 'Tab', 9);
+    await until(`__game.input.context === 'explore'`, 8000);
+    await evaluate(`localStorage.removeItem('foglight.save.v1'); 1`);
+    await cdp.goto('');
+    return out.join('；');
+  },
+});
+
 const extra = process.env.SMOKE_ONLY ? CHECKS.filter((c) => process.env.SMOKE_ONLY.split('|').some((k) => c.name.includes(k))) : CHECKS;
 
 // ---------------------------------------------------------------- 起服务 + 浏览器

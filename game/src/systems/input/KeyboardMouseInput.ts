@@ -7,6 +7,8 @@ import type { InputSink, InputSource } from './InputManager';
 const SRC = 'kbm';
 /** 浏览器 Esc 退出指针锁定时，keydown 与 pointerlockchange 的先后不定，这个窗口内只算一次暂停 */
 const ESC_DEDUPE_MS = 250;
+/** BUG-038：锁定被拒后，回退拖拽期间每次点画面最多隔这么久再试一次锁定（环境恢复 / Esc 后冷却期过了就能重新锁上） */
+const LOCK_RETRY_MS = 1500;
 
 /**
  * 键鼠输入源：只把原始按键（KeyboardEvent.code / Mouse0-2 / WheelUp/Down）、鼠标移动、滚轮写进 InputManager，
@@ -18,11 +20,23 @@ const ESC_DEDUPE_MS = 250;
  * - 锁定被浏览器解除（玩家按 Esc）→ 发出一次 pause（只算一次，见 ESC_DEDUPE_MS）。
  * - 上下文切到 cursor:'free'（阅读、菜单）时主动解锁，不算暂停；切回 locked 上下文后再点一下画面重新锁定
  *   （浏览器要求重新锁定必须由用户点击触发，Esc 解锁后约 1 秒内也不能重新锁定）。
- * - 不支持指针锁定（或被拒绝）时回退：按住鼠标左键拖拽转视角。
+ * - 拖拽回退：按住鼠标左键拖拽转视角（探索视角和机关转镜同一路 look 增量）。两种情况进入：
+ *   ① 不支持指针锁定（没有 Pointer Lock API / 触屏设备 / 配置关闭），始终拖拽；
+ *   ② BUG-038：由点击发起的锁定请求被拒——requestPointerLock 同步抛错、返回的 Promise reject、或收到 pointerlockerror
+ *     （iframe 没给 allow-pointer-lock、浏览器策略、Esc 解锁后冷却期内再点等）。被拒那一下左键若还按着，立即开始拖拽；
+ *     之后点击照常当游戏输入（不再被「锁定点击」吞掉），并每隔 LOCK_RETRY_MS 顺带再试一次锁定，锁上后回到锁定模式。
+ *   非点击发起的请求（切回 locked 上下文时的自动重锁，没有用户手势，被拒是正常的）不算被拒。
  */
 export class KeyboardMouseInput implements InputSource {
   private keys = new Set<string>();
   private dragging = false;
+  /** BUG-038：最近一次点击发起的锁定请求被拒，处于拖拽回退（锁定成功后清掉） */
+  private lockDenied = false;
+  private lastDeniedAt = Number.NEGATIVE_INFINITY;
+  /** 有一个点击发起的锁定请求在等结果（pointerlockerror 没带是哪次请求，用它归属） */
+  private pendingClickLock = false;
+  /** 发起锁定的那下左键还按着（被拒时据此立即开始拖拽） */
+  private lockClickHeld = false;
   private lastLockChange = 0;
   /** 上一次 pointerlockchange 时是否处于锁定（没锁过的「解锁」事件不当作 Esc） */
   private wasLocked = false;
@@ -47,6 +61,7 @@ export class KeyboardMouseInput implements InputSource {
     window.addEventListener('pointerup', this.onPointerUp);
     canvas.addEventListener('wheel', this.onWheel, { passive: false });
     document.addEventListener('pointerlockchange', this.onLockChange);
+    document.addEventListener('pointerlockerror', this.onLockError);
     window.addEventListener('contextmenu', this.onContextMenu);
     this.offFullscreen = onFullscreenChange(this.onFullscreenChange);
   }
@@ -55,19 +70,44 @@ export class KeyboardMouseInput implements InputSource {
     return document.pointerLockElement === this.canvas;
   }
 
+  /** 环境支持并且配置要指针锁定（不看是否被拒过） */
   private get lockWanted(): boolean {
     return gameConfig.input.pointerLock && device.supportsPointerLock && !device.isTouch;
   }
 
-  requestPointerLock(): void {
+  /** 当前用左键拖拽转视角：不支持锁定，或点击发起的锁定被拒（BUG-038） */
+  get dragFallback(): boolean {
+    return !this.lockWanted || this.lockDenied;
+  }
+
+  /**
+   * 请求指针锁定。fromClick = 由玩家点击画面发起（有用户手势）：只有这种请求被拒才回退拖拽；
+   * 被拒的三种形式都要接住：同步抛错（老浏览器 / iframe 无权限）、Promise reject（Chrome 等新实现）、pointerlockerror 事件（不返回 Promise 的实现）。
+   */
+  requestPointerLock(fromClick = false): void {
     if (!this.lockWanted || this.isLocked) return;
+    // pointerlockerror 归属给最近一次请求：非点击请求覆盖掉，避免把自动重锁的失败算成被拒
+    this.pendingClickLock = fromClick;
     try {
       const r = this.canvas.requestPointerLock() as unknown;
-      if (r instanceof Promise) r.catch(() => undefined);
+      if (r instanceof Promise) r.catch(() => this.onLockDenied(fromClick));
     } catch {
-      /* 某些环境（iframe 无权限）会抛错，回退拖拽模式 */
+      this.onLockDenied(fromClick);
     }
   }
+
+  private onLockDenied(fromClick: boolean): void {
+    if (!fromClick || this.isLocked) return;
+    this.pendingClickLock = false;
+    this.lockDenied = true;
+    this.lastDeniedAt = performance.now();
+    // 发起锁定的那下左键还按着：直接开始拖拽，不用松开再按
+    if (this.lockClickHeld && this.sink.enabled && this.sink.cursorMode === 'locked') this.dragging = true;
+  }
+
+  private onLockError = (): void => {
+    if (this.pendingClickLock) this.onLockDenied(true);
+  };
 
   exitPointerLock(): void {
     if (this.isLocked) document.exitPointerLock();
@@ -80,7 +120,7 @@ export class KeyboardMouseInput implements InputSource {
       document.exitPointerLock();
     } else if (this.sink.cursorMode === 'locked' && this.sink.enabled) {
       // 回到需要锁定的上下文（如关闭阅读）：若本次切换由用户按键/点击触发，浏览器允许直接重新锁定；
-      // 不允许（Esc 解锁后 1 秒内等）时静默失败，玩家再点一下画面即可
+      // 不允许（Esc 解锁后 1 秒内、没有用户手势等）时静默失败——非点击发起，不算被拒、不进拖拽回退（BUG-038），玩家再点一下画面即可
       this.requestPointerLock();
     }
     this.dragging = false;
@@ -114,6 +154,7 @@ export class KeyboardMouseInput implements InputSource {
     for (const code of this.keys) this.sink.setRaw(SRC, code, false);
     this.keys.clear();
     this.dragging = false;
+    this.lockClickHeld = false;
   };
 
   // ---------------------------------------------------------------- 鼠标
@@ -143,11 +184,18 @@ export class KeyboardMouseInput implements InputSource {
       this.lockWanted &&
       !this.isLocked
     ) {
-      this.requestPointerLock();
-      if (!lockClickPassesThrough(this.sink.context, code)) return;
+      if (!this.lockDenied) {
+        if (e.button === 0) this.lockClickHeld = true;
+        this.requestPointerLock(true);
+        // 同步抛错时 lockDenied 已经置上：这一下直接按拖拽回退处理
+        if (!this.lockDenied && !lockClickPassesThrough(this.sink.context, code)) return;
+      } else if (performance.now() - this.lastDeniedAt > LOCK_RETRY_MS) {
+        // 拖拽回退中：顺带再试一次锁定（这一下仍照常当游戏输入 / 开始拖拽）
+        this.requestPointerLock(true);
+      }
     }
-    // 不支持指针锁定时：左键拖拽转视角
-    if (e.button === 0 && this.isGameSurface(e.target) && !this.lockWanted) this.dragging = true;
+    // 拖拽回退（不支持锁定 / 锁定被拒）：左键拖拽转视角
+    if (e.button === 0 && this.isGameSurface(e.target) && this.dragFallback) this.dragging = true;
     this.keys.add(code);
     this.sink.setRaw(SRC, code, true);
   };
@@ -161,7 +209,10 @@ export class KeyboardMouseInput implements InputSource {
 
   private onPointerUp = (e: PointerEvent): void => {
     if (e.pointerType === 'touch') return;
-    if (e.button === 0) this.dragging = false;
+    if (e.button === 0) {
+      this.dragging = false;
+      this.lockClickHeld = false;
+    }
     const code = `Mouse${e.button}`;
     if (this.keys.delete(code)) this.sink.setRaw(SRC, code, false);
   };
@@ -185,6 +236,11 @@ export class KeyboardMouseInput implements InputSource {
     const wasLocked = this.wasLocked;
     this.wasLocked = this.isLocked;
     if (this.isLocked) {
+      // 锁上了：退出拖拽回退（BUG-038）
+      this.lockDenied = false;
+      this.pendingClickLock = false;
+      this.lockClickHeld = false;
+      this.dragging = false;
       // 锁定请求还没批下来时已经切到了要光标的界面（如右键关阅读后立刻按 J 开日志）：批下来后马上主动解锁，
       // 否则光标被锁在日志 / 菜单里，之后的解锁还会被当成玩家按 Esc 而误暂停
       if (this.sink.cursorMode === 'free') {
@@ -237,6 +293,7 @@ export class KeyboardMouseInput implements InputSource {
     window.removeEventListener('pointerup', this.onPointerUp);
     this.canvas.removeEventListener('wheel', this.onWheel);
     document.removeEventListener('pointerlockchange', this.onLockChange);
+    document.removeEventListener('pointerlockerror', this.onLockError);
     window.removeEventListener('contextmenu', this.onContextMenu);
     this.offFullscreen();
     this.exitPointerLock();

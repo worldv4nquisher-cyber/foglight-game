@@ -672,7 +672,7 @@ test('锁定点击透传：只放行绑定了 exitPuzzle 的键（机关 / 阅�
   assert.equal(lockClickPassesThrough('explore', 'Mouse0'), false);
   assert.equal(lockClickPassesThrough('explore', 'Mouse2'), false, '探索里右键是观察，锁定那下不触发');
   const src = readFileSync('src/systems/input/KeyboardMouseInput.ts', 'utf8');
-  assert.match(src, /requestPointerLock\(\);\s*if \(!lockClickPassesThrough\(this\.sink\.context, code\)\) return;/);
+  assert.match(src, /requestPointerLock\(true\);\s*\/\/[^\n]*\n\s*if \(!this\.lockDenied && !lockClickPassesThrough\(this\.sink\.context, code\)\) return;/);
 });
 
 test('单部件机关：操作条不显示 Q·E', () => {
