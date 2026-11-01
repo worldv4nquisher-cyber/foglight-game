@@ -1,5 +1,6 @@
 import { gameConfig } from '@/config/gameConfig';
 import { device } from '@/platform/device';
+import { onFullscreenChange } from '@/platform/fullscreen';
 import { allBoundCodes, lockClickPassesThrough, WHEEL_NOTCH_PX, type InputContextName } from './actions';
 import type { InputSink, InputSource } from './InputManager';
 
@@ -26,6 +27,9 @@ export class KeyboardMouseInput implements InputSource {
   /** 上一次 pointerlockchange 时是否处于锁定（没锁过的「解锁」事件不当作 Esc） */
   private wasLocked = false;
   private lastEscDown = 0;
+  /** 上一次替玩家补发 Esc 的时间（指针锁定被解除 / 全屏被 Esc 退出，两者先后不定，只补一次） */
+  private lastSynthEsc = 0;
+  private offFullscreen: () => void;
   private intentionalUnlock = false;
   private wheelAccum = 0;
   private bound = allBoundCodes();
@@ -44,6 +48,7 @@ export class KeyboardMouseInput implements InputSource {
     canvas.addEventListener('wheel', this.onWheel, { passive: false });
     document.addEventListener('pointerlockchange', this.onLockChange);
     window.addEventListener('contextmenu', this.onContextMenu);
+    this.offFullscreen = onFullscreenChange(this.onFullscreenChange);
   }
 
   get isLocked(): boolean {
@@ -195,10 +200,27 @@ export class KeyboardMouseInput implements InputSource {
     // 之前根本没锁上（进场时流程放开菜单上下文自动请求锁定、浏览器没批 / 立刻撤回）：不是玩家按 Esc，不暂停（v0.1-008）
     if (!wasLocked) return;
     // 玩家按 Esc 让浏览器解除了锁定 → 暂停（如果 Esc keydown 也到了页面，已经暂停过，不重复）
-    if (this.sink.enabled && performance.now() - this.lastEscDown > ESC_DEDUPE_MS) {
-      this.sink.setRaw(SRC, 'Escape', true);
-      this.sink.setRaw(SRC, 'Escape', false);
+    if (this.sink.enabled && performance.now() - this.lastEscDown > ESC_DEDUPE_MS && performance.now() - this.lastSynthEsc > ESC_DEDUPE_MS) {
+      this.synthEsc();
     }
+  };
+
+  private synthEsc(): void {
+    this.lastSynthEsc = performance.now();
+    this.sink.setRaw(SRC, 'Escape', true);
+    this.sink.setRaw(SRC, 'Escape', false);
+  }
+
+  /**
+   * batch26 ④：全屏被退出。浏览器把用来退全屏的 Esc 吞掉、页面收不到 keydown：
+   * 游玩中（光标锁定类上下文）且当时没有指针锁定（拖拽回退 / 还没点画面锁定）时补发一次 Esc → 暂停，和锁定时按 Esc 一致；
+   * 锁着的情况交给 pointerlockchange 补发；250 ms 内已有真 Esc 或已补发过就不重复。菜单 / 暂停 / 设置里退全屏不动游戏状态。
+   */
+  private onFullscreenChange = (active: boolean): void => {
+    if (active || this.isLocked) return;
+    const now = performance.now();
+    if (now - this.lastEscDown <= ESC_DEDUPE_MS || now - this.lastSynthEsc <= ESC_DEDUPE_MS) return;
+    if (this.sink.enabled && this.sink.cursorMode === 'locked') this.synthEsc();
   };
 
   private onContextMenu = (e: Event): void => {
@@ -216,6 +238,7 @@ export class KeyboardMouseInput implements InputSource {
     this.canvas.removeEventListener('wheel', this.onWheel);
     document.removeEventListener('pointerlockchange', this.onLockChange);
     window.removeEventListener('contextmenu', this.onContextMenu);
+    this.offFullscreen();
     this.exitPointerLock();
   }
 }

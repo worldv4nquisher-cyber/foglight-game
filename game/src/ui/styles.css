@@ -572,6 +572,11 @@ body {
   border-bottom-color: var(--ui-text);
 }
 
+/* batch26 ④：设置里的「全屏」在全屏中显示按下态（Esc 退出后由 fullscreenchange 同步回来） */
+.settings-actions .menu-btn.on {
+  color: var(--ui-accent);
+}
+
 .menu-btn.small:hover,
 .menu-btn.small:focus-visible {
   color: var(--ui-accent);

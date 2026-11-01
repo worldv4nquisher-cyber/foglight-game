@@ -4208,6 +4208,82 @@ CHECKS.push({
   },
 });
 
+// batch26 ④：全屏状态同步。requestFullscreen 走 CDP userGesture（等同玩家点了按钮）；退出用 document.exitFullscreen()
+// 模拟「浏览器吞掉 Esc、页面收不到 keydown」的退出方式（无头 Chrome 里真 Esc 不一定退全屏，退出路径和真机一致的是这个事件）。
+// 另用 webkitFullscreenElement + webkitfullscreenchange 走一遍 Safari 前缀路径。
+CHECKS.push({
+  name: 'v0.1-batch26-④ 全屏同步：fullscreenchange / webkitfullscreenchange 后状态、画布尺寸、设置按钮按下态同步；游玩中被退全屏补一次暂停、菜单里退全屏不动状态',
+  async run({ evaluate, sleep }) {
+    const gesture = (expression) => send('Runtime.evaluate', { expression, userGesture: true, awaitPromise: true, returnByValue: true }, sessionId);
+    const st = () =>
+      evaluate(`(() => { const g = __game, c = g.renderer.domElement, b = document.querySelector('.settings-panel [data-act="fullscreen"]');
+        return { fs: g.fullscreen, doc: !!document.fullscreenElement, n: g.debugStats.fullscreenChanges, black: g.debugStats.resizeAfterRender, paused: g.isPaused, ctx: g.input.context,
+          pauses: window.__b26pauses ?? -1, cw: c.width, ch: c.height, want: [Math.max(1, g.container.clientWidth), Math.max(1, g.container.clientHeight)].map((v) => Math.floor(v * g.renderer.getPixelRatio())),
+          btn: b ? { on: b.classList.contains('on'), aria: b.getAttribute('aria-pressed'), text: b.textContent } : null }; })()`);
+    const until = async (pred, ms = 5000) => { const end = Date.now() + ms; let s = await st(); while (!pred(s) && Date.now() < end) { await sleep(100); s = await st(); } return s; };
+    const out = [];
+    if (await evaluate('__game.isPaused')) await evaluate('__game.resume()');
+    await evaluate(`(() => { window.__b26pauses = 0; window.__b26off?.(); window.__b26off = __game.events.on('game:pause', () => window.__b26pauses++); })()`);
+    let s = await until((x) => x.ctx === 'explore', 20000);
+    if (s.ctx !== 'explore' || s.paused) throw new Error('起点应在 S1 explore 且未暂停 ' + JSON.stringify(s));
+    const n0 = s.n, black0 = s.black;
+    // 1. 游玩中进全屏（未锁定指针）
+    await gesture('document.documentElement.requestFullscreen()');
+    s = await until((x) => x.fs);
+    if (!s.fs || !s.doc || s.n !== n0 + 1) throw new Error('进全屏后 game.fullscreen 没同步 ' + JSON.stringify(s));
+    if (s.paused) throw new Error('进全屏不该暂停 ' + JSON.stringify(s));
+    s = await until((x) => x.cw === x.want[0] && x.ch === x.want[1]);
+    if (s.cw !== s.want[0] || s.ch !== s.want[1]) throw new Error('进全屏后画布尺寸没跟上 ' + JSON.stringify(s));
+    out.push(`进全屏：fullscreen=true、画布 ${s.cw}×${s.ch} ✓`);
+    // 2. 浏览器退出全屏（页面收不到 Esc keydown）→ 补发一次 Esc → 暂停，只暂停一次
+    await evaluate('document.exitFullscreen()');
+    s = await until((x) => !x.fs && x.paused);
+    if (s.fs || s.doc || !s.paused || s.ctx !== 'menu') throw new Error('游玩中被退全屏后应同步并暂停 ' + JSON.stringify(s));
+    await sleep(600);
+    s = await st();
+    if (s.pauses !== 1 || !s.paused) throw new Error('退全屏应只暂停一次（不闪回）' + JSON.stringify(s));
+    s = await until((x) => x.cw === x.want[0] && x.ch === x.want[1]);
+    if (s.cw !== s.want[0] || s.ch !== s.want[1]) throw new Error('退全屏后画布尺寸没跟上 ' + JSON.stringify(s));
+    out.push(`游玩中退全屏：同步 fullscreen=false、补发 Esc → 暂停 ×1 ✓、画布 ${s.cw}×${s.ch} ✓`);
+    // 3. 暂停菜单 → 设置：点真按钮进全屏，按下态跟着变；设置开着时退全屏 → 按钮立刻复原，游戏状态不动
+    await evaluate('__game.ui.pause.openSettings()');
+    await sleep(300);
+    s = await st();
+    if (!s.btn || s.btn.on || s.btn.aria !== 'false') throw new Error('设置里全屏按钮初始应为未按下 ' + JSON.stringify(s));
+    await gesture(`document.querySelector('.settings-panel [data-act="fullscreen"]').click()`);
+    s = await until((x) => x.fs && x.btn?.on);
+    if (!s.fs || !s.btn.on || s.btn.aria !== 'true') throw new Error('点全屏按钮后按下态没同步 ' + JSON.stringify(s));
+    await evaluate('document.exitFullscreen()');
+    await until((x) => !x.fs && !x.btn?.on);
+    await sleep(500);
+    s = await st();
+    if (s.fs || s.btn.on || s.btn.aria !== 'false') throw new Error('设置开着时退全屏，按钮没复原 ' + JSON.stringify(s));
+    if (!s.paused || s.pauses !== 1) throw new Error('菜单里退全屏不该改游戏状态 ' + JSON.stringify(s));
+    out.push(`设置里：按钮按下态 进 ✓ / 退 ✓（文字「${s.btn.text}」不变），暂停状态不动 ✓`);
+    // 4. Safari 前缀：只有 webkitFullscreenElement + webkitfullscreenchange
+    await evaluate(`(() => { Object.defineProperty(document, 'webkitFullscreenElement', { get: () => window.__b26wk ?? null, configurable: true });
+      window.__b26wk = document.documentElement; document.dispatchEvent(new Event('webkitfullscreenchange')); })()`);
+    s = await until((x) => x.fs && x.btn?.on);
+    if (!s.fs || !s.btn.on) throw new Error('webkitfullscreenchange 没同步进全屏 ' + JSON.stringify(s));
+    // 同一状态重复到达（标准 + 前缀两个事件都发）只算一次
+    const nWk = s.n;
+    await evaluate(`document.dispatchEvent(new Event('webkitfullscreenchange')); document.dispatchEvent(new Event('fullscreenchange'))`);
+    await sleep(200);
+    s = await st();
+    if (s.n !== nWk) throw new Error('状态没变的重复事件不该再算一次 ' + JSON.stringify(s));
+    await evaluate(`(() => { window.__b26wk = null; document.dispatchEvent(new Event('webkitfullscreenchange')); delete document.webkitFullscreenElement; })()`);
+    s = await until((x) => !x.fs && !x.btn?.on);
+    if (s.fs || s.btn.on) throw new Error('webkitfullscreenchange 没同步退出 ' + JSON.stringify(s));
+    out.push('webkit 前缀进 / 出 ✓、重复事件只算一次 ✓');
+    s = await st();
+    if (s.black !== black0) throw new Error(`全屏切换出现渲染后重设画布（黑帧）${black0} → ${s.black}`);
+    await evaluate('__game.ui.pause.closeSettings?.(); window.__b26off?.(); __game.resume()');
+    await sleep(300);
+    out.push(`fullscreenChanges ${n0} → ${s.n}，渲染后重设画布 0 次 ✓`);
+    return out.join('；');
+  },
+});
+
 const extra = process.env.SMOKE_ONLY ? CHECKS.filter((c) => process.env.SMOKE_ONLY.split('|').some((k) => c.name.includes(k))) : CHECKS;
 
 // ---------------------------------------------------------------- 起服务 + 浏览器

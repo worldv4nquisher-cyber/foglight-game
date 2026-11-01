@@ -19,6 +19,8 @@ export interface GameEvents {
   /** 首次启动的 3 秒画质自动检测完成 */
   'quality:detected': { tier: QualityTier; drops: number; rounds: Array<{ tier: QualityTier; fps: number; simulated: boolean }> };
   'viewport:resize': { width: number; height: number; pixelRatio: number };
+  /** batch26 ④：全屏状态变了（含 Esc / 浏览器自己退出；webkit 前缀事件也算） */
+  'viewport:fullscreen': { active: boolean };
   'ui:toggle-fps': { visible: boolean };
   /** 不可暂停的场景（主菜单 / 章节结束页）里按 Esc：从子界面返回（v0.1-008） */
   'ui:back': undefined;

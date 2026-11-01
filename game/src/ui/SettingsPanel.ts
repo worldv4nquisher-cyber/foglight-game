@@ -34,6 +34,7 @@ export class SettingsPanel {
   private ranges = new Map<'mouseSensitivity' | VolumeKey, { input: HTMLInputElement; value: HTMLSpanElement }>();
   private toggles = new Map<ToggleKey | 'showFps', HTMLButtonElement>();
   private offs: Array<() => void> = [];
+  private fsBtn: HTMLButtonElement | null = null;
 
   constructor(private game: Game) {
     this.el = document.createElement('div');
@@ -92,6 +93,7 @@ export class SettingsPanel {
     const fs = this.button('ui.settings.fullscreen', 'fullscreen');
     fs.hidden = !isFullscreenSupported();
     fs.addEventListener('click', () => void toggleFullscreen());
+    this.fsBtn = fs;
     const reset = this.button('ui.settings.reset', 'reset');
     reset.addEventListener('click', () => {
       this.game.settings.resetToDefaults();
@@ -106,6 +108,8 @@ export class SettingsPanel {
       this.game.settings.onChange(() => this.isOpen && this.refresh()),
       this.game.events.on('quality:changed', () => this.isOpen && this.refresh()),
       this.game.events.on('ui:toggle-fps', () => this.isOpen && this.refresh()),
+      // batch26 ④：Esc / 浏览器退出全屏后按钮状态跟着变（设置开着时立刻刷新）
+      this.game.events.on('viewport:fullscreen', () => this.isOpen && this.refresh()),
     );
   }
 
@@ -138,6 +142,11 @@ export class SettingsPanel {
       b.textContent = t(on ? 'ui.common.on' : 'ui.common.off');
       b.classList.toggle('on', on);
       b.setAttribute('aria-pressed', String(on));
+    }
+    // batch26 ④：全屏按钮按下态跟实际全屏状态（文字不变，没有「退出全屏」文案）
+    if (this.fsBtn) {
+      this.fsBtn.classList.toggle('on', this.game.fullscreen);
+      this.fsBtn.setAttribute('aria-pressed', String(this.game.fullscreen));
     }
     // 自动检测降过档、且玩家没手动改过时，画质项下显示提示（009）
     const note = this.el.querySelector<HTMLParagraphElement>('[data-role="quality-note"]')!;

@@ -13,6 +13,7 @@ import { SaveSystem } from '@/systems/save/SaveSystem';
 import { Settings } from '@/systems/save/Settings';
 import { UIManager } from '@/ui/UIManager';
 import { VisibilityWatcher } from '@/platform/visibility';
+import { isFullscreen, onFullscreenChange } from '@/platform/fullscreen';
 import { nativeBridge } from '@/platform/native';
 import { PostFX } from '@/render/PostFX';
 import { QualityBenchmark, parseSimulateFps } from '@/systems/QualityBenchmark';
@@ -39,7 +40,9 @@ export class Game {
   /** 首次启动的 3 秒画质自动检测（第一次进入 S1 时由场景调用 start()） */
   readonly benchmark: QualityBenchmark;
   /** 调试计数（smoke 读取）：resizeAfterRender = 在本帧渲染之后重设画布的次数（会出现一帧黑屏，应为 0） */
-  readonly debugStats = { resizeAfterRender: 0 };
+  readonly debugStats = { resizeAfterRender: 0, fullscreenChanges: 0 };
+  /** batch26 ④：当前是否全屏（fullscreenchange / webkitfullscreenchange 同步，Esc 退出也会更新） */
+  fullscreen = isFullscreen();
   private pendingResize = false;
   private renderedThisTick = false;
   /** 已发过 scene:firstFrame 的场景实例 */
@@ -114,6 +117,15 @@ export class Game {
     };
     window.addEventListener('orientationchange', onOrientation);
     this.disposers.push(() => window.removeEventListener('orientationchange', onOrientation));
+    // batch26 ④：全屏进出（含 Esc、浏览器自己退出）→ 记状态、下一帧渲染前立刻按新尺寸重设画布（不只靠 ResizeObserver），通知界面
+    this.disposers.push(
+      onFullscreenChange((active) => {
+        this.fullscreen = active;
+        this.debugStats.fullscreenChanges++;
+        this.pendingResize = true;
+        this.events.emit('viewport:fullscreen', { active });
+      }),
+    );
     this.resize();
 
     // 切后台自动暂停
