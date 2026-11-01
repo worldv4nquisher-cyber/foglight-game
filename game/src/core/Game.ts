@@ -14,6 +14,7 @@ import { Settings } from '@/systems/save/Settings';
 import { UIManager } from '@/ui/UIManager';
 import { VisibilityWatcher } from '@/platform/visibility';
 import { isFullscreen, onFullscreenChange } from '@/platform/fullscreen';
+import { watchDevicePixelRatio } from '@/platform/dprWatch';
 import { nativeBridge } from '@/platform/native';
 import { PostFX } from '@/render/PostFX';
 import { QualityBenchmark, parseSimulateFps } from '@/systems/QualityBenchmark';
@@ -40,7 +41,7 @@ export class Game {
   /** 首次启动的 3 秒画质自动检测（第一次进入 S1 时由场景调用 start()） */
   readonly benchmark: QualityBenchmark;
   /** 调试计数（smoke 读取）：resizeAfterRender = 在本帧渲染之后重设画布的次数（会出现一帧黑屏，应为 0） */
-  readonly debugStats = { resizeAfterRender: 0, fullscreenChanges: 0 };
+  readonly debugStats = { resizeAfterRender: 0, fullscreenChanges: 0, dprChanges: 0 };
   /** batch26 ④：当前是否全屏（fullscreenchange / webkitfullscreenchange 同步，Esc 退出也会更新） */
   fullscreen = isFullscreen();
   private pendingResize = false;
@@ -124,6 +125,11 @@ export class Game {
         this.debugStats.fullscreenChanges++;
         this.pendingResize = true;
         this.events.emit('viewport:fullscreen', { active });
+      }),
+      // batch26 ⑥：像素比变了（缩放 / 拖到别的显示器）不等 resize：下一帧渲染前按新像素比重设画布和后处理渲染目标
+      watchDevicePixelRatio(() => {
+        this.debugStats.dprChanges++;
+        this.pendingResize = true;
       }),
     );
     this.resize();

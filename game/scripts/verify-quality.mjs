@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { QUALITY_PRESETS, QualityManager } from '@/config/quality';
 import { EventBus } from '@/core/EventBus';
+import { watchDevicePixelRatio } from '@/platform/dprWatch';
 import { QualityBenchmark, parseSimulateFps } from '@/systems/QualityBenchmark';
 import { DEFAULT_SETTINGS, SETTINGS_KEY, Settings } from '@/systems/save/Settings';
 
@@ -392,6 +393,52 @@ test('URL ?quality= 临时覆盖：不跑检测、不写盘；parseSimulateFps',
 });
 
 console.info = realInfo;
+// batch26 ⑥：像素比监听——每次变化后按新值重新注册 (resolution: Ndppx)，旧查询解绑；老 Safari 只有 addListener 也能用
+function fakeWin(dpr, legacy = false) {
+  const w = { devicePixelRatio: dpr, queries: [] };
+  w.matchMedia = (q) => {
+    const m = { media: q, hs: new Set(), removed: 0 };
+    if (legacy) {
+      m.addListener = (h) => m.hs.add(h);
+      m.removeListener = (h) => { m.removed++; m.hs.delete(h); };
+    } else {
+      m.addEventListener = (t, h) => t === 'change' && m.hs.add(h);
+      m.removeEventListener = (t, h) => { m.removed++; m.hs.delete(h); };
+    }
+    m.fire = () => [...m.hs].forEach((h) => h());
+    w.queries.push(m);
+    return m;
+  };
+  return w;
+}
+for (const legacy of [false, true]) {
+  test(`batch26 ⑥：DPR 变化 1 → 1.5 → 2 → 1 每次都回调新值、按新值重新注册查询、旧查询解绑；dispose 后不再回调（${legacy ? 'addListener' : 'addEventListener'}）`, () => {
+    const w = fakeWin(1, legacy);
+    const seen = [];
+    const off = watchDevicePixelRatio((d) => seen.push(d), w);
+    assert.equal(w.queries.length, 1);
+    assert.equal(w.queries[0].media, '(resolution: 1dppx)');
+    for (const d of [1.5, 2, 1]) {
+      const cur = w.queries.at(-1);
+      w.devicePixelRatio = d;
+      cur.fire();
+      assert.equal(cur.hs.size, 0, '旧查询应解绑');
+      assert.equal(w.queries.at(-1).media, `(resolution: ${d}dppx)`);
+      assert.equal(w.queries.at(-1).hs.size, 1);
+    }
+    assert.deepEqual(seen, [1.5, 2, 1]);
+    const last = w.queries.at(-1);
+    off();
+    assert.equal(last.hs.size, 0, 'dispose 后应解绑');
+    last.fire();
+    assert.deepEqual(seen, [1.5, 2, 1]);
+  });
+}
+test('batch26 ⑥：没有 matchMedia 的环境不报错，返回空解绑', () => {
+  const off = watchDevicePixelRatio(() => assert.fail('不该回调'), { devicePixelRatio: 2 });
+  off();
+});
+
 let failed = 0;
 for (const [name, e] of results) {
   console.log(`${e ? '✗' : '✓'} ${name}`);

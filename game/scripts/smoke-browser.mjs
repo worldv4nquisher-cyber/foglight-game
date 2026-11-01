@@ -4284,6 +4284,42 @@ CHECKS.push({
   },
 });
 
+// batch26 ⑥：像素比变化（CDP 改 deviceScaleFactor，视口 CSS 尺寸不变 → ResizeObserver 不触发）也要重设画布和后处理渲染目标
+CHECKS.push({
+  name: 'v0.1-batch26-⑥ DPR 变化：matchMedia(resolution) 触发、视口不变也按新像素比重设画布 / 后处理 RT，变回来再跟一次',
+  async run({ evaluate, sleep }) {
+    const st = () =>
+      evaluate(`(() => { const g = __game, c = g.renderer.domElement, ib = g.postfx?.composer?.inputBuffer;
+        return { dpr: devicePixelRatio, n: g.debugStats.dprChanges, black: g.debugStats.resizeAfterRender, pr: g.renderer.getPixelRatio(), want: g.pixelRatio,
+          cw: c.width, ch: c.height, css: [g.container.clientWidth, g.container.clientHeight], rt: ib ? [ib.width, ib.height] : null, tier: g.quality.tier }; })()`);
+    const until = async (pred, ms = 8000) => { const end = Date.now() + ms; let s = await st(); while (!pred(s) && Date.now() < end) { await sleep(100); s = await st(); } return s; };
+    const ok = (s) => Math.abs(s.pr - s.want) < 1e-6 && s.cw === Math.floor(s.css[0] * s.pr) && s.ch === Math.floor(s.css[1] * s.pr);
+    const out = [];
+    const s0 = await st();
+    if (!ok(s0)) throw new Error('起点画布就和像素比不符 ' + JSON.stringify(s0));
+    try {
+      for (const dsf of [1.5, 1]) {
+        const before = await st();
+        await send('Emulation.setDeviceMetricsOverride', { width: before.css[0], height: before.css[1], deviceScaleFactor: dsf, mobile: false }, sessionId);
+        const s = await until((x) => x.dpr === dsf && x.n > before.n && ok(x));
+        if (s.dpr !== dsf) throw new Error(`CDP 改 deviceScaleFactor=${dsf} 没生效 ` + JSON.stringify(s));
+        if (s.n <= before.n) throw new Error('DPR 变了但没收到 matchMedia(resolution) 变化 ' + JSON.stringify(s));
+        if (!ok(s)) throw new Error('DPR 变了画布没按新像素比重设 ' + JSON.stringify(s));
+        if (s.css[0] !== before.css[0] || s.css[1] !== before.css[1]) throw new Error('视口 CSS 尺寸不该变（这项要验证的是不靠 resize）' + JSON.stringify([before.css, s.css]));
+        if (s.rt && before.rt && s.pr !== before.pr && s.rt[0] === before.rt[0]) throw new Error('后处理 RT 尺寸没跟着变 ' + JSON.stringify([before.rt, s.rt]));
+        out.push(`DPR ${before.dpr} → ${dsf}：回调 ${s.n - before.n} 次，像素比 ${before.pr.toFixed(2)} → ${s.pr.toFixed(2)}（${s.tier}），画布 ${before.cw}×${before.ch} → ${s.cw}×${s.ch}${s.rt ? `，RT ${before.rt.join('×')} → ${s.rt.join('×')}` : ''} ✓`);
+      }
+    } finally {
+      await send('Emulation.clearDeviceMetricsOverride', {}, sessionId).catch(() => {});
+    }
+    await sleep(500);
+    const s = await st();
+    if (s.black !== s0.black) throw new Error(`DPR 变化时出现渲染后重设画布（黑帧）${s0.black} → ${s.black}`);
+    out.push('渲染后重设画布 0 次 ✓');
+    return out.join('；');
+  },
+});
+
 const extra = process.env.SMOKE_ONLY ? CHECKS.filter((c) => process.env.SMOKE_ONLY.split('|').some((k) => c.name.includes(k))) : CHECKS;
 
 // ---------------------------------------------------------------- 起服务 + 浏览器
