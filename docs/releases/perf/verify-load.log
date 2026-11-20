@@ -1,0 +1,4 @@
+  ✓ 主菜单出现 1014 ms（≤ 3000），下载 3.69 MB / 40 个请求
+  ✓ 首场景 S1：首帧 3481 ms、资源全部完成 4041 ms（点「新游戏」起算），下载 129.3 MB / 148 个请求，失败 0
+
+加载校验通过（本机回环（vite preview 127.0.0.1），不限速）→ /workspace/game-studio/docs/releases/perf/verify-load.json

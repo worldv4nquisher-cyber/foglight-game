@@ -1,0 +1,27 @@
+{
+  "at": "2026-11-01T06:15:13.015Z",
+  "url": "http://127.0.0.1:38827/?smoke=1&art=1",
+  "network": "本机回环（vite preview 127.0.0.1），不限速",
+  "renderer": "headless Chrome + swiftshader（软渲染）",
+  "cache": "全新 profile + Network.setCacheDisabled + clearBrowserCache",
+  "menuBudgetMs": 3000,
+  "menu": {
+    "menuMs": 928,
+    "dcl": 481,
+    "scene": "menu",
+    "bytes": 4202320,
+    "requests": 47,
+    "ok": true
+  },
+  "firstScene": {
+    "scene": "s1-ebb-shore",
+    "firstFrameMs": 3602,
+    "allLoadedMs": 4113,
+    "entries": 153,
+    "pending": 0,
+    "failed": [],
+    "bytes": 135268014,
+    "requests": 147
+  },
+  "errors": []
+}

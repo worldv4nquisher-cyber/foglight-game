@@ -1,0 +1,10 @@
+
+> game-studio-game@0.1.0 smoke
+> node --import ./scripts/register-ts-paths.mjs scripts/smoke-browser.mjs
+
+  ✓ dist 解码器各一套：draco_decoder-Z1_iN-Ht.wasm, draco_wasm_wrapper-fZCQGLGb.js, basis_transcoder-VXdx5NbI.wasm, basis_transcoder-o4Hde_L7.js
+  ✓ 主场景就绪（1.1s）
+  ✓ v0.1-1031 配乐 S3 两层 + 爬塔：S2 → S3 两层同一 AudioContext 时刻起播、样本对齐、上层增益随玩家高度 0 → 1（楼梯底 → 灯室）：S3 首帧 @20723 ms 后请求底层 20724–20741 / 上层 20724–20740 / 结尾曲预取 20724–20742 ms；上层 with-base（底层 start @8.6933，上层 when 8.6933 offset 0.0000 → 文件 0 s 同余差 0.0e+0 s），两层 loop、各 7200000 样本；从 S2 曲 2 s 交叉淡化；爬塔：桥尾（塔外 y 3） y 3.00 r 32.00 → 增益 0.000（f = 0.000）上层 RMS -999.0 dBFS / 峰值 -999.0（77 帧 3.1 s）；楼梯底 y 0.20 r 2.50 → 增益 0.000（f = 0.000）上层 RMS -999.0 dBFS / 峰值 -999.0（33 帧 6.7 s）；门内平台 y 2.40 r 2.50 → 增益 0.101（f = 0.101）上层 RMS -44.4 dBFS / 峰值 -31.5（77 帧 3.1 s）；平台 A y 10.00 r 2.50 → 增益 0.450（f = 0.450）上层 RMS -29.0 dBFS / 峰值 -15.5（76 帧 3.0 s）；平台 B y 16.00 r 2.50 → 增益 0.725（f = 0.725）上层 RMS -27.3 dBFS / 峰值 -13.9（77 帧 3.0 s）；灯室 y 22.00 r 2.50 → 增益 1.000（f = 1.000）上层 RMS -26.8 dBFS / 峰值 -10.9（77 帧 3.1 s）；灯室音乐总线 RMS -37.6 dBFS / 峰值 -26.5（76 帧 3.0 s）；全程两层 start / offset 不变
+  （警告 1 条，首条：THREE.WebGLRenderer: KHR_parallel_shader_compile extension not supported.）
+冒烟测试通过
+EXIT 0

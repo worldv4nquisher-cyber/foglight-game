@@ -1,0 +1,98 @@
+  · 测试构建（--mode smoke）→ /tmp/foglight-smoke-dist-daL9SF，1 s
+0.5 first ok
+31.3 {"rs":"interactive","href":"http://127.0.0.1:39023/?smoke=1&autostart=1","g":"undefined"}
+31.6 {"rs":"complete","href":"http://127.0.0.1:39023/?smoke=1&autostart=1","g":"object","scene":"loading","ctx":"menu"}
+32.0 {"rs":"complete","href":"http://127.0.0.1:39023/?smoke=1&autostart=1","g":"object","scene":"s1-ebb-shore","ctx":"cutscene"}
+34.0 {"rs":"complete","href":"http://127.0.0.1:39023/?smoke=1&autostart=1","g":"object","scene":"s1-ebb-shore","ctx":"cutscene"}
+34.6 {"rs":"complete","href":"http://127.0.0.1:39023/?smoke=1&autostart=1","g":"object","scene":"s1-ebb-shore","ctx":"cutscene"}
+34.9 {"rs":"complete","href":"http://127.0.0.1:39023/?smoke=1&autostart=1","g":"object","scene":"s1-ebb-shore","ctx":"cutscene"}
+35.2 {"rs":"complete","href":"http://127.0.0.1:39023/?smoke=1&autostart=1","g":"object","scene":"s1-ebb-shore","ctx":"cutscene"}
+35.5 {"rs":"complete","href":"http://127.0.0.1:39023/?smoke=1&autostart=1","g":"object","scene":"s1-ebb-shore","ctx":"cutscene"}
+35.8 {"rs":"complete","href":"http://127.0.0.1:39023/?smoke=1&autostart=1","g":"object","scene":"s1-ebb-shore","ctx":"cutscene"}
+36.1 {"rs":"complete","href":"http://127.0.0.1:39023/?smoke=1&autostart=1","g":"object","scene":"s1-ebb-shore","ctx":"cutscene"}
+36.4 {"rs":"complete","href":"http://127.0.0.1:39023/?smoke=1&autostart=1","g":"object","scene":"s1-ebb-shore","ctx":"cutscene"}
+36.7 {"rs":"complete","href":"http://127.0.0.1:39023/?smoke=1&autostart=1","g":"object","scene":"s1-ebb-shore","ctx":"cutscene"}
+37.0 {"rs":"complete","href":"http://127.0.0.1:39023/?smoke=1&autostart=1","g":"object","scene":"s1-ebb-shore","ctx":"cutscene"}
+38.6 {"rs":"complete","href":"http://127.0.0.1:39023/?smoke=1&autostart=1","g":"object","scene":"s1-ebb-shore","ctx":"cutscene"}
+38.9 {"rs":"complete","href":"http://127.0.0.1:39023/?smoke=1&autostart=1","g":"object","scene":"s1-ebb-shore","ctx":"cutscene"}
+39.2 {"rs":"complete","href":"http://127.0.0.1:39023/?smoke=1&autostart=1","g":"object","scene":"s1-ebb-shore","ctx":"cutscene"}
+74.4 {"rs":"interactive","href":"http://127.0.0.1:39023/?smoke=1&autostart=1","g":"undefined"}
+74.7 {"rs":"complete","href":"http://127.0.0.1:39023/?smoke=1&autostart=1","g":"object","scene":"loading","ctx":"menu"}
+75.1 {"rs":"complete","href":"http://127.0.0.1:39023/?smoke=1&autostart=1","g":"object","scene":"s1-ebb-shore","ctx":"cutscene"}
+77.1 {"rs":"complete","href":"http://127.0.0.1:39023/?smoke=1&autostart=1","g":"object","scene":"s1-ebb-shore","ctx":"cutscene"}
+77.6 {"rs":"complete","href":"http://127.0.0.1:39023/?smoke=1&autostart=1","g":"object","scene":"s1-ebb-shore","ctx":"cutscene"}
+78.0 {"rs":"complete","href":"http://127.0.0.1:39023/?smoke=1&autostart=1","g":"object","scene":"s1-ebb-shore","ctx":"cutscene"}
+78.3 {"rs":"complete","href":"http://127.0.0.1:39023/?smoke=1&autostart=1","g":"object","scene":"s1-ebb-shore","ctx":"cutscene"}
+78.6 {"rs":"complete","href":"http://127.0.0.1:39023/?smoke=1&autostart=1","g":"object","scene":"s1-ebb-shore","ctx":"cutscene"}
+78.9 {"rs":"complete","href":"http://127.0.0.1:39023/?smoke=1&autostart=1","g":"object","scene":"s1-ebb-shore","ctx":"cutscene"}
+79.2 {"rs":"complete","href":"http://127.0.0.1:39023/?smoke=1&autostart=1","g":"object","scene":"s1-ebb-shore","ctx":"cutscene"}
+79.5 {"rs":"complete","href":"http://127.0.0.1:39023/?smoke=1&autostart=1","g":"object","scene":"s1-ebb-shore","ctx":"cutscene"}
+79.8 {"rs":"complete","href":"http://127.0.0.1:39023/?smoke=1&autostart=1","g":"object","scene":"s1-ebb-shore","ctx":"cutscene"}
+80.1 {"rs":"complete","href":"http://127.0.0.1:39023/?smoke=1&autostart=1","g":"object","scene":"s1-ebb-shore","ctx":"cutscene"}
+80.4 {"rs":"complete","href":"http://127.0.0.1:39023/?smoke=1&autostart=1","g":"object","scene":"s1-ebb-shore","ctx":"cutscene"}
+80.7 {"rs":"complete","href":"http://127.0.0.1:39023/?smoke=1&autostart=1","g":"object","scene":"s1-ebb-shore","ctx":"cutscene"}
+81.0 {"rs":"complete","href":"http://127.0.0.1:39023/?smoke=1&autostart=1","g":"object","scene":"s1-ebb-shore","ctx":"cutscene"}
+81.3 {"rs":"complete","href":"http://127.0.0.1:39023/?smoke=1&autostart=1","g":"object","scene":"s1-ebb-shore","ctx":"cutscene"}
+81.6 {"rs":"complete","href":"http://127.0.0.1:39023/?smoke=1&autostart=1","g":"object","scene":"s1-ebb-shore","ctx":"cutscene"}
+81.9 {"rs":"complete","href":"http://127.0.0.1:39023/?smoke=1&autostart=1","g":"object","scene":"s1-ebb-shore","ctx":"cutscene"}
+82.2 {"rs":"complete","href":"http://127.0.0.1:39023/?smoke=1&autostart=1","g":"object","scene":"s1-ebb-shore","ctx":"cutscene"}
+82.5 {"rs":"complete","href":"http://127.0.0.1:39023/?smoke=1&autostart=1","g":"object","scene":"s1-ebb-shore","ctx":"cutscene"}
+82.8 {"rs":"complete","href":"http://127.0.0.1:39023/?smoke=1&autostart=1","g":"object","scene":"s1-ebb-shore","ctx":"cutscene"}
+83.1 {"rs":"complete","href":"http://127.0.0.1:39023/?smoke=1&autostart=1","g":"object","scene":"s1-ebb-shore","ctx":"cutscene"}
+0.5s console [quality] GPU：ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)；档位 ultra（default）
+0.8s console [quality] GPU：ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)；档位 ultra（default）
+0.9s ===== A 清档、不碰全屏：S1 explore
+0.9s [A] pr=1 dpr=1 tier=ultra bench=idle rounds= fs=false paused=false cw=1280
+1.3s console [quality] 自动检测开始：极致档测 3 秒
+2.3s [A] pr=1 dpr=1 tier=ultra bench=running rounds= fs=false paused=false cw=1280
+6.4s console [quality] ultra 平均 2.0 fps
+7.9s [A] pr=1 dpr=1 tier=high bench=running rounds=ultra:2.0 fs=false paused=false cw=1280
+12.3s console [quality] high 平均 2.7 fps
+13.1s [A] pr=1 dpr=1 tier=standard bench=running rounds=ultra:2.0,high:2.7 fs=false paused=false cw=1280
+13.3s [A] pr=0.8 dpr=1 tier=standard bench=running rounds=ultra:2.0,high:2.7 fs=false paused=false cw=1024
+16.8s console [quality] standard 平均 6.3 fps
+16.8s console [quality] 自动检测完成：standard（降 2 档）
+16.8s [A] pr=0.8 dpr=1 tier=standard bench=done rounds=ultra:2.0,high:2.7,standard:6.3 fs=false paused=false cw=1024
+31.3s console [quality] GPU：ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)；档位 ultra（default）
+31.7s console [quality] 自动检测开始：极致档测 3 秒
+37.2s console [quality] ultra 平均 2.2 fps
+39.6s ===== B 清档、反复全屏：S1 explore
+39.6s [B0 进全屏] pr=1 dpr=1 tier=high bench=running rounds=ultra:2.2 fs=false paused=false cw=1280
+40.5s [B0 进全屏] pr=1 dpr=1 tier=high bench=running rounds=ultra:2.2 fs=true paused=false cw=800
+41.9s [B0 退全屏] pr=1 dpr=1 tier=high bench=running rounds=ultra:2.2 fs=false paused=true cw=1280
+42.9s [B0 恢复] pr=1 dpr=1 tier=high bench=running rounds=ultra:2.2 fs=false paused=false cw=1280
+44.9s [B1 进全屏] pr=1 dpr=1 tier=high bench=running rounds=ultra:2.2 fs=true paused=false cw=800
+46.1s [B1 退全屏] pr=1 dpr=1 tier=high bench=running rounds=ultra:2.2 fs=false paused=true cw=1280
+47.2s [B1 恢复] pr=1 dpr=1 tier=high bench=running rounds=ultra:2.2 fs=false paused=false cw=1280
+48.9s [B2 进全屏] pr=1 dpr=1 tier=high bench=running rounds=ultra:2.2 fs=true paused=false cw=800
+50.4s [B2 退全屏] pr=1 dpr=1 tier=high bench=running rounds=ultra:2.2 fs=false paused=true cw=1280
+51.6s [B2 恢复] pr=1 dpr=1 tier=high bench=running rounds=ultra:2.2 fs=false paused=false cw=1280
+53.1s [B3 进全屏] pr=1 dpr=1 tier=high bench=running rounds=ultra:2.2 fs=true paused=false cw=800
+55.0s [B3 退全屏] pr=1 dpr=1 tier=high bench=running rounds=ultra:2.2 fs=false paused=true cw=1280
+55.8s [B3 恢复] pr=1 dpr=1 tier=high bench=running rounds=ultra:2.2 fs=false paused=false cw=1280
+57.7s [B4 进全屏] pr=1 dpr=1 tier=high bench=running rounds=ultra:2.2 fs=true paused=false cw=800
+59.1s [B4 退全屏] pr=1 dpr=1 tier=high bench=running rounds=ultra:2.2 fs=false paused=true cw=1280
+60.3s [B4 恢复] pr=1 dpr=1 tier=high bench=running rounds=ultra:2.2 fs=false paused=false cw=1280
+62.2s [B5 进全屏] pr=1 dpr=1 tier=high bench=running rounds=ultra:2.2 fs=true paused=false cw=800
+63.3s [B5 退全屏] pr=1 dpr=1 tier=high bench=running rounds=ultra:2.2 fs=false paused=true cw=1280
+64.7s [B5 恢复] pr=1 dpr=1 tier=high bench=running rounds=ultra:2.2 fs=false paused=false cw=1280
+69.9s console [quality] high 平均 2.1 fps
+70.4s [B 收尾] pr=1 dpr=1 tier=standard bench=running rounds=ultra:2.2,high:2.1 fs=false paused=false cw=1280
+70.6s [B 收尾] pr=0.8 dpr=1 tier=standard bench=running rounds=ultra:2.2,high:2.1 fs=false paused=false cw=1024
+73.9s console [quality] 检测中玩家手动改了画质，停止检测
+74.4s console [quality] GPU：ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)；档位 ultra（user）
+83.4s ===== C 已检测、固定极致档、反复全屏 + resize：S1 explore
+83.4s [C0 进全屏] pr=1 dpr=1 tier=ultra bench=idle rounds= fs=false paused=false cw=1280
+84.9s [C0 进全屏] pr=1 dpr=1 tier=ultra bench=idle rounds= fs=true paused=false cw=800
+86.0s [C0 退全屏] pr=1 dpr=1 tier=ultra bench=idle rounds= fs=false paused=true cw=1280
+86.8s [C0 恢复] pr=1 dpr=1 tier=ultra bench=idle rounds= fs=false paused=false cw=1280
+89.5s [C1 进全屏] pr=1 dpr=1 tier=ultra bench=idle rounds= fs=true paused=false cw=800
+90.3s [C1 退全屏] pr=1 dpr=1 tier=ultra bench=idle rounds= fs=false paused=true cw=1280
+91.8s [C1 恢复] pr=1 dpr=1 tier=ultra bench=idle rounds= fs=false paused=false cw=1280
+94.0s [C2 进全屏] pr=1 dpr=1 tier=ultra bench=idle rounds= fs=true paused=false cw=800
+95.4s [C2 退全屏] pr=1 dpr=1 tier=ultra bench=idle rounds= fs=false paused=true cw=1280
+96.3s [C2 恢复] pr=1 dpr=1 tier=ultra bench=idle rounds= fs=false paused=false cw=1280
+98.8s [C3 进全屏] pr=1 dpr=1 tier=ultra bench=idle rounds= fs=true paused=false cw=800
+99.8s [C3 退全屏] pr=1 dpr=1 tier=ultra bench=idle rounds= fs=false paused=true cw=1280
+100.8s [C3 恢复] pr=1 dpr=1 tier=ultra bench=idle rounds= fs=false paused=false cw=1280
+page errors: 0 []

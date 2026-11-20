@@ -1,0 +1,10 @@
+
+> game-studio-game@0.1.0 smoke
+> node --import ./scripts/register-ts-paths.mjs scripts/smoke-browser.mjs
+
+  ✓ dist 解码器各一套：draco_decoder-Z1_iN-Ht.wasm, draco_wasm_wrapper-fZCQGLGb.js, basis_transcoder-VXdx5NbI.wasm, basis_transcoder-o4Hde_L7.js
+  ✓ 主场景就绪（4.0s）
+  ✓ v0.1-015 S3 白盒：?scene=s3 桥尾入口 / 世界摆位（塔心 39.73, −122.75，转 135°）/ 海面挪到塔心 / 室内触发体、点灯前无暖光、光路正解到点火口；?art=1 美术 020 七件 + 门扇挂合页：白盒：桥尾入口 39.73,3,-90.75、塔心 (39.73, −122.75) 转 135°、海面挪到塔心 y 1.6、室内触发体 ×1、无暖光 ✓，光路正解：窗口镜 → 导光镜 1 → 导光镜 2 → 点火口 ✓，art=1：020 六件 + 门扇挂合页、白盒隐藏、无暖光 ✓，art=1 导光镜 a / b 两个文件挂白盒组、初始 / 正解镜面 = 白盒（最大 0.000°）✓
+  ✗ v0.1-015 S3 谜题 5 流程：涨潮底层送回 / 敲钟退潮 / 开门撤碰撞 / 先调镜后开阀（红光 + 没有油 → 开阀重新计时）/ 光斑上升沿亮 + 共鸣 / 天光常亮 / 提示步骤 / 点灯：?scene=s3 没进 S3
+冒烟测试失败：1 项
+EXIT 1

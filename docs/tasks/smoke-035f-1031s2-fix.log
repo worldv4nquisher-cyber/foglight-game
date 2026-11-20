@@ -1,0 +1,10 @@
+
+> game-studio-game@0.1.0 smoke
+> node --import ./scripts/register-ts-paths.mjs scripts/smoke-browser.mjs
+
+  ✓ dist 解码器各一套：draco_decoder-Z1_iN-Ht.wasm, draco_wasm_wrapper-fZCQGLGb.js, basis_transcoder-VXdx5NbI.wasm, basis_transcoder-o4Hde_L7.js
+  ✓ 主场景就绪（1.0s）
+  ✓ v0.1-1031 配乐 S2：S1 → S2 首帧后懒加载 mus-s2-keeper-house，整文件 loop、和 S1 曲 2 s 交叉淡化、音乐总线有电平：S2 首帧 @26840 ms → 请求 @26840 → 下载 26841–26869 ms → 起播 @27319 ms；mus-s1-ebb-shore → mus-s2-keeper-house 交叉淡化 2 s、loop=true 循环点 0/0、151.111 s（解码后 7253333 样本 @48000 Hz）；2.2 s 后增益 1.00；AnalyserNode 音乐总线 RMS -47.0 dBFS / 峰值 -29.7（148 帧 6.0 s）
+  （警告 1 条，首条：THREE.WebGLRenderer: KHR_parallel_shader_compile extension not supported.）
+冒烟测试通过
+EXIT 0

@@ -1,0 +1,194 @@
+{
+  "at": "2026-11-01T06:15:22.154Z",
+  "tier": "ultra",
+  "renderer": "headless Chrome + swiftshader",
+  "tolerance": 0.1,
+  "steps": [
+    {
+      "label": "进 S1",
+      "scene": "s1-ebb-shore",
+      "staleScenes": [],
+      "geometries": 94,
+      "textures": 84,
+      "programs": 49,
+      "glTextures": 88,
+      "bigTextures": [
+        "4096x4096 0x8058 @进 S1",
+        "4096x4096 0x81a6 @进 S1",
+        "4096x4096 0x8e8d @进 S1",
+        "4096x4096 0x8e8c @进 S1",
+        "4096x4096 0x8e8c @进 S1",
+        "2048x2048 0x8e8d @进 S1"
+      ],
+      "gl": {
+        "tex": 407622795,
+        "buf": 38033744,
+        "rb": 1631520
+      },
+      "glMB": 426.6,
+      "texMB": 388.7,
+      "bufMB": 36.3,
+      "rbMB": 1.6,
+      "heapMB": 14.9,
+      "objHeapMB": 10.3,
+      "codeHeapMB": 4.6
+    },
+    {
+      "label": "切到 S2",
+      "scene": "s2-keeper-house",
+      "staleScenes": [],
+      "geometries": 94,
+      "textures": 81,
+      "programs": 44,
+      "glTextures": 85,
+      "bigTextures": [
+        "4096x4096 0x8e8d @进 S1",
+        "4096x4096 0x8e8c @进 S1",
+        "4096x4096 0x8e8c @进 S1",
+        "4096x4096 0x8058 @切到 S2",
+        "4096x4096 0x81a6 @切到 S2",
+        "2048x2048 0x8e8d @进 S1"
+      ],
+      "gl": {
+        "tex": 400917110,
+        "buf": 17737010,
+        "rb": 1631520
+      },
+      "glMB": 400.8,
+      "texMB": 382.3,
+      "bufMB": 16.9,
+      "rbMB": 1.6,
+      "heapMB": 15.7,
+      "objHeapMB": 10.4,
+      "codeHeapMB": 5.3
+    },
+    {
+      "label": "切到 S3",
+      "scene": "s3-lighthouse",
+      "staleScenes": [],
+      "geometries": 52,
+      "textures": 77,
+      "programs": 46,
+      "glTextures": 81,
+      "bigTextures": [
+        "4096x4096 0x8e8d @进 S1",
+        "4096x4096 0x8e8c @进 S1",
+        "4096x4096 0x8e8c @进 S1",
+        "4096x4096 0x8058 @切到 S3",
+        "4096x4096 0x81a6 @切到 S3",
+        "2048x2048 0x8e8d @进 S1"
+      ],
+      "gl": {
+        "tex": 396373282,
+        "buf": 18781948,
+        "rb": 1631520
+      },
+      "glMB": 397.5,
+      "texMB": 378,
+      "bufMB": 17.9,
+      "rbMB": 1.6,
+      "heapMB": 14.5,
+      "objHeapMB": 8.5,
+      "codeHeapMB": 6
+    },
+    {
+      "label": "回主菜单",
+      "scene": "menu",
+      "staleScenes": [],
+      "geometries": 19,
+      "textures": 17,
+      "programs": 15,
+      "glTextures": 21,
+      "bigTextures": [
+        "4096x4096 0x8e8d @进 S1",
+        "4096x4096 0x8e8c @进 S1",
+        "4096x4096 0x8e8c @进 S1",
+        "2048x2048 0x8e8d @进 S1",
+        "2048x2048 0x8e8c @进 S1",
+        "1024x1024 0x8e8d @进 S1"
+      ],
+      "gl": {
+        "tex": 91763743,
+        "buf": 4626184,
+        "rb": 0
+      },
+      "glMB": 91.9,
+      "texMB": 87.5,
+      "bufMB": 4.4,
+      "rbMB": 0,
+      "heapMB": 10.2,
+      "objHeapMB": 4.5,
+      "codeHeapMB": 5.7
+    },
+    {
+      "label": "再进 S1",
+      "scene": "s1-ebb-shore",
+      "staleScenes": [],
+      "geometries": 95,
+      "textures": 85,
+      "programs": 51,
+      "glTextures": 89,
+      "bigTextures": [
+        "4096x4096 0x8e8d @进 S1",
+        "4096x4096 0x8e8c @进 S1",
+        "4096x4096 0x8e8c @进 S1",
+        "4096x4096 0x8058 @再进 S1",
+        "4096x4096 0x81a6 @再进 S1",
+        "2048x2048 0x8e8d @进 S1"
+      ],
+      "gl": {
+        "tex": 408321846,
+        "buf": 38065372,
+        "rb": 1631520
+      },
+      "glMB": 427.3,
+      "texMB": 389.4,
+      "bufMB": 36.3,
+      "rbMB": 1.6,
+      "heapMB": 16.6,
+      "objHeapMB": 10.4,
+      "codeHeapMB": 6.1
+    }
+  ],
+  "failures": [],
+  "menu": {
+    "glMB": 91.9,
+    "firstS1": 426.6,
+    "ratio": 0.215,
+    "max": 0.5,
+    "ok": true
+  },
+  "compare": {
+    "glMB": {
+      "first": 426.6,
+      "again": 427.3,
+      "ratio": 1.002,
+      "ok": true
+    },
+    "geometries": {
+      "first": 94,
+      "again": 95,
+      "ratio": 1.011,
+      "ok": true
+    },
+    "textures": {
+      "first": 84,
+      "again": 85,
+      "ratio": 1.012,
+      "ok": true
+    },
+    "programs": {
+      "first": 49,
+      "again": 51,
+      "ratio": 1.041,
+      "ok": true
+    },
+    "objHeapMB": {
+      "first": 10.3,
+      "again": 10.4,
+      "ratio": 1.01,
+      "ok": true
+    }
+  },
+  "errors": []
+}

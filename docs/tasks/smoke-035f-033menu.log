@@ -1,0 +1,9 @@
+
+> game-studio-game@0.1.0 smoke
+> node --import ./scripts/register-ts-paths.mjs scripts/smoke-browser.mjs
+
+  ✓ dist 解码器各一套：draco_decoder-Z1_iN-Ht.wasm, draco_wasm_wrapper-fZCQGLGb.js, basis_transcoder-VXdx5NbI.wasm, basis_transcoder-o4Hde_L7.js
+  ✓ 主场景就绪（5.4s）
+  ✗ v0.1-033 配乐：主菜单 mus-menu 循环 + 首次交互后出声、新游戏进 S1 与 mus-s1-ebb-shore 2 s 交叉淡化、menu 组无 preview：新游戏进 S1 后没切到 mus-s1-ebb-shore {"s":"s1-ebb-shore","k":null,"log":[{"op":"play","key":"mus-menu","from":null,"at":0,"fade":0,"loop":true,"ctxState":"suspended","wall":7862.70000000298},{"op":"stop","key":null,"from":"mus-menu","at":103.60533333333333,"fade":2,"loop":false,"ctxState":"running","wall":112217.5}],"res":"missing","ff":27410.70000000298,"req":27410.70000000298,"now":280088.799999997,"fail":[{"key":"mus-s1-ebb-shore","url":"./assets/art/audio/music/mus-s1-ebb-shore.ogg","error":"lazy audio timeout 45000 ms: ./assets/art/audio/music/mus-s1-ebb-shore.ogg","wall":112209.79999999702}],"rt":[{"s":27412,"e":112248,"st":200}]}
+冒烟测试失败：1 项
+EXIT 1

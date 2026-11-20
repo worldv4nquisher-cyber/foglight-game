@@ -1,0 +1,9 @@
+
+> game-studio-game@0.1.0 smoke
+> node --import ./scripts/register-ts-paths.mjs scripts/smoke-browser.mjs
+
+  ✓ dist 解码器各一套：draco_decoder-Z1_iN-Ht.wasm, draco_wasm_wrapper-fZCQGLGb.js, basis_transcoder-VXdx5NbI.wasm, basis_transcoder-o4Hde_L7.js
+  ✓ 主场景就绪（1.2s）
+  ✗ v0.1-035 结尾演出 art=1：点燃 → 按音频时钟逐 cue（远景 / 雾口 / 剪影 / 眺望 / 父亲摸头同帧 / 那边没有亮 / 坐下写 / 日志 / 后拉 / 淡出）→ 106 s 才进结束页：lens 触发 5.323（上一帧 3.648）vs 4；silhouette 触发 25.429（上一帧 23.957）vs 24；father_in 触发 37.152（上一帧 34.389）vs 36；father_out 触发 44.192（上一帧 42.101）vs 42.6；journal 触发 67.221（上一帧 64.555）vs 66；演出结束时刻 {"how":"end","t":106.208,"prevT":106.208,"src":"audio","wall":125762.70000000298}
+冒烟测试失败：1 项
+EXIT 1

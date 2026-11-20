@@ -1,0 +1,9 @@
+
+> game-studio-game@0.1.0 smoke
+> node --import ./scripts/register-ts-paths.mjs scripts/smoke-browser.mjs
+
+  ✓ dist 解码器各一套：draco_decoder-Z1_iN-Ht.wasm, draco_wasm_wrapper-fZCQGLGb.js, basis_transcoder-VXdx5NbI.wasm, basis_transcoder-o4Hde_L7.js
+  ✓ 主场景就绪（1.1s）
+  ✓ v0.1-035 结尾曲下载失败 art=1：CDP 把 mus-ending-ch1.ogg 路由成 404 → 不放音乐、不报错，演出走后备时钟照常放完 → 结束页：404 ×1（S3 首帧后预取）→ isMissing、点燃后 result=missing、musicKey=null（场景曲 undefined fade undefined s）；演出后备时钟 15.03 s 时 26 帧 fallback / 0 帧 audio；实时段 lens 4→4.00、fog_open 14→14.05；seek 后 11 个 cue 全部 fallback、34 帧没放过结尾曲；结束页 @演出 106.85 s（endedBy end）、淡入后 fade 0.00、日志第 6 页 true；除 Chrome 那条 404 网络日志外无报错
+冒烟测试通过
+EXIT 0

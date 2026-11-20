@@ -1,0 +1,11 @@
+
+> game-studio-game@0.1.0 smoke
+> node --import ./scripts/register-ts-paths.mjs scripts/smoke-browser.mjs
+
+  ✓ dist 解码器各一套：draco_decoder-Z1_iN-Ht.wasm, draco_wasm_wrapper-fZCQGLGb.js, basis_transcoder-VXdx5NbI.wasm, basis_transcoder-o4Hde_L7.js
+  ✓ 主场景就绪（1.3s）
+  ✗ v0.1-035 结尾演出 art=1：点燃 → 按音频时钟逐 cue（远景 / 雾口 / 剪影 / 眺望 / 父亲摸头同帧 / 那边没有亮 / 坐下写 / 日志 / 后拉 / 淡出）→ 106 s 才进结束页：演出 200 s 墙钟内没进结束页 {"t":53.33230000004173,"cues":7}
+  ✗ v0.1-035 跳过 art=1：演出 20 s 按住 Space 1 s（圆环）→ 结尾曲 0.75 s 淡出 + 0.75 s 黑场 → 结束页（日志第 6 页照样写）：按住 0.5 s：圆环进度应在 0–1、未跳过 {"p":0.5077999999970197,"vis":false,"done":null}
+  ✗ v0.1-035 后备时钟 art=0：没有结尾曲 → performance.now 后备时钟逐 cue、106 s 进结束页：后备时钟没走到 15 s 14.0314999999851
+冒烟测试失败：3 项
+EXIT 1

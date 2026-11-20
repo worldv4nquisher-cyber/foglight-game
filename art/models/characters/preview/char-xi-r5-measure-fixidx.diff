@@ -1,0 +1,33 @@
+--- /workspace/game-studio/game/scripts/measure-ponytail-hood.mjs	2026-10-31 10:06:04.106434952 +0700
++++ /workspace/scratch/xi-r4/game/scripts/measure-ponytail-hood.mjs	2026-10-31 10:50:22.675289340 +0700
+@@ -11,11 +11,13 @@
+ import { MeshBVH } from 'three-mesh-bvh';
+ 
+ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+-const ART = resolve(root, '../art/models/characters');
+-const OUT = resolve(root, '../docs/tasks/shots-r4');
++const ART = process.env.PT_ART ?? resolve(root, '../art/models/characters');
++const OUT = process.env.PT_OUT ?? resolve(root, '../docs/tasks/shots-r4');
+ mkdirSync(OUT, { recursive: true });
+ const only = process.argv[2]?.split(',').filter(Boolean) ?? null;
+ const FPS = 30, NEAR = 0.04, PEN = 0.002;
++// PT_FIXIDX=1：MeshBVH 会给非索引几何建索引并重排，hit.faceIndex 指的是重排后的 index 三元组；原脚本按 arr[fi*9] 取三角形 → 拿到的多半不是最近的那个面（法线定符号近似随机）。=1 时按 g.index 取。
++const FIXIDX = process.env.PT_FIXIDX === '1';
+ 
+ globalThis.self ??= globalThis;
+ const { GLTFLoader } = await import('three/examples/jsm/loaders/GLTFLoader.js');
+@@ -66,7 +68,7 @@
+       if (hit.distance > NEAR) continue;
+       fNear++;
+       const fi = hit.faceIndex * 3;
+-      tri.a.fromArray(arr, fi * 3); tri.b.fromArray(arr, fi * 3 + 3); tri.c.fromArray(arr, fi * 3 + 6); tri.getNormal(n);
++      if (FIXIDX) { const ix = g.index; tri.setFromAttributeAndIndices(g.attributes.position, ix.getX(fi), ix.getX(fi + 1), ix.getX(fi + 2)); } else { tri.a.fromArray(arr, fi * 3); tri.b.fromArray(arr, fi * 3 + 3); tri.c.fromArray(arr, fi * 3 + 6); } tri.getNormal(n);
+       const raw = n.dot(v.clone().sub(hit.point)) >= 0 ? hit.distance : -hit.distance;
+       let chk = raw;
+       if (raw < 0) { line.closestPointToPoint(v, false, cen); ray.origin.copy(v); ray.direction.copy(v).sub(cen).normalize(); if (bvh.raycast(ray, THREE.DoubleSide).length === 0) chk = -raw; }
+@@ -83,4 +85,4 @@
+   rows.push(r);
+   console.log(`${r.clip.padEnd(18)} 帧 ${String(r.frames).padStart(4)}  最深 ${r.maxPenCm.toFixed(2)} cm @${r.atFrame}  当帧穿入顶点 ${r.vertsAtWorst}  穿>2mm 帧 ${r.penFrames}/${r.frames}  最近距 ${r.minDistCm} cm  近点 ${r.nearVertsMax}  raw ${r.rawMinCm}`);
+ }
+-writeFileSync(resolve(OUT, `ponytail-hood${only ? '-' + only.join('+') : ''}.json`), JSON.stringify({ ptVerts: ptVerts.length, hoodTris: hoodTris.length / 3, nearM: NEAR, penM: PEN, rows }, null, 2));
++writeFileSync(resolve(OUT, `ponytail-hood${FIXIDX ? '-fixidx' : ''}${only ? '-' + only.join('+') : ''}.json`), JSON.stringify({ ptVerts: ptVerts.length, hoodTris: hoodTris.length / 3, nearM: NEAR, penM: PEN, rows }, null, 2));

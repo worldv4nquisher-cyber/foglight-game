@@ -1,0 +1,9 @@
+
+> game-studio-game@0.1.0 smoke
+> node --import ./scripts/register-ts-paths.mjs scripts/smoke-browser.mjs
+
+  ✓ dist 解码器各一套：draco_decoder-Z1_iN-Ht.wasm, draco_wasm_wrapper-fZCQGLGb.js, basis_transcoder-VXdx5NbI.wasm, basis_transcoder-o4Hde_L7.js
+  ✓ 主场景就绪（1.2s）
+  ✓ v0.1-035 后备时钟 art=0：没有结尾曲 → performance.now 后备时钟逐 cue、106 s 进结束页：后备时钟：演出 15.32 s / 墙钟 18.18 s（32 帧 fallback、0 帧 audio）；实时段 lens 4→4.51、fog_open 14→14.19；seek 后 11 个 cue 按序（全部 fallback）；结束页 @演出 106.27 s
+冒烟测试通过
+EXIT 0

@@ -1,0 +1,6939 @@
+{
+  "at": "2026-11-01T06:08:30.278Z",
+  "mode": "verify",
+  "view": [
+    640,
+    360
+  ],
+  "tiers": [
+    "ultra",
+    "high",
+    "standard"
+  ],
+  "scenes": {
+    "s1": {
+      "load": {
+        "n": 209,
+        "bad": []
+      },
+      "tiers": {
+        "ultra": {
+          "budget": {
+            "tris": 6000000,
+            "calls": 2000
+          },
+          "spots": [
+            {
+              "id": "s1-raft-back",
+              "ok": true,
+              "main": {
+                "calls": 89,
+                "tris": 3387231,
+                "target": "EffectComposer.Buffer 640x360"
+              },
+              "frame": {
+                "calls": 287,
+                "tris": 10085258,
+                "shadowCalls": 41,
+                "shadowTris": 3184014,
+                "passes": 28
+              },
+              "charLevels": {
+                "char-xi": 0
+              },
+              "top": [
+                [
+                  "s1-art",
+                  2984383
+                ],
+                [
+                  "player",
+                  239692
+                ],
+                [
+                  "water",
+                  80000
+                ],
+                [
+                  "raft-s1",
+                  12504
+                ],
+                [
+                  "sky-dome",
+                  3968
+                ],
+                [
+                  "atmo028-fog",
+                  1628
+                ],
+                [
+                  "s1-notice",
+                  1124
+                ],
+                [
+                  "s1-neighbor-note",
+                  332
+                ],
+                [
+                  "s1-footprints-decal",
+                  8
+                ],
+                [
+                  "rain",
+                  4
+                ]
+              ],
+              "passes": [
+                [
+                  "other",
+                  80,
+                  3227887,
+                  "planar-reflection 320x180",
+                  ""
+                ],
+                [
+                  "main",
+                  89,
+                  3387231,
+                  "EffectComposer.Buffer 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "main",
+                  50,
+                  177291,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "main",
+                  3,
+                  108811,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "EffectComposer.Buffer 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "LuminancePass.Target 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap0 320x180",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap1 160x90",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap2 80x45",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap3 40x23",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap4 20x12",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap5 10x6",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap4 20x12",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap3 40x23",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap2 80x45",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap1 160x90",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap0 320x180",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "EffectComposer.Buffer 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "SMAA.Edges 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "SMAA.Weights 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "screen",
+                  ""
+                ]
+              ]
+            },
+            {
+              "id": "s1-neighbor-note",
+              "ok": true,
+              "main": {
+                "calls": 51,
+                "tris": 3366638,
+                "target": "EffectComposer.Buffer 640x360"
+              },
+              "frame": {
+                "calls": 175,
+                "tris": 10027236,
+                "shadowCalls": 37,
+                "shadowTris": 3249944,
+                "passes": 28
+              },
+              "charLevels": {
+                "char-xi": 0
+              },
+              "top": [
+                [
+                  "s1-art",
+                  2976342
+                ],
+                [
+                  "player",
+                  239692
+                ],
+                [
+                  "water",
+                  80000
+                ],
+                [
+                  "sky-dome",
+                  3968
+                ],
+                [
+                  "atmo028-fog",
+                  1568
+                ],
+                [
+                  "s1-notice",
+                  1124
+                ],
+                [
+                  "s1-neighbor-note",
+                  332
+                ],
+                [
+                  "s1-tide-pillar",
+                  12
+                ],
+                [
+                  "s1-footprints-decal",
+                  8
+                ],
+                [
+                  "rain",
+                  4
+                ]
+              ],
+              "passes": [
+                [
+                  "other",
+                  43,
+                  3224262,
+                  "planar-reflection 320x180",
+                  ""
+                ],
+                [
+                  "main",
+                  51,
+                  3366638,
+                  "EffectComposer.Buffer 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "main",
+                  18,
+                  125780,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "main",
+                  2,
+                  60588,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "EffectComposer.Buffer 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "LuminancePass.Target 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap0 320x180",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap1 160x90",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap2 80x45",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap3 40x23",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap4 20x12",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap5 10x6",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap4 20x12",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap3 40x23",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap2 80x45",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap1 160x90",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap0 320x180",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "EffectComposer.Buffer 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "SMAA.Edges 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "SMAA.Weights 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "screen",
+                  ""
+                ]
+              ]
+            },
+            {
+              "id": "s1-spawn-north",
+              "ok": true,
+              "main": {
+                "calls": 48,
+                "tris": 3365306,
+                "target": "EffectComposer.Buffer 640x360"
+              },
+              "frame": {
+                "calls": 169,
+                "tris": 10024572,
+                "shadowCalls": 37,
+                "shadowTris": 3249944,
+                "passes": 28
+              },
+              "charLevels": {
+                "char-xi": 0
+              },
+              "top": [
+                [
+                  "s1-art",
+                  2963630
+                ],
+                [
+                  "player",
+                  239692
+                ],
+                [
+                  "water",
+                  80000
+                ],
+                [
+                  "raft-s1",
+                  12504
+                ],
+                [
+                  "sky-dome",
+                  3968
+                ],
+                [
+                  "atmo028-fog",
+                  1568
+                ],
+                [
+                  "s1-neighbor-note",
+                  332
+                ],
+                [
+                  "s1-footprints-decal",
+                  8
+                ],
+                [
+                  "rain",
+                  4
+                ]
+              ],
+              "passes": [
+                [
+                  "other",
+                  40,
+                  3222930,
+                  "planar-reflection 320x180",
+                  ""
+                ],
+                [
+                  "main",
+                  48,
+                  3365306,
+                  "EffectComposer.Buffer 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "main",
+                  18,
+                  125780,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "main",
+                  2,
+                  60588,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "EffectComposer.Buffer 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "LuminancePass.Target 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap0 320x180",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap1 160x90",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap2 80x45",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap3 40x23",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap4 20x12",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap5 10x6",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap4 20x12",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap3 40x23",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap2 80x45",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap1 160x90",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap0 320x180",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "EffectComposer.Buffer 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "SMAA.Edges 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "SMAA.Weights 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "screen",
+                  ""
+                ]
+              ]
+            },
+            {
+              "id": "s1-opening",
+              "ok": true,
+              "main": {
+                "calls": 77,
+                "tris": 3353597,
+                "target": "EffectComposer.Buffer 640x360"
+              },
+              "frame": {
+                "calls": 263,
+                "tris": 10016600,
+                "shadowCalls": 41,
+                "shadowTris": 3182904,
+                "passes": 28
+              },
+              "charLevels": {
+                "char-xi": 0
+              },
+              "top": [
+                [
+                  "s1-art",
+                  2963581
+                ],
+                [
+                  "player",
+                  239692
+                ],
+                [
+                  "water",
+                  80000
+                ],
+                [
+                  "sky-dome",
+                  3968
+                ],
+                [
+                  "atmo028-fog",
+                  1628
+                ],
+                [
+                  "s1-notice",
+                  1124
+                ],
+                [
+                  "rain",
+                  4
+                ]
+              ],
+              "passes": [
+                [
+                  "other",
+                  72,
+                  3193981,
+                  "planar-reflection 320x180",
+                  ""
+                ],
+                [
+                  "main",
+                  77,
+                  3353597,
+                  "EffectComposer.Buffer 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "main",
+                  46,
+                  177283,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "main",
+                  3,
+                  108811,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "EffectComposer.Buffer 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "LuminancePass.Target 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap0 320x180",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap1 160x90",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap2 80x45",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap3 40x23",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap4 20x12",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap5 10x6",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap4 20x12",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap3 40x23",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap2 80x45",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap1 160x90",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap0 320x180",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "EffectComposer.Buffer 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "SMAA.Edges 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "SMAA.Weights 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "screen",
+                  ""
+                ]
+              ]
+            }
+          ],
+          "textures": {
+            "count": 63,
+            "max": 4096,
+            "compressed": 63,
+            "over": []
+          },
+          "chars": [
+            {
+              "name": "char-xi",
+              "topLevel": 0,
+              "topTris": 119846,
+              "budget": 120000,
+              "tris": [
+                119846,
+                48499,
+                24299
+              ],
+              "ok": true
+            }
+          ],
+          "critical": {
+            "count": 4,
+            "bad": []
+          }
+        },
+        "high": {
+          "budget": {
+            "tris": 3500000,
+            "calls": 1200
+          },
+          "spots": [
+            {
+              "id": "s1-raft-back",
+              "ok": true,
+              "main": {
+                "calls": 89,
+                "tris": 2862408,
+                "target": "EffectComposer.Buffer 640x360"
+              },
+              "frame": {
+                "calls": 286,
+                "tris": 8599443,
+                "shadowCalls": 41,
+                "shadowTris": 2793087,
+                "passes": 27
+              },
+              "charLevels": {
+                "char-xi": 1
+              },
+              "top": [
+                [
+                  "s1-art",
+                  2632254
+                ],
+                [
+                  "player",
+                  96998
+                ],
+                [
+                  "water",
+                  80000
+                ],
+                [
+                  "raft-s1",
+                  12504
+                ],
+                [
+                  "sky-dome",
+                  3968
+                ],
+                [
+                  "atmo028-fog",
+                  1628
+                ],
+                [
+                  "s1-notice",
+                  1124
+                ],
+                [
+                  "s1-neighbor-note",
+                  332
+                ],
+                [
+                  "s1-footprints-decal",
+                  8
+                ],
+                [
+                  "rain",
+                  4
+                ]
+              ],
+              "passes": [
+                [
+                  "other",
+                  80,
+                  2733064,
+                  "planar-reflection 320x180",
+                  ""
+                ],
+                [
+                  "main",
+                  89,
+                  2862408,
+                  "EffectComposer.Buffer 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "main",
+                  50,
+                  123771,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "main",
+                  3,
+                  87090,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  " 320x180",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 320x180",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 320x180",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 320x180",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 320x180",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "EffectComposer.Buffer 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "LuminancePass.Target 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap0 320x180",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap1 160x90",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap2 80x45",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap3 40x23",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap4 20x12",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap3 40x23",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap2 80x45",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap1 160x90",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap0 320x180",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "EffectComposer.Buffer 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "SMAA.Edges 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "SMAA.Weights 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "screen",
+                  ""
+                ]
+              ]
+            },
+            {
+              "id": "s1-neighbor-note",
+              "ok": true,
+              "main": {
+                "calls": 55,
+                "tris": 2855864,
+                "target": "EffectComposer.Buffer 640x360"
+              },
+              "frame": {
+                "calls": 186,
+                "tris": 8596260,
+                "shadowCalls": 41,
+                "shadowTris": 2840517,
+                "passes": 27
+              },
+              "charLevels": {
+                "char-xi": 1
+              },
+              "top": [
+                [
+                  "s1-art",
+                  2638262
+                ],
+                [
+                  "player",
+                  96998
+                ],
+                [
+                  "water",
+                  80000
+                ],
+                [
+                  "sky-dome",
+                  3968
+                ],
+                [
+                  "atmo028-fog",
+                  1568
+                ],
+                [
+                  "s1-notice",
+                  1124
+                ],
+                [
+                  "s1-neighbor-note",
+                  332
+                ],
+                [
+                  "s1-tide-pillar",
+                  12
+                ],
+                [
+                  "s1-footprints-decal",
+                  8
+                ],
+                [
+                  "rain",
+                  4
+                ]
+              ],
+              "passes": [
+                [
+                  "other",
+                  47,
+                  2743488,
+                  "planar-reflection 320x180",
+                  ""
+                ],
+                [
+                  "main",
+                  55,
+                  2855864,
+                  "EffectComposer.Buffer 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "main",
+                  18,
+                  95780,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "main",
+                  2,
+                  60588,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  " 320x180",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 320x180",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 320x180",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 320x180",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 320x180",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "EffectComposer.Buffer 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "LuminancePass.Target 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap0 320x180",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap1 160x90",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap2 80x45",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap3 40x23",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap4 20x12",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap3 40x23",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap2 80x45",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap1 160x90",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap0 320x180",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "EffectComposer.Buffer 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "SMAA.Edges 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "SMAA.Weights 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "screen",
+                  ""
+                ]
+              ]
+            },
+            {
+              "id": "s1-spawn-north",
+              "ok": true,
+              "main": {
+                "calls": 52,
+                "tris": 3056432,
+                "target": "EffectComposer.Buffer 640x360"
+              },
+              "frame": {
+                "calls": 180,
+                "tris": 9199296,
+                "shadowCalls": 41,
+                "shadowTris": 3042417,
+                "passes": 27
+              },
+              "charLevels": {
+                "char-xi": 1
+              },
+              "top": [
+                [
+                  "s1-art",
+                  2827450
+                ],
+                [
+                  "player",
+                  96998
+                ],
+                [
+                  "water",
+                  80000
+                ],
+                [
+                  "raft-s1",
+                  12504
+                ],
+                [
+                  "sky-dome",
+                  3968
+                ],
+                [
+                  "atmo028-fog",
+                  1568
+                ],
+                [
+                  "s1-neighbor-note",
+                  332
+                ],
+                [
+                  "s1-footprints-decal",
+                  8
+                ],
+                [
+                  "rain",
+                  4
+                ]
+              ],
+              "passes": [
+                [
+                  "other",
+                  44,
+                  2944056,
+                  "planar-reflection 320x180",
+                  ""
+                ],
+                [
+                  "main",
+                  52,
+                  3056432,
+                  "EffectComposer.Buffer 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "main",
+                  18,
+                  95780,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "main",
+                  2,
+                  60588,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  " 320x180",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 320x180",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 320x180",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 320x180",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 320x180",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "EffectComposer.Buffer 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "LuminancePass.Target 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap0 320x180",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap1 160x90",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap2 80x45",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap3 40x23",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap4 20x12",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap3 40x23",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap2 80x45",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap1 160x90",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap0 320x180",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "EffectComposer.Buffer 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "SMAA.Edges 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "SMAA.Weights 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "screen",
+                  ""
+                ]
+              ]
+            },
+            {
+              "id": "s1-opening",
+              "ok": true,
+              "main": {
+                "calls": 77,
+                "tris": 2829884,
+                "target": "EffectComposer.Buffer 640x360"
+              },
+              "frame": {
+                "calls": 262,
+                "tris": 8534115,
+                "shadowCalls": 41,
+                "shadowTris": 2793087,
+                "passes": 27
+              },
+              "charLevels": {
+                "char-xi": 1
+              },
+              "top": [
+                [
+                  "s1-art",
+                  2612562
+                ],
+                [
+                  "player",
+                  96998
+                ],
+                [
+                  "water",
+                  80000
+                ],
+                [
+                  "sky-dome",
+                  3968
+                ],
+                [
+                  "atmo028-fog",
+                  1628
+                ],
+                [
+                  "s1-notice",
+                  1124
+                ],
+                [
+                  "rain",
+                  4
+                ]
+              ],
+              "passes": [
+                [
+                  "other",
+                  72,
+                  2700268,
+                  "planar-reflection 320x180",
+                  ""
+                ],
+                [
+                  "main",
+                  77,
+                  2829884,
+                  "EffectComposer.Buffer 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "main",
+                  46,
+                  123763,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "main",
+                  3,
+                  87090,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  " 320x180",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 320x180",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 320x180",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 320x180",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 320x180",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "EffectComposer.Buffer 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "LuminancePass.Target 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap0 320x180",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap1 160x90",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap2 80x45",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap3 40x23",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap4 20x12",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap3 40x23",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap2 80x45",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap1 160x90",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap0 320x180",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "EffectComposer.Buffer 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "SMAA.Edges 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "SMAA.Weights 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "screen",
+                  ""
+                ]
+              ]
+            }
+          ],
+          "textures": {
+            "count": 63,
+            "max": 2048,
+            "compressed": 63,
+            "over": []
+          },
+          "chars": [
+            {
+              "name": "char-xi",
+              "topLevel": 1,
+              "topTris": 48499,
+              "budget": 50000,
+              "tris": [
+                119846,
+                48499,
+                24299
+              ],
+              "ok": true
+            }
+          ],
+          "critical": {
+            "count": 4,
+            "bad": []
+          }
+        },
+        "standard": {
+          "budget": {
+            "tris": 1500000,
+            "calls": 600
+          },
+          "spots": [
+            {
+              "id": "s1-raft-back",
+              "ok": false,
+              "known": "标准档 S1 主 pass 面数 2.20–2.56 M > 1.5 M：不做 LOD、不改预算，等 M8 实机帧率定",
+              "main": {
+                "calls": 93,
+                "tris": 2204190,
+                "target": "EffectComposer.Buffer 512x288"
+              },
+              "frame": {
+                "calls": 232,
+                "tris": 6362618,
+                "shadowCalls": 43,
+                "shadowTris": 2044785,
+                "passes": 14
+              },
+              "charLevels": {
+                "char-xi": 1
+              },
+              "top": [
+                [
+                  "s1-art",
+                  2005760
+                ],
+                [
+                  "player",
+                  96998
+                ],
+                [
+                  "water",
+                  80000
+                ],
+                [
+                  "raft-s1",
+                  12504
+                ],
+                [
+                  "sky-dome",
+                  3968
+                ],
+                [
+                  "atmo028-fog",
+                  1082
+                ],
+                [
+                  "s1-notice",
+                  492
+                ],
+                [
+                  "s1-neighbor-note",
+                  332
+                ],
+                [
+                  "s1-footprints-decal",
+                  8
+                ],
+                [
+                  "rain",
+                  2
+                ]
+              ],
+              "passes": [
+                [
+                  "other",
+                  84,
+                  2113631,
+                  "planar-reflection 128x72",
+                  ""
+                ],
+                [
+                  "main",
+                  93,
+                  2204190,
+                  "EffectComposer.Buffer 512x288",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "LuminancePass.Target 512x288",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap0 256x144",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap1 128x72",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap2 64x36",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap3 32x18",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap2 64x36",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap1 128x72",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap0 256x144",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "EffectComposer.Buffer 512x288",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "SMAA.Edges 512x288",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "SMAA.Weights 512x288",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "screen",
+                  ""
+                ]
+              ]
+            },
+            {
+              "id": "s1-neighbor-note",
+              "ok": false,
+              "known": "标准档 S1 主 pass 面数 2.20–2.56 M > 1.5 M：不做 LOD、不改预算，等 M8 实机帧率定",
+              "main": {
+                "calls": 55,
+                "tris": 2401041,
+                "target": "EffectComposer.Buffer 512x288"
+              },
+              "frame": {
+                "calls": 153,
+                "tris": 7015328,
+                "shadowCalls": 39,
+                "shadowTris": 2295610,
+                "passes": 14
+              },
+              "charLevels": {
+                "char-xi": 1
+              },
+              "top": [
+                [
+                  "s1-art",
+                  2215163
+                ],
+                [
+                  "player",
+                  96998
+                ],
+                [
+                  "water",
+                  80000
+                ],
+                [
+                  "sky-dome",
+                  3968
+                ],
+                [
+                  "atmo028-fog",
+                  1022
+                ],
+                [
+                  "s1-notice",
+                  492
+                ],
+                [
+                  "s1-neighbor-note",
+                  332
+                ],
+                [
+                  "s1-tide-pillar",
+                  12
+                ],
+                [
+                  "s1-footprints-decal",
+                  8
+                ],
+                [
+                  "rain",
+                  2
+                ]
+              ],
+              "passes": [
+                [
+                  "other",
+                  47,
+                  2318665,
+                  "planar-reflection 128x72",
+                  ""
+                ],
+                [
+                  "main",
+                  55,
+                  2401041,
+                  "EffectComposer.Buffer 512x288",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "LuminancePass.Target 512x288",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap0 256x144",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap1 128x72",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap2 64x36",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap3 32x18",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap2 64x36",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap1 128x72",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap0 256x144",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "EffectComposer.Buffer 512x288",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "SMAA.Edges 512x288",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "SMAA.Weights 512x288",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "screen",
+                  ""
+                ]
+              ]
+            },
+            {
+              "id": "s1-spawn-north",
+              "ok": false,
+              "known": "标准档 S1 主 pass 面数 2.20–2.56 M > 1.5 M：不做 LOD、不改预算，等 M8 实机帧率定",
+              "main": {
+                "calls": 52,
+                "tris": 2555750,
+                "target": "EffectComposer.Buffer 512x288"
+              },
+              "frame": {
+                "calls": 147,
+                "tris": 7480787,
+                "shadowCalls": 39,
+                "shadowTris": 2451651,
+                "passes": 14
+              },
+              "charLevels": {
+                "char-xi": 1
+              },
+              "top": [
+                [
+                  "s1-art",
+                  2357860
+                ],
+                [
+                  "player",
+                  96998
+                ],
+                [
+                  "water",
+                  80000
+                ],
+                [
+                  "raft-s1",
+                  12504
+                ],
+                [
+                  "sky-dome",
+                  3968
+                ],
+                [
+                  "atmo028-fog",
+                  1022
+                ],
+                [
+                  "s1-neighbor-note",
+                  332
+                ],
+                [
+                  "s1-footprints-decal",
+                  8
+                ],
+                [
+                  "rain",
+                  2
+                ]
+              ],
+              "passes": [
+                [
+                  "other",
+                  44,
+                  2473374,
+                  "planar-reflection 128x72",
+                  ""
+                ],
+                [
+                  "main",
+                  52,
+                  2555750,
+                  "EffectComposer.Buffer 512x288",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "LuminancePass.Target 512x288",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap0 256x144",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap1 128x72",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap2 64x36",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap3 32x18",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap2 64x36",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap1 128x72",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap0 256x144",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "EffectComposer.Buffer 512x288",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "SMAA.Edges 512x288",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "SMAA.Weights 512x288",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "screen",
+                  ""
+                ]
+              ]
+            },
+            {
+              "id": "s1-opening",
+              "ok": false,
+              "known": "标准档 S1 主 pass 面数 2.20–2.56 M > 1.5 M：不做 LOD、不改预算，等 M8 实机帧率定",
+              "main": {
+                "calls": 80,
+                "tris": 2326565,
+                "target": "EffectComposer.Buffer 512x288"
+              },
+              "frame": {
+                "calls": 209,
+                "tris": 6761995,
+                "shadowCalls": 42,
+                "shadowTris": 2199684,
+                "passes": 14
+              },
+              "charLevels": {
+                "char-xi": 1
+              },
+              "top": [
+                [
+                  "s1-art",
+                  2140335
+                ],
+                [
+                  "player",
+                  96998
+                ],
+                [
+                  "water",
+                  80000
+                ],
+                [
+                  "sky-dome",
+                  3968
+                ],
+                [
+                  "s1-notice",
+                  1124
+                ],
+                [
+                  "atmo028-fog",
+                  1082
+                ],
+                [
+                  "rain",
+                  2
+                ]
+              ],
+              "passes": [
+                [
+                  "other",
+                  75,
+                  2235734,
+                  "planar-reflection 128x72",
+                  ""
+                ],
+                [
+                  "main",
+                  80,
+                  2326565,
+                  "EffectComposer.Buffer 512x288",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "LuminancePass.Target 512x288",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap0 256x144",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap1 128x72",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap2 64x36",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap3 32x18",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap2 64x36",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap1 128x72",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap0 256x144",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "EffectComposer.Buffer 512x288",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "SMAA.Edges 512x288",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "SMAA.Weights 512x288",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "screen",
+                  ""
+                ]
+              ]
+            }
+          ],
+          "textures": {
+            "count": 63,
+            "max": 2048,
+            "compressed": 63,
+            "over": []
+          },
+          "chars": [
+            {
+              "name": "char-xi",
+              "topLevel": 1,
+              "topTris": 48499,
+              "budget": 50000,
+              "tris": [
+                119846,
+                48499,
+                24299
+              ],
+              "ok": true
+            }
+          ],
+          "critical": {
+            "count": 4,
+            "bad": []
+          }
+        }
+      }
+    },
+    "s2": {
+      "load": {
+        "n": 197,
+        "bad": []
+      },
+      "tiers": {
+        "ultra": {
+          "budget": {
+            "tris": 6000000,
+            "calls": 2000
+          },
+          "spots": [
+            {
+              "id": "s2-white-stone-5",
+              "ok": true,
+              "main": {
+                "calls": 97,
+                "tris": 761153,
+                "target": "EffectComposer.Buffer 640x360"
+              },
+              "frame": {
+                "calls": 251,
+                "tris": 1976399,
+                "shadowCalls": 97,
+                "shadowTris": 591385,
+                "passes": 28
+              },
+              "charLevels": {
+                "char-xi": 0
+              },
+              "top": [
+                [
+                  "s2-art",
+                  360899
+                ],
+                [
+                  "player",
+                  246932
+                ],
+                [
+                  "water",
+                  80000
+                ],
+                [
+                  "sky-dome",
+                  3968
+                ],
+                [
+                  "s2-puzzles",
+                  2504
+                ],
+                [
+                  "prop-kitchen-set-a-s2",
+                  2356
+                ],
+                [
+                  "prop-desk-set-a-s2",
+                  1756
+                ],
+                [
+                  "blockout-s2-keeper-house",
+                  596
+                ],
+                [
+                  "rain",
+                  4
+                ]
+              ],
+              "passes": [
+                [
+                  "other",
+                  15,
+                  427385,
+                  "planar-reflection 320x180",
+                  ""
+                ],
+                [
+                  "main",
+                  97,
+                  761153,
+                  "EffectComposer.Buffer 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "main",
+                  12,
+                  129924,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "main",
+                  6,
+                  66528,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "EffectComposer.Buffer 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "LuminancePass.Target 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap0 320x180",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap1 160x90",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap2 80x45",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap3 40x23",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap4 20x12",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap5 10x6",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap4 20x12",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap3 40x23",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap2 80x45",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap1 160x90",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap0 320x180",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "EffectComposer.Buffer 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "SMAA.Edges 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "SMAA.Weights 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "screen",
+                  ""
+                ]
+              ]
+            },
+            {
+              "id": "s2-white-stone-1",
+              "ok": true,
+              "main": {
+                "calls": 86,
+                "tris": 757633,
+                "target": "EffectComposer.Buffer 640x360"
+              },
+              "frame": {
+                "calls": 240,
+                "tris": 1972879,
+                "shadowCalls": 97,
+                "shadowTris": 591385,
+                "passes": 28
+              },
+              "charLevels": {
+                "char-xi": 0
+              },
+              "top": [
+                [
+                  "s2-art",
+                  357379
+                ],
+                [
+                  "player",
+                  246932
+                ],
+                [
+                  "water",
+                  80000
+                ],
+                [
+                  "sky-dome",
+                  3968
+                ],
+                [
+                  "s2-puzzles",
+                  2504
+                ],
+                [
+                  "prop-kitchen-set-a-s2",
+                  2356
+                ],
+                [
+                  "prop-desk-set-a-s2",
+                  1756
+                ],
+                [
+                  "blockout-s2-keeper-house",
+                  596
+                ],
+                [
+                  "rain",
+                  4
+                ]
+              ],
+              "passes": [
+                [
+                  "other",
+                  15,
+                  427385,
+                  "planar-reflection 320x180",
+                  ""
+                ],
+                [
+                  "main",
+                  86,
+                  757633,
+                  "EffectComposer.Buffer 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "main",
+                  12,
+                  129924,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "main",
+                  6,
+                  66528,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "EffectComposer.Buffer 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "LuminancePass.Target 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap0 320x180",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap1 160x90",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap2 80x45",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap3 40x23",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap4 20x12",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap5 10x6",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap4 20x12",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap3 40x23",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap2 80x45",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap1 160x90",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap0 320x180",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "EffectComposer.Buffer 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "SMAA.Edges 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "SMAA.Weights 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "screen",
+                  ""
+                ]
+              ]
+            },
+            {
+              "id": "s2-dial-gate",
+              "ok": true,
+              "main": {
+                "calls": 75,
+                "tris": 750457,
+                "target": "EffectComposer.Buffer 640x360"
+              },
+              "frame": {
+                "calls": 228,
+                "tris": 1907347,
+                "shadowCalls": 97,
+                "shadowTris": 591385,
+                "passes": 28
+              },
+              "charLevels": {
+                "char-xi": 0
+              },
+              "top": [
+                [
+                  "s2-art",
+                  350203
+                ],
+                [
+                  "player",
+                  246932
+                ],
+                [
+                  "water",
+                  80000
+                ],
+                [
+                  "sky-dome",
+                  3968
+                ],
+                [
+                  "s2-puzzles",
+                  2504
+                ],
+                [
+                  "prop-kitchen-set-a-s2",
+                  2356
+                ],
+                [
+                  "prop-desk-set-a-s2",
+                  1756
+                ],
+                [
+                  "blockout-s2-keeper-house",
+                  596
+                ],
+                [
+                  "rain",
+                  4
+                ]
+              ],
+              "passes": [
+                [
+                  "other",
+                  14,
+                  369029,
+                  "planar-reflection 320x180",
+                  ""
+                ],
+                [
+                  "main",
+                  75,
+                  750457,
+                  "EffectComposer.Buffer 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "main",
+                  12,
+                  129924,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "main",
+                  6,
+                  66528,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "EffectComposer.Buffer 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "LuminancePass.Target 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap0 320x180",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap1 160x90",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap2 80x45",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap3 40x23",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap4 20x12",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap5 10x6",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap4 20x12",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap3 40x23",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap2 80x45",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap1 160x90",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap0 320x180",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "EffectComposer.Buffer 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "SMAA.Edges 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "SMAA.Weights 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "screen",
+                  ""
+                ]
+              ]
+            }
+          ],
+          "textures": {
+            "count": 34,
+            "max": 4096,
+            "compressed": 34,
+            "over": []
+          },
+          "chars": [
+            {
+              "name": "char-xi",
+              "topLevel": 0,
+              "topTris": 119846,
+              "budget": 120000,
+              "tris": [
+                119846,
+                48499,
+                24299
+              ],
+              "ok": true
+            }
+          ],
+          "critical": {
+            "count": 22,
+            "bad": []
+          }
+        },
+        "high": {
+          "budget": {
+            "tris": 3500000,
+            "calls": 1200
+          },
+          "spots": [
+            {
+              "id": "s2-white-stone-5",
+              "ok": true,
+              "main": {
+                "calls": 97,
+                "tris": 588459,
+                "target": "EffectComposer.Buffer 640x360"
+              },
+              "frame": {
+                "calls": 250,
+                "tris": 1530485,
+                "shadowCalls": 97,
+                "shadowTris": 520038,
+                "passes": 27
+              },
+              "charLevels": {
+                "char-xi": 1
+              },
+              "top": [
+                [
+                  "s2-art",
+                  360899
+                ],
+                [
+                  "player",
+                  104238
+                ],
+                [
+                  "water",
+                  80000
+                ],
+                [
+                  "sky-dome",
+                  3968
+                ],
+                [
+                  "s2-puzzles",
+                  2504
+                ],
+                [
+                  "prop-kitchen-set-a-s2",
+                  2356
+                ],
+                [
+                  "prop-desk-set-a-s2",
+                  1756
+                ],
+                [
+                  "blockout-s2-keeper-house",
+                  596
+                ],
+                [
+                  "rain",
+                  4
+                ]
+              ],
+              "passes": [
+                [
+                  "other",
+                  15,
+                  255513,
+                  "planar-reflection 320x180",
+                  ""
+                ],
+                [
+                  "main",
+                  97,
+                  588459,
+                  "EffectComposer.Buffer 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "main",
+                  12,
+                  99924,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "main",
+                  6,
+                  66528,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  " 320x180",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 320x180",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 320x180",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 320x180",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 320x180",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "EffectComposer.Buffer 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "LuminancePass.Target 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap0 320x180",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap1 160x90",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap2 80x45",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap3 40x23",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap4 20x12",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap3 40x23",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap2 80x45",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap1 160x90",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap0 320x180",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "EffectComposer.Buffer 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "SMAA.Edges 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "SMAA.Weights 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "screen",
+                  ""
+                ]
+              ]
+            },
+            {
+              "id": "s2-white-stone-1",
+              "ok": true,
+              "main": {
+                "calls": 86,
+                "tris": 584939,
+                "target": "EffectComposer.Buffer 640x360"
+              },
+              "frame": {
+                "calls": 239,
+                "tris": 1526965,
+                "shadowCalls": 97,
+                "shadowTris": 520038,
+                "passes": 27
+              },
+              "charLevels": {
+                "char-xi": 1
+              },
+              "top": [
+                [
+                  "s2-art",
+                  357379
+                ],
+                [
+                  "player",
+                  104238
+                ],
+                [
+                  "water",
+                  80000
+                ],
+                [
+                  "sky-dome",
+                  3968
+                ],
+                [
+                  "s2-puzzles",
+                  2504
+                ],
+                [
+                  "prop-kitchen-set-a-s2",
+                  2356
+                ],
+                [
+                  "prop-desk-set-a-s2",
+                  1756
+                ],
+                [
+                  "blockout-s2-keeper-house",
+                  596
+                ],
+                [
+                  "rain",
+                  4
+                ]
+              ],
+              "passes": [
+                [
+                  "other",
+                  15,
+                  255513,
+                  "planar-reflection 320x180",
+                  ""
+                ],
+                [
+                  "main",
+                  86,
+                  584939,
+                  "EffectComposer.Buffer 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "main",
+                  12,
+                  99924,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "main",
+                  6,
+                  66528,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  " 320x180",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 320x180",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 320x180",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 320x180",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 320x180",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "EffectComposer.Buffer 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "LuminancePass.Target 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap0 320x180",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap1 160x90",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap2 80x45",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap3 40x23",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap4 20x12",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap3 40x23",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap2 80x45",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap1 160x90",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap0 320x180",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "EffectComposer.Buffer 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "SMAA.Edges 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "SMAA.Weights 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "screen",
+                  ""
+                ]
+              ]
+            },
+            {
+              "id": "s2-dial-gate",
+              "ok": true,
+              "main": {
+                "calls": 75,
+                "tris": 577763,
+                "target": "EffectComposer.Buffer 640x360"
+              },
+              "frame": {
+                "calls": 227,
+                "tris": 1490611,
+                "shadowCalls": 97,
+                "shadowTris": 520038,
+                "passes": 27
+              },
+              "charLevels": {
+                "char-xi": 1
+              },
+              "top": [
+                [
+                  "s2-art",
+                  350203
+                ],
+                [
+                  "player",
+                  104238
+                ],
+                [
+                  "water",
+                  80000
+                ],
+                [
+                  "sky-dome",
+                  3968
+                ],
+                [
+                  "s2-puzzles",
+                  2504
+                ],
+                [
+                  "prop-kitchen-set-a-s2",
+                  2356
+                ],
+                [
+                  "prop-desk-set-a-s2",
+                  1756
+                ],
+                [
+                  "blockout-s2-keeper-house",
+                  596
+                ],
+                [
+                  "rain",
+                  4
+                ]
+              ],
+              "passes": [
+                [
+                  "other",
+                  14,
+                  226335,
+                  "planar-reflection 320x180",
+                  ""
+                ],
+                [
+                  "main",
+                  75,
+                  577763,
+                  "EffectComposer.Buffer 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "main",
+                  12,
+                  99924,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "main",
+                  6,
+                  66528,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  " 320x180",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 320x180",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 320x180",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 320x180",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 320x180",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "EffectComposer.Buffer 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "LuminancePass.Target 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap0 320x180",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap1 160x90",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap2 80x45",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap3 40x23",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap4 20x12",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap3 40x23",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap2 80x45",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap1 160x90",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap0 320x180",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "EffectComposer.Buffer 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "SMAA.Edges 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "SMAA.Weights 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "screen",
+                  ""
+                ]
+              ]
+            }
+          ],
+          "textures": {
+            "count": 34,
+            "max": 2048,
+            "compressed": 34,
+            "over": []
+          },
+          "chars": [
+            {
+              "name": "char-xi",
+              "topLevel": 1,
+              "topTris": 48499,
+              "budget": 50000,
+              "tris": [
+                119846,
+                48499,
+                24299
+              ],
+              "ok": true
+            }
+          ],
+          "critical": {
+            "count": 22,
+            "bad": []
+          }
+        },
+        "standard": {
+          "budget": {
+            "tris": 1500000,
+            "calls": 600
+          },
+          "spots": [
+            {
+              "id": "s2-white-stone-5",
+              "ok": true,
+              "main": {
+                "calls": 97,
+                "tris": 415410,
+                "target": "EffectComposer.Buffer 512x288"
+              },
+              "frame": {
+                "calls": 207,
+                "tris": 869989,
+                "shadowCalls": 83,
+                "shadowTris": 243268,
+                "passes": 14
+              },
+              "charLevels": {
+                "char-xi": 1
+              },
+              "top": [
+                [
+                  "s2-art",
+                  221533
+                ],
+                [
+                  "player",
+                  104238
+                ],
+                [
+                  "water",
+                  80000
+                ],
+                [
+                  "sky-dome",
+                  3968
+                ],
+                [
+                  "prop-kitchen-set-a-s2",
+                  1084
+                ],
+                [
+                  "s2-puzzles",
+                  1060
+                ],
+                [
+                  "prop-desk-set-a-s2",
+                  840
+                ],
+                [
+                  "blockout-s2-keeper-house",
+                  298
+                ],
+                [
+                  "rain",
+                  2
+                ]
+              ],
+              "passes": [
+                [
+                  "other",
+                  15,
+                  211299,
+                  "planar-reflection 128x72",
+                  ""
+                ],
+                [
+                  "main",
+                  97,
+                  415410,
+                  "EffectComposer.Buffer 512x288",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "LuminancePass.Target 512x288",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap0 256x144",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap1 128x72",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap2 64x36",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap3 32x18",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap2 64x36",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap1 128x72",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap0 256x144",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "EffectComposer.Buffer 512x288",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "SMAA.Edges 512x288",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "SMAA.Weights 512x288",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "screen",
+                  ""
+                ]
+              ]
+            },
+            {
+              "id": "s2-white-stone-1",
+              "ok": true,
+              "main": {
+                "calls": 86,
+                "tris": 469390,
+                "target": "EffectComposer.Buffer 512x288"
+              },
+              "frame": {
+                "calls": 196,
+                "tris": 981469,
+                "shadowCalls": 83,
+                "shadowTris": 300768,
+                "passes": 14
+              },
+              "charLevels": {
+                "char-xi": 1
+              },
+              "top": [
+                [
+                  "s2-art",
+                  275215
+                ],
+                [
+                  "player",
+                  104238
+                ],
+                [
+                  "water",
+                  80000
+                ],
+                [
+                  "sky-dome",
+                  3968
+                ],
+                [
+                  "prop-kitchen-set-a-s2",
+                  1084
+                ],
+                [
+                  "s2-puzzles",
+                  1060
+                ],
+                [
+                  "prop-desk-set-a-s2",
+                  840
+                ],
+                [
+                  "blockout-s2-keeper-house",
+                  596
+                ],
+                [
+                  "rain",
+                  2
+                ]
+              ],
+              "passes": [
+                [
+                  "other",
+                  15,
+                  211299,
+                  "planar-reflection 128x72",
+                  ""
+                ],
+                [
+                  "main",
+                  86,
+                  469390,
+                  "EffectComposer.Buffer 512x288",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "LuminancePass.Target 512x288",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap0 256x144",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap1 128x72",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap2 64x36",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap3 32x18",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap2 64x36",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap1 128x72",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap0 256x144",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "EffectComposer.Buffer 512x288",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "SMAA.Edges 512x288",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "SMAA.Weights 512x288",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "screen",
+                  ""
+                ]
+              ]
+            },
+            {
+              "id": "s2-dial-gate",
+              "ok": true,
+              "main": {
+                "calls": 75,
+                "tris": 547763,
+                "target": "EffectComposer.Buffer 512x288"
+              },
+              "frame": {
+                "calls": 184,
+                "tris": 1116204,
+                "shadowCalls": 83,
+                "shadowTris": 386308,
+                "passes": 14
+              },
+              "charLevels": {
+                "char-xi": 1
+              },
+              "top": [
+                [
+                  "s2-art",
+                  350203
+                ],
+                [
+                  "player",
+                  104238
+                ],
+                [
+                  "water",
+                  80000
+                ],
+                [
+                  "sky-dome",
+                  3968
+                ],
+                [
+                  "s2-puzzles",
+                  2504
+                ],
+                [
+                  "prop-kitchen-set-a-s2",
+                  2356
+                ],
+                [
+                  "prop-desk-set-a-s2",
+                  1756
+                ],
+                [
+                  "blockout-s2-keeper-house",
+                  596
+                ],
+                [
+                  "rain",
+                  2
+                ]
+              ],
+              "passes": [
+                [
+                  "other",
+                  14,
+                  182121,
+                  "planar-reflection 128x72",
+                  ""
+                ],
+                [
+                  "main",
+                  75,
+                  547763,
+                  "EffectComposer.Buffer 512x288",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "LuminancePass.Target 512x288",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap0 256x144",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap1 128x72",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap2 64x36",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap3 32x18",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap2 64x36",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap1 128x72",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap0 256x144",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "EffectComposer.Buffer 512x288",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "SMAA.Edges 512x288",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "SMAA.Weights 512x288",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "screen",
+                  ""
+                ]
+              ]
+            }
+          ],
+          "textures": {
+            "count": 34,
+            "max": 2048,
+            "compressed": 34,
+            "over": []
+          },
+          "chars": [
+            {
+              "name": "char-xi",
+              "topLevel": 1,
+              "topTris": 48499,
+              "budget": 50000,
+              "tris": [
+                119846,
+                48499,
+                24299
+              ],
+              "ok": true
+            }
+          ],
+          "critical": {
+            "count": 22,
+            "bad": []
+          }
+        }
+      }
+    },
+    "s3": {
+      "load": {
+        "n": 146,
+        "bad": []
+      },
+      "tiers": {
+        "ultra": {
+          "budget": {
+            "tris": 6000000,
+            "calls": 2000
+          },
+          "spots": [
+            {
+              "id": "s3-spawn-south",
+              "ok": true,
+              "main": {
+                "calls": 44,
+                "tris": 699464,
+                "target": "EffectComposer.Buffer 640x360"
+              },
+              "frame": {
+                "calls": 157,
+                "tris": 1798393,
+                "shadowCalls": 23,
+                "shadowTris": 433552,
+                "passes": 29
+              },
+              "charLevels": {
+                "char-father": 0,
+                "char-xi": 0
+              },
+              "top": [
+                [
+                  "s3-frame",
+                  313072
+                ],
+                [
+                  "player",
+                  239692
+                ],
+                [
+                  "water",
+                  80000
+                ],
+                [
+                  "sky-dome",
+                  3968
+                ],
+                [
+                  "beam-renderer",
+                  696
+                ],
+                [
+                  "rain",
+                  4
+                ]
+              ],
+              "passes": [
+                [
+                  "other",
+                  53,
+                  593248,
+                  "planar-reflection 320x180",
+                  ""
+                ],
+                [
+                  "main",
+                  44,
+                  699464,
+                  "EffectComposer.Buffer 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "main",
+                  12,
+                  72104,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "main",
+                  0,
+                  0,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "EffectComposer.Buffer 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "LuminancePass.Target 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap0 320x180",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap1 160x90",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap2 80x45",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap3 40x23",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap4 20x12",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap5 10x6",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap4 20x12",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap3 40x23",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap2 80x45",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap1 160x90",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap0 320x180",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "EffectComposer.Buffer 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "EffectComposer.Buffer 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "SMAA.Edges 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "SMAA.Weights 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "screen",
+                  ""
+                ]
+              ]
+            },
+            {
+              "id": "s3-oil-valve",
+              "ok": true,
+              "main": {
+                "calls": 40,
+                "tris": 696282,
+                "target": "EffectComposer.Buffer 640x360"
+              },
+              "frame": {
+                "calls": 135,
+                "tris": 1755031,
+                "shadowCalls": 23,
+                "shadowTris": 433552,
+                "passes": 29
+              },
+              "charLevels": {
+                "char-father": 0,
+                "char-xi": 0
+              },
+              "top": [
+                [
+                  "s3-frame",
+                  310178
+                ],
+                [
+                  "player",
+                  239692
+                ],
+                [
+                  "water",
+                  80000
+                ],
+                [
+                  "sky-dome",
+                  3968
+                ],
+                [
+                  "beam-renderer",
+                  408
+                ],
+                [
+                  "rain",
+                  4
+                ]
+              ],
+              "passes": [
+                [
+                  "other",
+                  36,
+                  553356,
+                  "planar-reflection 320x180",
+                  ""
+                ],
+                [
+                  "main",
+                  40,
+                  696282,
+                  "EffectComposer.Buffer 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "main",
+                  11,
+                  71816,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "main",
+                  0,
+                  0,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "EffectComposer.Buffer 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "LuminancePass.Target 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap0 320x180",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap1 160x90",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap2 80x45",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap3 40x23",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap4 20x12",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap5 10x6",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap4 20x12",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap3 40x23",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap2 80x45",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap1 160x90",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap0 320x180",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "EffectComposer.Buffer 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "EffectComposer.Buffer 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "SMAA.Edges 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "SMAA.Weights 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "screen",
+                  ""
+                ]
+              ]
+            },
+            {
+              "id": "s3-logbook",
+              "ok": true,
+              "main": {
+                "calls": 34,
+                "tris": 690174,
+                "target": "EffectComposer.Buffer 640x360"
+              },
+              "frame": {
+                "calls": 118,
+                "tris": 1729211,
+                "shadowCalls": 23,
+                "shadowTris": 433552,
+                "passes": 29
+              },
+              "charLevels": {
+                "char-father": 0,
+                "char-xi": 0
+              },
+              "top": [
+                [
+                  "s3-frame",
+                  304358
+                ],
+                [
+                  "player",
+                  239692
+                ],
+                [
+                  "water",
+                  80000
+                ],
+                [
+                  "sky-dome",
+                  3968
+                ],
+                [
+                  "beam-renderer",
+                  120
+                ],
+                [
+                  "rain",
+                  4
+                ]
+              ],
+              "passes": [
+                [
+                  "other",
+                  26,
+                  533932,
+                  "planar-reflection 320x180",
+                  ""
+                ],
+                [
+                  "main",
+                  34,
+                  690174,
+                  "EffectComposer.Buffer 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "main",
+                  10,
+                  71528,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "main",
+                  0,
+                  0,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "EffectComposer.Buffer 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "LuminancePass.Target 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap0 320x180",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap1 160x90",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap2 80x45",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap3 40x23",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap4 20x12",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap5 10x6",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap4 20x12",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap3 40x23",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap2 80x45",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap1 160x90",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap0 320x180",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "EffectComposer.Buffer 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "EffectComposer.Buffer 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "SMAA.Edges 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "SMAA.Weights 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "screen",
+                  ""
+                ]
+              ]
+            }
+          ],
+          "textures": {
+            "count": 33,
+            "max": 4096,
+            "compressed": 33,
+            "over": []
+          },
+          "chars": [
+            {
+              "name": "char-father",
+              "topLevel": 0,
+              "topTris": 55870,
+              "budget": 60000,
+              "tris": [
+                55870,
+                24000,
+                11999
+              ],
+              "ok": true
+            },
+            {
+              "name": "char-xi",
+              "topLevel": 0,
+              "topTris": 119846,
+              "budget": 120000,
+              "tris": [
+                119846,
+                48499,
+                24299
+              ],
+              "ok": true
+            }
+          ],
+          "critical": {
+            "count": 17,
+            "bad": []
+          }
+        },
+        "high": {
+          "budget": {
+            "tris": 3500000,
+            "calls": 1200
+          },
+          "spots": [
+            {
+              "id": "s3-spawn-south",
+              "ok": true,
+              "main": {
+                "calls": 44,
+                "tris": 526770,
+                "target": "EffectComposer.Buffer 640x360"
+              },
+              "frame": {
+                "calls": 156,
+                "tris": 1378451,
+                "shadowCalls": 23,
+                "shadowTris": 362205,
+                "passes": 28
+              },
+              "charLevels": {
+                "char-father": 0,
+                "char-xi": 1
+              },
+              "top": [
+                [
+                  "s3-frame",
+                  313072
+                ],
+                [
+                  "player",
+                  96998
+                ],
+                [
+                  "water",
+                  80000
+                ],
+                [
+                  "sky-dome",
+                  3968
+                ],
+                [
+                  "beam-renderer",
+                  696
+                ],
+                [
+                  "rain",
+                  4
+                ]
+              ],
+              "passes": [
+                [
+                  "other",
+                  53,
+                  447348,
+                  "planar-reflection 320x180",
+                  ""
+                ],
+                [
+                  "main",
+                  44,
+                  526770,
+                  "EffectComposer.Buffer 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "main",
+                  12,
+                  42104,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "main",
+                  0,
+                  0,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  " 320x180",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 320x180",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 320x180",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 320x180",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 320x180",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "EffectComposer.Buffer 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "LuminancePass.Target 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap0 320x180",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap1 160x90",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap2 80x45",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap3 40x23",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap4 20x12",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap3 40x23",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap2 80x45",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap1 160x90",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap0 320x180",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "EffectComposer.Buffer 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "EffectComposer.Buffer 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "SMAA.Edges 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "SMAA.Weights 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "screen",
+                  ""
+                ]
+              ]
+            },
+            {
+              "id": "s3-oil-valve",
+              "ok": true,
+              "main": {
+                "calls": 40,
+                "tris": 523588,
+                "target": "EffectComposer.Buffer 640x360"
+              },
+              "frame": {
+                "calls": 134,
+                "tris": 1338295,
+                "shadowCalls": 23,
+                "shadowTris": 362205,
+                "passes": 28
+              },
+              "charLevels": {
+                "char-father": 0,
+                "char-xi": 1
+              },
+              "top": [
+                [
+                  "s3-frame",
+                  310178
+                ],
+                [
+                  "player",
+                  96998
+                ],
+                [
+                  "water",
+                  80000
+                ],
+                [
+                  "sky-dome",
+                  3968
+                ],
+                [
+                  "beam-renderer",
+                  408
+                ],
+                [
+                  "rain",
+                  4
+                ]
+              ],
+              "passes": [
+                [
+                  "other",
+                  36,
+                  410662,
+                  "planar-reflection 320x180",
+                  ""
+                ],
+                [
+                  "main",
+                  40,
+                  523588,
+                  "EffectComposer.Buffer 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "main",
+                  11,
+                  41816,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "main",
+                  0,
+                  0,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  " 320x180",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 320x180",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 320x180",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 320x180",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 320x180",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "EffectComposer.Buffer 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "LuminancePass.Target 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap0 320x180",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap1 160x90",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap2 80x45",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap3 40x23",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap4 20x12",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap3 40x23",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap2 80x45",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap1 160x90",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap0 320x180",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "EffectComposer.Buffer 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "EffectComposer.Buffer 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "SMAA.Edges 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "SMAA.Weights 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "screen",
+                  ""
+                ]
+              ]
+            },
+            {
+              "id": "s3-logbook",
+              "ok": true,
+              "main": {
+                "calls": 34,
+                "tris": 517480,
+                "target": "EffectComposer.Buffer 640x360"
+              },
+              "frame": {
+                "calls": 117,
+                "tris": 1312475,
+                "shadowCalls": 23,
+                "shadowTris": 362205,
+                "passes": 28
+              },
+              "charLevels": {
+                "char-father": 0,
+                "char-xi": 1
+              },
+              "top": [
+                [
+                  "s3-frame",
+                  304358
+                ],
+                [
+                  "player",
+                  96998
+                ],
+                [
+                  "water",
+                  80000
+                ],
+                [
+                  "sky-dome",
+                  3968
+                ],
+                [
+                  "beam-renderer",
+                  120
+                ],
+                [
+                  "rain",
+                  4
+                ]
+              ],
+              "passes": [
+                [
+                  "other",
+                  26,
+                  391238,
+                  "planar-reflection 320x180",
+                  ""
+                ],
+                [
+                  "main",
+                  34,
+                  517480,
+                  "EffectComposer.Buffer 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "main",
+                  10,
+                  41528,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "main",
+                  0,
+                  0,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  " 320x180",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 320x180",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 320x180",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 320x180",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 320x180",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "zt 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "EffectComposer.Buffer 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "LuminancePass.Target 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap0 320x180",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap1 160x90",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap2 80x45",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap3 40x23",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap4 20x12",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap3 40x23",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap2 80x45",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap1 160x90",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap0 320x180",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "EffectComposer.Buffer 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "EffectComposer.Buffer 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "SMAA.Edges 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "SMAA.Weights 640x360",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "screen",
+                  ""
+                ]
+              ]
+            }
+          ],
+          "textures": {
+            "count": 33,
+            "max": 2048,
+            "compressed": 33,
+            "over": []
+          },
+          "chars": [
+            {
+              "name": "char-father",
+              "topLevel": 1,
+              "topTris": 24000,
+              "budget": 40000,
+              "tris": [
+                55870,
+                24000,
+                11999
+              ],
+              "ok": true
+            },
+            {
+              "name": "char-xi",
+              "topLevel": 1,
+              "topTris": 48499,
+              "budget": 50000,
+              "tris": [
+                119846,
+                48499,
+                24299
+              ],
+              "ok": true
+            }
+          ],
+          "critical": {
+            "count": 17,
+            "bad": []
+          }
+        },
+        "standard": {
+          "budget": {
+            "tris": 1500000,
+            "calls": 600
+          },
+          "spots": [
+            {
+              "id": "s3-spawn-south",
+              "ok": true,
+              "main": {
+                "calls": 44,
+                "tris": 385651,
+                "target": "EffectComposer.Buffer 512x288"
+              },
+              "frame": {
+                "calls": 131,
+                "tris": 963619,
+                "shadowCalls": 21,
+                "shadowTris": 241726,
+                "passes": 15
+              },
+              "charLevels": {
+                "char-father": 0,
+                "char-xi": 1
+              },
+              "top": [
+                [
+                  "s3-frame",
+                  201953
+                ],
+                [
+                  "player",
+                  96998
+                ],
+                [
+                  "water",
+                  80000
+                ],
+                [
+                  "sky-dome",
+                  3968
+                ],
+                [
+                  "beam-renderer",
+                  696
+                ],
+                [
+                  "rain",
+                  2
+                ]
+              ],
+              "passes": [
+                [
+                  "other",
+                  53,
+                  336229,
+                  "planar-reflection 128x72",
+                  ""
+                ],
+                [
+                  "main",
+                  44,
+                  385651,
+                  "EffectComposer.Buffer 512x288",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "LuminancePass.Target 512x288",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap0 256x144",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap1 128x72",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap2 64x36",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap3 32x18",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap2 64x36",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap1 128x72",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap0 256x144",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "EffectComposer.Buffer 512x288",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "EffectComposer.Buffer 512x288",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "SMAA.Edges 512x288",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "SMAA.Weights 512x288",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "screen",
+                  ""
+                ]
+              ]
+            },
+            {
+              "id": "s3-oil-valve",
+              "ok": true,
+              "main": {
+                "calls": 40,
+                "tris": 462044,
+                "target": "EffectComposer.Buffer 512x288"
+              },
+              "frame": {
+                "calls": 110,
+                "tris": 1162476,
+                "shadowCalls": 21,
+                "shadowTris": 321301,
+                "passes": 15
+              },
+              "charLevels": {
+                "char-father": 0,
+                "char-xi": 1
+              },
+              "top": [
+                [
+                  "s3-frame",
+                  278634
+                ],
+                [
+                  "player",
+                  96998
+                ],
+                [
+                  "water",
+                  80000
+                ],
+                [
+                  "sky-dome",
+                  3968
+                ],
+                [
+                  "beam-renderer",
+                  408
+                ],
+                [
+                  "rain",
+                  2
+                ]
+              ],
+              "passes": [
+                [
+                  "other",
+                  36,
+                  379118,
+                  "planar-reflection 128x72",
+                  ""
+                ],
+                [
+                  "main",
+                  40,
+                  462044,
+                  "EffectComposer.Buffer 512x288",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "LuminancePass.Target 512x288",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap0 256x144",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap1 128x72",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap2 64x36",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap3 32x18",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap2 64x36",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap1 128x72",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap0 256x144",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "EffectComposer.Buffer 512x288",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "EffectComposer.Buffer 512x288",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "SMAA.Edges 512x288",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "SMAA.Weights 512x288",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "screen",
+                  ""
+                ]
+              ]
+            },
+            {
+              "id": "s3-logbook",
+              "ok": true,
+              "main": {
+                "calls": 34,
+                "tris": 455936,
+                "target": "EffectComposer.Buffer 512x288"
+              },
+              "frame": {
+                "calls": 94,
+                "tris": 1136944,
+                "shadowCalls": 21,
+                "shadowTris": 321301,
+                "passes": 15
+              },
+              "charLevels": {
+                "char-father": 0,
+                "char-xi": 1
+              },
+              "top": [
+                [
+                  "s3-frame",
+                  272814
+                ],
+                [
+                  "player",
+                  96998
+                ],
+                [
+                  "water",
+                  80000
+                ],
+                [
+                  "sky-dome",
+                  3968
+                ],
+                [
+                  "beam-renderer",
+                  120
+                ],
+                [
+                  "rain",
+                  2
+                ]
+              ],
+              "passes": [
+                [
+                  "other",
+                  26,
+                  359694,
+                  "planar-reflection 128x72",
+                  ""
+                ],
+                [
+                  "main",
+                  34,
+                  455936,
+                  "EffectComposer.Buffer 512x288",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "LuminancePass.Target 512x288",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap0 256x144",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap1 128x72",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap2 64x36",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Downsampling.Mipmap3 32x18",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap2 64x36",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap1 128x72",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "Upsampling.Mipmap0 256x144",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "EffectComposer.Buffer 512x288",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "EffectComposer.Buffer 512x288",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "SMAA.Edges 512x288",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "SMAA.Weights 512x288",
+                  ""
+                ],
+                [
+                  "other",
+                  1,
+                  1,
+                  "screen",
+                  ""
+                ]
+              ]
+            }
+          ],
+          "textures": {
+            "count": 33,
+            "max": 2048,
+            "compressed": 33,
+            "over": []
+          },
+          "chars": [
+            {
+              "name": "char-father",
+              "topLevel": 1,
+              "topTris": 24000,
+              "budget": 25000,
+              "tris": [
+                55870,
+                24000,
+                11999
+              ],
+              "ok": true
+            },
+            {
+              "name": "char-xi",
+              "topLevel": 1,
+              "topTris": 48499,
+              "budget": 50000,
+              "tris": [
+                119846,
+                48499,
+                24299
+              ],
+              "ok": true
+            }
+          ],
+          "critical": {
+            "count": 17,
+            "bad": []
+          }
+        }
+      }
+    }
+  },
+  "failures": [],
+  "warnings": [
+    "s1 standard s1-raft-back：主 pass 2204190 面 / 93 call 超过 1500000 / 600（已知项，上限 2700000：标准档 S1 主 pass 面数 2.20–2.56 M > 1.5 M：不做 LOD、不改预算，等 M8 实机帧率定）",
+    "s1 standard s1-neighbor-note：主 pass 2401041 面 / 55 call 超过 1500000 / 600（已知项，上限 2700000：标准档 S1 主 pass 面数 2.20–2.56 M > 1.5 M：不做 LOD、不改预算，等 M8 实机帧率定）",
+    "s1 standard s1-spawn-north：主 pass 2555750 面 / 52 call 超过 1500000 / 600（已知项，上限 2700000：标准档 S1 主 pass 面数 2.20–2.56 M > 1.5 M：不做 LOD、不改预算，等 M8 实机帧率定）",
+    "s1 standard s1-opening：主 pass 2326565 面 / 80 call 超过 1500000 / 600（已知项，上限 2700000：标准档 S1 主 pass 面数 2.20–2.56 M > 1.5 M：不做 LOD、不改预算，等 M8 实机帧率定）"
+  ],
+  "errors": []
+}

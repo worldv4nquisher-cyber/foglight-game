@@ -1,0 +1,634 @@
+
+> game-studio-game@0.1.0 check
+> npm run typecheck && npm run lint && npm run test && npm run build && npm run size && npm run css
+
+
+> game-studio-game@0.1.0 typecheck
+> tsc --noEmit && tsc --noEmit -p tsconfig.node.json
+
+
+> game-studio-game@0.1.0 lint
+> eslint .
+
+
+> game-studio-game@0.1.0 test
+> node --import ./scripts/register-ts-paths.mjs scripts/verify-lod.mjs && npm run test:assets && npm run test:input && npm run test:save && npm run test:physics && npm run test:camera && npm run test:quality && npm run test:text && npm run test:interaction && npm run test:narrative && npm run test:hint && npm run test:tide && npm run test:audio && npm run test:beam && npm run test:render && npm run test:atmo && npm run test:lightmap && npm run test:dressing && npm run test:flow && npm run test:s2 && npm run test:s3 && npm run test:xi && npm run test:father && npm run test:cutscene && npm run test:fonts
+
+  ✓ glTF extras.puzzleCritical 读到 object.userData.puzzleCritical
+  ✓ buildLods: {"lodGroups":1,"criticalGroups":2,"forcedGroups":0,"droppedLevels":4}，丢弃的低级 LOD 已交给 dispose
+  ✓ 白石（父级标记）与刻度柱（lod0 标记）只剩 LOD0，未生成 THREE.LOD
+  ✓ 对照石组装为 3 级 THREE.LOD，位于 LOD0 原位置，层级相对变换归零
+  ✓ ultra    lodDistances=[60, 150, 400]：对照石 0→1 于 60m、1→2 于 150m；关键物体保持 LOD0
+  ✓ high     lodDistances=[40, 100, 250]：对照石 0→1 于 40m、1→2 于 100m；关键物体保持 LOD0
+  ✓ standard lodDistances=[25, 60, 150]：对照石 0→1 于 25m、1→2 于 60m；关键物体保持 LOD0
+  ✓ ultra    lodDistances=[60, 150, 400]：对照石 0→1 于 60m、1→2 于 150m；关键物体保持 LOD0
+  ✓ standard 档 LOD0 = 25 m（style-guide §8）
+  ✓ 运行时在 LOD 上设 puzzleCritical：applyLodDistances 强制 LOD0（距离 = Infinity）
+  ✓ markPuzzleCritical 把 LOD 折叠为 LOD0 并保留位置
+  ✓ extras.forceLod0（父级或 lod0 标记）→ 只保留 LOD0、释放低级 LOD，且不标 puzzleCritical
+  ✓ 运行时在 LOD 上设 forceLod0：applyLodDistances 强制 LOD0
+
+LOD 校验通过（13 项）
+┌─────────┬────────────────────┬───────┬────────┬──────────┐
+│ (index) │ name               │ level │ levels │ critical │
+├─────────┼────────────────────┼───────┼────────┼──────────┤
+│ 0       │ 'white-stone'      │ 0     │ 1      │ true     │
+│ 1       │ 'white-stone_lod0' │ 0     │ 1      │ true     │
+│ 2       │ 'rock-control'     │ 2     │ 3      │ false    │
+│ 3       │ 'tide-gauge'       │ 0     │ 1      │ true     │
+│ 4       │ 'rock-control'     │ 0     │ 1      │ true     │
+└─────────┴────────────────────┴───────┴────────┴──────────┘
+
+> game-studio-game@0.1.0 test:assets
+> node --import ./scripts/register-ts-paths.mjs scripts/verify-assets.mjs
+
+  ✓ COLOR_0 平滑法线：材质 vertexColors 关掉、几何 color 属性保留并标 userData.outlineNormals，校验通过
+  ✓ prepareOutlineNormals 幂等（第二次没有材质要改）
+  ✓ 开关关闭（gameConfig.assets.vertexColorsAreOutlineNormals=false 或 manifest vertexColors:'color'）：vertexColors 保持开
+  ✓ 普通顶点色被识别为「不像平滑法线」并告警（86% 的顶点解码后不是单位向量（像是普通顶点色或没按 n*0.5+0.5 编码）），材质仍按约定关掉 vertexColors
+  ✓ 方向反了的平滑法线、没有 COLOR_0 的几何体都判为不通过
+  ✓ 合格的 puzzleCritical 道具：无错误，层级 [12] 三角面、-collider / -interact 各 1
+  ✓ puzzleCritical 缺 -collider / -interact / COLOR_0 → 错误
+  ✓ BUG-001：-collider / -interact 只在 nodes 数组里、没挂在场景树上（QA 改 JSON 的做法 + gltf-transform 孤立节点）→ 报「缺 -collider / -interact」并指出孤立节点
+  ✓ BUG-001：-collider / -interact 在场景树上但不在 puzzleCritical 根的子树里 → 错误；多个 puzzleCritical 根各自要有；非关键物体的孤立 -collider 也报错
+  ✓ extras 键名 pivot → 错误（加载后 NaN 也报）；originAt 正常通过
+  ✓ COLOR_0 是普通颜色 → 错误（加载器同款抽样校验）
+  ✓ 按名字取预算（prop-key-* ≤ 3k 超出报错），--budget 可覆盖
+  ✓ extras.forceLod0：交付自检报告、加载器固定 LOD0 并丢弃低级 LOD，不要求 -collider / -interact
+  ✓ LOD：关键物体带低级 LOD 警告并在加载器里丢弃；普通物体 3 级组装成 THREE.LOD、各级面数统计
+  ✓ package.json 的 node 脚本都带 register-ts-paths（@/ 别名），npm run verify:glb -- <文件> 可直接跑
+  ✓ 同一字体并发 / 重复请求只下载一次、只注册一个 FontFace
+  ✓ 卸载（forgetFont）后再请求会重新加载
+  ✓ 第一次 fetch 被取消 → 重试成功，不回退
+  ✓ 重试全部失败 → 返回 null 走系统字体回退（不抛错）；失败不缓存，下次可再试
+  ✓ HTTP 404 不重试，直接回退
+  ✓ CSS 回退栈含系统中文字体；字体只有 AssetLoader 一条下载路径（无 preload / @font-face 重复）
+  ✓ GLB / KTX2：被取消（TypeError / AbortError）、5xx 重试，最多 1+2 次；404 / 解析错误不重试；assetStats 记次数
+  ✓ 同一 URL 并发请求共用一次下载
+  ✓ 外部 KTX2：两个 GLB 同时引用、第一次请求被取消 → 重试成功，总共 2 次请求、拿到同一张贴图，无占位
+  ✓ 外部 KTX2：重试全部失败 → 棋盘格占位 + 失败回调（日志 / assets-fallback），失败不缓存，下次可再试
+  ✓ GLTFLoader 外部 KTX2：取消后重试 → 材质颜色 / 法线贴图都在；全部失败 → 颜色槽棋盘格占位、法线槽清空
+  ✓ check-size 分组估算：char-* 默认 common，char-father / tex-father → s3，-s2/-s3 后缀按场景，其余 s1
+  ✓ 030 UI：21 个文件全部登记（menu 14 / common 7），纸张 ×6 + 结尾插画 + 菜单兜底懒加载，8 份文档 → 6 种纸（README-030 §2.2）
+  ✓ AssetLoader.loadImage：同 key 并发共享一次下载、已加载直接返回、404 → null 且可重试、未登记 / ?art=0 → null 不发请求
+
+资源加载后处理 / 交付自检校验通过（29 项）
+
+> game-studio-game@0.1.0 test:input
+> node --import ./scripts/register-ts-paths.mjs scripts/verify-input.mjs
+
+✓ 源码里没有 jump action / player:jump 事件
+✓ GDD §3 键位表：explore
+✓ GDD §3 键位表：puzzle / reading / cutscene / menu
+✓ 机关上下文按 E 切部件不触发交互；右键 / Tab 退出回 explore
+✓ 上下文切换清掉未消费的按下；pop 函数只弹自己那层
+✓ Shift：explore = sprint，puzzle = fineAdjust（同键按上下文区分）
+✓ Esc 暂停：game:pause 压入 menu（只剩全局键），resume 弹出
+✓ 机关里暂停再继续，回到 puzzle 而不是 explore
+✓ 按住 Space 1 秒跳过演出；短按只推进字幕
+✓ 灵敏度 / Y 反转立即生效，观察模式 lookScale
+✓ 滚轮：explore 调距离，puzzle 走 partPrev/partNext 不调距离
+✓ 斜向移动不加速；按下缓冲 0.15s 后过期
+
+输入层校验通过（12 项）
+
+> game-studio-game@0.1.0 test:save
+> node --import ./scripts/register-ts-paths.mjs scripts/verify-save.mjs
+
+✓ 没有存档：status=empty，「继续」隐藏，无提示
+✓ 正常读写：进入 S1/S2/S3 各写一次，刷新后「继续」回到最后的场景入口
+✓ 存档只记场景入口：结构里没有任何谜题状态字段
+✓ 章节完成：chapterComplete 写入且之后保持
+✓ 版本不匹配（0 / 2 / 缺失）：load 返回 null，提示「存档无法读取」，「继续」隐藏
+✓ 非法 JSON / 字段类型不对：返回 null 不抛错
+✓ 坏存档后新游戏：清掉坏存档，启动提示仍保留给主菜单
+✓ 写入失败（隐私模式 setItem 抛错）：不崩溃，提示「进度不会保存」，本次会话内仍可继续
+✓ 游玩时间：每满 10 秒加 10 秒，存档时写入，继续后接着累计
+✓ 没有进度时直接存档（开发时直接进场景）：自动按新游戏开始
+✓ 设置默认值（GDD §10 / 006）
+✓ 设置修改后「刷新」仍保留；新游戏不清除设置
+✓ 设置越界 / 类型错误：截断或回默认
+✓ 旧键 game.quality 迁移一次后删除，视为玩家选择（不再自动检测）
+✓ 设置存储不可写：内存里照常修改，不抛错
+✓ 恢复默认：保留画质检测标记
+✓ 009：qualityDetectedTier 清洗 / 持久化；恢复默认回到检测结果（来源 auto），未检测回到极致
+✓ 008：章节完成时把不满 10 秒的零头记进用时；之后不再累计；结束页用时 m:ss
+
+存档 / 设置校验通过（18 项）
+
+> game-studio-game@0.1.0 test:physics
+> node --import ./scripts/register-ts-paths.mjs scripts/verify-physics.mjs
+
+  （S2 直梯竖直速度：上 0.5422 / 上Shift 0.5455 / 下 0.5422 / 下Shift 0.5422 m/s）
+  · 平均碰撞耗时 0.014 ms / 步（66 个碰撞体）
+  （S1 礁石台阶：最慢 1.42 s 游戏时间、最长停顿 0.00 s）
+  （S1 跨越：近岸平台→浮台 8.35→9.32（落点离沿 0.32）；浮台→近岸平台 9.15→8.18（落点离沿 0.32）；浮台→台阶平台 11.85→12.82（落点离沿 0.32）；台阶平台→浮台 12.65→11.68（落点离沿 0.32））
+  （018 新碰撞：谜题 1 踏石 ≥ 4.22 m；小径尽头 → 脚印 → 浮台 ≥ 7.30 m；浮台推动线 ≥ 13.65 m；码头主动线（甲板） ≥ 5.08 m；码头 10.7 s；踏石 6.3 s、脚印线 7.7 s；桩挡在 0.36 m、礁盘挡在 1.99 m）
+  （前景礁石挡人体离深水边界：#155 0.90、#156 2.84、#157 0.65、#158 3.53、#159 1.71、#160 4.21、#161 4.50、#162 4.03、#163 4.33 m（要求 ≥ 0.60）；#157 南侧 10 条路径最近离边界 0.35 m）
+✓ 站在地面上：落地、onGround、不下沉
+✓ 30° 坡可以走上去（到顶 ≈ 2.31 m）
+✓ 45° 坡走不上去（小跑也不行）
+✓ 0.25 m 台阶自动迈上
+✓ 0.4 m 台阶挡住（不穿模）
+✓ 螺旋楼梯（半径 2.5、每级 0.2 m）连续爬升，无卡顿、无大跳变
+✓ BUG-013 S2 室内直梯（16 × 0.1875、踏步 0.244）：按控制器走法上 / 下楼，纯楼梯段竖直速度 0.5455 ±1%（迈级到迈级口径）
+✓   楼梯：上楼 0.5437 / Shift 0.5455 / 下楼 -0.5414 m/s，水平 1.288 m/s
+✓ 楼梯步态：竖直速度固定 0.5455 m/s（017 xi-stairs 22 帧周期），上下楼一样，Shift 不加速
+✓ BUG-007 矮沿：陡端面凸出地面 3.6 cm（旧礁石坡接缝）任何起步相位都能走过去
+✓ 斜着撞墙：沿墙滑动，不穿、不黏
+✓ 动态碰撞体开关立即生效（闸门）
+✓ 站在升降台上会被带着走
+✓ 移动速度：慢走 1.6 / 小跑 3.2 m/s（±5%），0.15 s 内到速，转身 540°/s
+✓ 碰撞耗时：测试场地里小跑，平均 < 0.5 ms / 步（CPU 参考值）
+✓ 碰撞体命名约定：-collider / -wall（含 .001 后缀）注册并隐藏，其它网格忽略
+✓ 空气墙（-wall）挡水平移动，但不能站在上面
+✓ TraversalLink：时长 1–2 s，路径按弧长取样，首尾准确
+✓ 瞬移后落地站稳，不穿地、不下落（平台上 / 楼梯上）
+✓ 013 S1 退潮后走下礁石台阶（smoke 同一起点 x −9.7 → −8.4）：按控制器走法（楼梯步态 + 加速 + 转身）不卡、游戏时间 < 2.5 s
+✓ S1 跨越选择：站在每条起点 / 落点上，按 E 选中的是起点最近的那条（去程落点 → 回程起点，不会被上一条的半径抢走）
+✓ 013 S1 四条跨越（制作人拍板）：落点离所在台面最近边沿 ≥ 0.30 m、起点在起跳台面上，两端都站得稳（岸台 / 浮台锚位 / 台阶平台）
+✓ 018 打磨 S1 新碰撞（码头桩 38 根 + 前景礁石 9 块）：不压谜题 1 踏石 / 小径 / 脚印线 / 浮台线 / 码头主动线，出生点不卡；桩和礁石真的挡人
+✓ batch15 #157 礁石：9 块前景礁石挡人体与深水区边界之间要么留 ≥ 胶囊直径 + 余量的缝、要么和深水墙连上；带碰撞胶囊沿 #157 南侧多方向走不进深水区（不触发送回）
+
+全部 24 项通过
+
+> game-studio-game@0.1.0 test:camera
+> node --import ./scripts/register-ts-paths.mjs scripts/verify-camera.mjs
+
+✓ 默认距离 4.0 m、跟随点头部 1.35 m + 肩后偏右 0.4 m、FOV 55°
+✓ 滚轮 2.5–6.0，俯仰 -35° 到 +55°
+✓ 贴墙：立即前拉、相机不进墙；离开后 0.25 s 平滑恢复
+✓ 室内（-indoor 触发体）最大距离 2.0 m；穿窄门时相机不进墙
+✓ 观察模式：按住右键 FOV 0.3 s 到 30°、灵敏度 ×0.5、发 camera:observe；松开回 55°；小跑 58°
+✓ 固定观察眼位（裁定 16）：按住右键 → 过渡到眼位、FOV 固定、朝 enterYaw，眼位不随角色动；鼠标照转；松开平滑回第三人称、朝向恢复
+✓ 自动回正：设置开启时静止 8 s 后以 4°/s 漂向推荐构图；关闭时不动
+✓ 机关机位：0.6 s 过渡到 -cam 节点、±20° 小范围转动；退出 0.6 s 回到进入前朝向
+✓ 观察点对准度：≤6° 为 1、12° 内逐渐清晰、区域外 0
+✓ 演出 5 s：角色不能动、按轨道走；结束 0.8 s 交还，朝向保持演出前
+✓ 演出可按住空格 1 s 跳过
+✓ v0.1-013 裁定：画质检测第 1 轮没测完就跳过开场演出 → 接 3 s 不可跳过的 S1 建立镜头，最后一帧最多再等 5 s 不变
+✓ 建立镜头 3 s：期间不能移动，结束交还控制
+✓ 建立镜头 holdUntil：轨道播完停在最后一帧等条件（画质检测第一轮），条件满足 / 超时才交还
+✓ 换场景（dispose）时中断演出并交还输入上下文
+✓ 演出轨道也可跟随 GLB 相机动画节点（AnimationMixer 驱动，读节点 fov）
+✓ 裁定 19 室外限高带：带内相机 ≤ 视线 − margin、出带平滑放开（逐帧位移无跳变）
+✓ BUG-019 西窗外限高带：走入 / 侧入 / 退出相机位置逐帧连续（60 Hz：进带单帧 ≤ 0.25 m、全程 ≤ 0.6 m），任何一帧不高过真实限高
+   沿视线走向房子 s 13→2 @1.6 m/s：单帧最大 0.155 m（第 33 帧），限高帧 314
+   沿视线离开 s 2→13 @1.6 m/s：单帧最大 0.371 m（第 388 帧），限高帧 283
+   横穿入带 lat 6→0（s 5.5，相机在 +x 侧） @1.6 m/s：单帧最大 0.027 m（第 2 帧），限高帧 172
+   横穿入带 lat 6→0（s 5.5，相机在身后 +z 侧） @1.6 m/s：单帧最大 0.156 m（第 47 帧），限高帧 120
+   横穿入带 lat −6→0（s 8，相机在身后 −z 侧） @1.6 m/s：单帧最大 0.156 m（第 38 帧），限高帧 122
+   横穿出带 lat 0→6（s 5.5） @1.6 m/s：单帧最大 0.027 m（第 74 帧），限高帧 141
+   斜入 s 12 lat 5 → s 4 lat 0 @1.6 m/s：单帧最大 0.027 m（第 140 帧），限高帧 276
+   沿视线走向房子 s 13→2 @3.2 m/s：单帧最大 0.178 m（第 17 帧），限高帧 173
+   沿视线离开 s 2→13 @3.2 m/s：单帧最大 0.393 m（第 194 帧），限高帧 142
+   横穿入带 lat 6→0（s 5.5，相机在 +x 侧） @3.2 m/s：单帧最大 0.053 m（第 2 帧），限高帧 102
+   横穿入带 lat 6→0（s 5.5，相机在身后 +z 侧） @3.2 m/s：单帧最大 0.179 m（第 23 帧），限高帧 76
+   横穿入带 lat −6→0（s 8，相机在身后 −z 侧） @3.2 m/s：单帧最大 0.179 m（第 19 帧），限高帧 76
+   横穿出带 lat 0→6（s 5.5） @3.2 m/s：单帧最大 0.053 m（第 19 帧），限高帧 71
+   斜入 s 12 lat 5 → s 4 lat 0 @3.2 m/s：单帧最大 0.053 m（第 109 帧），限高帧 153
+✓ BUG-019 batch13 真实路径：S2 白盒碰撞 + 角色胶囊 + 相机碰撞 + 限高带，8 路径 × 8 yaw × 俯仰 −15/−30/−40 × 走 / 跑 × 60 / 30 Hz：非物理前拉单帧 ≤ 0.6 m（按帧率换算）、不来回弹、不高过真实限高
+   制作人 3：沿视线出 yaw 180 −40（原 0.70） → 0.350 m/帧、回弹 0
+   制作人 1：yaw 270 −15 外走（原 2.63 m） → 0.027 m/帧、回弹 0
+   制作人 2：yaw 315 −15 外走（原 1.89 / 1.48 回弹） → 0.027 m/帧、回弹 0
+   制作人 3：横出 yaw 90 −30（原 0.90） → 0.351 m/帧、回弹 0
+   制作人 3：横出 yaw 90 −40（原 0.85） → 0.351 m/帧、回弹 0
+   60 Hz 384 组（碰限高 380）：非物理前拉单帧最大 0.402 m（横出 lat 0→−6 @s8 yaw 180 -15° 3.2 m/s；上限 0.60），回弹 0，高过真实限高最多 0.019 m
+   30 Hz 384 组（碰限高 380）：非物理前拉单帧最大 0.804 m（横出 lat 0→−6 @s8 yaw 180 -15° 3.2 m/s；上限 1.20），回弹 0，高过真实限高最多 0.017 m
+✓ 018 打磨 S1 新碰撞（码头桩 38 根 + 前景礁石 9 块）的相机碰撞：甲板上走码头主动线与去掉新碰撞时逐帧一致；码头下 / 礁石旁 24 个朝向相机不进碰撞体、视线不穿桩 / 礁石、被挡时前拉
+   甲板上新旧碰撞相机差 0.0e+0 m；码头下 22/24 个朝向前拉（最近 0.32 m）；大礁盘 #155 北 12/24 个朝向前拉（最近 0.50 m）
+
+相机校验全部通过（20 项）
+
+> game-studio-game@0.1.0 test:quality
+> node --import ./scripts/register-ts-paths.mjs scripts/verify-quality.mjs
+
+✓ quality.ts 含 style-guide §8 全部键，三档数值与表一致
+✓ 与 §8 冲突的旧字段已去掉（雨 30k/15k/6k、阴影 4096/2048/2048 只认 §8 键）
+✓ 三档 label / tier 对应，视距覆盖 impostor 距离
+✓ 默认（无设置、无检测结果）档位为极致；不再按 GPU 名称判档
+✓ ?simulateFps=40：极致 → 高 → 重测 → 标准，不会再往下降
+✓ 实测帧率 ≥ 50：保持极致，不显示提示；40,60 → 只降一档
+✓ 检测后重启不再检测；手动改回极致生效并保存，之后不被自动改动
+✓ 「恢复默认」不重新检测，画质回到检测结果；没检测过回到极致
+✓ 检测中玩家手动改画质：立即停止、以玩家为准；检测前已手动选过则跳过
+✓ BUG-002：检测被手动改档打断 / 被跳过 → 没有检测结果（不写 qualityDetectedTier）、显示「尚未自动检测」、恢复默认回默认档
+✓ BUG-002：检测没完成就离开 S1（cancel）→ 不写任何结果、运行时档位退回设置、下次进 S1 重测
+✓ firstRoundDone：第一轮测完前为 false（建立镜头等它），之后 / 不在跑时为 true
+✓ 暂停 / 切后台时这一轮作废、恢复后重测；切档后丢弃热身帧
+✓ URL ?quality= 临时覆盖：不跑检测、不写盘；parseSimulateFps
+
+画质参数表 / 自动检测校验通过（14 项）
+
+> game-studio-game@0.1.0 test:text
+> node --import ./scripts/register-ts-paths.mjs scripts/import-text.mjs --check
+
+✓ zh-CN.ts 与 text-ch1.json 一致（177 条）
+✓ 代码里用到的文本 ID 161 个，缺失 0 个
+✓ 文本表之外没有硬编码的剧情中文（检查 165 个剧情短句片段）
+✓ src 全部场景 / UI / 系统代码里没有写死的玩家可见中文（例外：日志 / 报错 / 调试面板 / 5 个调试文件）
+
+> game-studio-game@0.1.0 test:interaction
+> node --import ./scripts/register-ts-paths.mjs scripts/verify-interaction.mjs
+
+  BUG-015 21 视角：修复前 {"lever":5,"lens":16,"none":0}
+✓ 优先级：附近有跨越点（默认 10）时 inspect / read（0）让位，E 留给跨越；操作类（20）不让；离开跨越点恢复
+✓ BUG-014 aimCone：没对准的「看看而已」（0）让给画面里的操作类（20）；对准了照样选；画面里没有更高优先级时照常参与；不设 aimCone 的行为不变
+✓ BUG-015 S3 灯室：可点灯时站在拉杆站位，yaw ±0.6 × pitch 0 / −0.25 / −0.5 共 21 个视角全选拉杆「E 点灯」；不可点灯时透镜仍可查看
+✓ 判定：距离 ≤ 1.8 m 且朝向夹角 ≤ 60° 才显示提示；E 触发
+✓ 图标：3.5 m 内且在屏幕内才显示；可交互的那个 active
+✓ 多个候选：取最靠近屏幕中心的那个
+✓ 禁用 / 无效配置
+✓ pickup / place：空手才能拿，只能放到 -socket 上（物品对得上、插槽空着）
+✓ use：按 E 那一步就开始走位，按 E → interact:used ≤ 0.4 − 2 个固定步（给输入帧延迟留余量；QA batch5 实测 0.433 s）
+✓ use：自动走到交互点并转向，用时 ≤ 0.4 s，结束后发 interact:used
+✓ use：路径被挡时不穿模（原地转身后照常触发）
+✓ use(approach:false)：不走位，按下即触发（demo 灯塔）
+✓ hold：按住 2 s 完成，圆环走满
+✓ hold：中途松开进度归零，不触发
+✓ push：按住沿轨道 0.8 m/s 移动、角色跟随，到端点发 pushEnd 并不可再推
+✓ 吸附档位：15° 一档、Shift 7.5°（绝对网格）
+✓ 机关：E 进入（相机机位、puzzle 上下文、操作条），鼠标 / 键盘转一档 15°，Shift 7.5°
+✓ 机关：Q / E 切换部件，高亮跟着走；双轴部件鼠标上下转第二轴、到限位停
+✓ 机关：R 复位、右键 / Tab 退出（相机还原、回 explore、解锁）
+✓ 机关：Esc 暂停 → 继续后仍在机关里；第一下右键直接退出（制作人裁定）
+✓ 锁定点击透传：只放行绑定了 exitPuzzle 的键（机关 / 阅读的右键），其余这一下只锁定
+✓ 单部件机关：操作条不显示 Q·E
+✓ 提示高亮：描边 3 s 后消失并发 highlight:end
+✓ demo 灯塔改走交互系统，场景里不再直接读 E
+✓ 交互提示文字全部来自文本表
+✓ 017 放风灯到灯台：先走到 socket 前 0.65 m 面向 socket，xi-place 第 48 帧（1.6 s）才放下，播完 2.33 s 解锁
+✓ 017 交互点节点 extras.anim 优先（地窖木架 xi-pickup-shelf）；approach:false 的 use 有动画时也先走位，grab 第 22 帧生效
+✓ 017 阀门 xi-valve-hold：握住 16 帧圆环不动，圆环 2 s 对应转动 16–76 帧，满后播完松手段（到 3.0 s）再解锁
+✓ 017 敲钟 xi-ring-bell：interact:used（钟声 / 退潮）在第 30 帧
+✓ 017 推：push-loop 播放率 = 推速 / 0.8，结束停循环；没有动画时交互即时生效（白盒不变）
+✓ 017 推：按住 E 起 ≤ 0.6 s 物体开始动（push-start 后半段与移动重叠、smoothstep 加速、接 push-loop 不跳速）→ 松手播 xi-push-end（1.2 s 锁定）；再推到端点也播 end
+✓ 017 推：pushStartRamp 起止 0 / 1、单调、moveAt = 0.5 ≤ 0.6（gameplay.interaction.pushStartMoveAt）
+
+32/32 通过
+
+> game-studio-game@0.1.0 test:narrative
+> node --import ./scripts/register-ts-paths.mjs scripts/verify-narrative.mjs
+
+✓ 时长：10 字 → 2.0 s，30 字 → 3.6 s，最短 2.0 s，空白不计
+✓ play(ids)：每行按自己的时长（max(2.0, 字数×0.12)）到时自动切到下一行，播完清空
+✓ 10 字的表内行 2.0 s、30 字的行 3.6 s 后自动切换（按帧推进，误差 ≤ 1 帧）
+✓ 左键 / Space 立即推进；锁定的演出字幕不响应
+✓ 同一时刻只一条：新 play 顶掉旧的；暂停（dt = 0）时不走时
+✓ 只一次：显示时记进 seenLines（存档），再 play 跳过；非只一次的照常
+✓ 演出时间轴：playAt(time) 与镜头时间同步（跳转 / 倒退按时间重算），演出期间屏蔽独白
+✓ 说话人字色（汐 #E4E8EA / 父亲 #8B959D）、字号三档递增
+✓ 首次阅读写进日志并发 journal:updated；再次阅读不重复
+✓ 已读文档交给存档：写盘 / 读回顺序不变；没有进度时只在内存
+✓ 文档都有标题和分组：doc → 信与纸条，journal → 父亲的日志
+✓ 父亲日志 5 页可翻；结尾演出后第 6 页 = ch1.outro.journal_entry（进存档）
+✓ 当前目标可由代码更新（goal:changed），只接受 goal 类文本
+✓ text-ch1.json 全部 ID 可加载（t / textMeta / textPages）
+✓ 阅读上下文：A/D、←/→ 翻页，右键 / Tab 关闭，J 关日志，没有移动轴，显示光标
+✓ 暂停→继续后阅读界面里的第一下右键直接关闭（reading 是自由光标，不走锁定点击）
+✓ import-text 检查：代码引用的缺失 ID = 0；硬编码剧情中文检查能抓到（反例）且 src 里为 0
+✓ BUG-005 硬编码中文检查：src 为 0，反例能抓到，日志 / 报错 / 调试面板 / 注释 / text-ok 放行
+✓ BUG-005 操作提示从文本表生成：按键框 + 说明，转义
+✓ BUG-021 值班簿按纸面 4 列排：标题不重复、表头行留空、每格放得下、列在纸上的竖线之间
+
+20/20 通过
+
+> game-studio-game@0.1.0 test:hint
+> node --import ./scripts/register-ts-paths.mjs scripts/verify-hint.mjs
+
+✓ 数值进 gameplay.hint：180 / 180 / 240 s，高亮 3 s（GDD §9）
+✓ 进入区域 3 分钟一级、6 分钟二级、10 分钟三级；解锁只通知一次
+✓ 离开区域计时暂停、不清零，回来接着计；不在区域时当前谜题 = 最近进过的
+✓ 没进过区域：不计时、没有当前谜题；H 显示三行「再等等，四处看看」
+✓ H：已解锁层级显示文本、未解锁为 null（locked）；新层级各记一次 hintsUsed，重复打开不再记
+✓ 二级：每次打开 H 都高亮关键物体 3 s
+✓ 解开谜题：图标消失、H 不再显示该谜题、计时停止
+✓ 分步骤（谜题 5）：二、三级取第一个未完成的步骤；高亮也跟着换；换步骤不重复记次数
+✓ 015 C stepTimed：谜题 5 二、三级按当前步骤计时（一级解锁后才走，换步骤清零回一级）
+✓ 015 C override（可点灯）：提示已解锁时按 H 只显示 ch1.hint.p5.ignite.l3、不高亮；未解锁仍 locked；退出后回原步骤
+✓ 两道谜题：在哪个区域就显示哪个；没进过的不计时
+✓ ?hintScale=0.05 把计时缩到 5%（只在开发 / 调试 / 冒烟时生效）
+✓ 配置错误：重复 id、没步骤也没 l2/l3 → 报错
+✓ hintsUsed 写存档：addHintUsed + flush 立刻落盘，不改存档点、不弹「已保存」
+
+提示系统校验通过（14 项）
+
+> game-studio-game@0.1.0 test:tide
+> node --import ./scripts/register-ts-paths.mjs scripts/verify-tide.mjs
+
+✓ 涨落：退潮 1.6 → 0.0 用 6 s，smoothstep 平滑、单调；changing / changed 事件；过渡中 toggle 无效
+✓ 测试场地：敲钟（interact:used）涨落、过渡中再敲无效 + 提示变灰 + E 不触发；sfx:play / tide:bell
+✓ walkableWhen：礁石路入口空气墙涨潮挡住、退潮放行（中点切换）；岸台深水墙水深 > 0.5 m 时启用
+✓ BUG-007 复现点：退潮后从岸台 (0/0.5/−0.6, 2.02, 23.0…23.99) 朝南走下礁石坡，任何起步相位都不卡在 z≈23.9 接缝；坡顶不高出岸台
+✓ 送回：站在被淹没 > 0.3 m 的地面 → 送回安全点 + 「水太冷了。」；0.3 m 以内、空中、接管中不送
+✓ S1 退潮深水区：码头尽头 / 小船附近退潮也送回（按美术海床 −0.44 算水深）；码头甲板、岸台、滩地合法路线不送
+✓ 浮物：锚位里随潮浮起到 1.6 + offset，与岸台齐平；站在上面稳定被带着升降；浮起时不能推
+✓ 浮物（BUG-010）：没离开原位就涨潮 → 原地浮起，不进 drifting
+✓ 浮物：不在锚位涨潮 → 2 s 漂回原位、推动进度归零；退潮搁浅后可再推
+✓ 浮物单元：起伏 ±2 cm / 3 s，刚浮起时渐入；snap
+✓ uTideLevel：TideSet 写全局 uniform；withTideLevel 注入材质着色器；Water.setLevel
+
+11/11 通过
+
+> game-studio-game@0.1.0 test:audio
+> node --import ./scripts/register-ts-paths.mjs scripts/verify-audio.mjs
+
+  钟风吹轻响：1 h 游戏时间 358 次，间隔 6.02…14.00 s、均值 10.08 s；dt 0.1 时 356 次；走远回来 0.03 s 后响 ✓
+    （ffmpeg 重测整条 RMS：mus-menu, mus-s1-ebb-shore）
+  ✓ startLoop：buffer 循环、默认淡入 loopFadeInSec、按名字可查
+  ✓ 淡入 / 淡出时长可配；fadeIn 0 立即满音量
+  ✓ 同名重复 start 不叠加（只建一个 source），不同名可并存
+  ✓ stopLoop：默认淡出 loopFadeOutSec，从当前音量开始（淡入中途停不跳），到点 stop + 断开；没在播返回 false
+  ✓ 淡出中同名重开：新实例从 0 淡入（与旧实例交叉），不会叠成两个在播
+  ✓ 缺 buffer：合成占位振荡器（fallback 频率 / 波形，音量 × loopFallbackVolume）
+  ✓ 暂停（suspend）时照常排程，不丢请求；context 关闭 / 不存在时不播
+  ✓ stopAllLoops（切场景）：全部停、默认立即；dispose 也停
+  ✓ sfx:loop / sfx:loopStop 事件桥接（有资源用 buffer，没有用 FALLBACK 频率），取消订阅后不再响应
+  ✓ sfx:play optional（032 补音，如钟锤 sfx-tide-bell-clapper）：有文件照播、可叠；文件缺失静默（不播合成占位）；不带 optional 仍走合成占位
+  ✓ 032 登记：79 个 ogg 全在清单（sfx 59 / ambience 20，url = assets/art/audio/<类>/<名>.ogg，art 可缺省）；../art 在时文件都存在；分组 menu 只放 UI、common 不放场景专属
+  ✓ 制作人要求：钟风吹轻响间隔 6–14 s（按游戏时间模拟 fixedUpdate，与墙钟 / 帧率无关）
+  ✓ 032 SfxBank：旧 id 别名（README 对照表）→ 032 文件；a–d 变体随机、同一 id 不连续重复、只挑已加载的；gainDb → 线性增益；全缺返回 null
+  ✓ 032 桥接：别名 / 增益走 SfxBank；没文件又没合成占位的新 id（脚步、环境音、UI）静默，不播 440 Hz 兜底
+  ✓ 032 循环：BeamHum 连通起播 sfx-beam-hum-loop、断开 0.3 s 宽限内不停、超过淡出、不重复起；PushLoop 推动中循环 sfx-raft-push-loop、停手 0.25 s / 推到底淡出、别的推动件不响
+  ✓ 032 可点灯嗡鸣：有 sfx-ignite-ready-loop 文件 → 整文件 buffer loop=true（不再 110 Hz 占位），淡入 igniterHumFadeInSec、淡出 0.3 s
+  ✓ 032 谜题件：拨盘 / 镜子 / 微调限频 60 ms / 提灯拿放 / 木筏浮起（仅搁浅→浮起）与落位 / 涨退潮 / 落水；地窖门、拉杆 f0 在场景脚本；每个 id 都有登记的文件
+  ✓ 032 脚步：着地按距离每半个动画周期一步（走 0.64 m / 小跑 0.96 m，起步半步就响）；离地 / busy / 停下不响；材质按碰撞体名 / 室内 / 场景默认
+  ✓ 032 环境音：进场按区域起循环（默认淡入），进出室内 1 s 交叉淡化；S2 西窗 < 2 m 叠雨打玻璃，S3 塔底叠积水；单发按间隔随机、室内不响雾号 / 海鸥；全部 id 已登记、细雨进 common
+  ✓ 032 UI 音：按钮点击委托（确认 / 返回·取消 / 翻页箭头与日志条目不响）、Esc 返回、日志打开、阅读器展纸、翻页 a–c；直接 playBuffer 带增益、没文件不响、解绑移除监听；Reader.flip 发 reader:page
+  ✓ Game：scene:change 时调 audio.stopAllLoops；暂停菜单走 audio.suspend（循环音同一 context，一起挂起）
+  ✓ 033 manifest：mus-menu 在 menu 组、mus-s1-ebb-shore 在 s1 组；没有任何 preview 路径；menu 组音频只有 mus-menu + UI 音效
+  ✓ 036 音乐总线：比环境音低 12 dB（文件 −20 LUFS、环境音 −24 LUFS → 总线 −16 dB），乘设置音乐音量
+  ✓ 033 playMusic：整文件 loop = true、不设循环点、第一首不淡入；同一首不重开
+  ✓ 036 交叉淡化：菜单 → S1 时长 2 s，旧曲淡出到 0 后 stop、新曲 0 → 1；log 记录
+  ✓ 033 自动播放限制：context 未解锁（suspended）时 playMusic 照常排程不抛错，第一次交互 resume
+  ✓ 033 接入点：MenuScene 进 mus-menu、ChapterEndScene 淡出、LevelScene 按 LevelDef.music 切换
+  ✓ 033 改 manifest / 体积：mus-s1-ebb-shore lazy、不随 s1 组预下载；size 记「s1 进场后懒加载」；懒加载图片仍算进所在组
+  ✓ 1031 结尾曲 AudioSystem：loop = false 单次、offset 起播、fadeOutPrev 旧曲单独淡出新曲不淡入；放完自己清掉（log end）；过头的 offset 不起播
+  ✓ 1031 S3 两层 AudioSystem：layers 和底层同一时刻同一 offset start、同为 loop、初始增益 0、接在曲目 gain 前；时长不同的层不放；交叉淡化时两层一起停；setMusicLayerGain 斜坡
+  ✓ 1031 S3 两层 addMusicLayer：上层晚到 → when = now + lead、offset = 底层当前播放位置（取模），换算的文件 0 s 和底层 startAt 同余；不同曲 / 已有 / 时长不同拒绝
+  ✓ 1031 S3 上层增益 = f(玩家高度)：塔内楼梯底 y 0.2 → 0、灯室地板 y 22 → 1、中间线性、两端夹住；塔外（桥 / 礁石）恒 0；世界 ↔ 局部换算一致
+  ✓ 1031 体积：6 首配乐全部登记；只有 mus-menu 随 menu 组预加载，其余 5 首都是进场后懒加载（不进首场景包 / 首次进 S1 总下载）；size 单列配乐合计
+  ✓ 033 改 接入点：Game 在新场景第一次 render 之后发 scene:firstFrame；LevelScene 对懒加载场景曲等 scene:firstFrame 才 loadAudio
+  ✓ 033 改 主菜单曲电平：manifest gainDb 后 mus-menu 与 mus-s1-ebb-shore 整条 RMS / 积分响度差 ≤ 1 dB，不削波；两首同走音乐总线
+  ✓ 1031 S2 场景曲：mus-s2-keeper-house 登记 s2 组 lazy、gainDb 0（−20 LUFS = 和 S1 一样走 −16 dB 音乐总线，比环境音低 12 dB）；LevelDef.s2.music 指向它；懒加载后和 S1 曲 2 s 交叉淡化、整文件 loop、不设循环点；失败不放不抛
+  ✓ 033 改 switchMusicLazy：解码完和主菜单曲 2 s 交叉淡化；菜单曲已停 → 从 0 淡入 2 s；失败 / 超时 → 菜单曲 2 s 淡出、不放、不抛；离场后丢弃
+  ✓ 1031 结尾曲 EndingMusic：manifest s3 lazy；预取后 lighthouse:ignited 同一音频时刻 start(0)、场景曲 2 s 淡出；跳过 0.75 s 淡出；晚到按点燃后秒数补位；缺失 / 过淡出点不放；结束页不掐结尾曲
+  ✓ 1031 S3 两层 switchLayeredMusicLazy：两层都到 → 一个 playMusic 同时起播；只到底层 → 先放底层、上层到了按位置对齐；底层失败不放、上层失败只放底层；离场丢弃
+  ✓ 033 改 LazyAudioCache：并发共享一次下载；404 → null 不抛、记缺失、下次重试；超时 → null、迟到的结果丢掉；?art=0 / 没登记不发请求
+verify-audio ✓ 40 项
+
+> game-studio-game@0.1.0 test:beam
+> node --import ./scripts/register-ts-paths.mjs scripts/verify-beam.mjs
+
+    （重算中位数 0.015 ms，最慢 0.518 ms）
+✓ 反射定律：入射角 30° → 反射角 30°（误差 < 0.1°），出射在法线另一侧
+✓ 最多 4 次反射：第 5 面（次）镜子不再折返，光停在上面
+✓ 光打到镜子背面被挡住（不反射）；射出镜面范围外不算命中
+✓ 碰撞体挡光（光斑在命中点）；空气墙不挡光；镜子自带碰撞框不会把反射光挡在原地
+✓ 接收器半径判定（默认 0.3 m）：0.29 m 偏移命中，0.31 m 不中
+✓ 持续命中 1.5 s 触发 receiver:activated（光感锁）；中途移开进度归零
+✓ 点火口 manual：连续受光 1.0 s 进入可点灯（receiver:ready），不自动点燃；activate() 只在可点灯时生效
+✓ 点火口断光容差：≤ 0.3 s 不算断（可点灯保持、累计阶段不清零），> 0.3 s 发 receiver:lost 并重新计 1.0 s
+✓ 015 可点灯嗡鸣循环：进入可点灯淡入 1 次（不叠加），0.3 s 宽限内不断，超过淡出 0.3 s；重新可点灯再起；点灯演出中断光不停、点燃后停；重置兜底停
+✓ 点火口未开阀：只红光（blocked）+ receiver:blocked，不进可点灯；开阀后从开阀那一刻起 1.0 s
+✓ 点火口 20 s 提醒：可点灯 20 s 没点 → ignition:reminder 一次 + 脉冲（0.8 s 升到峰——对齐 sfx-ignite-ready-pulse 峰 0.8 s / 0.8 s 落）；退出再进入重新计时
+✓ 点火口可点灯时前置条件失效（测试场地关阀）：退出可点灯
+✓ 点火口前置条件未满足：命中只发红光（blocked）并发 receiver:blocked 一次；满足后正常触发
+✓ 天光：40 s 一周期、亮 25 s、1 s 淡入淡出；beam:skyAlwaysOn 后常亮
+✓ 光源颜色暖 / 冷白可切换（beam:setColor），渲染颜色跟随；socket 光源放风灯亮、拿走灭
+✓ 事件驱动：没变化不重算；镜子转动 / puzzle:partRotated / beam:invalidate / 碰撞体开关时才重算
+✓ 测试场地光路：光源 → 镜 A → 镜 B → 接收器（转对后 1.5 s 触发）；转开光路即时更新
+✓ 测试场地点火口（015 C 同一套按 E）：开阀 + 天光 1.0 s → 可点灯不自动点燃，tryIgnite 点燃转暖；I 调试开关 autoIgnite
+✓ 性能：3 面镜子 + 4 次反射的光路重算单次 ≤ 1 ms（取 200 次中位数）
+
+19/19 通过
+
+> game-studio-game@0.1.0 test:render
+> node --import ./scripts/register-ts-paths.mjs scripts/verify-render.mjs
+
+✓ 021 / 022 替换入口（合成）：没交付不挂；交付后挂到 socket、对齐白盒节点、drive 跟白盒转、白盒网格隐藏（物理不动）、自发光清零：合成门：挂点回退 / 对齐 / 世界增量跟转 / 隐藏 ✓；表里 13 处摆放全部登记进清单
+✓ 美术回复 1030 立镜挂院墙 socket（合成）：env-courtyard-wall-s2-mirror-a-socket 优先、镜面对齐白盒、mirror-pivot 世界旋转 = 白盒 yaw（socket 朝向不同也对）；缺 socket 回退白盒立镜根（与旧 copy 一致）：挂 socket ✓、缺 socket 回退白盒根 ✓；镜面对齐 + 世界旋转跟白盒 yaw
+✓ 美术回复 1030 船绳端点挂在各自绳节点下（合成）：-rope-bow-end-high / -low 作为 -rope-high / -rope-low（含 _lodN 组）的子节点照样找到、世界坐标不变；两版切换可见性不影响取点：端点在绳节点 / _lod0 下：查找（遍历子树）+ 世界坐标 ✓（S1 运行时只用绳两版切换，端点只在 verify 里取点对船头环）
+✓ 美术回复 1030 塔门 prop-lighthouse-door-s3（合成）：到了优先用、door-leaf 原点对白盒合页、-collider 隐藏、门框锁孔跟着；缺失回退 020 env-lighthouse-ch1-door；都没有 = 白盒：塔门单独文件优先 / door-leaf 对合页 / -collider 隐藏 / 回退 020 / 白盒 ✓（-interact 暂未接：白盒站位不变）
+✓ 钟锤补音（1030b 方案 A）：阈值缺省 0.055 rad、美术根 extras.clapperHitRad 优先；按 xi-ring-bell 完整敲一次（touch→ring 推 + 自由摆）缺省阈值下钟锤碰壁会响（1–2 次）、美术重建 GLB 根 0.0537 生效也会响、emit sfx:play optional sfx-tide-bell-clapper（缺文件静默、叠在主钟声上）、碰壁期间不连发；manifest 登记（032 已交付）：缺省 0.055：敲一次钟锤最大相对角 0.055 → 碰壁 2 次（首声 ring 后 0.03 s）；0.14 → 0 次；extras 0.06 → 1 次；0.41 → 0 次；当前美术 GLB：根 clapperHitRad 0.0537 生效 → 敲一次碰壁 2 次（首声 ring 后 0.03 s）
+✓ 岩石实例化（合成）：实例矩阵乘上 _lodN 节点矩阵，顶面 = 摆放 y + 节点平移 + 半高：顶 0.520 / 底 -0.100
+✓ 实例 LOD 分级：按相机距离和画质 lodDistances 分到各级，回滞 10 %，三档距离各验一遍：ultra / high / standard ✓，回滞 ✓
+✓ 岩石实例化（美术 env-rock-shore-a..f，KHR_mesh_quantization）：小径石顶面 = s1-layout topY，各级矩阵一致：a×9 b×31 c×31 d×68 e×10 f×15
+✓ 天空层（env-lighthouse-silhouette-far）：LOD 折叠到最后一级、不剔除、不投影，313 / 332 m 在三档视距外仍在深度范围内：保留 LOD2 352 面，距开场相机 332 / 313 m
+✓ 按物体雾（env-lighthouse-island-main-s3tower extras fogLayer=mid, fogDensityHint=0.0036）：138.4 m 雾 22.0 %（场景雾 0.028 → 100.0 %）
+✓ 渔网材质 alphaHint=alphaHash → alphaHash 开、alphaTest 0、不透明排序：net-rack-a / b ✓
+✓ S1 布局 = s1-layout.json（1029 起冲突以 json 为准）：美术节点、关键点、小船 / 系船节点（GLB）一致：美术节点 7 个、关键点、台阶 / 平台、小船 (5.508, 1.36, -10.757) 与系船点 (3.26, 2.2, -11.39) ✓
+✓ 018 打磨 码头桩 / 前景礁石碰撞 = 美术：S1.pierPiles = env-pier-wood-ch1-collider 甲板下竖盒（38 根，断桩 3 根在深水区不加），S1.foregroundRocks = rocks.ts 155–163 的 GLB 包围盒：码头桩 38 根 = GLB（断桩 3 根在深水区不加）；前景礁石 9 块 = GLB 包围盒
+✓ 裁定 21 S1 前景大礁石放南沿外：9 块新礁石的 LOD0 网格和挡人盒都在避让区（x 0.5–12、z −3…8.5）外；开场 / 小径尽头机位 → 脚印 T1–T4（中心 + 4 角）、小径尽头 → 浮台路线（地面 / 身体）、开场 → 远景灯塔塔身的视线都不被 9 块挡：9 块网格 / 挡人盒都在避让区外（网格最北 z -3.17 < −3）；开场 46 条、小径尽头 42 条视线（脚印 20 点、路线 22 点、塔身 4 点）无遮挡
+✓ S1 深水区 = 美术海床（env-tidal-flat-s1 LOD0）：区内海床 < −0.3（送回水深），区外滩地北段 / 合法路线不在区内：区内 1112 点 98.2% < −0.3、最高 -0.27；区外北段 440 点深水 0.2%
+✓ 船绳涨 / 退潮两版切换：两版都找到才切换、按 switchLevel 切可见性；找不到 = null 保持现状；美术定名 -rope-high / -rope-low（_lodN 变体也认）：S1.boatRope = 美术名 env-pier-wood-ch1-rope-high / env-pier-wood-ch1-rope-low（船头端点 env-pier-wood-ch1-rope-bow-end-high / env-pier-wood-ch1-rope-bow-end-low，兼容旧 -rope-bow-end）；当前码头 GLB 已拆两版、切换生效
+✓ extras 默认隐藏（AssetLoader 通用）：码头 GLB -rope-low extras.defaultVisible false → 加载后不可见、-rope-high 可见；visible:false / hidden:true 同义；两版切换照常：-rope-low 默认隐藏 ✓；切换 ✓
+✓ 021 风灯 prop-lantern-brass：原点 = 提手，hang（提手到灯底）/ -emitter 与 017 对齐值一致：hang 0.280、emitter y -0.162、书桌提手离地 1.030 m
+✓ 021 灯台 prop-lantern-stand-s2：院墙 lamp socket = 白盒灯台位置；-socket 挂风灯后光源中心 = 白盒出光高度：east socket (-13.20, 1.008, -5.00)；west socket (-8.00, 1.008, -5.00)
+✓ 021 潮汐钟 prop-tide-bell：S1 bell-anchor / S3 tide-bell-s3-socket = 白盒钟位、正面朝白盒站位、触点高 1.10、bell-swing / bell-clapper 跟白盒（世界增量）、站位读 prop-tide-bell-interact、README 摆动公式（ring 帧 0.100 rad）：S1 钟位 (-15.50, 2.40, -6.20)、站位 (-14.52, 2.40, -6.20) 离钟轴 0.98（白盒原 1.05）、自由摆 -0.098..0.165 rad、钟锤最大相对 0.055；S3 钟位 (-2.76, 2.40, -5.16)、站位 (-3.45, 2.40, -4.47) 离钟轴 0.98（白盒原 0.98）、自由摆 -0.098..0.165 rad、钟锤最大相对 0.055
+✓ 021 木筏 prop-raft-s1：根零变换挂白盒 raft-s1、collider 2.0×0.3×3.0 = 白盒、interact / waterline / stand / takeoff / 甲板高与白盒逻辑一致（跨越落点离沿 ≥ 0.30）：collider = 白盒、interact (1.45, -0.30, 0.00)、stand 离沿 0.32 / 0.32、takeoff = s1StepLinks 起跳点、deck 0.4 → 1.85
+✓ 外部 KTX2：S1 全部 GLB 的 images.uri 相对 GLB 解析后存在（运行时 assets/art/models/env/../../textures/ 同理）：18 个 GLB / 74 处外部 KTX2 引用
+
+全部通过
+
+> game-studio-game@0.1.0 test:atmo
+> node --import ./scripts/register-ts-paths.mjs scripts/verify-atmo028.mjs
+
+  ✓ atmosphere028.ts = 美术 JSON 原样副本  028-v1 (2026-10-30)
+  ✓ 裁定 18 ①：全局雾 / 主岛 hint 按 028 预设  overcast-dusk / overcast-after-rain / rain-night / after-lit
+  ✓ 雨夜：天光 / 主光 ×0.35；暖光只有灯塔  hemi 0.56 / sun 0.84
+  ✓ 旧预设名别名 + 未知名回落
+  ✓ 远景剪影色 = #56616B → farWallTint（黄昏 0.38 / 雨夜 0.5）  #90989e
+  ✓ 028 雾片：5 层雾墙跟随相机 xz、两端 + 近相机淡出、深度夹在远平面内侧  5 层雾墙 + 30 片地面雾
+  ✓ 028 水面：两层法线 + textureGrad 雨圈（mip ≤ 3）、只在下雨且档位开时叠
+  ✓ LUT：lut-identity 查表后像素不变（≤ 1/255），四张预设 LUT 格式 1024×32  identity 最大误差 0.484/255；4 张预设 LUT
+  ✓ 雨：ultra/high 细长 quad（贴图、1–2.5 px 钳制 + 透明度守恒、普通 alpha），standard 1 px 线  ultra 30k/0.24 quad · high 15k/0.28 quad · standard 6k/0.20 线
+  ✓ 雨：溅水按 setGround 落点生成（序列帧 16 帧 @40 fps = 0.4 s），无落点不溅；预设关雨时不更新  稳态存活 198 个（perSecond 900）
+  ✓ 镜头水滴：仅 ultra 档配置、refraction 0.015、fadeIn 0.6 s；强度 0 = pass 关  ok
+  ✓ BUG-020 室内雨剔除：体积读 S2 / S3 白盒 -indoor 节点（layout 生成），地窖 / 石屋 / 塔内雨丝与溅水剔除，窗外 / 门外 / 屋顶上照常  S2 5 内 / 6 外、S3 5 内 / 5 外 ✓；塔内溅水 0（塔内候选落点 854 个全在体积外 = 门洞 / 墙外），塔外存活 360
+
+全部通过（12 项）
+
+> game-studio-game@0.1.0 test:lightmap
+> node --import ./scripts/register-ts-paths.mjs scripts/verify-lightmap.mjs
+
+✓ RGBM8 解码 = rgb·a·8，编码往返误差 ≤ 1 个量化级
+   往返最大相对误差 5.45%（暗部 E=0.001）
+✓ 着色器替换：lights_fragment_maps → RGBM 解码，lights_fragment_begin 去半球光（three 原文变了会抛错）
+   standard 片元着色器两处都替换
+✓ 运行时倍率：雨夜 ×0.35、开门角
+   塔门关 ×0.6，地窖门关 ×0.55
+✓ 天空分界点 0.18 / 0.7（烘焙用的三个预设）与 028 json 一致
+   dusk / after-rain / after-lit = 0.18 / 0.7；rain-night 0.15 / 0.6（028 原样，非烘焙预设）
+✓ manifest：9 张光照贴图 srgb:false、组 = 场景；GLB 所在组有对应贴图
+   9 张
+✓ 9 张 KTX2：UASTC、线性、RGBA、2048²、完整 mip
+   s1-tidal-flat 1.09，s1-cliff 2.27，s1-shore 1.43，s2-clifftop 1.36，s2-exterior 1.19，s2-interior 0.84，s3-tower 1.75，s3-islet 1.32，s3-interior 1.06；合计 12.30 MB
+✓ 18 个 GLB：根 extras.lightmap 与需求单一致，uv1 落在 rect 内，挂图只挂可见网格
+   env-tidal-flat-s1(6 网格 / 2 材质)，env-cliff-s1(6 网格 / 2 材质)，env-shore-ledge-s1(6 网格 / 2 材质)，env-pier-wood-ch1(6 网格 / 2 材质)，env-fish-shed-ruin(6 网格 / 2 材质)，env-net-rack-a(6 网格 / 2 材质)，env-net-rack-b(6 网格 / 2 材质)，env-clifftop-s2(9 网格 / 3 材质)，env-keeper-house-ch1(9 网格 / 3 材质)，env-courtyard-wall-s2(3 网格 / 1 材质)，env-laundry-rack(3 网格 / 1 材质)，env-keeper-house-ch1-interior(9 网格 / 3 材质)，env-cellar-s2(6 网格 / 2 材质)，env-lighthouse-ch1(9 网格 / 3 材质)，env-rock-islet-a(9 网格 / 3 材质)，env-stone-bridge-s3(6 网格 / 2 材质)，env-lighthouse-ch1-interior(9 网格 / 3 材质)，env-lamp-room-ch1(6 网格 / 2 材质)
+   env-pier-wood-ch1 挂件也挂（图集空位）：-rope-high -rope-low_1 -rope-low_2
+   门 / 透镜 / 钥匙 / 草图 / 日记 / 锡杯 不挂；18 个 GLB 一致；uv1 存储 Uint16-norm（getX 反归一化，出 rect 顶点全 0）
+✓ 码头船绳两版（-rope-high / -rope-low 全部子网格，含 rope-low 的木件与 mat-env-rope-wet-ch1）都挂 tex-s1-shore-lightmap、不设 offset，涨退潮切换前后不变
+   3 个子网格 × 材质（high 1 / low 2，其中 _lodN 0）全挂 tex-s1-shore-lightmap；材质 mat-env-wood-ch1 / mat-env-rope-wet-ch1；切潮 4 次不变
+✓ 院墙修复：5 个 socket 与修复前一致，灯台 socket 世界坐标 = layout 灯台
+   （没有修复前备份，跳过对比）；灯台 east/west 世界坐标 = layout
+✓ 地窖钥匙点光：#C4D2DE / 0.15 cd / 0.22 m / decay 2 / 不投影，env-cellar-s2 局部 (−0.35,−1.15,0.35) = socket 上方 0.15 m，挂在 socket 下
+   世界 (-2.350, -1.150, 1.350)，socket + (0, 0.15, 0)
+
+全部 10 项通过
+
+> game-studio-game@0.1.0 test:dressing
+> node --import ./scripts/register-ts-paths.mjs scripts/verify-dressing.mjs
+
+  ✓ manifest：027 全部登记（optional + art），场景用到的 key 都在对应组 — 19 个文件
+  ✓ GLB：植被无 COLOR_0 / TEXCOORD_1、outline:false；海鸟 morph + seabird-flap 0.6 s；剧情件 -interact 节点 — env-grass-coastal-a ✓，env-seaweed-a ✓，seabird-flap 0.60 s
+  ✓ mountDressing：socket 优先 → layout 回退；白盒换载体材质，子节点照常可见、白盒不描边 — socket / 回退 / 载体 / 变体 ✓
+  ✓ mountDressing：桌面实测吸附（≤ maxSnap 吸附并记偏差，超出不动）；倒扣杯读 GLB extras.poses — 偏差 +3.0 cm 吸附，倒扣 ✓
+  ✓ S2 / S3 摆位规格：日志合 / 开两版、纸 B 不加 rotX、书桌组在纸条之前（纸条落航海图） — ok
+  ✓ 033 脚印路径：footprints-path.json = 美术原件（逐字节），4 块 T1–T4 首尾相接、每块 2 m、yaw = 走向，和美术给的参考值一致 — T1 (2.914, 0.119, 4.272) yaw 0.9482；T2 (4.608, 0.116, 5.331) yaw 1.0499；T3 (6.304, 0.114, 6.389) yaw 0.9619；T4 (7.882, 0.112, 7.615) yaw 0.8414
+  ✓ 033 脚印贴花：4 块 1 × 2 m 挂在 json 坐标（y 直接用、不打射线），rotation (0, yaw, 0, YXZ)，脚尖（−V）沿走向，roughness 0.65，共用几何 / 材质 — 4 块 ✓
+  ✓ 033 字幕触发区：「比我的脚印大」在 T2 中心 r 1.4，和 S1 其他独白 / 目标触发区两两不重叠（XZ） — 脚印独白间隙：ch1.s1.tide_bell.mono_seen 9.78 m，ch1.s1.goal.cross_channel 0.71 m，ch1.s1.channel.mono 3.16 m
+  ✓ 海鸟：间歇出现（每 period 秒飞 arc 弧度），扇翅 / 滑翔交替，朝向切向 — 出现 9% 时间，交替 31 次
+全部 9 项通过
+
+> game-studio-game@0.1.0 test:flow
+> node --import ./scripts/register-ts-paths.mjs scripts/verify-flow.mjs
+
+✓ 资源清单：分组只用 boot / menu / common / s1–s3，key 唯一，字体在 menu 组
+✓ 场景链：S1 → S2 → S3，线性、场景名 / 资源组一一对应
+✓ 存档 → 场景：s1 / s2 / s3；旧存档 main 和认不出的 ID 回到 S1
+✓ 加载分组：新游戏 common + s1；继续 S2 = common + s2；换场景保留当前 + 下一个
+✓ 黑场时间分配：淡出 + 最短全黑 + 淡入 ≤ 1.0 s
+✓ SceneExit：走进去触发一次；出生在里面不触发；走出再走进再触发；disabled 不触发
+✓ 模型命名：-spawn-<id> 入口点（含朝向）、-exit-<s1|s2|s3> 出口（隐藏）
+✓ 切换（已预加载）：总时长 ≤ 1.0 s、全黑时换场景、不显示进度、释放上一个场景的组
+✓ 切换（没加载完）：黑场里显示细线进度，加载完才换场景
+
+场景流程校验全部通过（9 项）
+
+> game-studio-game@0.1.0 test:s2
+> node --import ./scripts/register-ts-paths.mjs scripts/verify-s2.mjs
+
+verify-s2 ✓ 最远白石 21.03 m、S3 灯塔方位 314.8° / 143.5 m；光路：灯 0.846 / 镜 0.85 / 锁 0.85，24×24 档唯一解 A 30° B 315°（落点离锁心 0.30 m），西灯台被晾衣架挡 ✓；动线：二层观察点 / 书桌 / 地窖（门开才进得去）/ 院子 → 拨盘铁门（开了才过得去）→ 出口 / 坡地 ✓，南石阶挡回头路 ✓；与美术 s2-layout.json 核对 deskInteract / 钥匙 / 草图 / 木架站位 / 镜子 / 光感锁 ✓；室内判定：2 个 -indoor 体积，一层 / 二层 / 地窖不淋湿、小院 / 门外淋湿 ✓；立镜真文件 ×2：挂院墙 socket（= 白盒镜心地面）、24 档镜面 / pivot 世界旋转 = 白盒（最大差 0.0000°）、正解时 -interact a (-13.80, 3.26) / b (-7.09, 9.24) ✓；拨盘铁门真文件：挂 gate-socket、合页对齐；西门柱面 x 5.004，门扇穿柱 95° 3.4 cm / 90° 1.5 cm / 开角 78° 离柱面 1.8 mm（不穿）；-interact (4.20, 11.265) 门南 0.485 m ✓；裁定 16 固定眼位 (0.95, 4.35, 1) FOV 30°：七段贴片 3 个字 90 个采样点白盒不挡、美术环境 env-clifftop-s2 / env-keeper-house-ch1 / env-keeper-house-ch1-interior / env-cellar-s2 / env-courtyard-wall-s2 / env-laundry-rack 可见网格也不挡、对准时全在画面内；进入朝西窗偏 14.6°；白石组真文件：挂崖顶零变换、眼位 (0.95, 4.35, 1) FOV 30、字组中心在视线下方 3.69°（水平 ±5.12°、高 4.49°）、进入离字组中心 14.9°、对准时 14 块数字石都在画面内且不被挡、只加亮数字材质（14 块） ✓；光感锁：挂 light-lock-socket、-receiver 对齐白盒（差 0.00 mm）、正解光线离美术透镜光轴心 4.0 mm（仍命中）；透镜 #F4C978 × 进度 × 1.6、指针 60° → −60°、解锁门闩 0.3 s 滑 +0.08 m；白盒透镜隐藏 ✓
+
+> game-studio-game@0.1.0 test:s3
+> node --import ./scripts/register-ts-paths.mjs scripts/verify-s3.mjs
+
+✓ json：光路 5 点 / 3 面镜子 / 点火口 / 拉杆 / 关键高度 / 世界坐标 一致；石桥 s 终点 json 33 vs GLB 33.0（白盒用 GLB）
+✓ GLB 拉杆动画名 xi-ignite-lever（工单 xi-ignite-lever）
+✓ GLB 空节点 35 个 ≤ 5 cm ✓
+✓ 世界：塔心 39.73,0,-122.75，5 m 大窗方位 95.0°，塔门 / 石桥方位 0.0°；踏步 108 级顶 21.8 / 楼梯口 182° ✓
+✓ 光路：正解 窗口镜 45/-30、导光镜 1 60、导光镜 2 300 → 点火口（光线离口心 0.0086 m）；法线 窗 15.8/66.3、A -19.78、B 160.76（美术 −19.777 / 160.755）；7.5° 穷举唯一解 ✓；离楼梯内沿余量 0.60 m；机位 window fov 64 / a fov 58 / b fov 56 框得住目标 ✓
+✓ 导光镜 a：正解 ψ 白盒 109.777° = 美术 109.777°、固定俯仰 -1.1°、正解 60° / 15° 档 24 档美术法线都跟白盒（镜心差 0.00 mm）、美术镜面反射离下一目标 8.6 mm、初始 ψ 49.777°；美术 -interact S3 局部 (-1.992, 10.00, 1.671) 离白盒站位 0.10 m；导光镜 b：正解 ψ 白盒 -70.760° = 美术 -70.755°、固定俯仰 4.4°、正解 300° / 15° 档 24 档美术法线都跟白盒（镜心差 0.00 mm）、美术镜面反射离下一目标 7.2 mm、初始 ψ -10.760°；美术 -interact S3 局部 (2.561, 16.00, -0.451) 离白盒站位 0.10 m
+✓ 动线：桥尾 → 门外平台（门关进不去）→ 门内 → 底层油阀 / 窗口镜 → 108 级 → 灯室拉杆 / 眺望 ✓
+✓ y 5 窗台平台：走得到窗前；窗轴离 远塔F1 81° / 远塔F2 121° / 石桥头 111° / 桥尾_S2侧 99°（> 60°）；光路在 y 5 处 r 1.08 θ 17.8，平台 θ310–338 ✓
+✓ 拉杆对位：char-xi-anims.glb extras（46 帧 / 30 fps / ignite 第 34 帧 / angleDegPerFrame）与代码一致，枢轴 / 握点换到 S3 ≤ 2 mm ✓
+✓ 拉杆 −60° 逐帧转动：第 34 帧握点到底 ✓；拉杆 ↔ 纸条 枢轴 1.98 m / 交互点 2.41 m（≥ 1.5）✓
+✓ 点灯独白 ch1.s3.ignite.mono：ignited 后 0.50–3.50 s 锁定显示、不可点掉、只一次；0:04 切远景前已消失 ✓
+✓ 油阀：挂 oil-valve-s3-socket、手轮轴朝塔心（差 0.00°）、开阀美术手轮 +90.0° 绕 +Z（白盒改为同向 +90°）、-interact 离白盒站位 0.0 cm（站位读美术） ✓
+✓ 窗口镜：挂白盒组、yaw / pitch 直接拷白盒（美术计划法线 15.8° / 66.3° = 白盒正解法线；节点角 yaw 74.21° / pitch -66.35°）、正解 + 72 个档位组合美术法线 = 白盒（镜心差 0.00 mm）、正解美术镜面反射离 A 0.0 mm、-interact 离白盒站位 0.0 cm 且朝镜（站位读美术） ✓
+✓ 点火口 + 拉杆：挂 ignition-port-s3-socket、-receiver 对齐白盒受光点（差 0.00 mm）；拉杆枢轴 / 握点 = 白盒，逐帧握点差 ≤ 0.00 mm，第 34 帧转 60.0° 到底；透镜 + 观察窗共用克隆材质，四态（关 / 红 0.6 / 冷白 0.15–0.35 + 脉冲 / 暖 2.0）跟白盒透镜；白盒透镜球 / 拉杆隐藏；-interact = 白盒站位（站位读美术） ✓
+✓ 塔门：buildS3Art 优先 prop-lighthouse-door-s3、door-leaf 原点 = 合页（差 0.00 mm）；关门时缓存 -interact → doorStand（离白盒站位 0.0 cm、朝门），开门后美术点跟门走 2.47 m、缓存不动；门扇向内开 -100.0° ✓
+✓ 室内判定：塔内一层 / 中段 / 顶层不淋湿、塔外淋湿 ✓
+verify-s3 通过
+
+> game-studio-game@0.1.0 test:xi
+> node --import ./scripts/register-ts-paths.mjs scripts/verify-xi.mjs
+
+[verify-xi] 起停滑步（60 fps 推算，改前→改后）：走 起步 0.67→0.19 m/s（8.2→0.8 cm）停步 0.42→0.33 m/s；跑 起步 1.53→0.44 m/s（23.6→1.8 cm）停步 1.77→0.33 m/s；跑停（松 Shift） 起步 1.53→0.44 m/s（23.6→1.8 cm）停步 0.40→0.33 m/s
+[verify-xi] step-across：缝 0.5 m → 起跳离近沿 0.15 m、落点离远沿 0.32 m、路径位移 ×1.141（0.97 m）；窄缝不缩放 ✓；S1 四条路径位移 = span·smoothstep(帧/48)（偏差 < 1 µm）✓
+[verify-xi] 材质：湿痕 ×(1 − 0.22·wet) / 粗糙度 → 0.28、脸 SDF θ / 左右翻转、暗部冷色、淋湿 / 晾干 ✓
+[verify-xi] 交互动作：事件帧（shelf grab 22、ring 30、place-table release 34、阀门 16–76 = 2 s）、节点 anim 优先 / 别名 / fallback、XiActions 计时 ✓
+[verify-xi] 速度混合：0.5–4 m/s 脚下速度 = 实际速度、1.6 纯 walk / 3.2 纯 jog 播放率 1、走跑相位锁定；楼梯 0.7091→1、推 0.812→1.015 ✓
+[verify-xi] clip 表 ↔ anims.glb extras：31 个名字 / 帧数 / 循环 / 事件帧 / 步幅 / 楼梯 / 根运动 / 提灯一致 ✓
+[verify-xi] 材质补丁：body / face / hair 三个材质克隆后注入 ramp 光照 + 湿痕、脸 SDF（uv1）✓
+[verify-xi] 钥匙 prop-key-lighthouse：extras.attach = 缺省 T/Q ✓；grab 帧 22 middle_03_r × attach 对 socket 偏差 0.0 mm / 0.00°；只交 LOD0（extras.lods = 1），不组 LOD ✓
+[verify-xi] 钥匙 prop-key-cellar-s2：extras.attach = 缺省 T/Q ✓；grab 帧 22 middle_03_r × attach 对 socket 偏差 0.0 mm / 0.00°；LOD 3 级，forceLod0 开 / 关 ✓
+[verify-xi] 小船对位：座位 = xi-row-boat 原点、桨架 = align.rowing ±0.56 / 0.525 / 0.22（≤ 1 cm）、桨角 91 帧循环 / 插值、系船站位桩中心前 0.37 m ✓
+[verify-xi] char-xi.glb 73 骨 / 9 个蒙皮网格 / hand_r_socket ✓；anims.glb 2163 条轨道全部绑得上；循环 clip 原地（首尾 < 1 cm）；step-across 原地（extras inPlace:true、hips 首尾差 0、左脚 48 帧回原位 0.0 cm）→ 不抵消，位移全由跨越路径按 span·smoothstep 给（漂移 4.0 cm）；turn ±90° @34 帧、尾段抵消 ✓
+[verify-xi] 全部通过
+
+> game-studio-game@0.1.0 test:father
+> node --import ./scripts/register-ts-paths.mjs scripts/verify-father.mjs
+
+✓ clip 表 / 事件帧 / 时间轴 / 对位矩阵（纯逻辑）✓
+✓ manifest：char-father / char-father-anims 在 s3；tex-father-* 按规则归 s3 ✓
+✓ clip 表 ↔ char-father-anims.glb extras：名字 / 帧数 / 循环 / 步幅 / 事件帧 / handOnHead 对位一致 ✓
+✓ 真模型：73 骨、LOD0–2 蒙皮、applyLodDistances 设上（[0,1000,2000] → [0,40,100]）；185 条轨道都按骨骼名绑上 ✓
+✓ 三段都能播：gaze 骨骼最大转角 3.71°、walk 左脚相对根 0.806 m 且根 1.3 m/s、hand 见下 ✓
+✓ hand-on-head 蒙皮网格（汐 LOD0 头发 27488 面）：xiCrownRest -0.0002, 1.4891, 0.0052 ↔ 绑定姿势头发最高点 -0.0083, 1.4919, -0.0101；handOn–handOff 81 帧 掌心点→头发表面 0.008（@120）…0.017 m（@79），第 80 帧 0.016 m，掌心点在头发里的帧 0/81（palmPad 0.03 m）；右手皮肤 1517 顶点→头发表面最小值 -0.027（@112 thumb_02_r，< 0 = 压进头发）…-0.009 m（其中手掌 hand_r 主权重顶点最深 -0.015 @57；带符号按最近三角形法线，发片交界处符号可能不准），皮肤离头发 > 5 mm 的帧 0/81 ✓
+✓ hand-on-head：父亲根 = 汐根·T(0,0,0.48)·R_y(180°)（误差 1.1e-16）；汐时间 = 父亲时间；事件 reachStart@20 handOn@56 strokeA@66 strokeB@98 handOff@136 armDown@170；掌心到汐头顶 handOn–handOff 最大 0.053 m / 抬手前·放下后最小 0.802 m ✓
+
+> game-studio-game@0.1.0 test:cutscene
+> node --import ./scripts/register-ts-paths.mjs scripts/verify-cutscene.mjs
+
+verify-cutscene：
+  音频时钟 ✓
+  后备时钟 ✓
+  时钟来源切换 ✓
+  seek ✓
+  播放器：11 个 cue 按音频时钟触发（误差 < 1 帧），106 s 结束一次 ✓
+  后备时钟一帧跨多个 cue 按序 ✓
+  播放器跳过 ✓
+  结束页时序：完整 106.02 s / 10 s 跳过 → 10.75 s ✓
+  跳过控制（按住 1 s / 松开 / 被挡 / 提示 / 外部进度）✓
+  结尾时间轴 ↔ CUES（4/14/24/30/50/58/66/74/95/106）✓
+  镜头分段 ✓
+
+> game-studio-game@0.1.0 test:fonts
+> node --import ./scripts/register-ts-paths.mjs scripts/subset-fonts.mjs --check
+
+  ✓ foglight-sans.woff2 224 KB ≤ 2 MB
+  ✓ foglight-serif.woff2 314 KB ≤ 2 MB
+  ✓ 字体子集覆盖当前全部用字（710 字，子集 713 字）
+
+> game-studio-game@0.1.0 build
+> npm run typecheck && vite build
+
+
+> game-studio-game@0.1.0 typecheck
+> tsc --noEmit && tsc --noEmit -p tsconfig.node.json
+
+vite v8.3.5 building client environment for production...
+transforming...
+✓ 257 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                               1.19 kB │ gzip:   0.65 kB
+dist/static/basis_transcoder-o4Hde_L7.js     57.52 kB
+dist/static/draco_wasm_wrapper-fZCQGLGb.js   58.45 kB
+dist/static/draco_decoder-Z1_iN-Ht.wasm     192.42 kB │ gzip:  64.11 kB
+dist/static/basis_transcoder-VXdx5NbI.wasm  527.33 kB │ gzip: 248.94 kB
+dist/static/index-ChsbBAJC.css               21.80 kB │ gzip:   5.26 kB
+dist/static/vendor-B0ACQCpQ.js              369.02 kB │ gzip: 173.01 kB
+dist/static/index-u1X-2dEO.js               534.21 kB │ gzip: 174.10 kB
+dist/static/three-Dx5aw8kf.js               762.34 kB │ gzip: 203.50 kB
+
+✓ built in 876ms
+
+> game-studio-game@0.1.0 size
+> node --import ./scripts/register-ts-paths.mjs scripts/check-size.mjs
+
+分包体积（dist/，按 src/assets/manifest.ts 分组）
+  boot       0.00 MB  0 个文件
+  menu       5.43 MB  29 个文件
+  common    35.09 MB  68 个文件
+  s1        91.89 MB  73 个文件
+  s2        59.72 MB  58 个文件
+  s3        25.81 MB  39 个文件
+  主菜单包 menu+boot          5.43 MB / 15 MB
+  首场景包 common+s1          126.98 MB / 150 MB
+  首次进入 S1 总下载           132.41 MB / 150 MB
+  s1 进场后懒加载（首帧后）     2.41 MB  mus-s1-ebb-shore.ogg（不计入上面两项）
+  s2 进场后懒加载（首帧后）     2.46 MB  mus-s2-keeper-house.ogg（不计入上面两项）
+  s3 进场后懒加载（首帧后）     6.43 MB  mus-s3-lighthouse.ogg, mus-s3-lighthouse-upper.ogg, mus-ending-ch1.ogg（不计入上面两项）
+  配乐 mus-* 合计 6 首        12.99 MB（13,623,265 B；预加载 1.70 MB，进场后懒加载 11.29 MB）
+  [预估] ../art 已交付未登记 8 个文件：menu 0.00 MB、common 0.00 MB、s1 0.81 MB、s2 0.00 MB、s3 0.00 MB
+         全部接入后首场景包 ≈ 127.79 MB，首次总下载 ≈ 133.22 MB（按文件名猜的分组，034 接入后以上面为准）
+  ✓ 分包体积在预算内
+
+> game-studio-game@0.1.0 css
+> node --import ./scripts/register-ts-paths.mjs scripts/check-css.mjs
+
+✓ 构建 CSS：10 处必须保留的属性（backdrop-filter / mask-image / user-select）都在，源码无手写前缀；button / input / select / textarea 全局 font: inherit（BUG-022）
+EXIT 0

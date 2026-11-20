@@ -1,0 +1,121 @@
+/* 雾灯 · UI 风格约定（030 R2 定稿版，2026-10-30）
+   色值取 style-guide §2「UI 色」；字体取 §6。只是参考实现，程序可以按需要合并进 game/src/ui/styles.css。
+   1080p 基准，字号单位 px；更高分辨率建议用 clamp() 或整体 scale。 */
+:root {
+  /* —— 色 —— */
+  --ui-panel: rgba(26, 33, 40, 0.80);      /* 面板底 #1A2128 80% */
+  --ui-panel-solid: #1a2128;
+  --ui-stroke: #8c8f8e;                    /* 面板描边 */
+  --ui-stroke-soft: rgba(140, 143, 142, 0.38); /* 内侧第二道细线 / 分隔线 */
+  --ui-primary: #d9a257;                   /* 主按钮（唯一一个） */
+  --ui-accent: #ffd38a;                    /* 强调：悬停文字、光点 */
+  --ui-text: #e4e8ea;                      /* 正文 / 图标线色 */
+  --ui-text-2: #8b959d;                    /* 次要文字 */
+  --ui-interact: #a9bcc4;                  /* 可交互提示（场景里物体旁的冷色图标） */
+  --ui-warn: #b5584f;                      /* 警告 */
+  --ui-glow: rgba(217, 162, 87, 0.32);     /* 琥珀悬停光晕 */
+  --ui-shadow-text: 0 1px 2px rgba(10, 14, 18, 0.85), 0 0 12px rgba(10, 14, 18, 0.55);
+
+  /* —— 字体（均为 SIL OFL 1.1，可商用） —— */
+  --ui-font-title: 'Foglight Serif', 'Noto Serif CJK SC', 'Source Han Serif SC', serif;   /* 标题：思源宋体 */
+  --ui-font-body: 'Foglight Sans', 'Noto Sans CJK SC', 'Source Han Sans SC', sans-serif;  /* 正文、字幕：思源黑体 */
+  --ui-font-num: var(--ui-font-title);   /* 数字、版本号、用时：统一用思源宋体（030 R2 定：Cormorant 不进包） */
+
+  /* —— 字号（1080p） —— */
+  --fs-logo: 132px;      /* 标题字（正式用 ui-title-logo.svg） */
+  --fs-h1: 30px;         /* 界面标题：暂停 / 设置 / 日志，宋体，字距 .32em */
+  --fs-menu: 21px;       /* 菜单项，宋体，字距 .28em */
+  --fs-body: 16px;       /* 正文、设置项，黑体 */
+  --fs-small: 13px;      /* 说明小字、按键提示 */
+  --fs-subtitle: 26px;   /* 字幕（中）；小 22 / 大 32 */
+  --track-title: 0.32em;
+  --track-menu: 0.28em;
+
+  /* —— 线与间距 —— */
+  --line: 1px;
+  --icon-stroke: 1.5px;
+  --pad-panel: 40px 56px;
+  --dur: 220ms;          /* 淡入淡出；HUD 提示 400ms */
+  --ease: cubic-bezier(.25, .1, .25, 1);
+}
+
+/* 面板：半透明深底 + 框图 ui-panel-frame.webp（9-slice，2x：224×224，四边各切 96 px = 48 css px；
+   外细线 38% + 内侧 7 px 处淡线 16% + 四角罗盘星角括，色已烘进图里）。直角，不要 border-radius。 */
+.ui-panel { position: relative; background: var(--ui-panel); padding: var(--pad-panel);
+  border: var(--line) solid transparent; border-image: url('ui-panel-frame.webp') 96 / 48px / 0 stretch;
+  backdrop-filter: blur(6px); color: var(--ui-text); font-family: var(--ui-font-body); }
+/* 备选（不用框图时）：CSS 线 + 四个 <span class="corner tl|tr|bl|br"> 内联 ui-panel-corner.svg（currentColor = --ui-stroke）。两种方式二选一，不要叠用。 */
+.ui-panel.is-svg-corners { border-image: none; border-color: var(--ui-stroke-soft); outline: var(--line) solid rgba(140,143,142,.16); outline-offset: -7px; }
+.ui-panel > .corner { position: absolute; width: 40px; height: 40px; color: var(--ui-stroke); pointer-events: none; }
+.ui-panel > .corner.tl { left: -1px; top: -1px; }
+.ui-panel > .corner.tr { right: -1px; top: -1px; transform: scaleX(-1); }
+.ui-panel > .corner.bl { left: -1px; bottom: -1px; transform: scaleY(-1); }
+.ui-panel > .corner.br { right: -1px; bottom: -1px; transform: scale(-1); }
+.ui-panel h1 { font: 400 var(--fs-h1)/1.2 var(--ui-font-title); letter-spacing: var(--track-title); margin: 0 0 28px; text-align: center; }
+.ui-rule { height: 1px; background: linear-gradient(90deg, transparent, var(--ui-stroke-soft) 20%, var(--ui-stroke-soft) 80%, transparent); border: 0; }
+
+/* 文字按钮（次按钮，绝大多数按钮；GDD §12.2「按钮（无边框文字为主）」）：无框，悬停变琥珀 + 下划线饰条从中间展开 + 左侧小菱形。
+   下划线饰条 = ui-button-secondary.webp（2x：240×24 = 120×12 css，两端渐隐 + 中心小菱形 + 柔光），固定 120 px 宽，居中在文字下方。 */
+.ui-btn { position: relative; background: none; border: 0; padding: 10px 6px; cursor: pointer; color: var(--ui-text);
+  font: 400 var(--fs-menu)/1.3 var(--ui-font-title); letter-spacing: var(--track-menu); transition: color var(--dur) var(--ease); }
+.ui-btn::after { content: ''; position: absolute; left: 50%; bottom: -2px; width: 120px; height: 12px; margin-left: -60px;
+  background: url('ui-button-secondary.webp') center / 120px 12px no-repeat; transform: scaleX(0); opacity: 0;
+  transition: transform var(--dur) var(--ease), opacity var(--dur) var(--ease); pointer-events: none; }
+.ui-btn::before { content: ''; position: absolute; left: -18px; top: 50%; width: 5px; height: 5px; margin-top: -3px;
+  border: 1px solid var(--ui-primary); transform: rotate(45deg); opacity: 0; transition: opacity var(--dur) var(--ease); }
+.ui-btn:hover, .ui-btn.is-hover { color: var(--ui-accent); text-shadow: 0 0 14px var(--ui-glow); }
+.ui-btn:hover::after, .ui-btn.is-hover::after, .ui-btn:focus-visible::after { transform: scaleX(1); opacity: 1; }
+.ui-btn:hover::before, .ui-btn.is-hover::before { opacity: 1; }
+.ui-btn:active, .ui-btn.is-active { color: var(--ui-primary); }
+.ui-btn:disabled, .ui-btn.is-disabled { color: var(--ui-text-2); opacity: .55; cursor: default; text-shadow: none; }
+.ui-btn:focus-visible, .ui-btn.is-focus { outline: 1px dashed var(--ui-interact); outline-offset: 4px; }
+
+/* 主按钮（每屏最多一个，唯一带框的按钮）：细描边矩形；悬停时淡入光效图 ui-button-primary.webp
+   （9-slice，2x：192×144，四边各切 56 px = 28 css px；图里的线正好压在按钮 1 px 边框上，外扩 20 px 是辉光 + 四角小角标）。
+   用透明度过渡，不动画 box-shadow，比较省。 */
+.ui-btn-primary { position: relative; padding: 12px 40px; border: 1px solid rgba(217,162,87,.55); color: var(--ui-text);
+  font: 400 var(--fs-menu)/1.3 var(--ui-font-title); letter-spacing: var(--track-menu); background: rgba(26,33,40,.35); cursor: pointer;
+  transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease), color var(--dur) var(--ease); }
+.ui-btn-primary::before { content: ''; position: absolute; inset: -21px; border: 28px solid transparent;
+  border-image: url('ui-button-primary.webp') 56 / 28px / 0 stretch; opacity: 0; transition: opacity var(--dur) var(--ease); pointer-events: none; }
+.ui-btn-primary:hover, .ui-btn-primary.is-hover { border-color: var(--ui-primary); color: var(--ui-accent); }
+.ui-btn-primary:hover::before, .ui-btn-primary.is-hover::before, .ui-btn-primary:focus-visible::before { opacity: 1; }
+.ui-btn-primary:active, .ui-btn-primary.is-active { background: rgba(217,162,87,.12); border-color: var(--ui-accent); }
+.ui-btn-primary:disabled, .ui-btn-primary.is-disabled { border-color: rgba(140,143,142,.35); color: var(--ui-text-2); }
+.ui-btn-primary:disabled::before, .ui-btn-primary.is-disabled::before { opacity: 0; }
+
+/* 标题字：<img src="ui-title-logo.svg">（矢量，可 CSS 改色）或 ui-title-logo.webp（2x 位图，已带下缘渐隐、雾丝和辉光）。
+   webp 856×406 px = 428×203 css px，四周各含 24 css px 辉光边，摆放时按字形对齐要减掉这 24 px。 */
+.ui-logo { display: block; width: 428px; height: auto; }
+
+/* 设置控件 */
+.ui-row { display: flex; align-items: center; justify-content: space-between; gap: 32px; padding: 11px 0; font-size: var(--fs-body); }
+.ui-row .label { color: var(--ui-text); letter-spacing: .08em; }
+.ui-row .note { display: block; font-size: var(--fs-small); color: var(--ui-text-2); margin-top: 4px; letter-spacing: .04em; }
+.ui-seg { display: flex; gap: 22px; }
+.ui-seg span { color: var(--ui-text-2); padding-bottom: 3px; border-bottom: 1px solid transparent; cursor: pointer; letter-spacing: .12em; }
+.ui-seg span.on { color: var(--ui-text); border-bottom-color: var(--ui-text); }
+.ui-seg span:hover { color: var(--ui-accent); }
+.ui-slider { position: relative; width: 220px; height: 14px; }
+.ui-slider::before { content: ''; position: absolute; left: 0; right: 0; top: 7px; height: 1px; background: rgba(139,149,157,.5); }
+.ui-slider .fill { position: absolute; left: 0; top: 7px; height: 1px; background: var(--ui-text); }
+.ui-slider .knob { position: absolute; top: 3px; width: 8px; height: 8px; margin-left: -4px; border: 1px solid var(--ui-text);
+  background: var(--ui-panel-solid); transform: rotate(45deg); }
+.ui-num { font: 400 17px/1 var(--ui-font-num); color: var(--ui-text-2); min-width: 36px; text-align: right; font-variant-numeric: lining-nums tabular-nums; }
+
+/* 图标：<svg> 内联或 mask-image，颜色跟 currentColor */
+.ui-icon { width: 24px; height: 24px; color: var(--ui-text); }
+.ui-icon.is-interactive { color: var(--ui-primary); filter: drop-shadow(0 0 6px var(--ui-glow)); }
+.ui-icon.is-world { color: var(--ui-interact); }   /* 场景物体旁的交互提示（GDD §9：#A9BCC4） */
+
+/* 按键框（ui.hud.controls、交互提示里的 E） */
+.ui-key { display: inline-flex; align-items: center; justify-content: center; min-width: 24px; height: 24px; padding: 0 6px;
+  border: 1px solid rgba(228,232,234,.55); border-radius: 3px; font: 500 13px/1 var(--ui-font-body); color: var(--ui-text); }
+
+/* 字幕：底部居中，浅阴影，不加底框 */
+.ui-subtitle { font: 400 var(--fs-subtitle)/1.55 var(--ui-font-body); color: var(--ui-text); letter-spacing: .06em; text-shadow: var(--ui-shadow-text); text-align: center; }
+.ui-subtitle .speaker { color: var(--ui-text-2); margin-right: .6em; }
+
+/* 加载细线进度 */
+.ui-progress { width: 360px; height: 1px; background: rgba(139,149,157,.35); position: relative; }
+.ui-progress > i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--ui-text); box-shadow: 0 0 8px rgba(228,232,234,.5); }

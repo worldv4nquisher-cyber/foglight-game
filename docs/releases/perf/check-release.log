@@ -1,0 +1,131 @@
+
+> game-studio-game@0.1.0 check:release
+> npm run build && npm run verify:prod-hooks && npm run size && node --import ./scripts/register-ts-paths.mjs scripts/with-smoke-build.mjs "npm run verify:budget && npm run verify:load && npm run verify:memory"
+
+
+> game-studio-game@0.1.0 build
+> npm run typecheck && vite build
+
+
+> game-studio-game@0.1.0 typecheck
+> tsc --noEmit && tsc --noEmit -p tsconfig.node.json
+
+vite v8.3.5 building client environment for production...
+transforming...
+✓ 275 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                               4.32 kB │ gzip:   2.11 kB
+dist/static/basis_transcoder-o4Hde_L7.js     57.52 kB
+dist/static/draco_wasm_wrapper-fZCQGLGb.js   58.45 kB
+dist/static/draco_decoder-Z1_iN-Ht.wasm     192.42 kB │ gzip:  64.11 kB
+dist/static/basis_transcoder-VXdx5NbI.wasm  527.33 kB │ gzip: 248.94 kB
+dist/static/index-BDK1p0Gx.css               22.89 kB │ gzip:   5.47 kB
+dist/static/vendor-CO1ldCca.js              368.99 kB │ gzip: 173.04 kB
+dist/static/index-GnMQJJyV.js               577.06 kB │ gzip: 188.91 kB
+dist/static/three-BTlSW89H.js               765.64 kB │ gzip: 204.31 kB
+
+✓ built in 959ms
+
+> game-studio-game@0.1.0 verify:prod-hooks
+> node --import ./scripts/register-ts-paths.mjs scripts/check-prod-hooks.mjs
+
+✓ index.html 内联 structuredClone polyfill 与 src/platform/structuredClonePolyfill.js 一致、在入口模块之前
+✓ 生产构建不含调试 / QA 钩子：7 个文件（index.html + static/*.js|css 6 个 + assets/**/*.js 0 个）里没有 __qa / __game / __perfSpot / __testbed / __s1 / __s2 / __s3 / __lods / installQaHooks / unparsable；也没有 读 ?debug / ?scene 参数 / 读 ?smoke 参数 / 读 ?hintScale 参数 / 读 ?father= 预览参数 / 读 ?autostart 参数 / ?scene=testbed / sandbox 直进分支；URL 参数白名单 为空，生产包里没有其它 URLSearchParams / location.search / searchParams 用法（含变量传参）
+
+> game-studio-game@0.1.0 size
+> node --import ./scripts/register-ts-paths.mjs scripts/check-size.mjs
+
+分包体积（dist/，按 src/assets/manifest.ts 分组）
+  boot       0.00 MB  0 个文件
+  menu       5.48 MB  29 个文件
+  common    35.37 MB  75 个文件
+  s1        91.35 MB  73 个文件
+  s2        59.72 MB  58 个文件
+  s3        25.86 MB  40 个文件
+  dev        0.13 MB  1 个文件
+  主菜单包 menu+boot          5.48 MB / 15 MB
+  首场景包 common+s1          126.72 MB / 150 MB
+  首次进入 S1 总下载           132.20 MB / 150 MB（内部警戒线 140 MB）
+  s1 进场后懒加载（首帧后）     2.41 MB  mus-s1-ebb-shore.ogg（不计入上面两项）
+  s2 进场后懒加载（首帧后）     2.46 MB  mus-s2-keeper-house.ogg（不计入上面两项）
+  s3 进场后懒加载（首帧后）     6.43 MB  mus-s3-lighthouse.ogg, mus-s3-lighthouse-upper.ogg, mus-ending-ch1.ogg（不计入上面两项）
+  配乐 mus-* 合计 6 首        12.99 MB（13,623,265 B；预加载 1.70 MB，进场后懒加载 11.29 MB）
+  ! dist/assets/models/test-lod-puzzle-critical.glb：没有 Meshopt（测试模型，只警告）
+  ✓ 压缩：71 个 GLB 的网格 Meshopt、贴图 KTX2 全部生效
+  ✓ KTX2 块对齐：82 张，非 4 倍数 4 张均为清单 ramp（运行时转 RGBA）
+  ✓ 分包体积在预算内
+  · 测试构建（--mode smoke）→ /tmp/foglight-smoke-dist-r5kfWf，1 s
+
+> game-studio-game@0.1.0 verify:budget
+> node --import ./scripts/register-ts-paths.mjs scripts/verify-budget.mjs
+
+  s1 加载 #1 {"n":209,"bad":[]}
+  ✓ s1 ultra    s1-raft-back     主 pass 3387231 面 / 89 call（整帧 10085258 / 287，阴影 3184014 / 41）角色 LOD {"char-xi":0}
+  ✓ s1 ultra    s1-neighbor-note 主 pass 3366638 面 / 51 call（整帧 10027236 / 175，阴影 3249944 / 37）角色 LOD {"char-xi":0}
+  ✓ s1 ultra    s1-spawn-north   主 pass 3365306 面 / 48 call（整帧 10024572 / 169，阴影 3249944 / 37）角色 LOD {"char-xi":0}
+  ✓ s1 ultra    s1-opening       主 pass 3353597 面 / 77 call（整帧 10016600 / 263，阴影 3182904 / 41）角色 LOD {"char-xi":0}
+  ✓ s1 ultra    贴图 63 张（压缩 63，最大 4096，超限 0）· 角色 char-xi lod0 119846/120000 · puzzleCritical 4 个（不合格 0）
+  ✓ s1 high     s1-raft-back     主 pass 2862408 面 / 89 call（整帧 8599443 / 286，阴影 2793087 / 41）角色 LOD {"char-xi":1}
+  ✓ s1 high     s1-neighbor-note 主 pass 2855864 面 / 55 call（整帧 8596260 / 186，阴影 2840517 / 41）角色 LOD {"char-xi":1}
+  ✓ s1 high     s1-spawn-north   主 pass 3056432 面 / 52 call（整帧 9199296 / 180，阴影 3042417 / 41）角色 LOD {"char-xi":1}
+  ✓ s1 high     s1-opening       主 pass 2829884 面 / 77 call（整帧 8534115 / 262，阴影 2793087 / 41）角色 LOD {"char-xi":1}
+  ✓ s1 high     贴图 63 张（压缩 63，最大 2048，超限 0）· 角色 char-xi lod1 48499/50000 · puzzleCritical 4 个（不合格 0）
+  ⚠ s1 standard s1-raft-back     主 pass 2204190 面 / 93 call（整帧 6362618 / 232，阴影 2044785 / 43）角色 LOD {"char-xi":1}
+  ⚠ s1 standard s1-neighbor-note 主 pass 2401041 面 / 55 call（整帧 7015328 / 153，阴影 2295610 / 39）角色 LOD {"char-xi":1}
+  ⚠ s1 standard s1-spawn-north   主 pass 2555750 面 / 52 call（整帧 7480787 / 147，阴影 2451651 / 39）角色 LOD {"char-xi":1}
+  ⚠ s1 standard s1-opening       主 pass 2326565 面 / 80 call（整帧 6761995 / 209，阴影 2199684 / 42）角色 LOD {"char-xi":1}
+  ✓ s1 standard 贴图 63 张（压缩 63，最大 2048，超限 0）· 角色 char-xi lod1 48499/50000 · puzzleCritical 4 个（不合格 0）
+  s2 加载 #1 {"n":197,"bad":[]}
+  ✓ s2 ultra    s2-white-stone-5 主 pass 761153 面 / 97 call（整帧 1976399 / 251，阴影 591385 / 97）角色 LOD {"char-xi":0}
+  ✓ s2 ultra    s2-white-stone-1 主 pass 757633 面 / 86 call（整帧 1972879 / 240，阴影 591385 / 97）角色 LOD {"char-xi":0}
+  ✓ s2 ultra    s2-dial-gate     主 pass 750457 面 / 75 call（整帧 1907347 / 228，阴影 591385 / 97）角色 LOD {"char-xi":0}
+  ✓ s2 ultra    贴图 34 张（压缩 34，最大 4096，超限 0）· 角色 char-xi lod0 119846/120000 · puzzleCritical 22 个（不合格 0）
+  ✓ s2 high     s2-white-stone-5 主 pass 588459 面 / 97 call（整帧 1530485 / 250，阴影 520038 / 97）角色 LOD {"char-xi":1}
+  ✓ s2 high     s2-white-stone-1 主 pass 584939 面 / 86 call（整帧 1526965 / 239，阴影 520038 / 97）角色 LOD {"char-xi":1}
+  ✓ s2 high     s2-dial-gate     主 pass 577763 面 / 75 call（整帧 1490611 / 227，阴影 520038 / 97）角色 LOD {"char-xi":1}
+  ✓ s2 high     贴图 34 张（压缩 34，最大 2048，超限 0）· 角色 char-xi lod1 48499/50000 · puzzleCritical 22 个（不合格 0）
+  ✓ s2 standard s2-white-stone-5 主 pass 415410 面 / 97 call（整帧 869989 / 207，阴影 243268 / 83）角色 LOD {"char-xi":1}
+  ✓ s2 standard s2-white-stone-1 主 pass 469390 面 / 86 call（整帧 981469 / 196，阴影 300768 / 83）角色 LOD {"char-xi":1}
+  ✓ s2 standard s2-dial-gate     主 pass 547763 面 / 75 call（整帧 1116204 / 184，阴影 386308 / 83）角色 LOD {"char-xi":1}
+  ✓ s2 standard 贴图 34 张（压缩 34，最大 2048，超限 0）· 角色 char-xi lod1 48499/50000 · puzzleCritical 22 个（不合格 0）
+  s3 加载 #1 {"n":146,"bad":[]}
+  ✓ s3 ultra    s3-spawn-south   主 pass 699464 面 / 44 call（整帧 1798393 / 157，阴影 433552 / 23）角色 LOD {"char-father":0,"char-xi":0}
+  ✓ s3 ultra    s3-oil-valve     主 pass 696282 面 / 40 call（整帧 1755031 / 135，阴影 433552 / 23）角色 LOD {"char-father":0,"char-xi":0}
+  ✓ s3 ultra    s3-logbook       主 pass 690174 面 / 34 call（整帧 1729211 / 118，阴影 433552 / 23）角色 LOD {"char-father":0,"char-xi":0}
+  ✓ s3 ultra    贴图 33 张（压缩 33，最大 4096，超限 0）· 角色 char-father lod0 55870/60000，char-xi lod0 119846/120000 · puzzleCritical 17 个（不合格 0）
+  ✓ s3 high     s3-spawn-south   主 pass 526770 面 / 44 call（整帧 1378451 / 156，阴影 362205 / 23）角色 LOD {"char-father":0,"char-xi":1}
+  ✓ s3 high     s3-oil-valve     主 pass 523588 面 / 40 call（整帧 1338295 / 134，阴影 362205 / 23）角色 LOD {"char-father":0,"char-xi":1}
+  ✓ s3 high     s3-logbook       主 pass 517480 面 / 34 call（整帧 1312475 / 117，阴影 362205 / 23）角色 LOD {"char-father":0,"char-xi":1}
+  ✓ s3 high     贴图 33 张（压缩 33，最大 2048，超限 0）· 角色 char-father lod1 24000/40000，char-xi lod1 48499/50000 · puzzleCritical 17 个（不合格 0）
+  ✓ s3 standard s3-spawn-south   主 pass 385651 面 / 44 call（整帧 963619 / 131，阴影 241726 / 21）角色 LOD {"char-father":0,"char-xi":1}
+  ✓ s3 standard s3-oil-valve     主 pass 462044 面 / 40 call（整帧 1162476 / 110，阴影 321301 / 21）角色 LOD {"char-father":0,"char-xi":1}
+  ✓ s3 standard s3-logbook       主 pass 455936 面 / 34 call（整帧 1136944 / 94，阴影 321301 / 21）角色 LOD {"char-father":0,"char-xi":1}
+  ✓ s3 standard 贴图 33 张（压缩 33，最大 2048，超限 0）· 角色 char-father lod1 24000/25000，char-xi lod1 48499/50000 · puzzleCritical 17 个（不合格 0）
+
+预算校验通过 → /workspace/game-studio/docs/releases/perf/verify-budget.json
+已知警告 4 项（不算失败）：
+  ⚠ s1 standard s1-raft-back：主 pass 2204190 面 / 93 call 超过 1500000 / 600（已知项，上限 2700000：标准档 S1 主 pass 面数 2.20–2.56 M > 1.5 M：不做 LOD、不改预算，等 M8 实机帧率定）
+  ⚠ s1 standard s1-neighbor-note：主 pass 2401041 面 / 55 call 超过 1500000 / 600（已知项，上限 2700000：标准档 S1 主 pass 面数 2.20–2.56 M > 1.5 M：不做 LOD、不改预算，等 M8 实机帧率定）
+  ⚠ s1 standard s1-spawn-north：主 pass 2555750 面 / 52 call 超过 1500000 / 600（已知项，上限 2700000：标准档 S1 主 pass 面数 2.20–2.56 M > 1.5 M：不做 LOD、不改预算，等 M8 实机帧率定）
+  ⚠ s1 standard s1-opening：主 pass 2326565 面 / 80 call 超过 1500000 / 600（已知项，上限 2700000：标准档 S1 主 pass 面数 2.20–2.56 M > 1.5 M：不做 LOD、不改预算，等 M8 实机帧率定）
+
+> game-studio-game@0.1.0 verify:load
+> node --import ./scripts/register-ts-paths.mjs scripts/verify-load.mjs
+
+  ✓ 主菜单出现 928 ms（≤ 3000），下载 4.01 MB / 47 个请求
+  ✓ 首场景 S1：首帧 3602 ms、资源全部完成 4113 ms（点「新游戏」起算），下载 129.0 MB / 147 个请求，失败 0
+
+加载校验通过（本机回环（vite preview 127.0.0.1），不限速）→ /workspace/game-studio/docs/releases/perf/verify-load.json
+
+> game-studio-game@0.1.0 verify:memory
+> node --import ./scripts/register-ts-paths.mjs scripts/verify-memory.mjs
+
+  进 S1           s1-ebb-shore     估算显存 426.6 MB（贴图 388.7 / 缓冲 36.3 / RB 1.6）几何体 94 贴图 84（GL 88）着色器 49 JS 堆 14.9 MB（对象 10.3 / 代码 4.6）
+  切到 S2          s2-keeper-house  估算显存 400.8 MB（贴图 382.3 / 缓冲 16.9 / RB 1.6）几何体 94 贴图 81（GL 85）着色器 44 JS 堆 15.7 MB（对象 10.4 / 代码 5.3）
+  切到 S3          s3-lighthouse    估算显存 397.5 MB（贴图 378 / 缓冲 17.9 / RB 1.6）几何体 52 贴图 77（GL 81）着色器 46 JS 堆 14.5 MB（对象 8.5 / 代码 6）
+  回主菜单           menu             估算显存 91.9 MB（贴图 87.5 / 缓冲 4.4 / RB 0）几何体 19 贴图 17（GL 21）着色器 15 JS 堆 10.2 MB（对象 4.5 / 代码 5.7）
+  再进 S1          s1-ebb-shore     估算显存 427.3 MB（贴图 389.4 / 缓冲 36.3 / RB 1.6）几何体 95 贴图 85（GL 89）着色器 51 JS 堆 16.6 MB（对象 10.4 / 代码 6.1）
+
+内存校验通过 → /workspace/game-studio/docs/releases/perf/verify-memory.json
+exit=0

@@ -1,0 +1,11 @@
+
+> game-studio-game@0.1.0 smoke
+> node --import ./scripts/register-ts-paths.mjs scripts/smoke-browser.mjs
+
+  ✓ dist 解码器各一套：draco_decoder-Z1_iN-Ht.wasm, draco_wasm_wrapper-fZCQGLGb.js, basis_transcoder-VXdx5NbI.wasm, basis_transcoder-o4Hde_L7.js
+  ✓ 主场景就绪（1.2s）
+    字体 fetch 次数：Foglight Sans 1，Foglight Serif 1
+  ✓ v0.1-010 场景流程：启动只加载 boot+menu、字体子集、新游戏加载 common+s1、S1 预加载 s2、S1→S2→S3 黑场 ≤ 1.0 s 并存档、释放上一场景、慢加载显示细线进度、S3 点灯→结束页、沙盒仅 debug：主菜单：加载 50 ms，导航起 1456 ms（无头软件渲染，仅供参考；boot+menu、字体 foglight-sans.woff2/foglight-serif.woff2）✓，新游戏 common+s1 → S1、存档 s1、地名 / 操作提示走文本表、无触屏控件、预加载 s2 ✓，S1→S2 2617 ms（全黑 1652 ms、最长帧 605 ms，无头软件渲染）、存档 s2、释放 s1（S1 几何体 157/150 已 dispose）、几何体 121→205 纹理 34→34 ✓，慢加载 S2→S3 10348 ms、进度线 15 帧（0.63→1.00）✓，S3 进场灯塔熄灭 → 点灯亮起 → 结束页、释放场景组 ✓，沙盒仅 debug ✓
+  （警告 2 条，首条：THREE.WebGLRenderer: KHR_parallel_shader_compile extension not supported.）
+冒烟测试通过
+EXIT 0

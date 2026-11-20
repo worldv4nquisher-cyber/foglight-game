@@ -1,0 +1,9 @@
+
+> game-studio-game@0.1.0 smoke
+> node --import ./scripts/register-ts-paths.mjs scripts/smoke-browser.mjs
+
+  ✓ dist 解码器各一套：draco_decoder-Z1_iN-Ht.wasm, draco_wasm_wrapper-fZCQGLGb.js, basis_transcoder-VXdx5NbI.wasm, basis_transcoder-o4Hde_L7.js
+  ✓ 主场景就绪（1.2s）
+  ✓ v0.1-1031 配乐 S3 点燃 → 结尾曲：ignited 那一帧 start(0)、单次、两层 2 s 淡出；章节结束页接着放；跳过 0.75 s 淡出：点燃 @音频 10.0587 s（游戏 4.233 s）→ 结尾曲 start @10.0587（差 0.0000 s）、文件 0 s、loop=false、淡入 0 s；两层淡出 2 s；点燃后 3 s 音乐总线 RMS -39.6 dBFS / 峰值 -27.5（29 帧 8.5 s）；completeChapter（演出结束 / 跳过调的同一入口）进章节结束页，结尾曲继续（位置 10.93 s = 点燃后 10.93 s），结束页上 RMS -41.1 dBFS / 峰值 -28.7（76 帧 3.0 s）；结束页按住 Space（0.5 s 圆环 0.50）→ 结尾曲 stop fade 0.75 s、留在结束页；按住 Space 跳过 @演出 1.40 s（点燃后 7.04 s）→ stop fade 0.75 s；0.9 s 后音乐总线 RMS -999.0 dBFS / 峰值 -999.0（50 帧 2.1 s）；随后到章节结束页
+冒烟测试通过
+EXIT 0

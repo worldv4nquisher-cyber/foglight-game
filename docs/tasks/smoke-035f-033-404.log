@@ -1,0 +1,9 @@
+
+> game-studio-game@0.1.0 smoke
+> node --import ./scripts/register-ts-paths.mjs scripts/smoke-browser.mjs
+
+  ✓ dist 解码器各一套：draco_decoder-Z1_iN-Ht.wasm, draco_wasm_wrapper-fZCQGLGb.js, basis_transcoder-VXdx5NbI.wasm, basis_transcoder-o4Hde_L7.js
+  ✓ 主场景就绪（2.6s）
+  ✓ v0.1-033 懒加载失败：S1 曲 404 → 菜单曲 2 s 淡出、不放音乐、不报错：S1 首帧后请求 → 404 → musicLazyResult=missing，菜单曲 stop fade 2 s，musicKey=null，isMissing=true，无游戏报错
+冒烟测试通过
+EXIT 0

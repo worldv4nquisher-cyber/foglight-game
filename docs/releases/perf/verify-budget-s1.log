@@ -1,0 +1,43 @@
+  s1 加载 #1 {"n":209,"bad":[]}
+  ✓ s1 ultra    s1-raft-back     主 pass 3387231 面 / 89 call（整帧 10085258 / 287，阴影 3184014 / 41）角色 LOD {"char-xi":0}
+  ✓ s1 ultra    s1-neighbor-note 主 pass 3366638 面 / 51 call（整帧 10027236 / 175，阴影 3249944 / 37）角色 LOD {"char-xi":0}
+  ✓ s1 ultra    s1-spawn-north   主 pass 3365306 面 / 48 call（整帧 10024572 / 169，阴影 3249944 / 37）角色 LOD {"char-xi":0}
+  ✓ s1 ultra    s1-opening       主 pass 3353597 面 / 77 call（整帧 10016600 / 263，阴影 3182904 / 41）角色 LOD {"char-xi":0}
+  ✓ s1 ultra    贴图 63 张（压缩 63，最大 4096，超限 0）· 角色 char-xi lod0 119846/120000 · puzzleCritical 4 个（不合格 0）
+  ✓ s1 high     s1-raft-back     主 pass 2862408 面 / 89 call（整帧 8599443 / 286，阴影 2793087 / 41）角色 LOD {"char-xi":1}
+  ✓ s1 high     s1-neighbor-note 主 pass 2855864 面 / 55 call（整帧 8596260 / 186，阴影 2840517 / 41）角色 LOD {"char-xi":1}
+  ✓ s1 high     s1-spawn-north   主 pass 3056432 面 / 52 call（整帧 9199296 / 180，阴影 3042417 / 41）角色 LOD {"char-xi":1}
+  ✓ s1 high     s1-opening       主 pass 2829884 面 / 77 call（整帧 8534115 / 262，阴影 2793087 / 41）角色 LOD {"char-xi":1}
+  ✗ s1 high     贴图 63 张（压缩 63，最大 4096，超限 3）· 角色 char-xi lod1 48499/50000 · puzzleCritical 4 个（不合格 0）
+  ✗ s1 standard s1-raft-back     主 pass 2204190 面 / 93 call（整帧 6362618 / 232，阴影 2044785 / 43）角色 LOD {"char-xi":1}
+  ✗ s1 standard s1-neighbor-note 主 pass 2401041 面 / 55 call（整帧 7015328 / 153，阴影 2295610 / 39）角色 LOD {"char-xi":1}
+  ✗ s1 standard s1-spawn-north   主 pass 2555750 面 / 52 call（整帧 7480787 / 147，阴影 2451651 / 39）角色 LOD {"char-xi":1}
+  ✗ s1 standard s1-opening       主 pass 2326565 面 / 80 call（整帧 6761995 / 209，阴影 2199684 / 42）角色 LOD {"char-xi":1}
+  ✗ s1 standard 贴图 63 张（压缩 63，最大 4096，超限 18）· 角色 char-xi lod1 48499/50000 · puzzleCritical 4 个（不合格 0）
+
+预算校验：25 项不通过 → /workspace/game-studio/docs/releases/perf/verify-budget-s1.json
+  ✗ s1 high 贴图 tex-xi-albedo 4096×4096 > 2048（char-prop：char-xi_lod0_1, char-xi_lod0_1-hull, char-xi_lod0_2）
+  ✗ s1 high 贴图 tex-xi-orm 4096×4096 > 2048（char-prop：char-xi_lod0_1, char-xi_lod0_2, char-xi_lod0_3）
+  ✗ s1 high 贴图 tex-xi-normal 4096×4096 > 2048（char-prop：char-xi_lod0_1, char-xi_lod0_2, char-xi_lod0_3）
+  ✗ s1 standard s1-raft-back：主 pass 2204190 面 / 93 call 超过 1500000 / 600
+  ✗ s1 standard s1-neighbor-note：主 pass 2401041 面 / 55 call 超过 1500000 / 600
+  ✗ s1 standard s1-spawn-north：主 pass 2555750 面 / 52 call 超过 1500000 / 600
+  ✗ s1 standard s1-opening：主 pass 2326565 面 / 80 call 超过 1500000 / 600
+  ✗ s1 standard 贴图 (无名) 2048×2048 > 1024（env：env-tidal-flat-s1_lod0_1, env-tidal-flat-s1_lod0_2, env-tidal-flat-s1_lod1_1）
+  ✗ s1 standard 贴图 tex-rock-shore-albedo 2048×2048 > 1024（env：env-tidal-flat-s1_lod0_2, env-tidal-flat-s1_lod1_2, env-tidal-flat-s1_lod2_2）
+  ✗ s1 standard 贴图 tex-rock-shore-orm 2048×2048 > 1024（env：env-tidal-flat-s1_lod0_2, env-tidal-flat-s1_lod1_2, env-tidal-flat-s1_lod2_2）
+  ✗ s1 standard 贴图 tex-rock-shore-normal 2048×2048 > 1024（env：env-tidal-flat-s1_lod0_2, env-tidal-flat-s1_lod1_2, env-tidal-flat-s1_lod2_2）
+  ✗ s1 standard 贴图 (无名) 2048×2048 > 1024（env：env-pier-wood-ch1_lod0, env-pier-wood-ch1_lod1, env-pier-wood-ch1_lod2）
+  ✗ s1 standard 贴图 tex-stone-masonry-albedo 2048×2048 > 1024（env：env-shore-ledge-s1_lod0_1, env-shore-ledge-s1_lod1_1, env-shore-ledge-s1_lod2_1）
+  ✗ s1 standard 贴图 tex-stone-masonry-orm 2048×2048 > 1024（env：env-shore-ledge-s1_lod0_1, env-shore-ledge-s1_lod1_1, env-shore-ledge-s1_lod2_1）
+  ✗ s1 standard 贴图 tex-stone-masonry-normal 2048×2048 > 1024（env：env-shore-ledge-s1_lod0_1, env-shore-ledge-s1_lod1_1, env-shore-ledge-s1_lod2_1）
+  ✗ s1 standard 贴图 (无名) 2048×2048 > 1024（env：env-cliff-s1_lod0_1, env-cliff-s1_lod0_2, env-cliff-s1_lod1_1）
+  ✗ s1 standard 贴图 tex-lighthouse-ch1-wall-albedo 2048×2048 > 1024（env：env-lighthouse-ch1_lod0_1, env-lighthouse-ch1_lod1_1, env-lighthouse-ch1_lod2_1）
+  ✗ s1 standard 贴图 tex-lighthouse-ch1-wall-orm 2048×2048 > 1024（env：env-lighthouse-ch1_lod0_1, env-lighthouse-ch1_lod1_1, env-lighthouse-ch1_lod2_1）
+  ✗ s1 standard 贴图 tex-lighthouse-ch1-wall-normal 2048×2048 > 1024（env：env-lighthouse-ch1_lod0_1, env-lighthouse-ch1_lod1_1, env-lighthouse-ch1_lod2_1）
+  ✗ s1 standard 贴图 tex-lighthouse-ch1-weather-albedo 2048×2048 > 1024（env：env-lighthouse-ch1_lod0_3, env-lighthouse-ch1_lod1_3, env-lighthouse-ch1_lod2_3）
+  ✗ s1 standard 贴图 tex-lighthouse-ch1-weather-orm 2048×2048 > 1024（env：env-lighthouse-ch1_lod0_3, env-lighthouse-ch1_lod1_3, env-lighthouse-ch1_lod2_3）
+  ✗ s1 standard 贴图 tex-lighthouse-ch1-weather-normal 2048×2048 > 1024（env：env-lighthouse-ch1_lod0_3, env-lighthouse-ch1_lod1_3, env-lighthouse-ch1_lod2_3）
+  ✗ s1 standard 贴图 tex-xi-albedo 4096×4096 > 2048（char-prop：char-xi_lod0_1, char-xi_lod0_1-hull, char-xi_lod0_2）
+  ✗ s1 standard 贴图 tex-xi-orm 4096×4096 > 2048（char-prop：char-xi_lod0_1, char-xi_lod0_2, char-xi_lod0_3）
+  ✗ s1 standard 贴图 tex-xi-normal 4096×4096 > 2048（char-prop：char-xi_lod0_1, char-xi_lod0_2, char-xi_lod0_3）

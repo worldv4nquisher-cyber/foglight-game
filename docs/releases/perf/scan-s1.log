@@ -1,0 +1,9 @@
+  s1 加载 #1 {"n":210,"bad":[]}
+  s1：11 个兴趣点 → 48 个候选机位
+  s1 面数最高 3 个：
+    s1-boat@180  3420861 面 / 74 call  eye [0,2.2,4.5] at [0,1,0]
+    raft-s1@180  3387231 面 / 89 call  eye [9.1,4.05,15] at [9.1,2.85,10.5]
+    s1-neighbor-note@270  3366638 面 / 51 call  eye [19.55,2.33,-1.7] at [15.05,1.13,-1.7]
+  s1 draw call 最多：raft-s1@180 89 call / 3387231 面
+
+扫描通过 → /workspace/game-studio/docs/releases/perf/scan-s1.json

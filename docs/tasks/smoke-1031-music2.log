@@ -1,0 +1,14 @@
+
+> game-studio-game@0.1.0 smoke
+> node --import ./scripts/register-ts-paths.mjs scripts/smoke-browser.mjs
+
+  ✓ dist 解码器各一套：draco_decoder-Z1_iN-Ht.wasm, draco_wasm_wrapper-fZCQGLGb.js, basis_transcoder-VXdx5NbI.wasm, basis_transcoder-o4Hde_L7.js
+  ✓ 主场景就绪（2.3s）
+  ✓ v0.1-033 配乐：主菜单 mus-menu 循环 + 首次交互后出声、新游戏进 S1 与 mus-s1-ebb-shore 2 s 交叉淡化、menu 组无 preview：主菜单 mus-menu（106.67 s / 2 声道，loop=true，循环点 0/0）起播时 context=suspended，总线 -17.9 dB；首次点击后 context=running；菜单曲电平：整条 -39.73 dBFS（文件 -22.09 + 曲目 0.30 + 总线 -17.94），实采 8 s -36.4 dBFS；进 S1：首帧 render @20917 ms → 发起请求 @20917 ms（+0）→ 下载 20919–41779 ms → 淡入 @49003 ms；mus-menu → mus-s1-ebb-shore 交叉淡化 2 s（读数时 0.02 s 处新曲增益 0.01），2.2 s 后增益 1.00；S1 稳定后电平：整条 -39.77 dBFS（文件 -21.83 + 曲目 0.00 + 总线 -17.94），实采 8 s -41.1 dBFS；主菜单 − S1 整条差 0.04 dB
+  ✓ v0.1-033 懒加载失败：S1 曲 404 → 菜单曲 2 s 淡出、不放音乐、不报错：S1 首帧后请求 → 404 → musicLazyResult=missing，菜单曲 stop fade 2 s，musicKey=null，isMissing=true，无游戏报错
+  ✓ v0.1-1031 配乐 S2：S1 → S2 首帧后懒加载 mus-s2-keeper-house，整文件 loop、和 S1 曲 2 s 交叉淡化、音乐总线有电平：S2 首帧 @32961 ms → 请求 @32961 → 下载 32962–32993 ms → 起播 @33445 ms；mus-s1-ebb-shore → mus-s2-keeper-house 交叉淡化 2 s、loop=true 循环点 0/0、151.111 s（解码后 7253333 样本 @48000 Hz）；2.2 s 后增益 1.00；AnalyserNode 音乐总线 RMS -45.9 dBFS / 峰值 -29.7（149 帧 6.0 s）
+  ✓ v0.1-1031 配乐 S3 两层 + 爬塔：S2 → S3 两层同一 AudioContext 时刻起播、样本对齐、上层增益随玩家高度 0 → 1（楼梯底 → 灯室）：S3 首帧 @19614 ms 后请求底层 19615–19630 / 上层 19615–19629 / 结尾曲预取 19615–19629 ms；上层 with-base（底层 start @8.6080，上层 when 8.6080 offset 0.0000 → 文件 0 s 同余差 0.0e+0 s），两层 loop、各 7200000 样本；从 S2 曲 2 s 交叉淡化；爬塔：桥尾（塔外 y 3） y 3.00 r 32.00 → 增益 0.000（f = 0.000）上层 RMS -999.0 dBFS / 峰值 -999.0（76 帧 3.0 s）；楼梯底 y 0.20 r 2.50 → 增益 0.000（f = 0.000）上层 RMS -999.0 dBFS / 峰值 -999.0（77 帧 3.1 s）；门内平台 y 2.40 r 2.50 → 增益 0.101（f = 0.101）上层 RMS -45.0 dBFS / 峰值 -29.0（77 帧 3.1 s）；平台 A y 10.00 r 2.50 → 增益 0.450（f = 0.450）上层 RMS -32.6 dBFS / 峰值 -19.1（76 帧 3.0 s）；平台 B y 16.00 r 2.50 → 增益 0.725（f = 0.725）上层 RMS -27.5 dBFS / 峰值 -14.4（37 帧 5.0 s）；灯室 y 22.00 r 2.50 → 增益 1.000（f = 1.000）上层 RMS -24.4 dBFS / 峰值 -11.1（76 帧 3.0 s）；灯室音乐总线 RMS -38.5 dBFS / 峰值 -26.9（77 帧 3.0 s）；全程两层 start / offset 不变
+  ✓ v0.1-1031 配乐 S3 点燃 → 结尾曲：ignited 那一帧 start(0)、单次、两层 2 s 淡出；章节结束页接着放；跳过 0.75 s 淡出：点燃 @音频 7.1680 s（游戏 4.067 s）→ 结尾曲 start @7.1680（差 0.0000 s）、文件 0 s、loop=false、淡入 0 s；两层淡出 2 s；点燃后 3 s 音乐总线 RMS -39.0 dBFS / 峰值 -26.8（20 帧 5.5 s）；completeChapter（S3 0:04 调的同一入口）进章节结束页，结尾曲继续（位置 6.59 s = 点燃后 6.59 s），结束页上 RMS -41.7 dBFS / 峰值 -32.4（7 帧 3.3 s）；跳过（cutscene:skip ch1-ending）@点燃后 1.5 s → stop fade 0.75 s；0.9 s 后音乐总线 RMS -999.0 dBFS / 峰值 -999.0（51 帧 2.0 s）
+  （警告 2 条，首条：THREE.WebGLRenderer: KHR_parallel_shader_compile extension not supported.）
+冒烟测试通过
+exit=0

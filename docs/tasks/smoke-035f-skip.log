@@ -1,0 +1,9 @@
+
+> game-studio-game@0.1.0 smoke
+> node --import ./scripts/register-ts-paths.mjs scripts/smoke-browser.mjs
+
+  ✓ dist 解码器各一套：draco_decoder-Z1_iN-Ht.wasm, draco_wasm_wrapper-fZCQGLGb.js, basis_transcoder-VXdx5NbI.wasm, basis_transcoder-o4Hde_L7.js
+  ✓ 主场景就绪（3.6s）
+  ✓ v0.1-035 跳过 art=1：演出 20 s 按住 Space 1 s（圆环）→ 结尾曲 0.75 s 淡出 + 0.75 s 黑场 → 结束页（日志第 6 页照样写）：演出 24.89 s 按下 Space、0.5 s 圆环进度 0.51（DOM 圆环显示过、最大 0.63）、1.12 s 后跳过（演出 27.17 s；已触发 lens/fog_open/silhouette）→ 结尾曲 stop fade 0.75 s → 1.64 s 后切结束页、淡入后 fade 0.00；日志第 6 页 true
+冒烟测试通过
+EXIT 0

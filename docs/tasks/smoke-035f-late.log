@@ -1,0 +1,10 @@
+
+> game-studio-game@0.1.0 smoke
+> node --import ./scripts/register-ts-paths.mjs scripts/smoke-browser.mjs
+
+  ✓ dist 解码器各一套：draco_decoder-Z1_iN-Ht.wasm, draco_wasm_wrapper-fZCQGLGb.js, basis_transcoder-VXdx5NbI.wasm, basis_transcoder-o4Hde_L7.js
+  ✓ 主场景就绪（1.1s）
+[035-late] switch {"pv":{"t":6.0963,"src":"fallback","key":null,"a":7.0827,"w":21537},"sw":{"t":7.6267,"src":"audio","key":"mus-ending-ch1","a":7.6267,"w":22077},"next":[{"t":8.064,"src":"audio","key":"mus-ending-ch1","a":8.064,"w":22522},{"t":8.5227,"src":"audio","key":"mus-ending-ch1","a":8.5227,"w":22982},{"t":9.0133,"src":"audio","key":"mus-ending-ch1","a":9.0133,"w":23468}],"off":7.52,"ig":2.421333333333333,"startAt":2.421333333333333,"l":{"op":"play","key":"mus-ending-ch1","from":null,"at":9.941333333333333,"fade":0.5,"loop":false,"ctxState":"running","offset":7.52,"wall":21977.40000000596}}
+  ✓ v0.1-035 结尾曲晚到 art=1：点燃时结尾曲还没下载完 → 后备时钟先走、场景曲照样淡出 → 到了按「点燃后音频时钟秒数」作 offset 补位起播（0.5 s 淡入）→ 演出时钟切到音频，t = 曲子位置：结尾曲请求扣住 16.6 s 墙钟；点燃 @音频 2.421 时 buffer 未到 → 场景曲 — fade — s，演出走后备（放行前 t 6.10 s、9 帧 fallback / 0 帧 audio、点燃后音频 7.15 s）→ 放行 → result=late，play offset 7.520 s = 起播 9.941 − 点燃 2.421，曲子 0 s 时刻 = 点燃（差 0.0e+0），淡入 0.5 s；时钟切换帧：上一帧 t 6.096（fallback，曲 7.083）→ 本帧 t 7.627（audio，曲 7.627），后备领先 -1.530 s → 第 0 帧对齐，之后 7 帧 |t − 曲子位置| ≤ 0.0000 s（切换后最大 0.000）、不倒退；补位后 0 个 cue 按音频触发（—）；之前 1 个 fallback；按住 Space 跳过 → 结束页
+冒烟测试通过
+EXIT 0

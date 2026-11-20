@@ -1,0 +1,9 @@
+  s2 加载 #1 {"n":197,"bad":[]}
+  s2：22 个兴趣点 → 92 个候选机位
+  s2 面数最高 3 个：
+    white-stone-s2-5@270  761153 面 / 97 call  eye [24.9,1.41,1.2] at [20.4,0.21,1.2]
+    white-stone-s2-1@270  757633 面 / 86 call  eye [21.1,1.71,2.8] at [16.6,0.51,2.8]
+    s2-dial-gate-collider@180  750457 面 / 75 call  eye [4.2,3.15,16.25] at [4.2,1.95,11.75]
+  s2 draw call 最多：white-stone-s2-5@270 97 call / 761153 面
+
+扫描通过 → /workspace/game-studio/docs/releases/perf/scan-s2.json

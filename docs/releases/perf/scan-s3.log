@@ -1,0 +1,9 @@
+  s3 加载 #1 {"n":146,"bad":[]}
+  s3：11 个兴趣点 → 48 个候选机位
+  s3 面数最高 3 个：
+    spawn@180  699464 面 / 44 call  eye [39.73,5.2,-86.25] at [39.73,4,-90.75]
+    oil-valve-s3@0  696282 面 / 40 call  eye [40.96,3.1,-129.88] at [40.96,1.9,-125.38]
+    logbook-s3@0  690174 面 / 34 call  eye [40.64,5.58,-124.6] at [40.64,4.38,-120.1]
+  s3 draw call 最多：spawn@180 44 call / 699464 面
+
+扫描通过 → /workspace/game-studio/docs/releases/perf/scan-s3.json

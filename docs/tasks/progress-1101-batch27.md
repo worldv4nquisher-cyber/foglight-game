@@ -1,0 +1,16 @@
+# batch27 进度（2026-11-01，M8 前最后一批）
+- 12:32 开始。HEAD a9865b0
+- 第 1 项 41de7eb：URL 调参全部 TEST_BUILD 门控；prod-hooks 白名单（空）+ 拦变量传参 + 自检；试建 /tmp 通过（旧 dist 报 25 处），测试构建 URLSearchParams 仍在；npm test 全过
+- 第 2 项 1c3abf0：合并为单一实现 structuredClonePolyfill.js + 内联插件；test:save 23 项过；生产试建 index.html 内联与源一致、vm 可用
+- 第 4 项 结论（无代码改动、无 commit）：全屏下像素比 1 → 0.8 是首次自动画质检测正常降档（SwiftShader 慢：ultra 2.0 fps → high → standard，standard 的 renderScale 0.8），不是全屏 / resize 误触发。证据 docs/releases/perf/batch27-fullscreen-dpr-probe.log（测试构建）：A 清存档不全屏，13.3 s 时同样降到 0.8（画布 1280→1024）；B 清存档 + 全屏进出 6 次，每次退全屏暂停会重置检测窗口，切换期间不降，跑满一个不间断 3 s 窗口后才降；C 检测完成后固定极致（用户来源）全屏进出 4 次，像素比 / DPR 始终 1。
+- BUG-037 a76631c：S3 冒烟去掉重试后发现——方向键轻点（按下松开落在同一帧间隔）被吞（页面收到 keydown 1 次、角度不变）。InputManager.getAxis 加 tappedThisFrame；test:input 16 项 ✓；docs/bugs/BUG-037.md
+- 第 3 项 7097d7f：S3 导光镜冒烟重写（不重试、精确角度、负向 / 回绕 / 上下限、鼠标四向、Esc 暂停继续、真实输入解光路）。单跑 4 次：3 ✓；1 ✗ 是跑到中途无头 Chrome 自己解除了指针锁定（不是 Esc keydown，触发补发暂停），之后加了 pointerlockchange / blur / focus / visibility 日志，后 3 次未复现
+- 第 5 项（docs 不在 git，无 commit）：compat-report §7 新增「全屏 + 指针锁定下按 Esc、Safari 的 webkitfullscreenchange」F1–F5，和「S3 导光镜：需真机手测」S1–S5（A/B 镜、正解手动、拖拽回退、手柄、低帧率轻点）
+- 13:07 typecheck / lint / npm test 全过
+- 13:08–13:18 check:release EXIT 0（dist 原地重建，HEAD 7097d7f），日志 docs/releases/perf/check-release.log；prod-hooks 白名单为空 ✓、内联 polyfill 一致 ✓
+- 13:18 全量冒烟（后台，timeout 4500）日志 /tmp/b27/smoke-full.log（13:22 中断恢复时仍在跑，继续用它）
+- 14:12 第二次中断恢复：全量冒烟仍在跑（pid 2180005，13:18 起，timeout 4500 → 最迟 14:33 结束），已完成 43/45 项全 ✓，日志 /tmp/b27/smoke-full.log；compat §4 / §4.1 / §6 已补 batch27（check:release 数字、新冒烟、BUG-037 行）
+- 14:20 全量冒烟 50/50 ✓（13:18–14:19，HEAD 7097d7f，测试构建 /tmp 自动删），日志 /tmp/b27/smoke-full.log。下一步：smoke:xb firefox / webkit（nohup，日志 /tmp/b27/xb-ff.log、/tmp/b27/xb-wk.log）
+- 14:21–14:26 smoke:xb firefox art=1 ✓ 5 步 190 s（llvmpipe）、webkit ✓ 5 步 26 s；截图目录已删
+- dist：13:08 check:release 原地重建（HEAD 7097d7f），之后无 src 改动，不需再建
+- 收尾清理：/tmp/b27（探针、日志、wait-idle 脚本、compat 备份）和 /tmp/b27-test.log 已删；item 4 探针日志存 docs/releases/perf/batch27-fullscreen-dpr-probe.log，全量冒烟日志存 docs/releases/perf/batch27-smoke-full.log；无残留 foglight-smoke-dist-* / smoke-chrome-* / m7-xb-*；未动 com.google.Chrome.* / qa-tools / pw-*。batch27 完成。

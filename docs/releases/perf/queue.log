@@ -1,0 +1,53 @@
+18:26 开始 shots-pen-lod1
+18:31 结束 shots-pen-lod1 exit 0
+18:35 旧队列（037-queue.sh）由新执行者停掉：dist 要重建（dev 组 / __perfSpot），改用 037-queue2.sh
+18:53 开始 scan-s2
+18:56 结束 scan-s2 exit 0
+18:56 开始 scan-s3
+19:01 scan-s2 18:56 Chrome 断（box OOM，QA 同时起了 015 art1 冒烟）；scan-s3 与 QA 冒烟撞车，新执行者停掉自己的 scan-s3 和队列 2，改 037-queue3.sh（空闲判断加 QA 跑批脚本、连续 30 s 空闲）
+19:23 第四执行者接手：停掉 037-queue3.sh（还在 idle 等待，从未开跑），改 037-queue4a.sh / 4b.sh（空闲判断加 qa-chrome、qa-tools 下任何进程、QA 跑批脚本，连续 ≥ 30 s；单次最多等 90 分钟）
+19:23 等空闲：scan-s2
+20:33 开始 scan-s2（可用内存 11477 MB）
+20:40 结束 scan-s2 exit 0
+20:40 等空闲：scan-s3
+20:40 开始 scan-s3（可用内存 10485 MB）
+20:43 结束 scan-s3 exit 0
+20:43 等空闲：budget-s1
+20:44 开始 budget-s1（可用内存 9747 MB）
+20:49 结束 budget-s1 exit 1
+20:49 队列 4a 完
+20:49 队列 5 接 4a（4b 不再单独跑：check:release 已含 budget / load / memory）
+20:49 等空闲：build
+20:50 开始 build（可用内存 10448 MB）
+20:50 结束 build exit 0
+20:50 等空闲：shots-strength
+20:50 开始 shots-strength（可用内存 9251 MB）
+20:57 结束 shots-strength exit 0
+→ /workspace/game-studio/game/scripts/../../docs/tasks/shots-025/strength/s1-pier-strength-1x3.png
+→ /workspace/game-studio/game/scripts/../../docs/tasks/shots-025/strength/s1-pier-low-strength-1x3.png
+→ /workspace/game-studio/game/scripts/../../docs/tasks/shots-025/strength/s1-opening-strength-1x3.png
+3 张
+20:57 等空闲：shots-bug028
+20:58 开始 shots-bug028（可用内存 10157 MB）
+21:03 结束 shots-bug028 exit 0
+→ /workspace/game-studio/game/scripts/../../docs/tasks/shots-bug028/bug028-east-1x2.png
+→ /workspace/game-studio/game/scripts/../../docs/tasks/shots-bug028/bug028-spin-66-1x2.png
+→ /workspace/game-studio/game/scripts/../../docs/tasks/shots-bug028/bug028-north-rock-1x2.png
+21:03 等空闲：check-release
+21:04 开始 check-release（可用内存 10519 MB）
+21:08 结束 check-release exit 1
+21:09 队列 5 完
+21:09 队列 6 开始
+21:09 等空闲：shots-bug028
+21:09 开始 shots-bug028（可用内存 10582 MB）
+21:14 结束 shots-bug028 exit 0
+→ /workspace/game-studio/game/scripts/../../docs/tasks/shots-bug028/bug028-east-1x2.png
+→ /workspace/game-studio/game/scripts/../../docs/tasks/shots-bug028/bug028-spin-66-1x2.png
+→ /workspace/game-studio/game/scripts/../../docs/tasks/shots-bug028/bug028-north-rock-1x2.png
+21:14 等空闲：load
+21:14 开始 load（可用内存 10544 MB）
+21:14 结束 load exit 0
+21:15 等空闲：memory
+21:15 开始 memory（可用内存 10416 MB）
+21:17 结束 memory exit 1
+21:17 队列 6 完
