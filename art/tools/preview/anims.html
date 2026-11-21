@@ -1,0 +1,231 @@
+<!doctype html>
+<!-- 017 汐动画预览：char-xi.glb + char-xi-anims.glb 用 AnimationMixer 播放（与游戏同一套加载方式），右手风灯挂 hand_r_socket。
+     由 ../render-preview-web.mjs --anims <jobs.json> 驱动。一张截图 = 网格，每格是某个 clip 的某一帧。
+     ?clips=a,b&n=8&views=side,q34   每个 clip × 视角一行，n 帧均匀取样（循环 clip 不含末帧，非循环含）
+     ?seq=xi-walk&n=48&cols=8&view=q34 连续帧（n 可超过一个循环 → 视频用）
+     地面条纹（0.5 m 间距）/楼梯以 clip 的速度后移：支撑脚和地面同速 = 不滑步。 -->
+<html><head><meta charset="utf-8"><style>html,body{margin:0;background:#8FA0AE;overflow:hidden}</style>
+<script type="importmap">{"imports":{"three":"/three/build/three.module.js","three/addons/":"/three/examples/jsm/"}}</script>
+</head><body>
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
+import { KTX2Loader } from 'three/addons/loaders/KTX2Loader.js';
+
+const Q = new URLSearchParams(location.search);
+const W = innerWidth, H = innerHeight;
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(1); renderer.setSize(W, H);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.AgXToneMapping; renderer.toneMappingExposure = 1.1;
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color('#8FA0AE'); scene.fog = new THREE.Fog('#8FA0AE', 7, 20);
+scene.add(new THREE.HemisphereLight('#A9B8C4', '#4A535A', 1.7));
+const sun = new THREE.DirectionalLight('#C9D6E0', 1.1);
+sun.position.set(-2.0, 4, 3); sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.01;
+Object.assign(sun.shadow.camera, { left: -2.5, right: 2.5, top: 2.5, bottom: -1.5, near: 0.1, far: 12 }); scene.add(sun);
+// 地面：0.5 m 条纹（跟着 clip 速度后移）+ 一条中线
+const cv = document.createElement('canvas'); cv.width = 64; cv.height = 64; const g2 = cv.getContext('2d');
+g2.fillStyle = '#5E6870'; g2.fillRect(0, 0, 64, 64); g2.fillStyle = '#7C8790'; g2.fillRect(0, 0, 64, 5);
+const stripe = new THREE.CanvasTexture(cv); stripe.wrapS = stripe.wrapT = THREE.RepeatWrapping; stripe.repeat.set(1, 80); stripe.colorSpace = THREE.SRGBColorSpace;
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(40, 40), new THREE.MeshToonMaterial({ map: stripe }));
+ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
+const stairs = new THREE.Group(); scene.add(stairs);
+const stepMat = [new THREE.MeshToonMaterial({ color: '#66717A' }), new THREE.MeshToonMaterial({ color: '#58626A' })];
+for (let k = -8; k <= 8; k++) { const m = new THREE.Mesh(new THREE.BoxGeometry(1.0, 3, 0.26), stepMat[(k + 8) % 2]); m.receiveShadow = m.castShadow = true; m.userData.k = k; stairs.add(m); }
+
+const mkRamp = (vals) => { const d = new Uint8Array(vals.flatMap((v) => [v, v, v, 255])); const t = new THREE.DataTexture(d, vals.length, 1); t.minFilter = t.magFilter = THREE.NearestFilter; t.needsUpdate = true; return t; };
+const ramp2 = mkRamp([150, 255]), rampFace = mkRamp([222, 255]), ramp3 = mkRamp([70, 150, 255]);
+const outlineMat = (px) => new THREE.ShaderMaterial({
+  side: THREE.BackSide, uniforms: { px: { value: px }, res: { value: new THREE.Vector2(W, H) }, color: { value: new THREE.Color('#2A2F36') } },
+  vertexShader: `#include <common>
+    #include <skinning_pars_vertex>
+    attribute vec4 color; uniform float px; uniform vec2 res;
+    void main(){
+      vec3 objectNormal = color.xyz*2.0-1.0; vec3 transformed = position;
+      #include <skinbase_vertex>
+      #include <skinnormal_vertex>
+      #include <skinning_vertex>
+      vec4 c = projectionMatrix*modelViewMatrix*vec4(transformed,1.0);
+      vec3 nv = normalize(normalMatrix*objectNormal); vec2 d = length(nv.xy)>1e-4 ? normalize(nv.xy) : vec2(0.0);
+      c.xy += d*px*2.0/res*c.w; gl_Position = c; }`,
+  fragmentShader: `uniform vec3 color; void main(){ gl_FragColor = vec4(color,1.0); }`,
+});
+function prepare(root, px = 1.2) {
+  const extra = [];
+  root.traverse((o) => {
+    if (/-collider$/.test(o.name)) { o.visible = false; return; }
+    if (!o.isMesh) return;
+    const m = o.material;
+    if (m.name === 'mat-prop-lantern-glow') { m.vertexColors = false; m.emissiveIntensity = 2.2; m.depthWrite = false; return; }
+    const gm = m.name === 'mat-char-xi-face' ? rampFace : m.name.startsWith('mat-char') ? ramp2 : ramp3;
+    o.material = new THREE.MeshToonMaterial({ name: m.name, map: m.map, normalMap: m.normalMap, gradientMap: gm });
+    o.castShadow = o.receiveShadow = true;
+    const ol = o.isSkinnedMesh ? new THREE.SkinnedMesh(o.geometry, outlineMat(px)) : new THREE.Mesh(o.geometry, outlineMat(px));
+    ol.frustumCulled = false; o.frustumCulled = false; extra.push([o, ol]);
+  });
+  for (const [o, ol] of extra) { o.parent.add(ol); if (o.isSkinnedMesh) ol.bind(o.skeleton, o.bindMatrix); else { ol.position.copy(o.position); ol.quaternion.copy(o.quaternion); ol.scale.copy(o.scale); } }
+}
+const ktx2 = new KTX2Loader().setTranscoderPath('/three/examples/jsm/libs/basis/').detectSupport(renderer);
+const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).setKTX2Loader(ktx2);
+const load = (u) => new Promise((ok, err) => loader.load(u, ok, undefined, err));
+try {
+  const [cg, ag, lg, sg, meta] = await Promise.all([load('/models/characters/char-xi.glb'), load('/models/characters/char-xi-anims.glb' + (Q.get('v') ? '?v=' + Q.get('v') : '')),
+    load('/models/props/prop-lantern-brass.glb'), load('/models/props/prop-lantern-stand-s2.glb'), fetch('/source/characters/char-xi-anims.meta.json').then((r) => r.json())]);
+  const kg = await load('/models/props/prop-key-cellar-s2.glb').catch(() => null);
+  const bg = await load('/models/props/prop-tide-bell.glb').catch(() => null);
+  const rg = await load('/models/props/prop-raft-s1.glb').catch(() => null);         // 021 木筏（xi-push-*：有就用真模型，替掉占位方块）        // 021 潮汐钟（有就用真模型）   // 021 地窖钥匙（有就用真模型，没有退回方块）
+  const c = cg.scene; prepare(c); c.traverse((o) => { const m = /_lod(\d)$/.exec(o.name); if (m) o.visible = +m[1] === 0; }); scene.add(c);
+  const lantern = lg.scene; prepare(lantern); c.getObjectByName('hand_r_socket').add(lantern);
+  lantern.getObjectByName('prop-lantern-brass-emitter')?.add(new THREE.PointLight('#E8A24A', 0.05, 1.2, 2));
+  const mixer = new THREE.AnimationMixer(c);
+  // batch 2 道具（只为预览对位：拉杆 / 手轮 / 钟 / 浮台 / 桌 / 灯台 / 地缝），参数来自 meta.clips[name].preview（glTF 根坐标，+Z = 汐前方）
+  prepare(sg.scene);
+  const propMat = (col) => new THREE.MeshToonMaterial({ color: col, gradientMap: ramp3 });
+  const propSets = {};
+  function props(name) {
+    if (propSets[name]) return propSets[name];
+    const pv = meta.clips[name].preview ?? {}, G = new THREE.Group(), upd = [];
+    const realRaft = rg && /^xi-push/.test(name);
+    if (realRaft) {   // 真木筏：根 = inverse(prop-raft-s1-interact) = (0, 0.30, 1.45) 绕 Y 转 +90°；掌心标记 = palm-l / palm-r（黄）
+      const m = rg.scene.clone(true); prepare(m); m.position.set(0, 0.30, 1.45); m.rotation.y = Math.PI / 2; G.add(m);
+      for (const pn of ['prop-raft-s1-palm-l', 'prop-raft-s1-palm-r']) { const o = m.getObjectByName(pn); const s = new THREE.Mesh(new THREE.SphereGeometry(0.014, 12, 8), new THREE.MeshBasicMaterial({ color: '#F2D04A', depthTest: false })); s.renderOrder = 9; o?.add(s); }
+    }
+    for (const b of realRaft ? [] : pv.boxes ?? []) { const m = new THREE.Mesh(new THREE.BoxGeometry(...b.s), propMat(b.col)); m.position.set(...b.c); m.castShadow = m.receiveShadow = true; G.add(m); }
+    if (pv.stand) { const st = sg.scene.clone(true); st.position.set(...pv.stand.pos); G.add(st); }
+    if (pv.lever) {
+      const L = pv.lever, piv = new THREE.Group(); piv.position.set(...L.pivot); G.add(piv);
+      const base = new THREE.Mesh(new THREE.BoxGeometry(0.16, L.pivot[1], 0.16), propMat('#4E5257')); base.position.set(L.pivot[0], L.pivot[1] / 2 - 0.04, L.pivot[2]); G.add(base);
+      const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, L.length), propMat('#8A6A3A')); rod.position.y = L.length / 2; piv.add(rod);
+      const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.016, 0.12), propMat('#B33A2A')); bar.rotation.z = Math.PI / 2; bar.position.y = L.length; piv.add(bar);
+      upd.push((f) => { piv.rotation.x = -THREE.MathUtils.degToRad(L.a0 + L.curve[Math.min(f, L.curve.length - 1)]); });
+    }
+    if (pv.wheel) {
+      const Wd = pv.wheel, hub = new THREE.Group(); hub.position.set(...Wd.center); G.add(hub);
+      const wall = new THREE.Mesh(new THREE.BoxGeometry(0.9, 1.6, 0.05), propMat('#5A6066')); wall.position.set(Wd.center[0], 0.8, Wd.center[2] + 0.12); G.add(wall);
+      hub.add(new THREE.Mesh(new THREE.TorusGeometry(Wd.r, 0.014, 8, 40), propMat('#A33A2A')));
+      for (let k = 0; k < 3; k++) { const sp = new THREE.Mesh(new THREE.BoxGeometry(2 * Wd.r, 0.016, 0.016), propMat('#A33A2A')); sp.rotation.z = (k * Math.PI) / 3; hub.add(sp); }
+      upd.push((f) => { hub.rotation.z = -THREE.MathUtils.degToRad(Wd.curve[Math.min(f, Wd.curve.length - 1)]); });
+    }
+    if (pv.bell && bg) {   // 真钟：根 = inverse(prop-tide-bell-interact) = (0, 0, 0.98) 转 180°；bell-swing 绕本地 +X
+      const B = pv.bell, m = bg.scene.clone(true); prepare(m); m.position.set(0, 0, 0.98); m.rotation.y = Math.PI; G.add(m);
+      const sw = m.getObjectByName('bell-swing'), sx = sw.userData, grip = meta.clips[name].grips?.[0];
+      const R = sx.contactRadiusM ?? 0.7, ring = sx.ringAmplitudeRad ?? 0.2, T = sx.ringPeriodS ?? 1.5, tau = sx.ringDecayS ?? 1.2;
+      // touch→ring：钟跟着掌心转（前推量 = 掌心前移，grip.targets 是 Blender 坐标，-y = 前）；ring 之后按 extras 推荐自由摆
+      upd.push((f) => { let th = 0;
+        if (grip && f >= grip.frames[0] && f <= grip.frames[1]) th = Math.asin(Math.max(0, -grip.targets[f - grip.frames[0]][1] + grip.targets[0][1]) / R);
+        else if (f > B.ring) { const t = (f - B.ring) / 30; th = ring * Math.exp(-t / tau) * Math.sin((2 * Math.PI * t) / T + Math.asin(0.5)); }
+        sw.rotation.x = th; });
+    } else if (pv.bell) {
+      const B = pv.bell, hang = new THREE.Group(); hang.position.set(B.contact[0], 1.75, B.contact[2] + B.r); G.add(hang);
+      const bell = new THREE.Mesh(new THREE.CylinderGeometry(B.r * 0.55, B.r, 0.5, 24, 1, true), propMat('#9C7A3C')); bell.material.side = THREE.DoubleSide; bell.position.y = B.contact[1] - 1.75 + 0.05; hang.add(bell);
+      const post = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.08, 0.08), propMat('#4E5257')); post.position.set(B.contact[0], 1.79, B.contact[2] + B.r); G.add(post);
+      upd.push((f) => { const t = (f - B.ring) / 30; hang.rotation.x = t > 0 ? 0.16 * Math.sin(t * 2 * Math.PI / 1.6) * Math.exp(-t * 0.6) : 0; });
+    }
+    if (pv.gap) {
+      const P = pv.gap, gap = new THREE.Mesh(new THREE.BoxGeometry(3, 0.01, P.far - P.near), new THREE.MeshBasicMaterial({ color: '#1C2024' }));
+      G.add(gap); upd.push((f, rf) => { gap.position.set(0, 0.004, (P.near + P.far) / 2 - rf); });
+    }
+    // batch 3：圆柱（系船桩）、跟骨头走的道具（纸 / 笔：第 0 帧算相对骨头的偏移）、双桨（逐帧 yaw / pitch）
+    for (const cy of pv.cyls ?? []) { const m = new THREE.Mesh(new THREE.CylinderGeometry(cy.r, cy.r, cy.h, 20), propMat(cy.col)); m.position.set(...cy.c); m.castShadow = m.receiveShadow = true; G.add(m); }
+    c.updateMatrixWorld(true);
+    for (const at of pv.attach ?? []) {
+      const bone = c.getObjectByName(at.bone); let m;
+      if (at.kind === 'box') { m = new THREE.Mesh(new THREE.BoxGeometry(...at.s), propMat(at.col)); m.position.set(...at.at0); m.quaternion.set(...at.q0); }
+      else { const a = new THREE.Vector3(...at.from0), b = new THREE.Vector3(...at.to0); m = new THREE.Mesh(new THREE.CylinderGeometry(at.r, at.r * 0.8, a.distanceTo(b), 8), propMat(at.col));
+        m.position.copy(a).add(b).multiplyScalar(0.5); m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.clone().sub(a).normalize()); }
+      m.castShadow = true; m.updateMatrix(); const off = bone.matrixWorld.clone().invert().multiply(m.matrix); m.matrixAutoUpdate = false; G.add(m);
+      upd.push(() => { m.matrix.copy(bone.matrixWorld).multiply(off); });
+    }
+    if (pv.pickup) {   // 拾取的小物件（钥匙）：grab 帧前放在架上，grab 帧起跟骨头走（偏移按 grab 帧算）
+      const K = pv.pickup, bone = c.getObjectByName(K.bone), att = kg?.scene.children.find((o) => o.userData.attach)?.userData.attach;   // 场景同名，GLTFLoader 会把根节点改名成 …_1
+      let m, home, off;
+      if (kg && att) {   // 真钥匙：根 = key-socket（架面上、长边左右、环在她右手边），挂手偏移直接用 GLB extras.attach（不在这里重算，顺便验证存的偏移不跳）
+        m = kg.scene.clone(true); prepare(m); m.traverse((o) => { const l = /_lod(\d)$/.exec(o.name); if (l) o.visible = +l[1] === 0; });
+        m.position.set(K.c[0], K.c[1] - K.s[1] / 2, K.c[2]); m.updateMatrix(); m.matrixAutoUpdate = false; G.add(m); home = m.matrix.clone();
+        off = new THREE.Matrix4().compose(new THREE.Vector3(...att.translation), new THREE.Quaternion(...att.rotation), new THREE.Vector3(1, 1, 1));
+      } else {
+        m = new THREE.Mesh(new THREE.BoxGeometry(...K.s), propMat(K.col)); m.position.set(...K.c); m.castShadow = true; m.updateMatrix(); m.matrixAutoUpdate = false; G.add(m);
+        const act = mixer.existingAction(clips[name]), t0 = act.time;
+        act.time = K.grab / 30; mixer.update(0); c.updateMatrixWorld(true);
+        home = m.matrix.clone(); off = bone.matrixWorld.clone().invert().multiply(home);
+        act.time = t0; mixer.update(0); c.updateMatrixWorld(true);
+      }
+      upd.push((f) => { if (f >= K.grab) m.matrix.copy(bone.matrixWorld).multiply(off); else m.matrix.copy(home); });
+    }
+    if (pv.oars) {
+      const O = pv.oars;
+      for (const [k, sx] of [[0, 1], [1, -1]]) {
+        const lock = new THREE.Vector3(...O.locks[k]), grp = new THREE.Group(); G.add(grp);
+        const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, O.inboard + O.outboard, 8), propMat('#9A7A50')); shaft.position.y = (O.inboard - O.outboard) / 2; grp.add(shaft);
+        const blade = new THREE.Mesh(new THREE.BoxGeometry(0.14, O.blade, 0.012), propMat('#9A7A50')); blade.position.y = -O.outboard + O.blade / 2; grp.add(blade);
+        const pin = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.08, 6), propMat('#3A3A3A')); pin.position.copy(lock).add(new THREE.Vector3(0, -0.03, 0)); G.add(pin);
+        upd.push((f) => { const y = THREE.MathUtils.degToRad(O.yaw[Math.min(f, O.yaw.length - 1)]), p = THREE.MathUtils.degToRad(O.pitch[Math.min(f, O.pitch.length - 1)]);
+          const d = new THREE.Vector3(-sx * Math.cos(y) * Math.cos(p), Math.sin(p), Math.sin(y) * Math.cos(p));
+          grp.position.copy(lock); grp.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d); });
+      }
+    }
+    scene.add(G); return (propSets[name] = { G, upd });
+  }
+  const clips = Object.fromEntries(ag.animations.map((a) => [a.name, a]));
+  const cam = new THREE.PerspectiveCamera(24, 1, 0.05, 60);
+  const VIEWS = { side: [[-4.6, 0.85, 0], [0, 0.72, 0]], front: [[0, 0.85, 4.6], [0, 0.72, 0]], q34: [[-3.3, 1.05, 3.3], [0, 0.72, 0]], back: [[1.2, 1.0, -4.4], [0, 0.72, 0]],
+    feet: [[-2.0, 0.35, 0.4], [0, 0.25, 0]], top: [[0.01, 4.5, 0.0], [0, 0, 0]], lantern: [[-1.6, 0.75, 1.5], [-0.25, 0.65, 0]],
+    q34l: [[3.3, 1.05, 3.3], [0, 0.72, 0.2]], sideF: [[-4.9, 0.9, 0.45], [0, 0.72, 0.45]], q34f: [[-3.0, 1.3, 3.9], [0, 0.75, 0.45]], backL: [[-1.7, 1.75, -2.9], [0, 0.95, 0.35]],
+    // 地窖钥匙特写（目标 = 钥匙 / 右手）：keyR 从她右手边、keyF 隔着木架从正前方（两层板之间）、keyT 从她左后上方
+    keyR: [[-0.62, 1.20, 0.52], [-0.05, 1.125, 0.44]], keyF: [[-0.12, 1.30, 1.15], [-0.05, 1.11, 0.45]], keyT: [[0.32, 1.44, 0.02], [-0.05, 1.10, 0.45]],
+    // 潮汐钟（021）：bellW 全身 + 钟，bellR 从她右手边看掌心触点，bellO 越过她左肩
+    bellW: [[-3.4, 1.5, 2.9], [0, 1.0, 0.55]], bellR: [[-1.25, 1.25, 0.62], [-0.04, 1.08, 0.62]], bellO: [[0.75, 1.85, -0.75], [0, 1.1, 0.72]],
+    // 木筏（021）：raftW 从她右后方看全身 + 木筏，raftH 从她右侧看双手按推把
+    raftW: [[-3.6, 1.9, -2.2], [0.2, 0.55, 1.0]], raftH: [[-1.15, 0.95, 0.15], [0, 0.66, 0.46]] };
+  let cur = null;
+  function pose(name, t) {
+    const clip = clips[name]; if (!clip) throw new Error('no clip ' + name);
+    const m = meta.clips[name];
+    if (cur?.getClip() !== clip) { mixer.stopAllAction(); cur = mixer.clipAction(clip); cur.setLoop(m.loop ? THREE.LoopRepeat : THREE.LoopOnce); cur.clampWhenFinished = true; cur.play(); }
+    cur.time = m.loop ? t % clip.duration : Math.min(t, clip.duration); mixer.update(0);
+    const fr = Math.round(cur.time * 30), pv = m.preview ?? {};
+    for (const [k, ps] of Object.entries(propSets)) ps.G.visible = k === name;
+    const rf = m.rootMotion?.profile === 'smoothstep' ? (() => { const u = Math.min(1, cur.time / clip.duration); return m.rootMotion.translateM[2] * u * u * (3 - 2 * u); })() : 0;
+    c.updateMatrixWorld(true);
+    props(name).upd.forEach((u) => u(fr, rf));
+    lantern.visible = name.includes('lantern') || !!m.lantern;
+    const free = pv.lanternAt && ((pv.lanternFrom != null && fr >= pv.lanternFrom) || (pv.lanternUntil != null && fr < pv.lanternUntil));
+    if (free) { if (lantern.parent !== scene) { scene.add(lantern); } lantern.position.set(...pv.lanternAt); lantern.quaternion.identity(); }
+    else if (lantern.parent === scene) { const s = c.getObjectByName('hand_r_socket'); s.add(lantern); lantern.position.set(0, 0, 0); lantern.quaternion.identity(); }
+    const v = m.gait?.v ?? 0;
+    ground.visible = !m.stairs; stairs.visible = !!m.stairs;
+    stripe.offset.y = -(v * t + rf) * 2;   // 40 m / 80 条 = 0.5 m 一条
+    if (m.stairs) {
+      const st = m.stairs, vh = m.horizSpeed, vv = Math.abs(m.vertSpeed) * (st.up ? 1 : -1);
+      const tt = t % clip.duration, y0 = st.yTreadFront + vh * tt, z0 = st.zTread - vv * tt;
+      for (const s of stairs.children) { const k = s.userData.k; const yk = y0 + k * st.tread, top = z0 - k * st.rise * (st.up ? 1 : -1); s.position.set(0, top - 1.5, -(yk + st.tread / 2)); }
+    }
+    c.updateMatrixWorld(true);
+  }
+  function tile(i, j, cols, rows, view) {
+    const tw = Math.floor(W / cols), th = Math.floor(H / rows);
+    const [p, tg] = VIEWS[view]; cam.aspect = tw / th; cam.fov = view === 'feet' ? 30 : view === 'lantern' ? 30 : view.startsWith('key') ? 26 : view === 'bellR' || view === 'bellO' || view === 'raftH' ? 30 : 24; cam.updateProjectionMatrix();
+    cam.position.set(...p); cam.lookAt(new THREE.Vector3(...tg));
+    renderer.setViewport(i * tw, H - (j + 1) * th, tw, th); renderer.setScissor(i * tw, H - (j + 1) * th, tw, th); renderer.setScissorTest(true);
+    renderer.render(scene, cam);
+  }
+  if (Q.get('seq')) {
+    const name = Q.get('seq'), n = +Q.get('n'), cols = +Q.get('cols'), rows = Math.ceil(n / cols), view = Q.get('view') ?? 'q34';
+    for (let k = 0; k < n; k++) { pose(name, k / 30); tile(k % cols, Math.floor(k / cols), cols, rows, view); }
+  } else {
+    const FR = Q.get('frames')?.split(',').map(Number);   // frames=14,22,25 → 只画这几帧
+    const names = Q.get('clips').split(','), n = FR ? FR.length : +(Q.get('n') ?? 8), views = (Q.get('views') ?? 'side').split(',');
+    const rows = names.length * views.length; let j = 0;
+    for (const name of names) for (const view of views) {
+      const m = meta.clips[name], dur = (m.frames - 1) / 30;
+      for (let k = 0; k < n; k++) { const t = FR ? FR[k] / 30 : m.loop ? (dur * k) / n : (dur * k) / (n - 1); pose(name, t); tile(k, j, n, rows, view); }
+      j++;
+    }
+  }
+  document.title = 'done';
+} catch (e) { document.title = 'error: ' + e.message; document.body.insertAdjacentText('beforeend', String(e.stack)); }
+</script></body></html>

@@ -1,0 +1,887 @@
+{
+ "samplers": {
+  "piano": [
+   {
+    "file": "Keys/Upright Piano/Player_dyn1_rr1_000.wav",
+    "midi": 21,
+    "layer": 0,
+    "cents": 0.0,
+    "gainDb": -0.58
+   },
+   {
+    "file": "Keys/Upright Piano/Player_dyn1_rr1_002.wav",
+    "midi": 25,
+    "layer": 0,
+    "cents": 3.8,
+    "gainDb": 3.16
+   },
+   {
+    "file": "Keys/Upright Piano/Player_dyn1_rr1_004.wav",
+    "midi": 29,
+    "layer": 0,
+    "cents": 5.7,
+    "gainDb": 2.13
+   },
+   {
+    "file": "Keys/Upright Piano/Player_dyn1_rr1_006.wav",
+    "midi": 33,
+    "layer": 0,
+    "cents": -3.6,
+    "gainDb": 4.39
+   },
+   {
+    "file": "Keys/Upright Piano/Player_dyn1_rr1_008.wav",
+    "midi": 37,
+    "layer": 0,
+    "cents": -10.5,
+    "gainDb": -3.81
+   },
+   {
+    "file": "Keys/Upright Piano/Player_dyn1_rr1_010.wav",
+    "midi": 41,
+    "layer": 0,
+    "cents": 1.1,
+    "gainDb": 0.16
+   },
+   {
+    "file": "Keys/Upright Piano/Player_dyn1_rr1_012.wav",
+    "midi": 45,
+    "layer": 0,
+    "cents": -11.7,
+    "gainDb": -3.51
+   },
+   {
+    "file": "Keys/Upright Piano/Player_dyn1_rr1_014.wav",
+    "midi": 49,
+    "layer": 0,
+    "cents": -0.7,
+    "gainDb": -5.79
+   },
+   {
+    "file": "Keys/Upright Piano/Player_dyn1_rr1_016.wav",
+    "midi": 53,
+    "layer": 0,
+    "cents": -0.5,
+    "gainDb": -0.73
+   },
+   {
+    "file": "Keys/Upright Piano/Player_dyn1_rr1_018.wav",
+    "midi": 57,
+    "layer": 0,
+    "cents": 5.6,
+    "gainDb": 4.58
+   },
+   {
+    "file": "Keys/Upright Piano/Player_dyn1_rr1_020.wav",
+    "midi": 61,
+    "layer": 0,
+    "cents": 2.3,
+    "gainDb": -0.64
+   },
+   {
+    "file": "Keys/Upright Piano/Player_dyn1_rr1_022.wav",
+    "midi": 65,
+    "layer": 0,
+    "cents": 1.8,
+    "gainDb": -6.0
+   },
+   {
+    "file": "Keys/Upright Piano/Player_dyn1_rr1_024.wav",
+    "midi": 69,
+    "layer": 0,
+    "cents": 2.2,
+    "gainDb": -3.79
+   },
+   {
+    "file": "Keys/Upright Piano/Player_dyn1_rr1_026.wav",
+    "midi": 73,
+    "layer": 0,
+    "cents": 4.8,
+    "gainDb": -6.0
+   },
+   {
+    "file": "Keys/Upright Piano/Player_dyn1_rr1_028.wav",
+    "midi": 77,
+    "layer": 0,
+    "cents": 4.6,
+    "gainDb": 4.83
+   },
+   {
+    "file": "Keys/Upright Piano/Player_dyn1_rr1_030.wav",
+    "midi": 81,
+    "layer": 0,
+    "cents": 11.2,
+    "gainDb": 3.56
+   },
+   {
+    "file": "Keys/Upright Piano/Player_dyn1_rr1_032.wav",
+    "midi": 85,
+    "layer": 0,
+    "cents": 0.0,
+    "gainDb": 6.0
+   },
+   {
+    "file": "Keys/Upright Piano/Player_dyn1_rr1_034.wav",
+    "midi": 89,
+    "layer": 0,
+    "cents": 20.5,
+    "gainDb": 6.0
+   },
+   {
+    "file": "Keys/Upright Piano/Player_dyn1_rr1_036.wav",
+    "midi": 93,
+    "layer": 0,
+    "cents": 0.0,
+    "gainDb": 6.0
+   },
+   {
+    "file": "Keys/Upright Piano/Player_dyn1_rr1_038.wav",
+    "midi": 97,
+    "layer": 0,
+    "cents": 0.0,
+    "gainDb": 0.53
+   },
+   {
+    "file": "Keys/Upright Piano/Player_dyn1_rr1_040.wav",
+    "midi": 101,
+    "layer": 0,
+    "cents": 0.0,
+    "gainDb": -2.83
+   },
+   {
+    "file": "Keys/Upright Piano/Player_dyn1_rr1_042.wav",
+    "midi": 105,
+    "layer": 0,
+    "cents": 0.0,
+    "gainDb": -5.93
+   },
+   {
+    "file": "Keys/Upright Piano/Player_dyn1_rr1_044.wav",
+    "midi": 109,
+    "layer": 0,
+    "cents": 0.0,
+    "gainDb": -6.0
+   },
+   {
+    "file": "Keys/Upright Piano/Player_dyn2_rr1_000.wav",
+    "midi": 21,
+    "layer": 1,
+    "cents": 0.0,
+    "gainDb": 3.72
+   },
+   {
+    "file": "Keys/Upright Piano/Player_dyn2_rr1_002.wav",
+    "midi": 25,
+    "layer": 1,
+    "cents": 0.0,
+    "gainDb": 3.27
+   },
+   {
+    "file": "Keys/Upright Piano/Player_dyn2_rr1_004.wav",
+    "midi": 29,
+    "layer": 1,
+    "cents": 8.5,
+    "gainDb": 2.95
+   },
+   {
+    "file": "Keys/Upright Piano/Player_dyn2_rr1_006.wav",
+    "midi": 33,
+    "layer": 1,
+    "cents": -2.8,
+    "gainDb": -0.47
+   },
+   {
+    "file": "Keys/Upright Piano/Player_dyn2_rr1_008.wav",
+    "midi": 37,
+    "layer": 1,
+    "cents": -9.3,
+    "gainDb": -3.45
+   },
+   {
+    "file": "Keys/Upright Piano/Player_dyn2_rr1_010.wav",
+    "midi": 41,
+    "layer": 1,
+    "cents": 4.6,
+    "gainDb": -1.63
+   },
+   {
+    "file": "Keys/Upright Piano/Player_dyn2_rr1_012.wav",
+    "midi": 45,
+    "layer": 1,
+    "cents": -5.9,
+    "gainDb": -3.98
+   },
+   {
+    "file": "Keys/Upright Piano/Player_dyn2_rr1_014.wav",
+    "midi": 49,
+    "layer": 1,
+    "cents": -1.6,
+    "gainDb": -2.73
+   },
+   {
+    "file": "Keys/Upright Piano/Player_dyn2_rr1_016.wav",
+    "midi": 53,
+    "layer": 1,
+    "cents": 0.6,
+    "gainDb": 1.11
+   },
+   {
+    "file": "Keys/Upright Piano/Player_dyn2_rr1_018.wav",
+    "midi": 57,
+    "layer": 1,
+    "cents": 2.5,
+    "gainDb": 2.05
+   },
+   {
+    "file": "Keys/Upright Piano/Player_dyn2_rr1_020.wav",
+    "midi": 61,
+    "layer": 1,
+    "cents": 1.9,
+    "gainDb": -0.23
+   },
+   {
+    "file": "Keys/Upright Piano/Player_dyn2_rr1_022.wav",
+    "midi": 65,
+    "layer": 1,
+    "cents": 1.5,
+    "gainDb": -4.44
+   },
+   {
+    "file": "Keys/Upright Piano/Player_dyn2_rr1_024.wav",
+    "midi": 69,
+    "layer": 1,
+    "cents": 1.3,
+    "gainDb": -5.82
+   },
+   {
+    "file": "Keys/Upright Piano/Player_dyn2_rr1_026.wav",
+    "midi": 73,
+    "layer": 1,
+    "cents": 4.5,
+    "gainDb": -4.45
+   },
+   {
+    "file": "Keys/Upright Piano/Player_dyn2_rr1_028.wav",
+    "midi": 77,
+    "layer": 1,
+    "cents": 4.6,
+    "gainDb": 0.37
+   },
+   {
+    "file": "Keys/Upright Piano/Player_dyn2_rr1_030.wav",
+    "midi": 81,
+    "layer": 1,
+    "cents": 6.8,
+    "gainDb": 6.0
+   },
+   {
+    "file": "Keys/Upright Piano/Player_dyn2_rr1_032.wav",
+    "midi": 85,
+    "layer": 1,
+    "cents": 12.2,
+    "gainDb": 5.31
+   },
+   {
+    "file": "Keys/Upright Piano/Player_dyn2_rr1_034.wav",
+    "midi": 89,
+    "layer": 1,
+    "cents": 13.6,
+    "gainDb": 2.86
+   },
+   {
+    "file": "Keys/Upright Piano/Player_dyn2_rr1_036.wav",
+    "midi": 93,
+    "layer": 1,
+    "cents": 18.8,
+    "gainDb": 1.29
+   },
+   {
+    "file": "Keys/Upright Piano/Player_dyn2_rr1_038.wav",
+    "midi": 97,
+    "layer": 1,
+    "cents": 0.0,
+    "gainDb": -2.62
+   },
+   {
+    "file": "Keys/Upright Piano/Player_dyn2_rr1_040.wav",
+    "midi": 101,
+    "layer": 1,
+    "cents": 0.0,
+    "gainDb": 4.11
+   },
+   {
+    "file": "Keys/Upright Piano/Player_dyn2_rr1_042.wav",
+    "midi": 105,
+    "layer": 1,
+    "cents": 0.0,
+    "gainDb": 0.24
+   },
+   {
+    "file": "Keys/Upright Piano/Player_dyn2_rr1_044.wav",
+    "midi": 109,
+    "layer": 1,
+    "cents": 0.0,
+    "gainDb": -4.12
+   },
+   {
+    "file": "Keys/Upright Piano/Player_dyn3_rr1_000.wav",
+    "midi": 21,
+    "layer": 2,
+    "cents": 0.0,
+    "gainDb": 5.43
+   },
+   {
+    "file": "Keys/Upright Piano/Player_dyn3_rr1_002.wav",
+    "midi": 25,
+    "layer": 2,
+    "cents": 0.0,
+    "gainDb": 5.62
+   },
+   {
+    "file": "Keys/Upright Piano/Player_dyn3_rr1_004.wav",
+    "midi": 29,
+    "layer": 2,
+    "cents": 7.4,
+    "gainDb": 3.88
+   },
+   {
+    "file": "Keys/Upright Piano/Player_dyn3_rr1_006.wav",
+    "midi": 33,
+    "layer": 2,
+    "cents": -1.5,
+    "gainDb": 0.85
+   },
+   {
+    "file": "Keys/Upright Piano/Player_dyn3_rr1_008.wav",
+    "midi": 37,
+    "layer": 2,
+    "cents": -7.5,
+    "gainDb": -0.42
+   },
+   {
+    "file": "Keys/Upright Piano/Player_dyn3_rr1_010.wav",
+    "midi": 41,
+    "layer": 2,
+    "cents": 7.9,
+    "gainDb": 0.52
+   },
+   {
+    "file": "Keys/Upright Piano/Player_dyn3_rr1_012.wav",
+    "midi": 45,
+    "layer": 2,
+    "cents": -3.9,
+    "gainDb": -3.75
+   },
+   {
+    "file": "Keys/Upright Piano/Player_dyn3_rr1_014.wav",
+    "midi": 49,
+    "layer": 2,
+    "cents": 1.6,
+    "gainDb": -2.92
+   },
+   {
+    "file": "Keys/Upright Piano/Player_dyn3_rr1_016.wav",
+    "midi": 53,
+    "layer": 2,
+    "cents": 3.4,
+    "gainDb": -0.7
+   },
+   {
+    "file": "Keys/Upright Piano/Player_dyn3_rr1_018.wav",
+    "midi": 57,
+    "layer": 2,
+    "cents": 4.2,
+    "gainDb": 0.21
+   },
+   {
+    "file": "Keys/Upright Piano/Player_dyn3_rr1_020.wav",
+    "midi": 61,
+    "layer": 2,
+    "cents": 4.2,
+    "gainDb": -2.82
+   },
+   {
+    "file": "Keys/Upright Piano/Player_dyn3_rr1_022.wav",
+    "midi": 65,
+    "layer": 2,
+    "cents": 3.7,
+    "gainDb": -6.0
+   },
+   {
+    "file": "Keys/Upright Piano/Player_dyn3_rr1_024.wav",
+    "midi": 69,
+    "layer": 2,
+    "cents": 5.2,
+    "gainDb": -6.0
+   },
+   {
+    "file": "Keys/Upright Piano/Player_dyn3_rr1_026.wav",
+    "midi": 73,
+    "layer": 2,
+    "cents": 6.5,
+    "gainDb": -4.92
+   },
+   {
+    "file": "Keys/Upright Piano/Player_dyn3_rr1_028.wav",
+    "midi": 77,
+    "layer": 2,
+    "cents": 6.6,
+    "gainDb": -1.64
+   },
+   {
+    "file": "Keys/Upright Piano/Player_dyn3_rr1_030.wav",
+    "midi": 81,
+    "layer": 2,
+    "cents": 11.8,
+    "gainDb": 0.85
+   },
+   {
+    "file": "Keys/Upright Piano/Player_dyn3_rr1_032.wav",
+    "midi": 85,
+    "layer": 2,
+    "cents": 18.0,
+    "gainDb": 2.41
+   },
+   {
+    "file": "Keys/Upright Piano/Player_dyn3_rr1_034.wav",
+    "midi": 89,
+    "layer": 2,
+    "cents": 13.9,
+    "gainDb": -4.43
+   },
+   {
+    "file": "Keys/Upright Piano/Player_dyn3_rr1_036.wav",
+    "midi": 93,
+    "layer": 2,
+    "cents": 20.7,
+    "gainDb": 3.13
+   },
+   {
+    "file": "Keys/Upright Piano/Player_dyn3_rr1_038.wav",
+    "midi": 97,
+    "layer": 2,
+    "cents": 0.0,
+    "gainDb": 2.04
+   },
+   {
+    "file": "Keys/Upright Piano/Player_dyn3_rr1_040.wav",
+    "midi": 101,
+    "layer": 2,
+    "cents": 0.0,
+    "gainDb": 6.0
+   },
+   {
+    "file": "Keys/Upright Piano/Player_dyn3_rr1_042.wav",
+    "midi": 105,
+    "layer": 2,
+    "cents": 0.0,
+    "gainDb": 3.51
+   },
+   {
+    "file": "Keys/Upright Piano/Player_dyn3_rr1_044.wav",
+    "midi": 109,
+    "layer": 2,
+    "cents": 0.0,
+    "gainDb": 0.59
+   }
+  ],
+  "cello": [
+   {
+    "file": "Strings/Cello Section/susvib/susvib_A2_v1_1.wav",
+    "midi": 57,
+    "layer": 0,
+    "cents": -1.5,
+    "gainDb": -0.13
+   },
+   {
+    "file": "Strings/Cello Section/susvib/susvib_A2_v3_1.wav",
+    "midi": 57,
+    "layer": 1,
+    "cents": -1.5,
+    "gainDb": 0.48
+   },
+   {
+    "file": "Strings/Cello Section/susvib/susvib_B1_v1_1.wav",
+    "midi": 47,
+    "layer": 0,
+    "cents": 0.2,
+    "gainDb": -3.5
+   },
+   {
+    "file": "Strings/Cello Section/susvib/susvib_B1_v3_1.wav",
+    "midi": 47,
+    "layer": 1,
+    "cents": 1.3,
+    "gainDb": -1.28
+   },
+   {
+    "file": "Strings/Cello Section/susvib/susvib_B3_v1_1.wav",
+    "midi": 71,
+    "layer": 0,
+    "cents": 2.4,
+    "gainDb": 2.28
+   },
+   {
+    "file": "Strings/Cello Section/susvib/susvib_B3_v3_1.wav",
+    "midi": 71,
+    "layer": 1,
+    "cents": 2.5,
+    "gainDb": 0.52
+   },
+   {
+    "file": "Strings/Cello Section/susvib/susvib_C1_v1_1.wav",
+    "midi": 36,
+    "layer": 0,
+    "cents": 0.7,
+    "gainDb": 0.21
+   },
+   {
+    "file": "Strings/Cello Section/susvib/susvib_C1_v3_1.wav",
+    "midi": 36,
+    "layer": 1,
+    "cents": 0.1,
+    "gainDb": 0.82
+   },
+   {
+    "file": "Strings/Cello Section/susvib/susvib_C3_v1_1.wav",
+    "midi": 60,
+    "layer": 0,
+    "cents": 0.7,
+    "gainDb": -1.22
+   },
+   {
+    "file": "Strings/Cello Section/susvib/susvib_C3_v3_1.wav",
+    "midi": 60,
+    "layer": 1,
+    "cents": -2.1,
+    "gainDb": -0.06
+   },
+   {
+    "file": "Strings/Cello Section/susvib/susvib_D2_v1_1.wav",
+    "midi": 50,
+    "layer": 0,
+    "cents": -1.2,
+    "gainDb": -1.2
+   },
+   {
+    "file": "Strings/Cello Section/susvib/susvib_D2_v3_1.wav",
+    "midi": 50,
+    "layer": 1,
+    "cents": 0.6,
+    "gainDb": -2.14
+   },
+   {
+    "file": "Strings/Cello Section/susvib/susvib_D4_v1_1.wav",
+    "midi": 74,
+    "layer": 0,
+    "cents": 2.5,
+    "gainDb": 2.55
+   },
+   {
+    "file": "Strings/Cello Section/susvib/susvib_D4_v3_1.wav",
+    "midi": 74,
+    "layer": 1,
+    "cents": 2.1,
+    "gainDb": 0.75
+   },
+   {
+    "file": "Strings/Cello Section/susvib/susvib_E1_v1_1.wav",
+    "midi": 40,
+    "layer": 0,
+    "cents": -2.9,
+    "gainDb": 6.0
+   },
+   {
+    "file": "Strings/Cello Section/susvib/susvib_E1_v3_1.wav",
+    "midi": 40,
+    "layer": 1,
+    "cents": -4.3,
+    "gainDb": 2.69
+   },
+   {
+    "file": "Strings/Cello Section/susvib/susvib_E3_v1_1.wav",
+    "midi": 64,
+    "layer": 0,
+    "cents": -2.0,
+    "gainDb": -0.73
+   },
+   {
+    "file": "Strings/Cello Section/susvib/susvib_E3_v3_1.wav",
+    "midi": 64,
+    "layer": 1,
+    "cents": 2.0,
+    "gainDb": -3.54
+   },
+   {
+    "file": "Strings/Cello Section/susvib/susvib_F2_v1_1.wav",
+    "midi": 53,
+    "layer": 0,
+    "cents": -1.0,
+    "gainDb": 1.11
+   },
+   {
+    "file": "Strings/Cello Section/susvib/susvib_F2_v3_1.wav",
+    "midi": 53,
+    "layer": 1,
+    "cents": 1.6,
+    "gainDb": 2.53
+   },
+   {
+    "file": "Strings/Cello Section/susvib/susvib_F4_v1_1.wav",
+    "midi": 77,
+    "layer": 0,
+    "cents": 2.3,
+    "gainDb": -0.13
+   },
+   {
+    "file": "Strings/Cello Section/susvib/susvib_F4_v3_1.wav",
+    "midi": 77,
+    "layer": 1,
+    "cents": -0.5,
+    "gainDb": 1.31
+   },
+   {
+    "file": "Strings/Cello Section/susvib/susvib_G1_v1_1.wav",
+    "midi": 43,
+    "layer": 0,
+    "cents": 0.2,
+    "gainDb": -3.02
+   },
+   {
+    "file": "Strings/Cello Section/susvib/susvib_G1_v3_1.wav",
+    "midi": 43,
+    "layer": 1,
+    "cents": -0.0,
+    "gainDb": -1.86
+   },
+   {
+    "file": "Strings/Cello Section/susvib/susvib_G3_v1_1.wav",
+    "midi": 67,
+    "layer": 0,
+    "cents": 0.8,
+    "gainDb": -2.83
+   },
+   {
+    "file": "Strings/Cello Section/susvib/susvib_G3_v3_1.wav",
+    "midi": 67,
+    "layer": 1,
+    "cents": 3.9,
+    "gainDb": -0.22
+   }
+  ],
+  "bass": [
+   {
+    "file": "Strings/Solo Contrabass/SusNV/BKCtbss_SusNV_A#0_v1_rr1.wav",
+    "midi": 34,
+    "layer": 0,
+    "cents": 0.3,
+    "gainDb": -5.32
+   },
+   {
+    "file": "Strings/Solo Contrabass/SusNV/BKCtbss_SusNV_A#0_v3_rr1.wav",
+    "midi": 34,
+    "layer": 1,
+    "cents": -0.2,
+    "gainDb": -6.0
+   },
+   {
+    "file": "Strings/Solo Contrabass/SusNV/BKCtbss_SusNV_A1_v1_rr1.wav",
+    "midi": 45,
+    "layer": 0,
+    "cents": 1.2,
+    "gainDb": -6.0
+   },
+   {
+    "file": "Strings/Solo Contrabass/SusNV/BKCtbss_SusNV_A1_v3_rr1.wav",
+    "midi": 45,
+    "layer": 1,
+    "cents": -1.3,
+    "gainDb": -5.51
+   },
+   {
+    "file": "Strings/Solo Contrabass/SusNV/BKCtbss_SusNV_B2_v1_rr1.wav",
+    "midi": 59,
+    "layer": 0,
+    "cents": -1.1,
+    "gainDb": 1.56
+   },
+   {
+    "file": "Strings/Solo Contrabass/SusNV/BKCtbss_SusNV_B2_v3_rr1.wav",
+    "midi": 59,
+    "layer": 1,
+    "cents": 1.1,
+    "gainDb": -3.03
+   },
+   {
+    "file": "Strings/Solo Contrabass/SusNV/BKCtbss_SusNV_C#2_v1_rr1.wav",
+    "midi": 49,
+    "layer": 0,
+    "cents": 0.9,
+    "gainDb": 4.92
+   },
+   {
+    "file": "Strings/Solo Contrabass/SusNV/BKCtbss_SusNV_C#2_v3_rr1.wav",
+    "midi": 49,
+    "layer": 1,
+    "cents": -1.0,
+    "gainDb": 4.65
+   },
+   {
+    "file": "Strings/Solo Contrabass/SusNV/BKCtbss_SusNV_C1_v1_rr1.wav",
+    "midi": 36,
+    "layer": 0,
+    "cents": 5.2,
+    "gainDb": -2.62
+   },
+   {
+    "file": "Strings/Solo Contrabass/SusNV/BKCtbss_SusNV_C1_v3_rr1.wav",
+    "midi": 36,
+    "layer": 1,
+    "cents": 0.1,
+    "gainDb": -2.0
+   },
+   {
+    "file": "Strings/Solo Contrabass/SusNV/BKCtbss_SusNV_D1_v1_rr1.wav",
+    "midi": 38,
+    "layer": 0,
+    "cents": 2.0,
+    "gainDb": 3.34
+   },
+   {
+    "file": "Strings/Solo Contrabass/SusNV/BKCtbss_SusNV_D1_v3_rr1.wav",
+    "midi": 38,
+    "layer": 1,
+    "cents": -0.4,
+    "gainDb": -3.31
+   },
+   {
+    "file": "Strings/Solo Contrabass/SusNV/BKCtbss_SusNV_E0_v1_rr1.wav",
+    "midi": 28,
+    "layer": 0,
+    "cents": 0.2,
+    "gainDb": 2.59
+   },
+   {
+    "file": "Strings/Solo Contrabass/SusNV/BKCtbss_SusNV_E0_v3_rr1.wav",
+    "midi": 28,
+    "layer": 1,
+    "cents": 0.1,
+    "gainDb": 1.75
+   },
+   {
+    "file": "Strings/Solo Contrabass/SusNV/BKCtbss_SusNV_E1_v1_rr1.wav",
+    "midi": 40,
+    "layer": 0,
+    "cents": 0.3,
+    "gainDb": 6.0
+   },
+   {
+    "file": "Strings/Solo Contrabass/SusNV/BKCtbss_SusNV_E1_v3_rr1.wav",
+    "midi": 40,
+    "layer": 1,
+    "cents": -0.1,
+    "gainDb": 5.3
+   },
+   {
+    "file": "Strings/Solo Contrabass/SusNV/BKCtbss_SusNV_E2_v1_rr1.wav",
+    "midi": 52,
+    "layer": 0,
+    "cents": -0.2,
+    "gainDb": 5.58
+   },
+   {
+    "file": "Strings/Solo Contrabass/SusNV/BKCtbss_SusNV_E2_v3_rr1.wav",
+    "midi": 52,
+    "layer": 1,
+    "cents": 0.7,
+    "gainDb": 3.95
+   },
+   {
+    "file": "Strings/Solo Contrabass/SusNV/BKCtbss_SusNV_F#0_v1_rr1.wav",
+    "midi": 30,
+    "layer": 0,
+    "cents": 1.1,
+    "gainDb": 0.42
+   },
+   {
+    "file": "Strings/Solo Contrabass/SusNV/BKCtbss_SusNV_F#0_v3_rr1.wav",
+    "midi": 30,
+    "layer": 1,
+    "cents": -1.4,
+    "gainDb": 2.89
+   },
+   {
+    "file": "Strings/Solo Contrabass/SusNV/BKCtbss_SusNV_F#1_v1_rr1.wav",
+    "midi": 42,
+    "layer": 0,
+    "cents": -0.3,
+    "gainDb": 1.0
+   },
+   {
+    "file": "Strings/Solo Contrabass/SusNV/BKCtbss_SusNV_F#1_v3_rr1.wav",
+    "midi": 42,
+    "layer": 1,
+    "cents": -0.5,
+    "gainDb": 2.08
+   },
+   {
+    "file": "Strings/Solo Contrabass/SusNV/BKCtbss_SusNV_G#1_v1_rr1.wav",
+    "midi": 44,
+    "layer": 0,
+    "cents": -0.6,
+    "gainDb": -6.0
+   },
+   {
+    "file": "Strings/Solo Contrabass/SusNV/BKCtbss_SusNV_G#1_v3_rr1.wav",
+    "midi": 44,
+    "layer": 1,
+    "cents": 0.8,
+    "gainDb": -6.0
+   },
+   {
+    "file": "Strings/Solo Contrabass/SusNV/BKCtbss_SusNV_G#2_v1_rr1.wav",
+    "midi": 56,
+    "layer": 0,
+    "cents": -0.1,
+    "gainDb": 0.53
+   },
+   {
+    "file": "Strings/Solo Contrabass/SusNV/BKCtbss_SusNV_G#2_v3_rr1.wav",
+    "midi": 56,
+    "layer": 1,
+    "cents": -0.4,
+    "gainDb": 4.39
+   },
+   {
+    "file": "Strings/Solo Contrabass/SusNV/BKCtbss_SusNV_G0_v1_rr1.wav",
+    "midi": 31,
+    "layer": 0,
+    "cents": -0.9,
+    "gainDb": 4.39
+   },
+   {
+    "file": "Strings/Solo Contrabass/SusNV/BKCtbss_SusNV_G0_v3_rr1.wav",
+    "midi": 31,
+    "layer": 1,
+    "cents": -0.3,
+    "gainDb": 6.0
+   }
+  ]
+ },
+ "used": [
+  "Keys/Upright Piano/Player_dyn1_rr1_000.wav",
+  "Keys/Upright Piano/Player_dyn1_rr1_002.wav",
+  "Keys/Upright Piano/Player_dyn1_rr1_006.wav",
+  "Keys/Upright Piano/Player_dyn1_rr1_008.wav",
+  "Keys/Upright Piano/Player_dyn1_rr1_018.wav",
+  "Keys/Upright Piano/Player_dyn1_rr1_020.wav",
+  "Keys/Upright Piano/Player_dyn1_rr1_022.wav",
+  "Keys/Upright Piano/Player_dyn1_rr1_024.wav",
+  "Strings/Cello Section/susvib/susvib_B1_v1_1.wav",
+  "Strings/Cello Section/susvib/susvib_E1_v1_1.wav",
+  "Strings/Cello Section/susvib/susvib_G1_v1_1.wav",
+  "Strings/Solo Contrabass/SusNV/BKCtbss_SusNV_A#0_v1_rr1.wav",
+  "Strings/Solo Contrabass/SusNV/BKCtbss_SusNV_C1_v1_rr1.wav",
+  "Strings/Solo Contrabass/SusNV/BKCtbss_SusNV_D1_v1_rr1.wav"
+ ]
+}

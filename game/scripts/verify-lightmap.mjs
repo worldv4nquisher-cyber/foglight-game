@@ -399,7 +399,7 @@ await test('院墙修复：5 个 socket 与修复前一致，灯台 socket 世�
     });
   };
   const now = read(await loadGlb('env/env-courtyard-wall-s2'));
-  const old = '/workspace/bk-029/env-courtyard-wall-s2.glb.badpack';
+  const old = process.env.BK029_BADPACK ?? ''; // 可选：修复前备份 GLB 路径（原 bk-029/env-courtyard-wall-s2.glb.badpack），不设就跳过对比
   let cmp = '（没有修复前备份，跳过对比）';
   if (existsSync(old)) {
     const was = read(await loadGlb(old));

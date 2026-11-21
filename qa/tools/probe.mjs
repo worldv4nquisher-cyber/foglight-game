@@ -1,0 +1,12 @@
+import { launch, sleep } from './cdp.mjs';
+import { startDev } from './server.mjs';
+const dev = await startDev();
+const { page, close } = await launch();
+await page.goto(dev.url + '/');
+const ok = await page.waitFor(`window.__game?.scenes?.current?.name === 'main'`, 90000);
+console.log('main ready', ok, await page.evaluate(`({ctx: __game.input.context, frame: __game.time.frame, mode: __game.scenes.current.cameraFollow?.modeName})`));
+await sleep(5000);
+console.log(await page.evaluate(`({ctx: __game.input.context, frame: __game.time.frame, fps: 0})`));
+await page.screenshot('/tmp/probe.png');
+console.log(page.errors);
+close(); await dev.close(); process.exit(0);

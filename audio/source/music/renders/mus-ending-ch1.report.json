@@ -1,0 +1,29 @@
+{
+ "file": "mus-ending-ch1.ogg",
+ "vorbisQ": 6,
+ "bytes": 1839809,
+ "seconds": 107.0,
+ "samples": 4718700,
+ "srcSamples": 4718700,
+ "kbps": 137.6,
+ "lufs": -20.0,
+ "lra": 9.9,
+ "truePeakDb": -2.62,
+ "limiter": {
+  "maxGrDb": 0.0,
+  "grSeconds": 0.0
+ },
+ "oneshot": true,
+ "headTail": {
+  "firstSampleAbs": 0.0,
+  "first10msDb": -86.4,
+  "last1sDb": -240.0,
+  "lastSampleAbs": 0.0
+ },
+ "shortTermLufs": {
+  "p50": -21.5,
+  "p90": -17.8,
+  "max": -12.9
+ },
+ "path": "art/audio/music/mus-ending-ch1.ogg"
+}

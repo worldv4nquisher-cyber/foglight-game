@@ -1,0 +1,33 @@
+{
+ "file": "mus-menu.ogg",
+ "vorbisQ": 5.5,
+ "bytes": 1779931,
+ "seconds": 106.667,
+ "samples": 4704000,
+ "srcSamples": 4704000,
+ "kbps": 133.5,
+ "lufs": -20.0,
+ "lra": 9.2,
+ "truePeakDb": -1.46,
+ "limiter": {
+  "maxGrDb": 0.32,
+  "grSeconds": 0.0
+ },
+ "seamSrc": [
+  -76.2,
+  -63.6,
+  -22.1
+ ],
+ "seamDec": [
+  -51.4,
+  -63.5,
+  -22.1
+ ],
+ "seamDecVsTrackStepP999": -51.5,
+ "shortTermLufs": {
+  "p50": -20.8,
+  "p90": -17.2,
+  "max": -14.9
+ },
+ "path": "art/audio/music/mus-menu.ogg"
+}

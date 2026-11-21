@@ -1,0 +1,299 @@
+<!doctype html>
+<!-- 道具预览：冷色阴天 + 三渲二（MeshToonMaterial + COLOR_0 平滑法线外扩描边）。由 ../render-preview-web.mjs 驱动。
+     参数：?view=lantern | stand | stand-back | bell | bell-side | bell-scale | raft | raft-float | raft-top
+           | mirror | mirror-back | guide-a | guide-b | gate | gate-open | gate-dials（021 / 022 解谜道具，2026-10-30）
+           | lock | lock-lit | valve | valve-open | window | window-side | ignite | ignite-pulled | ignite-below | door | door-open | door-key（10-30 第 3 批）
+     潮汐钟（mat-prop-tide-bell，extras.wetMetal）：toon 三阶 + 近似阶梯冷高光（雾白偏青，按 ORM 金属度遮罩），只为预览 023 的湿铜效果 -->
+<html><head><meta charset="utf-8"><style>html,body{margin:0;background:#8FA0AE;overflow:hidden}</style>
+<script type="importmap">{"imports":{"three":"/three/build/three.module.js","three/addons/":"/three/examples/jsm/"}}</script>
+</head><body>
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
+import { KTX2Loader } from 'three/addons/loaders/KTX2Loader.js';
+
+const view = new URLSearchParams(location.search).get('view') ?? 'lantern';
+const W = innerWidth, H = innerHeight;
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(1); renderer.setSize(W, H);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.AgXToneMapping; renderer.toneMappingExposure = 1.1;
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color('#8FA0AE');
+scene.fog = new THREE.Fog('#8FA0AE', 4, 14);
+scene.add(new THREE.HemisphereLight('#A9B8C4', '#4A535A', 1.7));
+const sun = new THREE.DirectionalLight('#C9D6E0', 1.1);
+sun.position.set(2.5, 4, 3); sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
+Object.assign(sun.shadow.camera, { left: -1.5, right: 1.5, top: 1.5, bottom: -1.5, near: 0.1, far: 10 }); sun.shadow.radius = 6;
+scene.add(sun);
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(30, 30), new THREE.MeshToonMaterial({ color: '#5E6870' }));
+ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
+
+const ramp = new THREE.DataTexture(new Uint8Array([70, 70, 70, 255, 150, 150, 150, 255, 255, 255, 255, 255]), 3, 1);
+ramp.minFilter = ramp.magFilter = THREE.NearestFilter; ramp.needsUpdate = true;
+
+const outlineMat = new THREE.ShaderMaterial({
+  side: THREE.BackSide,
+  uniforms: { px: { value: 1.6 }, res: { value: new THREE.Vector2(W, H) }, color: { value: new THREE.Color('#2A2F36') } },
+  vertexShader: `attribute vec4 color; uniform float px; uniform vec2 res;
+    void main(){ vec3 n = color.xyz*2.0-1.0; vec4 c = projectionMatrix*modelViewMatrix*vec4(position,1.0);
+      vec3 nv = normalize(normalMatrix*n); vec2 d = length(nv.xy)>1e-4 ? normalize(nv.xy) : vec2(0.0);
+      c.xy += d*px*2.0/res*c.w; gl_Position = c; }`,
+  fragmentShader: `uniform vec3 color; void main(){ gl_FragColor = vec4(color,1.0); }`,
+});
+
+function prepare(root) {
+  const extra = [];
+  root.traverse((o) => {
+    if (/-collider$/.test(o.name)) { o.visible = false; return; }
+    if (!o.isMesh || !o.parent?.visible) return;
+    const m = o.material;
+    if (m.name === 'mat-prop-puzzle-ch1' || m.name === 'mat-prop-raft-s1') {
+      o.material = new THREE.MeshToonMaterial({ name: m.name, map: m.map, normalMap: m.normalMap, aoMap: m.aoMap, gradientMap: ramp });
+      o.castShadow = o.receiveShadow = true;
+      const ol = new THREE.Mesh(o.geometry, outlineMat); ol.name = o.name + '-outline'; extra.push([o, ol]);
+    } else if (m.userData?.wetMetal) {
+      o.material = wetToon(m); o.castShadow = o.receiveShadow = true;
+      const ol = new THREE.Mesh(o.geometry, outlineMat); ol.name = o.name + '-outline'; extra.push([o, ol]);
+    } else if (m.name === 'mat-prop-lantern-glow') {
+      m.vertexColors = false; m.emissiveIntensity = 2.2; m.depthWrite = false;    } else if (m.name === 'mat-env-wood-ch1') {   // 塔门（020 门扇网格）
+      o.material = new THREE.MeshToonMaterial({ name: m.name, map: m.map, normalMap: m.normalMap, aoMap: m.aoMap, gradientMap: ramp });
+      o.castShadow = o.receiveShadow = true;
+      const ol = new THREE.Mesh(o.geometry, outlineMat); ol.name = o.name + '-outline'; extra.push([o, ol]);
+    } else { m.vertexColors = false; o.castShadow = true; }   // 发光材质（光感锁透镜 / 点火口四态）、锁孔
+
+  });
+  for (const [o, ol] of extra) o.add(ol);
+}
+
+// 湿铜预览：MeshToonMaterial + 阶梯 Blinn 高光（两档），金属度 = ORM.b 做遮罩，粗糙度 = ORM.g 控制高光宽度
+const sunView = { value: new THREE.Vector3() };
+function wetToon(m) {
+  const t = new THREE.MeshToonMaterial({ name: m.name, map: m.map, normalMap: m.normalMap, aoMap: m.aoMap, gradientMap: ramp });
+  const spec = new THREE.Color(m.userData.specTint ?? m.userData.specColor ?? '#DCE1E4');
+  t.onBeforeCompile = (sh) => {
+    sh.uniforms.ormTex = { value: m.metalnessMap ?? m.roughnessMap };
+    sh.uniforms.sunView = sunView; sh.uniforms.specCol = { value: spec };
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform sampler2D ormTex; uniform vec3 sunView; uniform vec3 specCol;')
+      .replace('#include <dithering_fragment>', `#include <dithering_fragment>
+        vec3 ormS = texture2D(ormTex, vMapUv).rgb;
+        vec3 Hh = normalize(normalize(sunView) + normalize(vViewPosition));
+        float shin = mix(60.0, 10.0, clamp((ormS.g - 0.12) / 0.5, 0.0, 1.0));
+        float s = pow(max(dot(normal, Hh), 0.0), shin);
+        float stepS = smoothstep(0.45, 0.5, s) * 0.75 + smoothstep(0.85, 0.88, s) * 0.25;
+        gl_FragColor.rgb += specCol * stepS * mix(0.45, 1.0, ormS.b) * smoothstep(0.6, 0.25, ormS.g) * 0.9;   // 湿面：金属满强度，湿铜绿约一半`);
+  };
+  return t;
+}
+
+const ktx2 = new KTX2Loader().setTranscoderPath('/three/examples/jsm/libs/basis/').detectSupport(renderer);
+const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).setKTX2Loader(ktx2);
+const load = (u) => new Promise((ok, err) => loader.load(u, (g) => ok(g.scene), undefined, err));
+async function bellView() {
+  const bell = await load('/models/props/prop-tide-bell.glb'); prepare(bell); scene.add(bell);
+  Object.assign(sun.shadow.camera, { left: -2, right: 2, top: 2.6, bottom: -0.5 }); sun.shadow.camera.updateProjectionMatrix();
+  scene.fog.near = 6; scene.fog.far = 18;
+  const swing = bell.getObjectByName('bell-swing'), clap = bell.getObjectByName('bell-clapper');
+  let cam = new THREE.PerspectiveCamera(30, W / H, 0.01, 50), at;
+  if (view === 'bell') { cam.position.set(1.9, 2.0, 4.6); at = new THREE.Vector3(-0.22, 1.2, 0); swing.rotation.x = 0.0; }
+  else if (view === 'bell-side') { // 从 +X 侧看剖面：钟摆到真实幅度 0.2 rad，钟锤相对钟体 -clapperHitRad（锤头刚碰内壁）；钟体按 x≤0 剖开
+    let hit = NaN; bell.traverse((o) => { if (typeof o.userData.clapperHitRad === 'number') hit = o.userData.clapperHitRad; }); if (!(hit > 0)) throw new Error('缺 clapperHitRad'); swing.rotation.x = 0.2; clap.rotation.x = -hit;
+    cam = new THREE.OrthographicCamera(-1.0 * W / H, 1.0 * W / H, 1.0, -1.0, 0.01, 50);
+    cam.position.set(6, 1.25, 0); at = new THREE.Vector3(0, 1.25, 0);
+    renderer.localClippingEnabled = true; const cut = [new THREE.Plane(new THREE.Vector3(-1, 0, 0), 0)];
+    const inClap = new Set(); clap.traverse((o) => inClap.add(o));
+    swing.traverse((o) => { if (/-outline$/.test(o.name)) o.visible = inClap.has(o); else if (o.isMesh && !inClap.has(o)) { o.material = new THREE.MeshStandardMaterial({ color: '#8A6E4A', roughness: 0.6, metalness: 0.3, side: THREE.DoubleSide, clippingPlanes: cut }); } });
+    const ghost = (await load('/models/props/prop-tide-bell.glb')).getObjectByName('bell-swing');   // 静止位置的钟做半透明对照
+    ghost.traverse((o) => { if (o.isMesh) o.material = new THREE.MeshBasicMaterial({ color: '#E8EEF2', transparent: true, opacity: 0.18, depthWrite: false, clippingPlanes: cut }); });
+    bell.add(ghost);
+  } else { cam.position.set(-0.30, 1.22, 2.25); at = new THREE.Vector3(-0.60, 1.17, 0.15); cam.fov = 30; } // bell-scale：刻度板特写
+  cam.updateProjectionMatrix(); cam.lookAt(at);
+  scene.updateMatrixWorld(true); cam.updateMatrixWorld();
+  sunView.value.copy(sun.position).sub(sun.target.position).normalize().transformDirection(cam.matrixWorldInverse);
+  renderer.render(scene, cam);
+}
+// 021 木筏：raft = 搁浅在沙上 3/4 视角；raft-float = 漂浮（水面 = -waterline 节点，甲板高出 0.25）；raft-top = 正交俯视 + 节点标记 / 白盒 2.1 板宽 / 石槽挡坎
+async function raftView() {
+  const raft = await load('/models/props/prop-raft-s1.glb'); prepare(raft);
+  const root = new THREE.Group(); root.add(raft); root.position.y = 0.30; scene.add(root);   // 甲板顶 y 0 → 抬 0.30，原木底贴地
+  Object.assign(sun.shadow.camera, { left: -2.5, right: 2.5, top: 2.5, bottom: -2.5 }); sun.shadow.camera.updateProjectionMatrix();
+  scene.fog.near = 7; scene.fog.far = 20;
+  ground.material.color.set('#7A7A70');                                                        // 湿沙
+  let cam = new THREE.PerspectiveCamera(30, W / H, 0.01, 60), at;
+  const mark = (name, col, r = 0.035) => { const o = raft.getObjectByName(name); const m = new THREE.Mesh(new THREE.SphereGeometry(r, 16, 12), new THREE.MeshBasicMaterial({ color: col, depthTest: false })); m.renderOrder = 9; o.add(m); return o; };
+  if (view === 'raft') { cam.position.set(4.2, 2.3, 3.6); at = new THREE.Vector3(0.15, 0.1, 0); }
+  else if (view === 'raft-float') {
+    const wl = raft.getObjectByName('prop-raft-s1-waterline'); scene.updateMatrixWorld(true);
+    const wy = wl.getWorldPosition(new THREE.Vector3()).y;
+    const water = new THREE.Mesh(new THREE.PlaneGeometry(30, 30), new THREE.MeshToonMaterial({ color: '#3E5560', transparent: true, opacity: 0.72, gradientMap: ramp }));
+    water.rotation.x = -Math.PI / 2; water.position.y = wy; scene.add(water); ground.position.y = wy - 0.9;
+    cam.position.set(3.6, 1.0, 3.9); at = new THREE.Vector3(0, 0.2, 0);
+  } else {
+    cam = new THREE.OrthographicCamera(-2.15, 2.15, 2.15 * H / W, -2.15 * H / W, 0.01, 60); cam.position.set(0.3, 8, 0); cam.up.set(1, 0, 0); at = new THREE.Vector3(0.3, 0, 0);
+    // 视图里 +X（推的一侧）朝上；标记：交互点 红、掌心 黄、站立点 绿、系绳环 青
+    mark('prop-raft-s1-interact', '#E0453A', 0.05); mark('prop-raft-s1-palm-l', '#F2D04A'); mark('prop-raft-s1-palm-r', '#F2D04A');
+    mark('prop-raft-s1-stand-s', '#4AD06A', 0.05); mark('prop-raft-s1-stand-n', '#4AD06A', 0.05); mark('prop-raft-s1-ring', '#4AC8E0');
+    const line = (pts, col) => { const g = new THREE.BufferGeometry().setFromPoints(pts.map(([x, z]) => new THREE.Vector3(x, 0.4, z))); const l = new THREE.LineLoop(g, new THREE.LineBasicMaterial({ color: col, depthTest: false })); l.renderOrder = 8; scene.add(l); };
+    line([[-1, -1.5], [1, -1.5], [1, 1.5], [-1, 1.5]], '#FFFFFF');                                  // collider 2.0 × 3.0
+    line([[-1.05, -1.65], [1.05, -1.65], [1.05, 1.65], [-1.05, 1.65]], '#E07A3A');                  // 白盒装饰板 2.1 宽（只示意外缘）
+    for (const s of [-1, 1]) line([[-1.0, s * 1.6], [1.52, s * 1.6], [1.52, s * 2.0], [-1.0, s * 2.0]], '#A0A0FF');   // 石槽挡坎（槽心在 raft.slot 时：z 8.5–8.9 / 12.1–12.5 → 本地 ±1.6..2.0；槽底到 x 0.62 → 本地 1.52）
+  }
+  if (cam.isPerspectiveCamera) cam.updateProjectionMatrix(); else cam.updateProjectionMatrix();
+  cam.lookAt(at); scene.updateMatrixWorld(true); cam.updateMatrixWorld();
+  renderer.render(scene, cam);
+}
+// 021 / 022 解谜道具（2026-10-30）：节点标记 红 = -interact、青 = -mirror-plane（+Z 法线短线）、黄 = 光线
+async function puzzleView() {
+  const D = Math.PI / 180;
+  scene.fog.near = 7; scene.fog.far = 22;
+  Object.assign(sun.shadow.camera, { left: -2.5, right: 2.5, top: 2.5, bottom: -0.5 }); sun.shadow.camera.updateProjectionMatrix();
+  const mark = (o, col, r = 0.035) => { const m = new THREE.Mesh(new THREE.SphereGeometry(r, 16, 12), new THREE.MeshBasicMaterial({ color: col, depthTest: false })); m.renderOrder = 9; o.add(m); };
+  const line = (pts, col, parent = scene) => { const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts.map((p) => new THREE.Vector3(...p))), new THREE.LineBasicMaterial({ color: col, depthTest: false })); l.renderOrder = 8; parent.add(l); };
+  const normalTick = (o) => line([[0, 0, 0], [0, 0, 0.35]], '#4AC8E0', o);
+  const cam = new THREE.PerspectiveCamera(30, W / H, 0.01, 60); let at;
+  if (view.startsWith('mirror')) {
+    const m = await load('/models/props/prop-mirror-stand-s2.glb'); prepare(m); scene.add(m);
+    m.getObjectByName('mirror-pivot').rotation.y = 30 * D;   // 白盒 A 的正解档（30°）
+    mark(m.getObjectByName('prop-mirror-stand-s2-interact'), '#E0453A', 0.05); const pl = m.getObjectByName('prop-mirror-stand-s2-mirror-plane'); mark(pl, '#4AC8E0'); normalTick(pl);
+    line([[-3, 0.85, 0.85 * 0], [0, 0.85, 0]], '#F2D04A');
+    if (view === 'mirror') { cam.position.set(2.2, 1.55, 3.4); at = new THREE.Vector3(0, 0.62, 0); }
+    else { cam.position.set(-1.6, 1.7, -3.0); at = new THREE.Vector3(0, 0.75, 0); }
+  } else if (view.startsWith('guide')) {
+    const k = view.slice(-1), g = await load(`/models/props/prop-guide-mirror-wall-s3-${k}.glb`); prepare(g);
+    const root = new THREE.Group(); root.add(g); root.position.y = 0.6; scene.add(root);   // 平台面（-0.6）贴地
+    const ex = g.getObjectByName('mirror-pivot').parent.userData; const psi = ex.solvedPsiDeg * D; g.getObjectByName('mirror-pivot').rotation.y = psi;
+    const pl = g.getObjectByName(`prop-guide-mirror-wall-s3-${k}-mirror-plane`); mark(pl, '#4AC8E0'); normalTick(pl); mark(g.getObjectByName(`prop-guide-mirror-wall-s3-${k}-interact`), '#E0453A', 0.05);
+    const P = [[2.35, 1.35, 0], [-0.9958577760546713, 10.6, 0.8356238925925014], [1.2802500789158704, 16.6, -0.2257426309670095], [0, 21.85, 0]];
+    const i = k === 'a' ? 1 : 2, c = P[i]; const rel = (p, s) => { const d = new THREE.Vector3(p[0] - c[0], p[1] - c[1], p[2] - c[2]).normalize().multiplyScalar(s); return [d.x, d.y, d.z]; };
+    line([rel(P[i - 1], 2.2), [0, 0, 0], rel(P[i + 1], 2.2)], '#F2D04A', root);
+    // 楼梯井示意：r 1.3 处的镜心、r 2 楼梯内沿（地面圆）
+    const ring = (r, col) => { const pts = []; for (let a = 0; a <= 64; a++) pts.push([Math.cos(a / 32 * Math.PI) * r - c[0], 0.005, Math.sin(a / 32 * Math.PI) * r - c[2]]); line(pts, col); };
+    ring(2.0, '#A0A0FF'); ring(3.0, '#A0A0FF');
+    const out = new THREE.Vector3(c[0], 0, c[2]).normalize(), side = new THREE.Vector3(-out.z, 0, out.x);
+    cam.position.copy(new THREE.Vector3(0, 1.5, 0)).addScaledVector(out, -2.6).addScaledVector(side, 1.6); at = new THREE.Vector3(0, 0.35, 0).addScaledVector(out, 0.35);
+  } else {
+    const gt = await load('/models/props/prop-dial-gate-s2.glb'); prepare(gt); scene.add(gt);
+    const door = gt.getObjectByName('gate-door'); [3, 1, 7].forEach((n, i) => { gt.getObjectByName(`dial-${i}`).rotation.z = -36 * n * D; });  // 密码 317 转到指针下
+    mark(gt.getObjectByName('prop-dial-gate-s2-interact'), '#E0453A', 0.05); mark(door, '#4AD06A', 0.04);
+    for (const x of [-1.1, 1.1]) { const p = new THREE.Mesh(new THREE.BoxGeometry(0.6, 1.6, 0.6), new THREE.MeshToonMaterial({ color: '#7D858A', transparent: true, opacity: 0.35 })); p.position.set(x, 0.8, 0); scene.add(p); }  // 门柱示意（env-clifftop-s2：中心 x ±1.1，宽 0.6）
+    if (view === 'gate-open') door.rotation.y = 78 * D;
+    if (view === 'gate-dials') { cam.position.set(0, 1.16, -1.05); at = new THREE.Vector3(0, 1.15, 0); cam.fov = 40; }
+    else if (view === 'gate-dial-close') { cam.position.set(0, 1.15, -0.42); at = new THREE.Vector3(0, 1.15, 0); cam.fov = 40; }
+    else if (view === 'gate-open') { cam.position.set(-2.6, 2.2, 3.6); at = new THREE.Vector3(0.3, 0.9, 0.4); }
+    else { cam.position.set(-1.9, 1.6, -3.9); at = new THREE.Vector3(0, 0.95, 0); }
+  }
+  cam.updateProjectionMatrix(); cam.lookAt(at); scene.updateMatrixWorld(true); cam.updateMatrixWorld();
+  renderer.render(scene, cam);
+}
+// 10-30 第 3 批：光感锁 / 油阀 / 窗口镜 / 点火口 + 拉杆 / 塔门。红 = -interact，青 = -mirror-plane / -receiver，黄 = 光线，绿 = 握点 / 锁孔
+async function b3View() {
+  const D = Math.PI / 180;
+  scene.fog.near = 7; scene.fog.far = 22;
+  Object.assign(sun.shadow.camera, { left: -2.5, right: 2.5, top: 2.5, bottom: -1.5 }); sun.shadow.camera.updateProjectionMatrix();
+  const mark = (o, col, r = 0.03) => { const m = new THREE.Mesh(new THREE.SphereGeometry(r, 16, 12), new THREE.MeshBasicMaterial({ color: col, depthTest: false })); m.renderOrder = 9; o.add(m); return m; };
+  const line = (pts, col, parent = scene) => { const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts.map((p) => new THREE.Vector3(...p))), new THREE.LineBasicMaterial({ color: col, depthTest: false })); l.renderOrder = 8; parent.add(l); };
+  const toon = (col, op = 1) => new THREE.MeshToonMaterial({ color: col, gradientMap: ramp, transparent: op < 1, opacity: op });
+  const glow = (root, name, col, k) => root.traverse((o) => { if (o.isMesh && o.material.name === name) { o.material.emissive.set(col); o.material.emissiveIntensity = k; } });
+  const cam = new THREE.PerspectiveCamera(30, W / H, 0.01, 80); let at;
+  if (view.startsWith('lock')) {
+    const m = await load('/models/props/prop-light-lock-s2.glb'); prepare(m);
+    const g = new THREE.Group(); g.add(m); g.position.y = 0.85; scene.add(g);
+    const wall = new THREE.Mesh(new THREE.BoxGeometry(3, 2.4, 0.4), toon('#8A8478')); wall.position.set(0, 1.2, -0.2); wall.receiveShadow = true; scene.add(wall);   // 守塔人小屋北墙（示意）
+    const p = view === 'lock-lit' ? 1 : 0;
+    glow(m, 'mat-prop-light-lock-lens', '#F4C978', p * 1.6); m.getObjectByName('light-lock-needle').rotation.z = (60 - 120 * p) * D;
+    if (p) m.getObjectByName('light-lock-bolt').position.x = 0.08;
+    mark(m.getObjectByName('prop-light-lock-s2-receiver'), '#4AC8E0', 0.02); mark(m.getObjectByName('prop-light-lock-s2-interact'), '#E0453A', 0.04);
+    if (p) line([[2.2, 0.85, 2.6], [0, 0.85, 0.06]], '#F2D04A');
+    sun.position.set(2, 4, 4);
+    cam.position.set(1.0, 1.25, 1.9); at = new THREE.Vector3(0, 0.88, 0);
+  } else if (view.startsWith('valve')) {
+    const m = await load('/models/props/prop-oil-valve-s3.glb'); prepare(m);
+    const g = new THREE.Group(); g.add(m); g.position.y = 0.7; scene.add(g);
+    const wall = new THREE.Mesh(new THREE.CylinderGeometry(3.0, 3.0, 3, 64, 1, true, Math.PI * 0.82, Math.PI * 0.36), toon('#7E7A70')); wall.material.side = THREE.BackSide; wall.position.set(0, 1.5, 2.9); scene.add(wall);   // 塔内壁 r 3.0（示意）
+    if (view === 'valve-open') m.getObjectByName('valve-wheel').rotation.z = 90 * D;
+    mark(m.getObjectByName('prop-oil-valve-s3-interact'), '#E0453A', 0.04);
+    for (const a of [165, 15]) mark(m.getObjectByName('valve-wheel'), '#4AD06A', 0.015).position.set(Math.cos(a * D) * 0.15, Math.sin(a * D) * 0.15, 0.02);
+    line([[-0.5, 1.4, -0.06], [0.5, 1.4, -0.06]], '#4AC8E0');   // 潮线（S3 海水面 1.6 = 地面 + 1.4）
+    sun.position.set(1.5, 4, 4);
+    cam.position.set(0.75, 1.15, 1.5); at = new THREE.Vector3(0, 0.62, -0.05);
+  } else if (view.startsWith('window')) {
+    const m = await load('/models/props/prop-guide-mirror-window-s3.glb'); prepare(m);
+    const g = new THREE.Group(); g.add(m); g.position.set(0, 0.8, 0); scene.add(g);   // 本地 −0.8 = 机房地面
+    const C = [2.35, 1.35, 0], L0 = [9.5, 4.6, 0.6], A = [-0.9958577760546713, 10.6, 0.8356238925925014];
+    const dir = (p) => new THREE.Vector3(p[0] - C[0], p[1] - C[1], p[2] - C[2]).normalize();
+    const n = dir(L0).add(dir(A)).normalize();
+    const pitch = Math.asin(n.y), psi = Math.atan2(n.x, n.z);
+    m.getObjectByName('mirror-yaw').rotation.y = psi; m.getObjectByName('mirror-pitch').rotation.x = -pitch;
+    document.title = `yaw ${(psi / D).toFixed(2)} pitch ${(pitch / D).toFixed(2)}`;
+    const pl = m.getObjectByName('prop-guide-mirror-window-s3-mirror-plane'); mark(pl, '#4AC8E0', 0.02); line([[0, 0, 0], [0, 0, 0.4]], '#4AC8E0', pl);
+    mark(m.getObjectByName('prop-guide-mirror-window-s3-interact'), '#E0453A', 0.04);
+    const c = new THREE.Vector3(0, 1.15, 0); const s = (p, k) => c.clone().addScaledVector(dir(p), k).toArray();
+    line([s(L0, 2.4), c.toArray(), s(A, 2.4)], '#F2D04A');
+    for (const z of [-0.27, 0.27]) mark(scene, '#4AD06A', 0.02).position.set(-0.5, 1.05, z);
+    if (view === 'window-side') { cam.position.set(-0.3, 1.6, 3.2); at = new THREE.Vector3(-0.1, 0.8, 0); }
+    else { cam.position.set(-2.6, 1.9, 1.7); at = new THREE.Vector3(0, 0.75, 0); }
+  } else if (view.startsWith('ignite')) {
+    const m = await load('/models/props/prop-ignition-port-s3.glb'); prepare(m);
+    const sock = new THREE.Group(); sock.position.set(0, 21.85, 0); sock.rotation.x = Math.PI; sock.add(m);   // = ignition-port-s3-socket（翻转）
+    const g = new THREE.Group(); g.position.y = -22; g.add(sock); scene.add(g);                               // 灯室地面 y 22 → 0
+    const slabG = new THREE.RingGeometry(0.22, 1.7, 64); slabG.rotateX(-Math.PI / 2);
+    const slab = new THREE.Mesh(slabG, toon('#8C877E')); slab.receiveShadow = true; scene.add(slab);
+    const under = new THREE.Mesh(slabG, toon('#8C877E')); under.material.side = THREE.DoubleSide; under.position.y = -0.25; scene.add(under);
+    const side = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.25, 32, 1, true), toon('#6E6A62')); side.material.side = THREE.BackSide; side.position.y = -0.125; scene.add(side);
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(0.29, 0.06, 8, 32), toon('#3E4246')); rim.rotation.x = Math.PI / 2; rim.position.y = -0.33; scene.add(rim);   // env 铁圈（示意）
+    ground.visible = false;
+    const pts = [[0.001, 0], [0.62, 0], [0.62, 0.06], [0.42, 0.12], [0.3, 0.2], [0.27, 0.5], [0.33, 0.56], [0.62, 0.62], [0.64, 0.7], [0.56, 0.74], [0.56, 0.85], [0.001, 0.85]];
+    const base = new THREE.Mesh(new THREE.LatheGeometry(pts.map(([r, y]) => new THREE.Vector2(r, y)), 40), toon('#4C5054', 0.55)); scene.add(base);   // env 主灯铸铁底座（半透明示意）
+    const lever = m.getObjectByName('ignite-lever');
+    const st = { ignite: ['#C8382A', 0.6, 0], 'ignite-pulled': ['#FFB25E', 2.0, -60], 'ignite-below': ['#DCE6EE', 0.35, 0] }[view];
+    glow(m, 'mat-prop-ignition-glow', st[0], st[1]); lever.rotateX(st[2] * D);   // 拉动轴 = 节点本地 +X（extras.pullAxis）
+    mark(m.getObjectByName('prop-ignition-port-s3-interact'), '#E0453A', 0.04); mark(m.getObjectByName('prop-ignition-port-s3-receiver'), '#4AC8E0', 0.02);
+    for (const p of [[1.05, 1.0, 0], [1.2, 0.74, 0]]) mark(scene, '#4AD06A', 0.018).position.set(...p);   // 握点：静止 / 拉到底（layout）
+    mark(scene, '#F2D04A', 0.03).position.set(-0.9408, 0.03, 0.1322);                                    // 纸条
+    if (view === 'ignite-below') { cam.position.set(1.4, -2.6, 1.0); at = new THREE.Vector3(0, -0.1, 0); cam.fov = 34; line([[1.28, -5.25, -0.23], [0, -0.15, 0]], '#F2D04A'); }
+    else if (view === 'ignite-pulled') { cam.position.set(1.9, 1.5, 2.2); at = new THREE.Vector3(0.95, 0.6, 0); }
+    else { cam.position.set(2.6, 1.6, -1.6); at = new THREE.Vector3(0.7, 0.55, 0); }
+  } else {
+    const m = await load('/models/props/prop-lighthouse-door-s3.glb'); prepare(m); scene.add(m);
+    if (view === 'door-open') m.getObjectByName('door-leaf').rotation.y = -100 * D;
+    mark(m.getObjectByName('prop-lighthouse-door-s3-interact'), '#E0453A', 0.05); mark(m.getObjectByName('door-keyhole'), '#4AD06A', 0.012);
+    const key = await load('/models/props/prop-key-lighthouse.glb'); prepare(key);
+    if (view === 'door-key') { const k = key; k.position.set(0.92, 0.86 - 0.006, -0.12); k.rotation.set(Math.PI / 2, 0, Math.PI / 2); scene.add(k); cam.position.set(0.98, 0.95, -0.55); at = new THREE.Vector3(0.92, 0.88, -0.05); cam.fov = 30; }
+    else if (view === 'door-open') { cam.position.set(2.4, 1.8, 2.6); at = new THREE.Vector3(0.3, 1.0, 0.3); }
+    else { cam.position.set(1.9, 1.5, -3.2); at = new THREE.Vector3(0.5, 1.05, 0); }
+  }
+  cam.updateProjectionMatrix(); cam.lookAt(at); scene.updateMatrixWorld(true); cam.updateMatrixWorld();
+  sunView.value.copy(sun.position).sub(sun.target.position).normalize().transformDirection(cam.matrixWorldInverse);
+  renderer.render(scene, cam);
+}
+try {
+  if (/^(lock|valve|window|ignite|door)/.test(view)) { await b3View(); document.title = 'done'; throw 'ok'; }
+  if (/^(mirror|guide|gate)/.test(view)) { await puzzleView(); document.title = 'done'; throw 'ok'; }
+  if (view.startsWith('raft')) { await raftView(); document.title = 'done'; throw 'ok'; }
+  if (view.startsWith('bell')) { await bellView(); document.title = 'done'; throw 'ok'; }
+  const lantern = await load('/models/props/prop-lantern-brass.glb');
+  prepare(lantern);
+  const warm = new THREE.PointLight('#E8A24A', 0.05, 1.2, 2);
+  lantern.getObjectByName('prop-lantern-brass-emitter').add(warm);
+  let target;
+  if (view === 'lantern') {
+    lantern.position.y = 0.28; scene.add(lantern); target = lantern;
+  } else {
+    const stand = await load('/models/props/prop-lantern-stand-s2.glb'); prepare(stand); scene.add(stand);
+    stand.getObjectByName('prop-lantern-stand-s2-socket').add(lantern); target = stand;
+  }
+  scene.updateMatrixWorld(true);
+  const box = new THREE.Box3();
+  target.traverse((o) => { if (o.isMesh && o.visible && !/-collider|-outline/.test(o.name)) box.expandByObject(o); });
+  const c = box.getCenter(new THREE.Vector3()), size = box.getSize(new THREE.Vector3()).length();
+  const cam = new THREE.PerspectiveCamera(30, W / H, 0.01, 50);
+  const dir = view === 'stand-back' ? new THREE.Vector3(-0.6, 0.3, -1) : new THREE.Vector3(0.6, 0.3, 1);
+  cam.position.copy(c).addScaledVector(dir.normalize(), size * 1.9); cam.lookAt(c);
+  renderer.render(scene, cam);
+  document.title = 'done';
+} catch (e) { if (e === 'ok') {} else { document.title = 'error: ' + e.message; document.body.insertAdjacentText('beforeend', String(e.stack)); } }
+</script></body></html>

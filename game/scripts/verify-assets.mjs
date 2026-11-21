@@ -748,7 +748,7 @@ try {
     assert.equal(m.twin('/abs/art/textures/sub/tex-xi-ramp.ktx2'.replace('/abs/art/', '')), 'textures/tex-xi-ramp.ktx2', '子目录同名 → twin');
     assert.equal(m.twin('assets/art/textures/tex-xi-ramp.ktx2'), null, '清单 ramp 本身不是 twin');
     assert.equal(m.twin('textures/tex-unknown.ktx2'), null, '不同名 → null');
-    const full = '/workspace/game-studio/art/models/props/tex-xi-ramp.ktx2';
+    const full = resolve(root, '../art/models/props/tex-xi-ramp.ktx2'); // 仓库内绝对路径，只用来断言报错以完整路径开头
     const msg = ktx2AlignmentVerdict({ name: full, width: 256, height: 1, ramp: m('models/props/tex-xi-ramp.ktx2'), twin: m.twin('models/props/tex-xi-ramp.ktx2') });
     assert.ok(msg.startsWith(full + ' 256×1'), '报错以完整路径开头：' + msg);
     assert.match(msg, /与清单 ramp「textures\/tex-xi-ramp\.ktx2」同名但不在同一目录/);

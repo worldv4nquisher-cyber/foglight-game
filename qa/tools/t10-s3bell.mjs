@@ -1,0 +1,46 @@
+// batch10 S3 art=1：真按 E 敲钟（站位 0.98 / 第 30 帧钟响 / 美术钟摆跟白盒 / 切潮）
+import './b10env.mjs';
+import { s3, sleep } from './b8s3.mjs';
+import { counter, SH10 } from './b10lib.mjs';
+const S = await s3(5436, 'art=1');
+const { page, ev, must, rec, step, done } = S;
+const T = 'b10-S3bell'; const X = '__s3';
+await ev(counter(X));
+const waitN = async (k) => { const n0 = await ev('window.__n'); await must(`window.__n >= ${n0 + k}`, 900000, 'ticks ' + k); };
+await step(T, 'S3 真按 E 敲钟', async () => {
+  const t0 = await ev(`${X}.puzzles.tide.state`);
+  const sp = await ev(`(() => { const b = ${X}.puzzles.bell.interactable; const r = b.standPoint(${X}.rig.body.position.clone()); return { p: [r.position.x, r.position.y, r.position.z], f: r.facing }; })()`);
+  await ev(`(() => { const s = ${X}, f = ${sp.f}; const p = new s.rig.body.position.constructor(${sp.p[0]} - Math.sin(f) * 0.15, ${sp.p[1]} + 0.03, ${sp.p[2]} - Math.cos(f) * 0.15); s.rig.body.teleport(p); s.rig.body.velocity.set(0,0,0); s.rig.controller.facing = f; s.cameraFollow.yaw = f + Math.PI; s.cameraFollow.pitch = -0.15; return 1; })()`);
+  await waitN(20);
+  const ok = await page.waitFor(`/敲钟/.test(document.querySelector('.hud-prompt')?.textContent ?? '')`, 60000, 150);
+  const prompt = await ev(`document.querySelector('.hud-prompt')?.textContent ?? null`);
+  if (!ok) { rec(T, 'S3 敲钟提示', 'FAIL', { prompt, sp, t0 }); return; }
+  await ev(`(() => { window.__f = () => { const s = ${X}, a = s.interaction.animState, b = s.puzzles.bell, sw = s.scene.getObjectByName('tide-bell-s3-swing'), m = s.artSlots?.mounted.find(x => /tide-bell/.test(x.id)), as = m && m.model.getObjectByName('bell-swing');
+    const q = (o) => o ? o.getWorldQuaternion(o.quaternion.clone()) : null; const qa = q(as), ql = q(sw); const bp = s.rig.body.position;
+    return { n: window.__n, clip: a?.clip ?? null, t: a ? +a.t.toFixed(4) : null, ang: +b.angle.toFixed(4), cl: +b.clapperAngle.toFixed(4), rings: b.rings, qa: qa && [qa.x, qa.y, qa.z, qa.w], ql: ql && [ql.x, ql.y, ql.z, ql.w], pos: [bp.x, bp.y, bp.z], mid: m?.id ?? null }; };
+    window.__smp = []; window.__sfx = []; __game.events.on('sfx:play', (e) => window.__sfx.push({ id: e.id, n: window.__n })); return 1; })()`);
+  await page.tap('KeyE');
+  await must(`${X}.puzzles.tide.transitioning`, 300000, '切潮开始');
+  await waitN(120);
+  const smp = await ev(`(() => { const r = window.__smp; window.__smp = null; return r; })()`);
+  const sfx = await ev('window.__sfx');
+  const a0 = smp.find(x => x.clip === 'xi-ring-bell'); const bs = sfx.find(x => x.id === 'sfx-tide-bell');
+  const frameAtSfx = a0 && bs ? +((bs.n - a0.n) + a0.t * 60).toFixed(2) : null; const row = bs && smp.find(x => x.n === bs.n);
+  const axis = await ev(`(() => { const o = ${X}.scene.getObjectByName('tide-bell-s3-socket') ?? ${X}.scene.getObjectByName('tide-bell-s3'); const v = o.getWorldPosition(o.position.clone()); return [v.x, v.y, v.z]; })()`);
+  const dAxis = a0 ? +Math.hypot(a0.pos[0] - axis[0], a0.pos[2] - axis[2]).toFixed(3) : null;
+  const qang = (a, b) => 2 * Math.acos(Math.min(1, Math.abs(a[0]*b[0]+a[1]*b[1]+a[2]*b[2]+a[3]*b[3])));
+  const f0 = smp.find(x => x.qa && x.ql); const fe = smp.filter(x => x.qa && x.ql).map(x => Math.abs(qang(x.qa, f0.qa) - qang(x.ql, f0.ql)));
+  const before = smp.filter(x => x.clip === 'xi-ring-bell' && x.t * 60 < 21.5).map(x => Math.abs(x.ang));
+  const info = { prompt, mounted: a0?.mid ?? smp[0]?.mid, dAxis, frameAtSfx, angAtSfx: row?.ang, maxAng: Math.max(...smp.map(x => x.ang)), minAng: Math.min(...smp.map(x => x.ang)), maxBeforeTouch: Math.max(0, ...before), clapMax: Math.max(...smp.map(x => Math.abs(x.cl))), maxFollowErr: fe.length ? +Math.max(...fe).toFixed(5) : null };
+  rec(T, 'S3 真按 E「E 敲钟」→ xi-ring-bell，站位离钟轴 0.98（±0.03）', a0 && Math.abs(dAxis - 0.98) <= 0.03 ? 'PASS' : 'FAIL', info);
+  rec(T, 'S3 钟声在第 30 帧（±1）', frameAtSfx !== null && Math.abs(frameAtSfx - 30) <= 1 ? 'PASS' : 'FAIL', { frameAtSfx });
+  rec(T, 'S3 钟摆：22 帧前不动、ring 帧约 0.100 rad、自由摆、钟锤相对摆', info.maxBeforeTouch < 0.005 && Math.abs((row?.ang ?? 0) - 0.1) < 0.012 && info.minAng < -0.02 && info.clapMax > 0.005 ? 'PASS' : 'FAIL', info);
+  rec(T, 'S3 美术 bell-swing 跟白盒 swing（≤0.002 rad）', info.maxFollowErr !== null && info.maxFollowErr <= 0.002 ? 'PASS' : 'FAIL', { maxFollowErr: info.maxFollowErr, n: fe.length });
+  await ev(`(() => { const t = ${X}.puzzles.tide; t.t = Math.max(t.t, t.transitionSec - 0.05); return 1; })()`);
+  await must(`!${X}.puzzles.tide.transitioning`, 300000, '切潮完');
+  const t1 = await ev(`${X}.puzzles.tide.state`);
+  rec(T, 'S3 敲钟切潮', t0 !== t1 ? 'PASS' : 'FAIL', { before: t0, after: t1 });
+  await page.screenshot(`${SH10}/s3-bell-art.png`);
+});
+await step(T, '页面错误', async () => rec(T, '页面错误', page.errors?.length ? 'FAIL' : 'PASS', page.errors ?? []));
+S.save('t10-s3bell'); await done();

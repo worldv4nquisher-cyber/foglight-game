@@ -1,0 +1,20 @@
+import { open, sleep, SH } from './b6lib.mjs';
+const { page, ev, must, url, rec, step, done } = await open(5283);
+const T = 'v0.1-013';
+const camSt = `(() => { const cf = window.__s1?.cameraFollow; return { name: cf?.cutsceneName ?? null, ctx: __game.input.context, el: +__game.time.elapsed.toFixed(3), running: __game.benchmark.running, first: __game.benchmark.firstRoundDone }; })()`;
+await step(T, '对照：检测完成并保存后再进 S1 跳过', async () => {
+  await page.goto(url('?smoke=1&debug=1&autostart=1'));
+  await must(`!!window.__s1 && __game.benchmark.running === false`, 300000, 'bench done');
+  const saved = await ev(`localStorage.getItem('foglight.settings.v1')`);
+  await page.goto(url('?smoke=1&debug=1&autostart=1'));
+  await must(`!!window.__s1 && __s1.cameraFollow?.cutsceneName === 'establishing'`, 240000, 'establishing');
+  const a = await ev(camSt);
+  await page.keyDown('Space');
+  await page.waitFor(`__s1.cameraFollow.cutsceneName !== 'establishing'`, 120000, 50);
+  await page.keyUp('Space');
+  const b = await ev(camSt);
+  await sleep(500); const c = await ev(camSt);
+  rec(T, '检测已完成时跳过直接交还（不补 hold 镜头）', !a.running && b.name !== 's1-establishing-hold' && c.ctx === 'explore' ? 'PASS' : 'FAIL', { saved, before: a, afterSkip: b, after500ms: c });
+});
+console.log('ERRORS', JSON.stringify(page.errors));
+await done(); console.log('DONE');

@@ -1,0 +1,2913 @@
+{
+ "note": "返工 2026-10-29：已按 013 白盒 game/src/levels/s1/layout.ts（权威，只读）对位——礁石台阶、对岸台阶 / 崖顶平台、石槽、points；冲突以 layout.ts 为准。+Z 北、右手系 ⇒ 东 = -X、西 = +X；局部 y = 世界高度。",
+ "instances": [
+  {
+   "rock": "a",
+   "role": "reef-path",
+   "walkableWhen": "low",
+   "translation": [
+    -5.9,
+    -0.155,
+    -3
+   ],
+   "rotationY": 5.43,
+   "scale": [
+    0.965,
+    0.965,
+    0.965
+   ],
+   "topY": 0.42
+  },
+  {
+   "rock": "c",
+   "role": "reef-path",
+   "walkableWhen": "low",
+   "translation": [
+    -4.5,
+    -0.184,
+    -1.9
+   ],
+   "rotationY": 0.605,
+   "scale": [
+    1.037,
+    1.037,
+    1.037
+   ],
+   "topY": 0.5
+  },
+  {
+   "rock": "b",
+   "role": "reef-path",
+   "walkableWhen": "low",
+   "translation": [
+    -3.2,
+    -0.138,
+    -0.7
+   ],
+   "rotationY": 4.795,
+   "scale": [
+    0.995,
+    0.995,
+    0.995
+   ],
+   "topY": 0.38
+  },
+  {
+   "rock": "a",
+   "role": "reef-path",
+   "walkableWhen": "low",
+   "translation": [
+    -2,
+    -0.074,
+    0.5
+   ],
+   "rotationY": 3.9,
+   "scale": [
+    1,
+    1.048,
+    1
+   ],
+   "topY": 0.55
+  },
+  {
+   "rock": "c",
+   "role": "reef-path",
+   "walkableWhen": "low",
+   "translation": [
+    -0.8,
+    -0.191,
+    1.6
+   ],
+   "rotationY": 6.132,
+   "scale": [
+    0.972,
+    0.972,
+    0.972
+   ],
+   "topY": 0.45
+  },
+  {
+   "rock": "b",
+   "role": "reef-path",
+   "walkableWhen": "low",
+   "translation": [
+    0.4,
+    -0.161,
+    2.6
+   ],
+   "rotationY": 4.551,
+   "scale": [
+    1.001,
+    1.001,
+    1.001
+   ],
+   "topY": 0.36
+  },
+  {
+   "rock": "a",
+   "role": "dressing",
+   "translation": [
+    -5.34,
+    0.02,
+    2.17
+   ],
+   "rotationY": 1.959,
+   "scale": [
+    1.271,
+    1.419,
+    1.271
+   ]
+  },
+  {
+   "rock": "a",
+   "role": "dressing",
+   "translation": [
+    -2.39,
+    0.108,
+    4.01
+   ],
+   "rotationY": 1.834,
+   "scale": [
+    0.773,
+    0.815,
+    0.773
+   ]
+  },
+  {
+   "rock": "d",
+   "role": "dressing",
+   "translation": [
+    -1.92,
+    -0.288,
+    -6.62
+   ],
+   "rotationY": 0.763,
+   "scale": [
+    1.326,
+    1.423,
+    1.326
+   ]
+  },
+  {
+   "rock": "d",
+   "role": "dressing",
+   "translation": [
+    -0.04,
+    -0.17,
+    -4.52
+   ],
+   "rotationY": 1.432,
+   "scale": [
+    0.861,
+    0.872,
+    0.861
+   ]
+  },
+  {
+   "rock": "d",
+   "role": "dressing",
+   "translation": [
+    -2.56,
+    -0.178,
+    -4.14
+   ],
+   "rotationY": 5.266,
+   "scale": [
+    1.488,
+    1.499,
+    1.488
+   ]
+  },
+  {
+   "rock": "a",
+   "role": "dressing",
+   "translation": [
+    0.03,
+    -0.286,
+    -7.98
+   ],
+   "rotationY": 3.114,
+   "scale": [
+    1.193,
+    1.317,
+    1.193
+   ]
+  },
+  {
+   "rock": "b",
+   "role": "dressing",
+   "translation": [
+    -4.37,
+    -0.124,
+    -4.84
+   ],
+   "rotationY": 1.278,
+   "scale": [
+    1.297,
+    1.179,
+    1.297
+   ]
+  },
+  {
+   "rock": "a",
+   "role": "dressing",
+   "translation": [
+    -4.55,
+    0.053,
+    3.57
+   ],
+   "rotationY": 4.204,
+   "scale": [
+    0.732,
+    0.648,
+    0.732
+   ]
+  },
+  {
+   "rock": "b",
+   "role": "dressing",
+   "translation": [
+    0.26,
+    -0.387,
+    -6.12
+   ],
+   "rotationY": 1.273,
+   "scale": [
+    1.147,
+    1.266,
+    1.147
+   ]
+  },
+  {
+   "rock": "a",
+   "role": "dressing",
+   "translation": [
+    -8.54,
+    -0.089,
+    -0.37
+   ],
+   "rotationY": 3.213,
+   "scale": [
+    0.772,
+    0.778,
+    0.772
+   ]
+  },
+  {
+   "rock": "c",
+   "role": "dressing",
+   "translation": [
+    -1.01,
+    0.057,
+    -2.25
+   ],
+   "rotationY": 3.175,
+   "scale": [
+    0.987,
+    1.03,
+    0.987
+   ]
+  },
+  {
+   "rock": "d",
+   "role": "dressing",
+   "translation": [
+    -11.52,
+    0.072,
+    4.36
+   ],
+   "rotationY": 4.273,
+   "scale": [
+    0.679,
+    0.704,
+    0.679
+   ]
+  },
+  {
+   "rock": "b",
+   "role": "dressing",
+   "translation": [
+    -3.28,
+    -0.154,
+    -7.29
+   ],
+   "rotationY": 4.526,
+   "scale": [
+    0.603,
+    0.651,
+    0.603
+   ]
+  },
+  {
+   "rock": "a",
+   "role": "dressing",
+   "translation": [
+    -4.93,
+    -0.071,
+    0.87
+   ],
+   "rotationY": 5.13,
+   "scale": [
+    0.653,
+    0.679,
+    0.653
+   ]
+  },
+  {
+   "rock": "b",
+   "role": "dressing",
+   "translation": [
+    -4.45,
+    -0.096,
+    -6.16
+   ],
+   "rotationY": 2.152,
+   "scale": [
+    0.652,
+    0.613,
+    0.652
+   ]
+  },
+  {
+   "rock": "c",
+   "role": "dressing",
+   "translation": [
+    -6.84,
+    -0.117,
+    0.6
+   ],
+   "rotationY": 6.271,
+   "scale": [
+    1.105,
+    1.185,
+    1.105
+   ]
+  },
+  {
+   "rock": "b",
+   "role": "dressing",
+   "translation": [
+    -7.14,
+    -0.022,
+    -0.92
+   ],
+   "rotationY": 3.347,
+   "scale": [
+    0.96,
+    0.824,
+    0.96
+   ]
+  },
+  {
+   "rock": "b",
+   "role": "dressing",
+   "translation": [
+    -4.16,
+    -0.159,
+    -6.92
+   ],
+   "rotationY": 5.173,
+   "scale": [
+    0.72,
+    0.763,
+    0.72
+   ]
+  },
+  {
+   "rock": "d",
+   "role": "dressing",
+   "translation": [
+    -9.38,
+    -0.132,
+    -1.14
+   ],
+   "rotationY": 1.456,
+   "scale": [
+    0.69,
+    0.591,
+    0.69
+   ]
+  },
+  {
+   "rock": "b",
+   "role": "dressing",
+   "translation": [
+    -3.77,
+    0.076,
+    2.01
+   ],
+   "rotationY": 5.448,
+   "scale": [
+    0.681,
+    0.682,
+    0.681
+   ]
+  },
+  {
+   "rock": "a",
+   "role": "dressing",
+   "translation": [
+    -11.93,
+    0.254,
+    2.72
+   ],
+   "rotationY": 3.157,
+   "scale": [
+    0.611,
+    0.592,
+    0.611
+   ]
+  },
+  {
+   "rock": "e",
+   "role": "dressing",
+   "translation": [
+    -11.54,
+    -0.953,
+    -12.56
+   ],
+   "rotationY": 5.488,
+   "scale": [
+    1.05,
+    0.994,
+    1.05
+   ]
+  },
+  {
+   "rock": "d",
+   "role": "dressing",
+   "translation": [
+    -13.8,
+    -0.645,
+    -13.35
+   ],
+   "rotationY": 1.706,
+   "scale": [
+    1.03,
+    0.966,
+    1.03
+   ]
+  },
+  {
+   "rock": "d",
+   "role": "dressing",
+   "translation": [
+    -17.93,
+    -0.632,
+    -13.5
+   ],
+   "rotationY": 3.195,
+   "scale": [
+    0.665,
+    0.615,
+    0.665
+   ]
+  },
+  {
+   "rock": "d",
+   "role": "dressing",
+   "translation": [
+    -15.62,
+    -0.645,
+    -11.31
+   ],
+   "rotationY": 3.039,
+   "scale": [
+    0.88,
+    0.871,
+    0.88
+   ]
+  },
+  {
+   "rock": "d",
+   "role": "dressing",
+   "translation": [
+    -18.63,
+    -0.607,
+    -11.37
+   ],
+   "rotationY": 2.889,
+   "scale": [
+    0.896,
+    0.995,
+    0.896
+   ]
+  },
+  {
+   "rock": "d",
+   "role": "dressing",
+   "translation": [
+    -16.97,
+    -0.489,
+    -11.32
+   ],
+   "rotationY": 3.912,
+   "scale": [
+    0.637,
+    0.608,
+    0.637
+   ]
+  },
+  {
+   "rock": "d",
+   "role": "dressing",
+   "translation": [
+    -15.31,
+    -0.593,
+    -13.14
+   ],
+   "rotationY": 5.197,
+   "scale": [
+    0.845,
+    0.969,
+    0.845
+   ]
+  },
+  {
+   "rock": "d",
+   "role": "dressing",
+   "translation": [
+    -13.7,
+    -0.516,
+    -11.54
+   ],
+   "rotationY": 1.497,
+   "scale": [
+    0.991,
+    0.904,
+    0.991
+   ]
+  },
+  {
+   "rock": "d",
+   "role": "dressing",
+   "translation": [
+    -23.94,
+    0.667,
+    -0.88
+   ],
+   "rotationY": 1.726,
+   "scale": [
+    1.059,
+    1.2,
+    1.059
+   ]
+  },
+  {
+   "rock": "d",
+   "role": "dressing",
+   "translation": [
+    -20.77,
+    0.673,
+    2.14
+   ],
+   "rotationY": 2.767,
+   "scale": [
+    0.892,
+    0.968,
+    0.892
+   ]
+  },
+  {
+   "rock": "d",
+   "role": "dressing",
+   "translation": [
+    -17.12,
+    0.781,
+    3.21
+   ],
+   "rotationY": 2.58,
+   "scale": [
+    0.849,
+    0.833,
+    0.849
+   ]
+  },
+  {
+   "rock": "d",
+   "role": "dressing",
+   "translation": [
+    -17.11,
+    0.825,
+    1.67
+   ],
+   "rotationY": 5.014,
+   "scale": [
+    0.603,
+    0.561,
+    0.603
+   ]
+  },
+  {
+   "rock": "d",
+   "role": "dressing",
+   "translation": [
+    -22.62,
+    0.644,
+    4.26
+   ],
+   "rotationY": 5.572,
+   "scale": [
+    1.14,
+    1.263,
+    1.14
+   ]
+  },
+  {
+   "rock": "d",
+   "role": "dressing",
+   "translation": [
+    -17.07,
+    0.612,
+    -1.03
+   ],
+   "rotationY": 5.118,
+   "scale": [
+    1.063,
+    1.149,
+    1.063
+   ]
+  },
+  {
+   "rock": "d",
+   "role": "dressing",
+   "translation": [
+    -19.59,
+    0.643,
+    3.65
+   ],
+   "rotationY": 4.649,
+   "scale": [
+    0.862,
+    0.777,
+    0.862
+   ]
+  },
+  {
+   "rock": "d",
+   "role": "dressing",
+   "translation": [
+    -21.91,
+    0.617,
+    2.94
+   ],
+   "rotationY": 2.847,
+   "scale": [
+    0.61,
+    0.52,
+    0.61
+   ]
+  },
+  {
+   "rock": "d",
+   "role": "dressing",
+   "translation": [
+    19.09,
+    1.482,
+    6.94
+   ],
+   "rotationY": 2.219,
+   "scale": [
+    0.813,
+    0.749,
+    0.813
+   ]
+  },
+  {
+   "rock": "e",
+   "role": "dressing",
+   "translation": [
+    19.16,
+    0.947,
+    1.17
+   ],
+   "rotationY": 3.011,
+   "scale": [
+    1.178,
+    1.044,
+    1.178
+   ]
+  },
+  {
+   "rock": "e",
+   "role": "dressing",
+   "translation": [
+    24.95,
+    1.507,
+    11.19
+   ],
+   "rotationY": 0.177,
+   "scale": [
+    0.917,
+    0.843,
+    0.917
+   ]
+  },
+  {
+   "rock": "d",
+   "role": "dressing",
+   "translation": [
+    29,
+    3.005,
+    9.68
+   ],
+   "rotationY": 3.267,
+   "scale": [
+    1.063,
+    1.141,
+    1.063
+   ]
+  },
+  {
+   "rock": "e",
+   "role": "dressing",
+   "translation": [
+    28.58,
+    2.411,
+    2.56
+   ],
+   "rotationY": 3.502,
+   "scale": [
+    0.936,
+    0.795,
+    0.936
+   ]
+  },
+  {
+   "rock": "e",
+   "role": "dressing",
+   "translation": [
+    23.02,
+    1.475,
+    6.76
+   ],
+   "rotationY": 6.156,
+   "scale": [
+    1.08,
+    0.935,
+    1.08
+   ]
+  },
+  {
+   "rock": "e",
+   "role": "dressing",
+   "translation": [
+    20.27,
+    0.936,
+    -10.31
+   ],
+   "rotationY": 5.265,
+   "scale": [
+    0.662,
+    0.617,
+    0.662
+   ]
+  },
+  {
+   "rock": "f",
+   "role": "dressing",
+   "translation": [
+    29.06,
+    2.645,
+    -4.74
+   ],
+   "rotationY": 5.057,
+   "scale": [
+    1.223,
+    1.165,
+    1.223
+   ]
+  },
+  {
+   "rock": "e",
+   "role": "dressing",
+   "translation": [
+    18.13,
+    1.135,
+    5.33
+   ],
+   "rotationY": 2.085,
+   "scale": [
+    0.689,
+    0.771,
+    0.689
+   ]
+  },
+  {
+   "rock": "e",
+   "role": "dressing",
+   "translation": [
+    23.68,
+    0.803,
+    -10.18
+   ],
+   "rotationY": 5.245,
+   "scale": [
+    1.118,
+    1.054,
+    1.118
+   ]
+  },
+  {
+   "rock": "d",
+   "role": "dressing",
+   "translation": [
+    6.76,
+    -0.885,
+    -14.29
+   ],
+   "rotationY": 3.319,
+   "scale": [
+    1.072,
+    0.99,
+    1.072
+   ]
+  },
+  {
+   "rock": "d",
+   "role": "dressing",
+   "translation": [
+    11.17,
+    -0.85,
+    -14.5
+   ],
+   "rotationY": 4.916,
+   "scale": [
+    0.884,
+    0.756,
+    0.884
+   ]
+  },
+  {
+   "rock": "d",
+   "role": "dressing",
+   "translation": [
+    1.13,
+    -0.689,
+    -14.68
+   ],
+   "rotationY": 0.784,
+   "scale": [
+    0.743,
+    0.766,
+    0.743
+   ]
+  },
+  {
+   "rock": "d",
+   "role": "dressing",
+   "translation": [
+    10.19,
+    -0.549,
+    -10.53
+   ],
+   "rotationY": 1.689,
+   "scale": [
+    0.767,
+    0.777,
+    0.767
+   ]
+  },
+  {
+   "rock": "d",
+   "role": "dressing",
+   "translation": [
+    11.84,
+    -0.776,
+    -11.88
+   ],
+   "rotationY": 5.805,
+   "scale": [
+    1.431,
+    1.465,
+    1.431
+   ]
+  },
+  {
+   "rock": "d",
+   "role": "dressing",
+   "translation": [
+    -3.34,
+    -0.913,
+    -13.59
+   ],
+   "rotationY": 2.884,
+   "scale": [
+    1.472,
+    1.668,
+    1.472
+   ]
+  },
+  {
+   "rock": "d",
+   "role": "dressing",
+   "translation": [
+    3.01,
+    -1.052,
+    -15.75
+   ],
+   "rotationY": 3.431,
+   "scale": [
+    1.188,
+    1.272,
+    1.188
+   ]
+  },
+  {
+   "rock": "d",
+   "role": "dressing",
+   "translation": [
+    28.8,
+    3.327,
+    12.99
+   ],
+   "rotationY": 6.035,
+   "scale": [
+    1.284,
+    1.116,
+    1.284
+   ]
+  },
+  {
+   "rock": "d",
+   "role": "dressing",
+   "translation": [
+    20.22,
+    2.012,
+    12.83
+   ],
+   "rotationY": 1.292,
+   "scale": [
+    1.064,
+    1.197,
+    1.064
+   ]
+  },
+  {
+   "rock": "d",
+   "role": "dressing",
+   "translation": [
+    3.27,
+    1.023,
+    13.17
+   ],
+   "rotationY": 3.773,
+   "scale": [
+    1.216,
+    1.214,
+    1.216
+   ]
+  },
+  {
+   "rock": "d",
+   "role": "dressing",
+   "translation": [
+    16.87,
+    0.995,
+    12.49
+   ],
+   "rotationY": 6.104,
+   "scale": [
+    0.938,
+    0.897,
+    0.938
+   ]
+  },
+  {
+   "rock": "d",
+   "role": "dressing",
+   "translation": [
+    8.71,
+    1.031,
+    13.11
+   ],
+   "rotationY": 5.568,
+   "scale": [
+    0.765,
+    0.755,
+    0.765
+   ]
+  },
+  {
+   "rock": "d",
+   "role": "dressing",
+   "translation": [
+    11.9,
+    1.423,
+    13.46
+   ],
+   "rotationY": 2.182,
+   "scale": [
+    1.35,
+    1.333,
+    1.35
+   ]
+  },
+  {
+   "rock": "f",
+   "role": "dressing-hightide",
+   "translation": [
+    11.76,
+    -1.95,
+    -22.52
+   ],
+   "rotationY": 0.587,
+   "scale": [
+    1.717,
+    2.514,
+    0.902
+   ]
+  },
+  {
+   "rock": "e",
+   "role": "dressing-hightide",
+   "translation": [
+    15.27,
+    -1.95,
+    -23.7
+   ],
+   "rotationY": 1.822,
+   "scale": [
+    1.161,
+    1.601,
+    1.375
+   ]
+  },
+  {
+   "rock": "f",
+   "role": "dressing-hightide",
+   "translation": [
+    14.08,
+    -1.95,
+    -21.94
+   ],
+   "rotationY": 0.182,
+   "scale": [
+    1.604,
+    2.53,
+    1.164
+   ]
+  },
+  {
+   "rock": "c",
+   "role": "dressing-hightide",
+   "translation": [
+    12.96,
+    -1.95,
+    -21.52
+   ],
+   "rotationY": 1.16,
+   "scale": [
+    0.713,
+    6.144,
+    0.827
+   ]
+  },
+  {
+   "rock": "d",
+   "role": "dressing-hightide",
+   "translation": [
+    13.77,
+    -1.95,
+    -23.64
+   ],
+   "rotationY": 2.668,
+   "scale": [
+    0.765,
+    3.597,
+    0.868
+   ]
+  },
+  {
+   "rock": "c",
+   "role": "dressing-hightide",
+   "translation": [
+    16.34,
+    -1.95,
+    -22.77
+   ],
+   "rotationY": 4.447,
+   "scale": [
+    0.663,
+    6.198,
+    0.532
+   ]
+  },
+  {
+   "rock": "f",
+   "role": "dressing-hightide",
+   "translation": [
+    14.52,
+    -1.95,
+    -20.58
+   ],
+   "rotationY": 0.299,
+   "scale": [
+    1.536,
+    2.557,
+    0.998
+   ]
+  },
+  {
+   "rock": "c",
+   "role": "dressing-hightide",
+   "translation": [
+    17.49,
+    -1.909,
+    -22.08
+   ],
+   "rotationY": 2.538,
+   "scale": [
+    0.776,
+    6.307,
+    0.696
+   ]
+  },
+  {
+   "rock": "d",
+   "role": "dressing-hightide",
+   "translation": [
+    15.67,
+    -1.251,
+    -19.48
+   ],
+   "rotationY": -0.785,
+   "scale": [
+    1.696,
+    3.185,
+    1.132
+   ]
+  },
+  {
+   "rock": "c",
+   "role": "dressing-hightide",
+   "translation": [
+    12.94,
+    -1.95,
+    -21.03
+   ],
+   "rotationY": 3.739,
+   "scale": [
+    0.717,
+    6.109,
+    0.744
+   ]
+  },
+  {
+   "rock": "c",
+   "role": "dressing-hightide",
+   "translation": [
+    17.47,
+    -0.45,
+    -18.4
+   ],
+   "rotationY": 5.391,
+   "scale": [
+    0.62,
+    3.61,
+    0.574
+   ]
+  },
+  {
+   "rock": "c",
+   "role": "dressing-hightide",
+   "translation": [
+    13.89,
+    -1.795,
+    -19.79
+   ],
+   "rotationY": 2.644,
+   "scale": [
+    1.006,
+    6.159,
+    1.201
+   ]
+  },
+  {
+   "rock": "d",
+   "role": "dressing-hightide",
+   "translation": [
+    17.14,
+    -0.508,
+    -19.1
+   ],
+   "rotationY": 5.238,
+   "scale": [
+    0.941,
+    2.289,
+    1.082
+   ]
+  },
+  {
+   "rock": "d",
+   "role": "dressing-hightide",
+   "translation": [
+    16.37,
+    -0.45,
+    -17.72
+   ],
+   "rotationY": 2.106,
+   "scale": [
+    0.689,
+    2.489,
+    0.656
+   ]
+  },
+  {
+   "rock": "f",
+   "role": "dressing-hightide",
+   "translation": [
+    16.64,
+    -0.45,
+    -17.91
+   ],
+   "rotationY": 0.183,
+   "scale": [
+    1.551,
+    1.558,
+    1.034
+   ]
+  },
+  {
+   "rock": "c",
+   "role": "dressing-hightide",
+   "translation": [
+    19.07,
+    -0.45,
+    -17.31
+   ],
+   "rotationY": 2.303,
+   "scale": [
+    0.583,
+    3.292,
+    0.555
+   ]
+  },
+  {
+   "rock": "d",
+   "role": "dressing-hightide",
+   "translation": [
+    14.91,
+    -0.728,
+    -18.45
+   ],
+   "rotationY": 1.606,
+   "scale": [
+    1.183,
+    2.74,
+    1.047
+   ]
+  },
+  {
+   "rock": "b",
+   "role": "dressing-hightide",
+   "translation": [
+    16.57,
+    -0.45,
+    -17.77
+   ],
+   "rotationY": 4.676,
+   "scale": [
+    0.625,
+    5.106,
+    0.725
+   ]
+  },
+  {
+   "rock": "d",
+   "role": "dressing-hightide",
+   "translation": [
+    18.82,
+    -0.45,
+    -17.67
+   ],
+   "rotationY": -0.686,
+   "scale": [
+    2.06,
+    2.489,
+    1.143
+   ]
+  },
+  {
+   "rock": "c",
+   "role": "dressing-hightide",
+   "translation": [
+    14.8,
+    -1.119,
+    -19.05
+   ],
+   "rotationY": 4.942,
+   "scale": [
+    0.669,
+    4.833,
+    0.663
+   ]
+  },
+  {
+   "rock": "c",
+   "role": "dressing-hightide",
+   "translation": [
+    22.61,
+    -0.45,
+    -17.71
+   ],
+   "rotationY": 0.85,
+   "scale": [
+    1.201,
+    3.599,
+    1.136
+   ]
+  },
+  {
+   "rock": "b",
+   "role": "dressing-hightide",
+   "translation": [
+    15.01,
+    -0.476,
+    -17.68
+   ],
+   "rotationY": 4.458,
+   "scale": [
+    0.818,
+    4.598,
+    0.895
+   ]
+  },
+  {
+   "rock": "e",
+   "role": "dressing-hightide",
+   "translation": [
+    17.09,
+    -0.73,
+    -19.43
+   ],
+   "rotationY": 6.173,
+   "scale": [
+    0.839,
+    1.152,
+    0.763
+   ]
+  },
+  {
+   "rock": "b",
+   "role": "dressing-hightide",
+   "translation": [
+    23.89,
+    -0.45,
+    -17.26
+   ],
+   "rotationY": 2.973,
+   "scale": [
+    1.119,
+    4.966,
+    1.332
+   ]
+  },
+  {
+   "rock": "f",
+   "role": "dressing-hightide",
+   "translation": [
+    22.08,
+    -0.45,
+    -19.51
+   ],
+   "rotationY": -0.832,
+   "scale": [
+    1.597,
+    1.694,
+    0.971
+   ]
+  },
+  {
+   "rock": "d",
+   "role": "dressing-hightide",
+   "translation": [
+    19.89,
+    -0.45,
+    -19.58
+   ],
+   "rotationY": 3.423,
+   "scale": [
+    0.995,
+    2.067,
+    1.153
+   ]
+  },
+  {
+   "rock": "c",
+   "role": "dressing-hightide",
+   "translation": [
+    21.75,
+    -0.45,
+    -19.68
+   ],
+   "rotationY": 3.311,
+   "scale": [
+    1.147,
+    3.971,
+    1.348
+   ]
+  },
+  {
+   "rock": "c",
+   "role": "dressing-hightide",
+   "translation": [
+    18.42,
+    -0.45,
+    -18.09
+   ],
+   "rotationY": 0.742,
+   "scale": [
+    1.295,
+    3.958,
+    1.341
+   ]
+  },
+  {
+   "rock": "d",
+   "role": "dressing-hightide",
+   "translation": [
+    22.67,
+    -0.613,
+    -20.55
+   ],
+   "rotationY": 2.361,
+   "scale": [
+    0.747,
+    2.641,
+    0.709
+   ]
+  },
+  {
+   "rock": "d",
+   "role": "dressing-hightide",
+   "translation": [
+    26.04,
+    -0.864,
+    -21.19
+   ],
+   "rotationY": 4.31,
+   "scale": [
+    1.093,
+    2.921,
+    1.156
+   ]
+  },
+  {
+   "rock": "f",
+   "role": "dressing-hightide",
+   "translation": [
+    22.33,
+    -0.45,
+    -17.59
+   ],
+   "rotationY": -0.091,
+   "scale": [
+    1.149,
+    1.537,
+    0.849
+   ]
+  },
+  {
+   "rock": "c",
+   "role": "dressing-hightide",
+   "translation": [
+    23.02,
+    -0.45,
+    -18.27
+   ],
+   "rotationY": 0.569,
+   "scale": [
+    1.136,
+    3.169,
+    1.121
+   ]
+  },
+  {
+   "rock": "c",
+   "role": "dressing-hightide",
+   "translation": [
+    22.79,
+    -0.45,
+    -16.64
+   ],
+   "rotationY": 5.316,
+   "scale": [
+    0.817,
+    3.196,
+    0.837
+   ]
+  },
+  {
+   "rock": "d",
+   "role": "dressing-hightide",
+   "translation": [
+    19.76,
+    -0.45,
+    -18.16
+   ],
+   "rotationY": 5.359,
+   "scale": [
+    0.631,
+    2.14,
+    0.66
+   ]
+  },
+  {
+   "rock": "b",
+   "role": "dressing-hightide",
+   "translation": [
+    23.14,
+    -0.45,
+    -16.69
+   ],
+   "rotationY": 2.049,
+   "scale": [
+    1.146,
+    4.526,
+    1.342
+   ]
+  },
+  {
+   "rock": "f",
+   "role": "dressing-hightide",
+   "translation": [
+    8.69,
+    -1.95,
+    -35.98
+   ],
+   "rotationY": -0.504,
+   "scale": [
+    1.37,
+    2.585,
+    1.011
+   ]
+  },
+  {
+   "rock": "c",
+   "role": "dressing-hightide",
+   "translation": [
+    7.74,
+    -1.95,
+    -34.77
+   ],
+   "rotationY": 4.884,
+   "scale": [
+    0.613,
+    6.074,
+    0.561
+   ]
+  },
+  {
+   "rock": "b",
+   "role": "dressing-hightide",
+   "translation": [
+    9.37,
+    -1.95,
+    -34.87
+   ],
+   "rotationY": 0.551,
+   "scale": [
+    1.129,
+    6.91,
+    1.089
+   ]
+  },
+  {
+   "rock": "b",
+   "role": "dressing-hightide",
+   "translation": [
+    7.3,
+    -1.95,
+    -37.2
+   ],
+   "rotationY": 4.042,
+   "scale": [
+    0.594,
+    6.821,
+    0.643
+   ]
+  },
+  {
+   "rock": "b",
+   "role": "dressing-hightide",
+   "translation": [
+    10.73,
+    -1.95,
+    -35.61
+   ],
+   "rotationY": 1.115,
+   "scale": [
+    0.954,
+    7.079,
+    0.926
+   ]
+  },
+  {
+   "rock": "f",
+   "role": "dressing-hightide",
+   "translation": [
+    11.93,
+    -1.95,
+    -44.93
+   ],
+   "rotationY": 0.121,
+   "scale": [
+    1.802,
+    2.703,
+    1.333
+   ]
+  },
+  {
+   "rock": "b",
+   "role": "dressing-hightide",
+   "translation": [
+    8.74,
+    -1.95,
+    -45.37
+   ],
+   "rotationY": 2.237,
+   "scale": [
+    0.725,
+    6.645,
+    0.763
+   ]
+  },
+  {
+   "rock": "c",
+   "role": "dressing-hightide",
+   "translation": [
+    13.76,
+    -1.95,
+    -46.07
+   ],
+   "rotationY": 5.075,
+   "scale": [
+    0.691,
+    5.717,
+    0.563
+   ]
+  },
+  {
+   "rock": "d",
+   "role": "dressing-hightide",
+   "translation": [
+    14.18,
+    -1.95,
+    -45.49
+   ],
+   "rotationY": 1.838,
+   "scale": [
+    0.638,
+    3.693,
+    0.705
+   ]
+  },
+  {
+   "rock": "d",
+   "role": "dressing-hightide",
+   "translation": [
+    13.15,
+    -1.95,
+    -47.17
+   ],
+   "rotationY": 6.222,
+   "scale": [
+    1.133,
+    3.927,
+    0.964
+   ]
+  },
+  {
+   "rock": "d",
+   "role": "dressing-hightide",
+   "translation": [
+    13.43,
+    -1.95,
+    -41.35
+   ],
+   "rotationY": -0.64,
+   "scale": [
+    2.023,
+    3.756,
+    1.76
+   ]
+  },
+  {
+   "rock": "c",
+   "role": "dressing-hightide",
+   "translation": [
+    11.59,
+    -1.95,
+    -43.5
+   ],
+   "rotationY": 3.104,
+   "scale": [
+    1.267,
+    5.626,
+    1.161
+   ]
+  },
+  {
+   "rock": "b",
+   "role": "dressing-hightide",
+   "translation": [
+    13.46,
+    -1.95,
+    -40.21
+   ],
+   "rotationY": 1.456,
+   "scale": [
+    1.089,
+    6.727,
+    0.91
+   ]
+  },
+  {
+   "rock": "b",
+   "role": "dressing-hightide",
+   "translation": [
+    16.29,
+    -1.95,
+    -41.93
+   ],
+   "rotationY": 3.04,
+   "scale": [
+    1.216,
+    7.563,
+    1.406
+   ]
+  },
+  {
+   "rock": "d",
+   "role": "dressing-hightide",
+   "translation": [
+    17.5,
+    -1.95,
+    -42.95
+   ],
+   "rotationY": -0.64,
+   "scale": [
+    1.306,
+    3.509,
+    1.045
+   ]
+  },
+  {
+   "rock": "c",
+   "role": "dressing-hightide",
+   "translation": [
+    15.95,
+    -1.95,
+    -42.74
+   ],
+   "rotationY": 4.399,
+   "scale": [
+    0.73,
+    6.051,
+    0.738
+   ]
+  },
+  {
+   "rock": "b",
+   "role": "dressing-hightide",
+   "translation": [
+    18.86,
+    -1.95,
+    -41.15
+   ],
+   "rotationY": 2.727,
+   "scale": [
+    1.151,
+    7.599,
+    1.181
+   ]
+  },
+  {
+   "rock": "c",
+   "role": "dressing-hightide",
+   "translation": [
+    20.57,
+    -1.95,
+    -44.33
+   ],
+   "rotationY": 5.876,
+   "scale": [
+    0.678,
+    6.306,
+    0.677
+   ]
+  },
+  {
+   "rock": "b",
+   "role": "dressing-hightide",
+   "translation": [
+    20.15,
+    -1.95,
+    -44.62
+   ],
+   "rotationY": 4.932,
+   "scale": [
+    1.188,
+    6.669,
+    1.244
+   ]
+  },
+  {
+   "rock": "d",
+   "role": "dressing-hightide",
+   "translation": [
+    17,
+    -1.95,
+    -41.21
+   ],
+   "rotationY": 0.1,
+   "scale": [
+    1.265,
+    3.901,
+    1.048
+   ]
+  },
+  {
+   "rock": "d",
+   "role": "dressing-hightide",
+   "translation": [
+    18.12,
+    -1.95,
+    -37.96
+   ],
+   "rotationY": 0.473,
+   "scale": [
+    1.834,
+    3.843,
+    1.457
+   ]
+  },
+  {
+   "rock": "c",
+   "role": "dressing-hightide",
+   "translation": [
+    14.44,
+    -1.95,
+    -37.95
+   ],
+   "rotationY": 1.685,
+   "scale": [
+    0.831,
+    5.528,
+    0.879
+   ]
+  },
+  {
+   "rock": "d",
+   "role": "dressing-hightide",
+   "translation": [
+    18.43,
+    -1.95,
+    -39.86
+   ],
+   "rotationY": 3.592,
+   "scale": [
+    0.572,
+    3.918,
+    0.555
+   ]
+  },
+  {
+   "rock": "d",
+   "role": "dressing-hightide",
+   "translation": [
+    20.67,
+    -1.95,
+    -36.72
+   ],
+   "rotationY": 1.289,
+   "scale": [
+    0.675,
+    3.693,
+    0.665
+   ]
+  },
+  {
+   "rock": "c",
+   "role": "dressing-hightide",
+   "translation": [
+    18.62,
+    -1.95,
+    -37.76
+   ],
+   "rotationY": 3.883,
+   "scale": [
+    1.144,
+    5.688,
+    1.364
+   ]
+  },
+  {
+   "rock": "f",
+   "role": "dressing-hightide",
+   "translation": [
+    20.09,
+    -1.95,
+    -37.34
+   ],
+   "rotationY": 0.025,
+   "scale": [
+    1.903,
+    2.636,
+    1.369
+   ]
+  },
+  {
+   "rock": "d",
+   "role": "dressing-hightide",
+   "translation": [
+    24.06,
+    -1.95,
+    -37.84
+   ],
+   "rotationY": 5.258,
+   "scale": [
+    1.181,
+    3.603,
+    1.005
+   ]
+  },
+  {
+   "rock": "b",
+   "role": "dressing-hightide",
+   "translation": [
+    15.75,
+    -1.95,
+    -36.96
+   ],
+   "rotationY": 5.887,
+   "scale": [
+    0.859,
+    6.869,
+    0.94
+   ]
+  },
+  {
+   "rock": "b",
+   "role": "dressing-hightide",
+   "translation": [
+    18.2,
+    -1.95,
+    -39.05
+   ],
+   "rotationY": 0.055,
+   "scale": [
+    0.615,
+    6.738,
+    0.694
+   ]
+  },
+  {
+   "rock": "d",
+   "role": "dressing-hightide",
+   "translation": [
+    19.54,
+    -1.95,
+    -38.93
+   ],
+   "rotationY": 0.761,
+   "scale": [
+    0.573,
+    3.358,
+    0.642
+   ]
+  },
+  {
+   "rock": "d",
+   "role": "dressing-hightide",
+   "translation": [
+    18.11,
+    -1.95,
+    -37.55
+   ],
+   "rotationY": 3.761,
+   "scale": [
+    0.608,
+    3.879,
+    0.681
+   ]
+  },
+  {
+   "rock": "d",
+   "role": "dressing-hightide",
+   "translation": [
+    28.44,
+    -1.95,
+    -36.2
+   ],
+   "rotationY": -0.799,
+   "scale": [
+    2.013,
+    3.632,
+    1.312
+   ]
+  },
+  {
+   "rock": "d",
+   "role": "dressing-hightide",
+   "translation": [
+    28.7,
+    -1.95,
+    -35.78
+   ],
+   "rotationY": 1.245,
+   "scale": [
+    0.623,
+    3.77,
+    0.73
+   ]
+  },
+  {
+   "rock": "b",
+   "role": "dressing-hightide",
+   "translation": [
+    31.34,
+    -1.95,
+    -37.23
+   ],
+   "rotationY": 1.457,
+   "scale": [
+    1.029,
+    7.733,
+    1.126
+   ]
+  },
+  {
+   "rock": "d",
+   "role": "dressing-hightide",
+   "translation": [
+    24.02,
+    -1.95,
+    -37.95
+   ],
+   "rotationY": 2.766,
+   "scale": [
+    1.13,
+    3.821,
+    1.322
+   ]
+  },
+  {
+   "rock": "d",
+   "role": "dressing-hightide",
+   "translation": [
+    32.21,
+    -1.95,
+    -35.62
+   ],
+   "rotationY": -0.35,
+   "scale": [
+    2.22,
+    3.842,
+    1.186
+   ]
+  },
+  {
+   "rock": "b",
+   "role": "dressing-hightide",
+   "translation": [
+    34.47,
+    -1.95,
+    -37.6
+   ],
+   "rotationY": 2.716,
+   "scale": [
+    0.695,
+    7.862,
+    0.566
+   ]
+  },
+  {
+   "rock": "b",
+   "role": "dressing-hightide",
+   "translation": [
+    35.67,
+    -1.95,
+    -34.17
+   ],
+   "rotationY": 5.978,
+   "scale": [
+    0.935,
+    6.962,
+    1.092
+   ]
+  },
+  {
+   "rock": "b",
+   "role": "dressing-hightide",
+   "translation": [
+    31.85,
+    -1.95,
+    -34.48
+   ],
+   "rotationY": 1.451,
+   "scale": [
+    0.685,
+    6.74,
+    0.593
+   ]
+  },
+  {
+   "rock": "b",
+   "role": "dressing-hightide",
+   "translation": [
+    29.21,
+    -1.95,
+    -33.67
+   ],
+   "rotationY": 0.335,
+   "scale": [
+    1.262,
+    7.303,
+    1.167
+   ]
+  },
+  {
+   "rock": "f",
+   "role": "dressing-hightide",
+   "translation": [
+    35.26,
+    -1.95,
+    -37.51
+   ],
+   "rotationY": -0.654,
+   "scale": [
+    1.779,
+    2.461,
+    1.153
+   ]
+  },
+  {
+   "rock": "c",
+   "role": "dressing-hightide",
+   "translation": [
+    37.34,
+    -1.95,
+    -39.3
+   ],
+   "rotationY": 0.128,
+   "scale": [
+    0.763,
+    6.309,
+    0.792
+   ]
+  },
+  {
+   "rock": "c",
+   "role": "dressing-hightide",
+   "translation": [
+    37.85,
+    -1.95,
+    -39.4
+   ],
+   "rotationY": 2.655,
+   "scale": [
+    1.131,
+    5.585,
+    1.32
+   ]
+  },
+  {
+   "rock": "d",
+   "role": "dressing-hightide",
+   "translation": [
+    32.69,
+    -1.95,
+    -37.1
+   ],
+   "rotationY": 0.185,
+   "scale": [
+    0.857,
+    3.422,
+    0.936
+   ]
+  },
+  {
+   "rock": "f",
+   "role": "dressing-hightide",
+   "translation": [
+    38.11,
+    -1.95,
+    -36.44
+   ],
+   "rotationY": -0.524,
+   "scale": [
+    1.652,
+    2.437,
+    0.981
+   ]
+  },
+  {
+   "rock": "c",
+   "role": "dressing-hightide",
+   "translation": [
+    35.12,
+    -1.95,
+    -37.83
+   ],
+   "rotationY": 1.932,
+   "scale": [
+    1.157,
+    5.777,
+    1.224
+   ]
+  },
+  {
+   "rock": "d",
+   "role": "dressing-hightide",
+   "translation": [
+    35.37,
+    -1.95,
+    -35.23
+   ],
+   "rotationY": 3.93,
+   "scale": [
+    1.11,
+    3.772,
+    1.179
+   ]
+  },
+  {
+   "rock": "b",
+   "role": "dressing-hightide",
+   "translation": [
+    39.47,
+    -1.95,
+    -34.86
+   ],
+   "rotationY": 1.595,
+   "scale": [
+    1.061,
+    7.339,
+    0.88
+   ]
+  },
+  {
+   "rock": "f",
+   "role": "dressing-hightide",
+   "translation": [
+    40.08,
+    -1.95,
+    -34.18
+   ],
+   "rotationY": 0.387,
+   "scale": [
+    1.144,
+    2.695,
+    0.915
+   ]
+  },
+  {
+   "rock": "c",
+   "role": "dressing-hightide",
+   "translation": [
+    41.52,
+    -1.95,
+    -34.24
+   ],
+   "rotationY": 4.106,
+   "scale": [
+    0.569,
+    5.452,
+    0.662
+   ]
+  },
+  {
+   "rock": "c",
+   "role": "dressing-hightide",
+   "translation": [
+    40.16,
+    -1.95,
+    -33.19
+   ],
+   "rotationY": 3.674,
+   "scale": [
+    0.893,
+    5.42,
+    1.04
+   ]
+  },
+  {
+   "rock": "d",
+   "role": "dressing-hightide",
+   "translation": [
+    41.57,
+    -1.95,
+    -32.98
+   ],
+   "rotationY": 5.752,
+   "scale": [
+    0.802,
+    3.434,
+    0.672
+   ]
+  },
+  {
+   "rock": "d",
+   "role": "dressing-hightide",
+   "translation": [
+    39.38,
+    -1.95,
+    -35.01
+   ],
+   "rotationY": 0.804,
+   "scale": [
+    1.269,
+    3.391,
+    1.445
+   ]
+  },
+  {
+   "rock": "d",
+   "role": "dressing-hightide",
+   "translation": [
+    37.28,
+    -1.95,
+    -34.22
+   ],
+   "rotationY": 6.157,
+   "scale": [
+    0.948,
+    3.56,
+    0.845
+   ]
+  },
+  {
+   "rock": "f",
+   "role": "dressing-hightide",
+   "translation": [
+    8.6,
+    -0.221,
+    -5.9
+   ],
+   "rotationY": -0.179,
+   "scale": [
+    1.45,
+    1.854,
+    1.25
+   ]
+  },
+  {
+   "rock": "d",
+   "role": "dressing-hightide",
+   "translation": [
+    6.4,
+    -0.135,
+    -4.7
+   ],
+   "rotationY": -0.616,
+   "scale": [
+    1.9,
+    2.35,
+    1.7
+   ]
+  },
+  {
+   "rock": "f",
+   "role": "dressing-hightide",
+   "translation": [
+    11.6,
+    -0.269,
+    -6.6
+   ],
+   "rotationY": -0.503,
+   "scale": [
+    1.25,
+    1.666,
+    1.1
+   ]
+  },
+  {
+   "rock": "d",
+   "role": "dressing-hightide",
+   "translation": [
+    10.6,
+    -0.134,
+    -4.6
+   ],
+   "rotationY": 0.145,
+   "scale": [
+    1.5,
+    2.167,
+    1.35
+   ]
+  },
+  {
+   "rock": "c",
+   "role": "dressing-hightide",
+   "translation": [
+    6.7,
+    -0.265,
+    -6.46
+   ],
+   "rotationY": 3.854,
+   "scale": [
+    1.005,
+    0.958,
+    0.886
+   ]
+  },
+  {
+   "rock": "c",
+   "role": "dressing-hightide",
+   "translation": [
+    11.41,
+    -0.099,
+    -4.11
+   ],
+   "rotationY": 6.071,
+   "scale": [
+    1.009,
+    1.051,
+    1.115
+   ]
+  },
+  {
+   "rock": "b",
+   "role": "dressing-hightide",
+   "translation": [
+    8.82,
+    -0.071,
+    -3.8
+   ],
+   "rotationY": 4.37,
+   "scale": [
+    1.112,
+    1.302,
+    1.303
+   ]
+  },
+  {
+   "rock": "d",
+   "role": "dressing-hightide",
+   "translation": [
+    12.03,
+    -0.12,
+    -4.42
+   ],
+   "rotationY": 1.785,
+   "scale": [
+    0.685,
+    0.669,
+    0.665
+   ]
+  },
+  {
+   "rock": "b",
+   "role": "dressing-hightide",
+   "translation": [
+    7.83,
+    -0.11,
+    -4.33
+   ],
+   "rotationY": 3.219,
+   "scale": [
+    0.841,
+    0.831,
+    0.697
+   ]
+  }
+ ],
+ "nodes": {
+  "env-rock-shore-a": {
+   "file": "models/env/env-rock-shore-a.glb",
+   "instanced": true
+  },
+  "env-rock-shore-b": {
+   "file": "models/env/env-rock-shore-b.glb",
+   "instanced": true
+  },
+  "env-rock-shore-c": {
+   "file": "models/env/env-rock-shore-c.glb",
+   "instanced": true
+  },
+  "env-rock-shore-d": {
+   "file": "models/env/env-rock-shore-d.glb",
+   "instanced": true
+  },
+  "env-rock-shore-e": {
+   "file": "models/env/env-rock-shore-e.glb",
+   "instanced": true
+  },
+  "env-rock-shore-f": {
+   "file": "models/env/env-rock-shore-f.glb",
+   "instanced": true
+  },
+  "env-tidal-flat-s1": {
+   "file": "models/env/env-tidal-flat-s1.glb",
+   "translation": [
+    4,
+    0,
+    -3
+   ],
+   "rotationY": 0
+  },
+  "pierFrame": {
+   "mid": [
+    -3.3899999999999997,
+    -9.8
+   ],
+   "rotationY": -1.23594,
+   "landEnd": [
+    -10,
+    -7.5
+   ],
+   "seaEnd": [
+    3.22,
+    -12.1
+   ]
+  },
+  "env-pier-wood-ch1": {
+   "file": "models/env/env-pier-wood-ch1.glb",
+   "translation": [
+    -3.39,
+    0,
+    -9.8
+   ],
+   "rotationY": -1.23594,
+   "rotationYDeg": -70.81
+  },
+  "prop-boat-rowboat": {
+   "file": "models/props/prop-boat-rowboat.glb",
+   "translation": [
+    5.508,
+    1.36,
+    -10.757
+   ],
+   "rotationY": -1.70407,
+   "rotationYDeg": -97.64,
+   "seabedY": -0.44,
+   "mooredTo": "env-pier-wood-ch1-mooring-post-top",
+   "bowRingWorld": [
+    4.071,
+    1.98,
+    -10.95
+   ],
+   "was": {
+    "translation": [
+     0.182,
+     1.36,
+     -13.531
+    ],
+    "rotationY": -1.11594
+   },
+   "note": "返工 1029：涨潮 1.6 漂浮，系在码头尽头 +X 系船桩上，船头朝桩（船头环离桩中心 0.7 m，= 码头节点 env-pier-wood-ch1-rope-bow-end）。y 随水位：水面 − 0.24；退潮搁在泥上（此处海床 y ≈ -0.44）"
+  },
+  "prop-boat-rowboat-sunken": {
+   "file": "models/props/prop-boat-rowboat-sunken.glb",
+   "translation": [
+    10.2,
+    -1.15,
+    -17
+   ],
+   "rotationY": 0.6,
+   "rotationXDeg": 9,
+   "rotationZDeg": -21,
+   "note": "半埋在退潮线外的泥沙里，退潮时露出船舷"
+  },
+  "env-shore-ledge-s1": {
+   "file": "models/env/env-shore-ledge-s1.glb",
+   "translation": [
+    -12.74,
+    0,
+    -6.25
+   ],
+   "rotationY": 0
+  },
+  "env-cliff-s1": {
+   "file": "models/env/env-cliff-s1.glb",
+   "translation": [
+    4,
+    0,
+    17
+   ],
+   "rotationY": 0
+  },
+  "env-fish-shed-ruin": {
+   "file": "models/env/env-fish-shed-ruin.glb",
+   "translation": [
+    18.73,
+    0,
+    1.46
+   ],
+   "rotationY": 0
+  },
+  "env-net-rack-a": {
+   "file": "models/env/env-net-rack-a.glb",
+   "translation": [
+    16.25,
+    0,
+    -2.25
+   ],
+   "rotationY": 0
+  },
+  "env-net-rack-b": {
+   "file": "models/env/env-net-rack-b.glb",
+   "translation": [
+    17.31,
+    0,
+    8.13
+   ],
+   "rotationY": 0
+  },
+  "env-lighthouse-silhouette-far": {
+   "file": "models/env/env-lighthouse-silhouette-far.glb",
+   "instances": [
+    {
+     "translation": [
+      23.1,
+      -0.5,
+      -321.9
+     ],
+     "rotationY": -0.8,
+     "scale": 0.8
+    },
+    {
+     "translation": [
+      142.9,
+      -0.5,
+      -268.5
+     ],
+     "rotationY": 1.9,
+     "scale": 0.72
+    }
+   ],
+   "note": "S1 两处远景小塔，分在主灯塔两侧（开场画面横向约 41 % 和 73 %，对齐概念图）；主灯塔 = env-lighthouse-island-main-s3tower + 020 塔（约 58.5 %）。S2、S3 按各自构图另摆"
+  },
+  "env-lighthouse-island-main-s3tower": {
+   "file": "models/env/env-lighthouse-island-main-s3tower.glb",
+   "translation": [
+    39.73,
+    0,
+    -122.75
+   ],
+   "rotationY": -0.19,
+   "note": "S1 主灯塔岛（正式组合，占位坐标；正式坐标 013 与 S3 一起定）。开场镜头 (-0.9,4.2,9.5) 水平看向 (6.58,4.2,-29.78)，岛沿视线从 110.7 m 推到 138.4 m（1.25×）：画面横向约 58.5 %；涨潮 1.6 时水面到塔尖 ≈ 30.9 m ≈ 画面高 0.31（约 1/3）。塔由插槽 lighthouse-ch1-socket 实例化 020 env-lighthouse-ch1（1.0 比例）",
+   "socketInstances": [
+    {
+     "socket": "lighthouse-ch1-socket",
+     "instance": "env-lighthouse-ch1",
+     "file": "models/env/env-lighthouse-ch1.glb",
+     "scale": 1,
+     "lodByTier": {
+      "ultra": 1,
+      "high": 2,
+      "standard": 2
+     },
+     "previewLod": 2,
+     "worldRotationY": 2.356194490192345,
+     "worldRotationYDeg": 135,
+     "socketLocalRotationY": 2.54619,
+     "socketY": 6.6
+    }
+   ]
+  }
+ },
+ "authority": "game/src/levels/s1/layout.ts",
+ "worldFrames": {
+  "s3": {
+   "authority": "layout.ts S3_WORLD_FRAME",
+   "towerCenter": [
+    39.73,
+    0,
+    -122.75
+   ],
+   "rotationY": 2.35619,
+   "rotationYDeg": 135,
+   "islandRotationY": -0.19,
+   "socketY": 6.6,
+   "formula": "S3 局部 → 世界：world = R_y(135°)·local + towerCenter（three.js R_y）",
+   "s1SocketInstanceWorldRotYDeg": 135,
+   "towerBaseYNote": "015 注意：S3 场景里塔基 y 0（= S3 低潮 0）；S1 远景插槽里同一座塔实例的塔基在 y 6.6（岛台面 7.4 − 0.8）。两者不是同一套高度，S3 场景放进世界时 y 不跟 6.6 对齐（layout.ts 遗留项，留给 015）"
+  }
+ },
+ "axes": {
+  "north": "+Z",
+  "east": "-X",
+  "west": "+X",
+  "up": "+Y",
+  "units": "m"
+ },
+ "keyHeights": {
+  "pierDeck": 2.2,
+  "bellPlatform": 2.4,
+  "reefPathTops": [
+   0.36,
+   0.55
+  ],
+  "raftDeckGrounded": 0.4,
+  "raftDeckFloating": 1.85,
+  "reefStairsBottom": 0.2,
+  "farStepsTop": 4.91,
+  "plateau": 5.2,
+  "nearPlatform": 1.85,
+  "farLowestStep": 1.85,
+  "channelFloor": -0.5,
+  "sand": 0.1,
+  "tideLow": 0,
+  "tideHigh": 1.6
+ },
+ "points": {
+  "spawnStart": [
+   2.277,
+   2.2,
+   -11.772
+  ],
+  "bellAnchor": [
+   -15.5,
+   2.4,
+   -6.2
+  ],
+  "bellAnchorOriginAt": "钟轴正下方站台面点 = prop-tide-bell 根原点（021：根节点直接对齐本挂点，不加偏移、不缩放）",
+  "safePoint": [
+   -12.5,
+   2.4,
+   -4
+  ],
+  "reefPath": [
+   [
+    -5.9,
+    0.42,
+    -3
+   ],
+   [
+    -4.5,
+    0.5,
+    -1.9
+   ],
+   [
+    -3.2,
+    0.38,
+    -0.7
+   ],
+   [
+    -2,
+    0.55,
+    0.5
+   ],
+   [
+    -0.8,
+    0.45,
+    1.6
+   ],
+   [
+    0.4,
+    0.36,
+    2.6
+   ]
+  ],
+  "reefPathFormat": "[x, 顶面 y, z]（返工 1029：原 [x, z]）",
+  "reefPathEnd": [
+   1.8,
+   0.1,
+   3.4
+  ],
+  "raftHome": [
+   9.1,
+   0.4,
+   10.5
+  ],
+  "stoneSlot": [
+   -0.9,
+   0.4,
+   10.5
+  ],
+  "raftNote": "浮台中心 = 搁浅甲板顶 0.4（layout.ts raft.home / slot；原 y 0.1 = 沙面）",
+  "stoneSlotBox": {
+   "min": [
+    -1.9,
+    9
+   ],
+   "max": [
+    0.1,
+    12
+   ]
+  },
+  "linkNear": [
+   -0.9,
+   1.85,
+   8.5
+  ],
+  "linkFar": [
+   -0.9,
+   1.85,
+   12.5
+  ],
+  "exitToS2": [
+   -9.6,
+   5.2,
+   21
+  ],
+  "reefStairs": {
+   "x0": -10,
+   "run": 0.32,
+   "rise": 0.2,
+   "count": 11,
+   "z": [
+    -3.8,
+    -2.2
+   ]
+  },
+  "farSteps": {
+   "x": [
+    -2.4,
+    0.6
+   ],
+   "z0": 12.5,
+   "landing": 1,
+   "count": 18,
+   "rise": 0.17,
+   "run": 0.3333,
+   "baseY": 1.85,
+   "topZ": 19.5,
+   "topY": 4.91
+  },
+  "plateau": {
+   "min": [
+    -12,
+    19.5
+   ],
+   "max": [
+    0.6,
+    23.5
+   ],
+   "topY": 5.2
+  },
+  "ridge": [
+   [
+    -12,
+    2.35,
+    -2.2
+   ],
+   [
+    -11,
+    2.25,
+    0.5
+   ],
+   [
+    -9,
+    2.1,
+    3
+   ],
+   [
+    -6.5,
+    1.95,
+    5.4
+   ],
+   [
+    -4.4,
+    1.85,
+    6.6
+   ]
+  ],
+  "ridgeFormat": "[x, 顶面 y, z]（返工 1029：原 [x, z, y]）",
+  "fishShed": [
+   18.73,
+   0,
+   1.46
+  ],
+  "netRacks": [
+   [
+    16.25,
+    0,
+    -2.25
+   ],
+   [
+    17.31,
+    0,
+    8.13
+   ]
+  ]
+ },
+ "triangles": {
+  "lod": [
+   3119116,
+   1561094,
+   764473
+  ],
+  "instances": 164,
+  "instanceTris": [
+   2340080,
+   1170040,
+   571374
+  ],
+  "socketInstanceTris": {
+   "env-lighthouse-ch1": [
+    43980,
+    21268,
+    10440
+   ]
+  },
+  "budget": [
+   4000000,
+   2300000,
+   1000000
+  ]
+ }
+}

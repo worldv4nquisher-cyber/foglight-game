@@ -1,0 +1,180 @@
+<!doctype html>
+<!-- v0.1-029 S2 / S3 光照贴图对比页（S1 见 lightmap029.html，写法相同）。由 ../render-preview-web.mjs --page lightmap029-s23.html --jobs … 驱动。
+     ?scene=s2|s3   &mode=irr|lit|hemi（同 S1 页）   &lod=0|1|2   &lmi=1（lightMapIntensity 倍数，对比室内用）
+     S2 view: entry（入口南石阶顶）| court（小院 + 晾衣架）| clifftop | room（一楼）| upper（二楼）| cellar
+     S3 view: bridge（从 S2 过来的石桥头）| islet | room（塔内底层）| mid（塔内 10 m 平台）| lamp（灯室）
+     遮挡物：门扇按打开 −100° 摆（同烘焙），S3 潮汐钟挂礁岛锚点；都不挂光照贴图（irr 下灰色） -->
+<html><head><meta charset="utf-8"><style>html,body{margin:0;background:#000;overflow:hidden}#cap{position:absolute;left:10px;bottom:8px;color:#e8ecee;text-shadow:0 1px 2px #000;font:13px sans-serif}</style>
+<script type="importmap">{"imports":{"three":"/three/build/three.module.js","three/addons/":"/three/examples/jsm/"}}</script>
+</head><body><div id="cap"></div>
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
+import { KTX2Loader } from 'three/addons/loaders/KTX2Loader.js';
+const Q = new URLSearchParams(location.search);
+const LMI = +(Q.get('lmi') ?? 1), SC = Q.get('scene') ?? 's2', mode = Q.get('mode') ?? 'irr', view = Q.get('view') ?? (SC === 's2' ? 'entry' : 'bridge'), LOD = +(Q.get('lod') ?? 0);
+const W = innerWidth, H = innerHeight;
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(1); renderer.setSize(W, H); renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = mode === 'irr' ? THREE.NoToneMapping : THREE.AgXToneMapping;
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(mode === 'irr' ? '#202428' : '#B9C2C8');
+if (mode !== 'irr') scene.fog = new THREE.FogExp2('#B9C2C8', 0.009);
+// game/src/config/atmosphere.ts overcast-after-rain / overcast-dusk（都用 DUSK_LIGHT）
+if (mode !== 'irr') {
+  scene.add(new THREE.HemisphereLight(0x8c9cab, 0x1c2024, 1.6));
+  const sun = new THREE.DirectionalLight(0xa9b8c8, 2.4); sun.position.set(-12, 18, -8).normalize().multiplyScalar(60);
+  sun.castShadow = true; sun.shadow.mapSize.set(4096, 4096); Object.assign(sun.shadow.camera, { left: -45, right: 45, top: 45, bottom: -45, near: 1, far: 160 });
+  sun.shadow.bias = -0.0005; sun.shadow.normalBias = 0.03; scene.add(sun, sun.target);
+}
+const ktx2 = new KTX2Loader().setTranscoderPath('/three/examples/jsm/libs/basis/').detectSupport(renderer);
+const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).setKTX2Loader(ktx2);
+const load = (u) => new Promise((ok, err) => loader.load(u, (g) => ok(g.scene), undefined, err));
+const loadTex = (u) => new Promise((ok, err) => ktx2.load(u, ok, undefined, err));
+const L = await (await fetch(`/source/env/${SC}-layout.json`)).json();
+
+// ---- RGBM8 解码（= 交付说明里给程序的写法）：lightMap 采样 rgb·a·8；挂了光照贴图就不再加半球光
+// v0.1-029 室内补光对比：?fill=E（只加在室内节点，冷色，E 单位同光照贴图）、?pts=倍数（解谜点冷色实时点光）
+const FILL = +(Q.get('fill') ?? 0), PTS = +(Q.get('pts') ?? 0), FILL_RGB = [0.86, 0.94, 1.0];
+const INTERIOR = new Set(['env-keeper-house-ch1-interior', 'env-cellar-s2', 'env-lighthouse-ch1-interior', 'env-lamp-room-ch1']);
+function rgbmLightMap(mat, fill = 0) {
+  const f = fill ? `vec3(${FILL_RGB.map((c) => (c * fill).toFixed(5)).join(',')})` : 'vec3(0.0)';
+  mat.onBeforeCompile = (sh) => {
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <lights_fragment_begin>', THREE.ShaderChunk.lights_fragment_begin.replace('irradiance += getHemisphereLightIrradiance( hemisphereLights[ i ], geometryNormal );', ''))
+      .replace('#include <lights_fragment_maps>', THREE.ShaderChunk.lights_fragment_maps.replace('vec3 lightMapIrradiance = lightMapTexel.rgb * lightMapIntensity;', `vec3 lightMapIrradiance = (lightMapTexel.rgb * lightMapTexel.a * 8.0 + ${f}) * lightMapIntensity;`))
+      // MeshBasicMaterial 的光照贴图在主体 frag 里
+      .replace('reflectedLight.indirectDiffuse += lightMapTexel.rgb * lightMapIntensity * RECIPROCAL_PI;', `reflectedLight.indirectDiffuse += (lightMapTexel.rgb * lightMapTexel.a * 8.0 + ${f}) * lightMapIntensity * RECIPROCAL_PI;`);
+  };
+  mat.customProgramCacheKey = () => 'rgbm8' + f;
+}
+const lmCache = {};
+const getLM = async (name) => (lmCache[name] ??= loadTex(Q.has('lmalt') && /^tex-s[23]-interior-lightmap\.ktx2$/.test(name) ? `/source/bake/${SC}/cmp/${name.replace('.ktx2', '')}-${Q.get('lmalt')}.ktx2` : Q.has('isletalt') && name === 'tex-s3-islet-lightmap.ktx2' ? `/source/bake/s3/cmp/tex-s3-islet-lightmap-${Q.get('isletalt')}.ktx2` /* 对比：?isletalt=pre = 塔内补光前的礁岛图 */ : `/textures/${name}`).catch((e) => { (window.lmErr ??= []).push(`${name}: ${e?.message ?? e}`); console.error('lightmap load', name, e); return null; }).then((t) => { if (!t) return null; t.channel = 1; t.colorSpace = THREE.NoColorSpace; t.flipY = false; if (Q.has('nomip')) { t.minFilter = THREE.LinearFilter; } /* 调试：只用 mip0，查小分块 mip 串色 */ t.needsUpdate = true; return t; }));
+
+const LM_NODES = { s2: ['env-clifftop-s2', 'env-keeper-house-ch1', 'env-courtyard-wall-s2', 'env-laundry-rack', 'env-keeper-house-ch1-interior', 'env-cellar-s2'], s3: ['env-lighthouse-ch1', 'env-rock-islet-a', 'env-stone-bridge-s3', 'env-lighthouse-ch1-interior', 'env-lamp-room-ch1'] }[SC];
+const white = new THREE.MeshBasicMaterial({ color: 0xffffff });
+async function prep(root, lmName, fill = 0) {
+  const lm = lmName && mode !== 'hemi' ? await getLM(lmName) : null;
+  const todo = [];
+  root.traverse((o) => {
+    if (!o.isMesh) return;
+    const n = o.name;
+    if (/-(collider|wall)$/.test(n)) { o.visible = false; return; }
+    const m = /_lod(\d)$/.exec(n); if (m && +m[1] !== LOD) { o.visible = false; return; }
+    if (/rope-high$/.test(n)) { o.visible = false; return; }
+    if (o.isLOD) return;
+    todo.push(o);
+  });
+  root.traverse((o) => { if (o.isLOD) { o.autoUpdate = false; o.levels.forEach((l, i) => (l.object.visible = i === LOD)); } });
+  for (const o of todo) {
+    o.castShadow = o.receiveShadow = true;
+    const mats = Array.isArray(o.material) ? o.material : [o.material];
+    const out = mats.map((mt) => {
+      mt.vertexColors = false;
+      if (mode === 'irr') {
+        if (!lm) { const b = new THREE.MeshBasicMaterial({ color: 0x404448 }); return b; }
+        const b = new THREE.MeshBasicMaterial({ color: 0xffffff, lightMap: lm, lightMapIntensity: Math.PI * LMI, alphaMap: mt.alphaMap, alphaTest: mt.alphaTest, alphaHash: mt.alphaHash, map: null });
+        if (mt.alphaHash || mt.transparent) { b.map = mt.map; b.color.set(0xffffff); }
+        rgbmLightMap(b, fill); return b;
+      }
+      if (lm) { const c = mt.clone(); c.lightMap = lm; c.lightMapIntensity = LMI; rgbmLightMap(c, fill); return c; }
+      return mt;
+    });
+    o.material = Array.isArray(o.material) ? out : out[0];
+  }
+  return root;
+}
+const place = (o, pl) => { o.position.set(...pl.translation); o.rotation.order = 'YXZ'; o.rotation.y = pl.rotationY ?? 0; };
+try {
+  const ONLY = Q.get('only'); // 调试：只显示某个节点（逗号分隔），用于查墙缝里看到的是谁
+  for (const n of LM_NODES.filter((n) => !ONLY || ONLY.split(',').includes(n))) { const pl = L.nodes[n]; const o = await prep(await load(`/${pl.file}`), null); 
+    // 读 GLB 根 extras.lightmap.texture
+    let tex = null; o.traverse((q) => { if (!tex && q.userData?.lightmap?.texture) tex = q.userData.lightmap.texture; });
+    if (tex && mode !== 'hemi') await prep(o, tex, INTERIOR.has(n) ? FILL : 0);
+    place(o, pl); scene.add(o); }
+  // 遮挡物道具（同 s1-lightmap.json occluders：潮汐钟挂岸台锚点、沉船；不挂光照贴图，irr 下为灰）
+  const occMat = (m) => (mode === 'irr' ? new THREE.MeshBasicMaterial({ color: 0x404448 }) : m);
+  const prepOcc = (o) => { o.traverse((q) => { if (!q.isMesh) return; if (/-(collider|wall|interact)$/.test(q.name)) { q.visible = false; return; } const m = /_lod(\d)$/.exec(q.name); if (m && +m[1] !== 0) { q.visible = false; return; } q.castShadow = q.receiveShadow = true; if (q.material) q.material.vertexColors = false; q.material = occMat(q.material); }); o.traverse((q) => { if (q.isLOD) { q.autoUpdate = false; q.levels.forEach((l, i) => (l.object.visible = i === 0)); } }); return o; };
+  const D = Math.PI / 180;
+  const putOcc = async (file, tr, eulDeg) => { const o = prepOcc(await load(file)); o.position.set(...tr); o.rotation.order = 'YXZ'; o.rotation.set(eulDeg[0] * D, eulDeg[1] * D, eulDeg[2] * D); scene.add(o); };
+  if (SC === 's2') await putOcc('/models/env/env-cellar-door-s2.glb', [0.985, 0, 3.86], [0, -100, 0]);
+  if (SC === 's3') { await putOcc('/models/env/env-lighthouse-ch1-door.glb', [-2.6304, 2.4, -1.8668], [0, -415, 0]);
+    const bell = prepOcc(await load('/models/props/prop-tide-bell.glb')); scene.updateMatrixWorld(true); const anc = scene.getObjectByName('tide-bell-s3-socket'); if (anc) anc.add(bell); else (window.lmErr ??= []).push('no tide-bell-s3-socket'); }
+  // v0.1-029 解谜物件可读性：?props=C|A0 把道具挂到 socket 上，用「所在台面的烘焙 E」做常量环境光（≈ 程序用探针时的效果；去掉半球光）。E = 地窖地面背衬板重烘后（/tmp/lm-s2d）（台面法线朝上的覆盖像素中位数）
+  if (Q.has('props') && SC === 's2' && mode !== 'hemi') {
+    const PE = { C: { key: [0.0843, 0.0922, 0.0981], sketch: [0.0847, 0.0926, 0.0985], journal: [0.0579, 0.0638, 0.0684], cups: [0.0917, 0.1012, 0.1084] },
+                 A0: { key: [0.0001, 0.0001, 0.0001], sketch: [0.0001, 0.0002, 0.0002], journal: [0.0024, 0.0032, 0.0039], cups: [0.007, 0.0085, 0.0099] } }[Q.get('props')] ?? {};
+    scene.updateMatrixWorld(true);
+    for (const [file, sock, k] of [['prop-key-cellar-s2', 'env-cellar-s2-key-socket', 'key'], ['prop-sketch-window', 'env-cellar-s2-sketch-socket', 'sketch'], ['prop-journal-father', 'env-keeper-house-ch1-interior-journal-socket', 'journal'], ['prop-cup-tin', 'env-keeper-house-ch1-interior-cups-socket', 'cups']]) {
+      const anc = scene.getObjectByName(sock); if (!anc) { (window.lmErr ??= []).push('no ' + sock); continue; }
+      const o = await load(`/models/props/${file}.glb`).catch(() => null); if (!o) { (window.lmErr ??= []).push('no ' + file); continue; }
+      const e = PE[k] ?? [0, 0, 0], mx = Math.max(...e, 1e-6);
+      const t = new THREE.DataTexture(new Uint8Array([...e.map((c) => Math.round((255 * c) / mx)), 255]), 1, 1); t.needsUpdate = true; t.colorSpace = THREE.NoColorSpace;
+      o.traverse((q) => { if (!q.isMesh) return; if (/-(collider|wall|interact)$/.test(q.name)) { q.visible = false; return; } const m = /_lod(\d)$/.exec(q.name); if (m && +m[1] !== 0) { q.visible = false; return; }
+        q.castShadow = q.receiveShadow = true;
+        q.material = (Array.isArray(q.material) ? q.material : [q.material]).map((mt) => { if (mode === 'irr') return new THREE.MeshBasicMaterial({ color: 0xff40ff });
+          const c = mt.clone(); c.vertexColors = false; if (Q.has('keymat') && k === 'key') { const [km, kr] = Q.get('keymat').split(',').map(Number); c.metalness = km; c.roughness = kr; } /* 调试：?keymat=金属度,粗糙度（覆盖 GLB 里的 factor） */ c.lightMap = t; c.lightMapIntensity = (mx / 8) * LMI; rgbmLightMap(c); return c; });
+        if (q.material.length === 1) q.material = q.material[0]; });
+      anc.add(o);
+    }
+  }
+  // 解谜点补光（方案 B）：冷色 #C4D2DE，无阴影，distance 4.5 m，decay 2；基准强度 cd × PTS
+  // v0.1-029 S3 塔内补光对比：?props=1 把解谜物件挂到 socket（同 game/src/levels/s3 artSlots / dressing 的挂点），常量环境光 = 该变体在 socket 0.6 m 内的烘焙 E 中位数（≈ 程序 SH 探针），去掉半球光
+  if (Q.has('props') && SC === 's3' && mode !== 'hemi') {
+    const PE3 = await (await fetch(`/source/bake/s3/cmp/propsE-${Q.get('lmalt') ?? 'A0'}.json`)).json().catch(() => ({}));
+    scene.updateMatrixWorld(true);
+    for (const [file, sock] of [['prop-oil-valve-s3', 'oil-valve-s3-socket'], ['prop-guide-mirror-window-s3', 'guide-mirror-s3-window-socket'], ['prop-guide-mirror-wall-s3-a', 'guide-mirror-s3-mid-a-socket'], ['prop-guide-mirror-wall-s3-b', 'guide-mirror-s3-mid-b-socket'], ['prop-ignition-port-s3', 'ignition-port-s3-socket'], ['prop-letter-b', 'ignition-note-read'], ['prop-logbook-s3', 'logbook-s3-read']]) {
+      const anc = scene.getObjectByName(sock); if (!anc) { (window.lmErr ??= []).push('no ' + sock); continue; }
+      const o = await load(`/models/props/${file}.glb`).catch(() => null); if (!o) { (window.lmErr ??= []).push('no ' + file); continue; }
+      const e = PE3[sock] ?? [0.001, 0.001, 0.001], mx = Math.max(...e, 1e-6);
+      const t = new THREE.DataTexture(new Uint8Array([...e.map((c) => Math.round((255 * c) / mx)), 255]), 1, 1); t.needsUpdate = true; t.colorSpace = THREE.NoColorSpace;
+      o.traverse((q) => { if (!q.isMesh) return; if (/-(collider|wall|interact)$/.test(q.name)) { q.visible = false; return; } const m = /_lod(\d)$/.exec(q.name); if (m && +m[1] !== 0) { q.visible = false; return; }
+        q.castShadow = q.receiveShadow = true;
+        q.material = (Array.isArray(q.material) ? q.material : [q.material]).map((mt) => { if (mode === 'irr') return new THREE.MeshBasicMaterial({ color: 0xff40ff });
+          const c = mt.clone(); c.vertexColors = false; c.lightMap = t; c.lightMapIntensity = (mx / 8) * LMI; rgbmLightMap(c); return c; });
+        if (q.material.length === 1) q.material = q.material[0]; });
+      const wp = anc.getWorldPosition(new THREE.Vector3()); o.position.copy(wp); scene.add(o); /* 只取 socket 位置，不继承 socket 旋转（同 dressing 的 W() + yaw 0） */
+    }
+  }
+  // v0.1-029 钥匙点光：?pt2=x,y,z,cd[,distance] 覆盖第 2 盏（预览坐标 = env-cellar-s2 本地 + (−2, 0, 1)；cd 为绝对值，不乘 pts；默认 distance 4.5）
+  const PT2 = Q.has('pt2') ? Q.get('pt2').split(',').map(Number) : null;
+  if ((PTS || PT2) && mode !== 'irr' && SC === 's2') for (const [p, cd, dist] of [[[-4.6, 2.3, 3.2], 1.2 * PTS, 4.5], [[-4.4, 5.0, 0.4], 1.2 * PTS, 4.5], PT2 ? [PT2.slice(0, 3), PT2[3], PT2[4] ?? 4.5] : [[-1.7, -0.5, 1.6], 0.8 * PTS, 4.5]].filter((_, i) => !Q.has('ptsi') || Q.get('ptsi').split(',').includes(String(i)))) { // ?ptsi=2 只开地窖木架那盏
+    const pl = new THREE.PointLight(0xc4d2de, cd, dist, 2); pl.position.set(...p); scene.add(pl); }
+  const cam = new THREE.PerspectiveCamera(40, W / H, 0.1, 3000);
+  const look = (p, t, fov) => { cam.position.set(...p); cam.lookAt(...t); cam.fov = fov; cam.updateProjectionMatrix(); };
+  const V = {
+    s2: { entry: [[0, 1.6, -12.5], [-2, 2.5, 1], 55], court: [[-14, 3, -9], [-6, 1, 0], 55], clifftop: [[18, 8, -14], [0, 0, 6], 55],
+          room: [[-4.1, 1.6, -1.0], [0.5, 1.0, 3], 75], upper: [[-5, 4.6, -1], [1, 3.8, 3], 75], cellar: [[0.8, -1.2, 0.0], [-2.35, -1.6, 1.6], 75],
+          lock: [[-1.6, 1.7, 0.6], [-4.8, 0.9, 4], 70], desk: [[-2.4, 4.7, 1.6], [-4.7, 3.5, -0.3], 70], shelf: [[0, 0, 0], [0, 0, -1], 55], journal: [[0, 0, 0], [0, 0, -1], 55],
+          cellarentry: [[0.6, -0.25, 1.0], [-2.35, -1.3, 1.35], 60] }, // v0.1-029 钥匙材质：地窖入口 = 下楼梯第 9 级（y -1.8，眼高 1.55 m，视线刚过一层地板搁栅）看向钥匙 socket
+    s3: { bridge: [[-22.6, 4.6, -22.6], [0, 9, 0], 50], islet: [[-12, 6, 12], [2, 1, -2], 55],
+          room: [[-2, 3.8, -1.6], [2, 2.6, 1.6], 80], mid: [[-2.4, 11.6, 0.3], [2, 10.4, 0], 80], lamp: [[-2.2, 23.4, -1.2], [2, 22.4, 1.2], 80],
+          // v0.1-029 塔内补光：解谜物件机位（导光镜用 env 里的 -cam 节点；其余 = 站位眼高看向 socket）
+          valve: [[0.75, 1.75, 1.45], [0.99, 0.9, 2.73], 60], winmirror: [[0.2, 2.5, -1.4], [2.35, 1.35, 0], 60], mirrora: [[-2.3766, 11.6, 0.334], [-0.9959, 10.6, 0.8356], 60],
+          mirrorb: [[1.7835, 17.6, -1.6059], [1.2803, 16.6, -0.2257], 60], logbook: [[-1.35, 4.05, 0.1], [-2.55, 3.38, -1.23], 60], note: [[0.6, 23.5, 1.1], [-0.9408, 22.03, 0.1322], 60],
+          stairs: [[-0.6, 5.6, 0.9], [1.6, 4.2, -1.9], 75], wallfoot: [[-1.3, 1.5, -0.7], [2.1, 0.45, 1.5], 70], floor: [[-0.2, 2.2, -2.2], [0.3, 0.3, 0.9], 75] },
+  }[SC][view];
+  look(...V);
+  // v0.1-029：解谜物件近景 = 互动站位眼高 1.55 m 看向 socket（玩家实际看到的角度）
+  if (SC === 's2' && (view === 'shelf' || view === 'journal')) { scene.updateMatrixWorld(true);
+    const [ia, sa] = view === 'shelf' ? ['env-cellar-s2-shelf-interact', 'env-cellar-s2-key-socket'] : ['env-keeper-house-ch1-interior-desk-interact', 'env-keeper-house-ch1-interior-journal-socket'];
+    const pa = scene.getObjectByName(ia).getWorldPosition(new THREE.Vector3()), pb = scene.getObjectByName(sa).getWorldPosition(new THREE.Vector3());
+    look([pa.x, pa.y + 1.55, pa.z], [pb.x, pb.y, pb.z], 55); }
+  document.getElementById('cap').textContent = Q.has('cap') ? Q.get('cap') : `029 ${SC.toUpperCase()} ${mode} · ${view} · LOD${LOD}` + (LMI !== 1 ? ` · lightMapIntensity ×${LMI}` : '') + (FILL ? ` · 室内补光 E=${FILL}` : '') + (PTS ? ` · 解谜点补光 ×${PTS}` : '') + (window.lmErr ? ` · ⚠ ${window.lmErr.join(' / ')}` : '');
+  /* 量化用：?mask=r → 钥匙 socket 周围 r 米内的表面白、钥匙本体红、其余黑（同机位） */
+  if (Q.has('mask') && SC === 's2') { scene.updateMatrixWorld(true); const sk = scene.getObjectByName('env-cellar-s2-key-socket'); const kc = sk.getWorldPosition(new THREE.Vector3()); const keyMeshes = new Set(); sk.traverse((q) => { if (q.isMesh) keyMeshes.add(q); });
+    const mk = (isKey) => new THREE.ShaderMaterial({ uniforms: { c: { value: kc }, r: { value: +Q.get('mask') } }, vertexShader: 'varying vec3 wp; void main(){ vec4 w = modelMatrix * vec4(position,1.0); wp = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }', fragmentShader: isKey ? 'void main(){ gl_FragColor = vec4(1.0,0.0,0.0,1.0); }' : 'uniform vec3 c; uniform float r; varying vec3 wp; void main(){ float k = distance(wp, c) < r ? 1.0 : 0.0; gl_FragColor = vec4(k,k,k,1.0); }', side: THREE.DoubleSide });
+    scene.traverse((q) => { if (q.isMesh && q.visible) q.material = mk(keyMeshes.has(q)); }); scene.background = new THREE.Color(0); scene.fog = null; document.getElementById('cap').textContent = ''; renderer.toneMapping = THREE.NoToneMapping; }
+  /* 调试：?wpos=1 → 颜色 = 世界坐标（r = (x+3.2)/6.4，g = y/2，b = (z+3.2)/6.4，线性输出），用于在画面上反查像素的位置 */
+  if (Q.has('wpos')) { const m = new THREE.ShaderMaterial({ vertexShader: 'varying vec3 wp; void main(){ vec4 w = modelMatrix * vec4(position,1.0); wp = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }', fragmentShader: 'varying vec3 wp; void main(){ gl_FragColor = vec4(clamp((wp.x+3.2)/6.4,0.0,1.0), clamp(wp.y/2.0,0.0,1.0), clamp((wp.z+3.2)/6.4,0.0,1.0), 1.0); }', side: THREE.DoubleSide });
+    scene.traverse((q) => { if (q.isMesh && q.visible) q.material = m; }); scene.background = new THREE.Color(0); scene.fog = null; document.getElementById('cap').textContent = ''; renderer.toneMapping = THREE.NoToneMapping; renderer.outputColorSpace = THREE.LinearSRGBColorSpace; }
+  /* 调试：?wuv=u|v → 把 UV2（TEXCOORD_1）按两通道高精度输出：r = floor(t·255)/255，g = fract(t·255)；t = u 或 v（glTF 方向）。b = 1 表示有 UV2 */
+  if (Q.has('wuv')) { const ax = Q.get('wuv') === 'v' ? 'y' : 'x'; const m = new THREE.ShaderMaterial({ vertexShader: 'attribute vec2 uv1; varying vec2 vU; void main(){ vU = uv1; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }', fragmentShader: `varying vec2 vU; void main(){ float t = clamp(vU.${ax},0.0,0.99999)*255.0; gl_FragColor = vec4(floor(t)/255.0, fract(t), 1.0, 1.0); }`, side: THREE.DoubleSide });
+    scene.traverse((q) => { if (q.isMesh && q.visible) if (!q.geometry.attributes.uv1) { q.material = new THREE.MeshBasicMaterial({ color: 0 }); return; } const id = /rock-islet/.test(q.name) ? 1.0 : /ch1-interior/.test(q.name) ? 0.8 : /lamp-room/.test(q.name) ? 0.6 : /lighthouse-ch1/.test(q.name) ? 0.4 : 0.2; /* b = 网格 id */ const mm = m.clone(); mm.fragmentShader = m.fragmentShader.replace('1.0, 1.0); }', `${id.toFixed(1)}, 1.0); }`); q.material = mm; }); scene.background = new THREE.Color(0); scene.fog = null; document.getElementById('cap').textContent = ''; renderer.toneMapping = THREE.NoToneMapping; renderer.outputColorSpace = THREE.LinearSRGBColorSpace; }
+  renderer.render(scene, cam); renderer.render(scene, cam);
+  document.title = 'done';
+} catch (e) { console.error(e); document.title = 'done'; document.body.insertAdjacentHTML('beforeend', `<pre style="color:#f88;position:absolute;top:0">${e.stack}</pre>`); }
+</script></body></html>

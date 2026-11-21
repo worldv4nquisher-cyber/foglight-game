@@ -1,0 +1,606 @@
+{
+ "note": "020 占位布局（015 白盒 blockout-s3-lighthouse.glb 未交付）：坐标由美术按 020 / 015 / GDD 文字推定，白盒到了按白盒对位（误差 ≤ 5 cm）。S3 局部原点 = 灯塔中心，y 0 = 退潮海面。+Z 北、东 = -X、西 = +X。所有 S3 件 translation 都是 [0,0,0]（同一坐标系建模）。",
+ "instances": [],
+ "nodes": {
+  "env-lighthouse-ch1": {
+   "file": "models/env/env-lighthouse-ch1.glb",
+   "translation": [
+    0,
+    0,
+    0
+   ],
+   "rotationY": 0
+  },
+  "env-lighthouse-ch1-door": {
+   "file": "models/env/env-lighthouse-ch1-door.glb",
+   "translation": [
+    -2.6304,
+    2.4,
+    -1.8668
+   ],
+   "rotationY": -5.497787
+  },
+  "env-lighthouse-ch1-interior": {
+   "file": "models/env/env-lighthouse-ch1-interior.glb",
+   "translation": [
+    0,
+    0,
+    0
+   ],
+   "rotationY": 0
+  },
+  "env-lamp-room-ch1": {
+   "file": "models/env/env-lamp-room-ch1.glb",
+   "translation": [
+    0,
+    0,
+    0
+   ],
+   "rotationY": 0
+  },
+  "prop-fresnel-lens-ch1": {
+   "file": "models/props/prop-fresnel-lens-ch1.glb",
+   "translation": [
+    0,
+    22.85,
+    0
+   ],
+   "rotationY": 0,
+   "parent": "env-lamp-room-ch1/fresnel-lens-socket"
+  },
+  "env-rock-islet-a": {
+   "file": "models/env/env-rock-islet-a.glb",
+   "translation": [
+    0,
+    0,
+    0
+   ],
+   "rotationY": 0
+  },
+  "env-stone-bridge-s3": {
+   "file": "models/env/env-stone-bridge-s3.glb",
+   "translation": [
+    0,
+    0,
+    0
+   ],
+   "rotationY": 0
+  }
+ },
+ "axes": {
+  "north": "+Z",
+  "east": "-X",
+  "west": "+X",
+  "up": "+Y",
+  "units": "m",
+  "angle": "θ 从 +X（西）逆时针：90 北 / 180 东 / 270 南"
+ },
+ "placeholders": {
+  "why": "015 白盒 blockout-s3-lighthouse.glb 未交付、013 未定 S3 世界坐标：以下全部是按 020 / 015 文字推的占位，白盒到了以后对位（误差 ≤ 5 cm）",
+  "items": [
+   "S3 在世界里的位置 / 朝向（本文件全是 S3 局部坐标，塔中心 = 原点）",
+   "门朝向 θ225（东南）与石桥方向",
+   "螺旋楼梯起始角 θ152、平台角度区间",
+   "西窗 θ0、窗口镜石座位置",
+   "镜 A / 镜 B 位置（r 1.3，y 10.6 / 16.6）",
+   "油阀 θ70 y 0.9",
+   "点火口 (0,21.85,0)",
+   "潮钟座（门外平台）",
+   "石桥长度 / 跨数 / S2 端点 spawn-from-s2",
+   "礁岛轮廓"
+  ]
+ },
+ "keyHeights": {
+  "lowTide": 0,
+  "highTide": 1.6,
+  "groundFloor": 0.2,
+  "oilValve": 0.9,
+  "westWindowSill": 1,
+  "doorThreshold": 2.4,
+  "doorPlatform": 2.4,
+  "bridgeDeck": 3,
+  "platformA": 10,
+  "platformB": 16,
+  "lampRoomFloor": 22,
+  "ignitionPort": 21.85,
+  "lampRoomDeskTop": 22.68,
+  "lampRoomChairSeat": 22.4,
+  "lensCenter": 23.55,
+  "domeTop": 25,
+  "vaneTop": 25.95,
+  "stairRise": 0.2,
+  "stairWidth": 1
+ },
+ "points": {
+  "tower": {
+   "center": [
+    0,
+    0,
+    0
+   ],
+   "rBase": 4,
+   "rTop": 3.5,
+   "rIn": 3
+  },
+  "door": {
+   "th": 225,
+   "w": 1.1,
+   "y0": 2.4,
+   "y1": 4.6
+  },
+  "westWindow": {
+   "th": 0,
+   "w": 0.8,
+   "y0": 1,
+   "y1": 2.2
+  },
+  "stairWindows": [
+   {
+    "th": 320,
+    "w": 0.8,
+    "y0": 5.900000000000001,
+    "y1": 7.400000000000001,
+    "k": 24,
+    "glass": true,
+    "platform": true
+   },
+   {
+    "th": 59,
+    "w": 0.45,
+    "y0": 8.75,
+    "y1": 9.55,
+    "k": 38,
+    "glass": true
+   },
+   {
+    "th": 245,
+    "w": 0.45,
+    "y0": 13.95,
+    "y1": 14.75,
+    "k": 64,
+    "glass": true
+   },
+   {
+    "th": 83,
+    "w": 0.45,
+    "y0": 19.55,
+    "y1": 20.35,
+    "k": 92,
+    "glass": true
+   },
+   {
+    "th": 140,
+    "w": 0.5,
+    "y0": 11,
+    "y1": 11.9,
+    "k": 49,
+    "glass": true
+   },
+   {
+    "th": 350,
+    "w": 0.5,
+    "y0": 17,
+    "y1": 17.9,
+    "k": 79,
+    "glass": true
+   }
+  ],
+  "stair": {
+   "r": [
+    2,
+    3
+   ],
+   "degPerTread": 6,
+   "treads": 108,
+   "firstTreadDeg": 152,
+   "landings": {
+    "door": {
+     "tread": 11,
+     "span": [
+      212,
+      238
+     ]
+    },
+    "window5m": {
+     "tread": 24,
+     "span": [
+      310,
+      338
+     ],
+     "y": 5.000000000000001,
+     "windowTh": 320,
+     "sillY": 5.900000000000001,
+     "topY": 7.400000000000001,
+     "w": 0.8,
+     "worldBearingDeg": 95,
+     "bearingNote": "方位角：0 = 世界北（+Z），90 = 东（−X）"
+    },
+    "A": {
+     "tread": 49,
+     "span": [
+      482,
+      518
+     ]
+    },
+    "B": {
+     "tread": 79,
+     "span": [
+      692,
+      728
+     ]
+    }
+   },
+   "hatchDeg": [
+    110,
+    182
+   ]
+  },
+  "lampRoomFurniture": {
+   "note": "017 第 3 批加的书桌 + 椅子（灯室西南，θ315，靠矮墙）。θ 从 +X 逆时针；facing = 汐坐下 / 站立时面朝的方向（S3 局部，径向朝外）",
+   "thDeg": 315,
+   "desk": {
+    "center": [
+     1.902,
+     22,
+     -1.902
+    ],
+    "top": 22.68,
+    "size": [
+     0.9,
+     0.68,
+     0.5
+    ],
+    "sizeNote": "[切向宽, 高, 径向深]",
+    "frontEdgeR": 2.44,
+    "backEdgeR": 2.94
+   },
+   "chair": {
+    "center": [
+     1.57,
+     22,
+     -1.57
+    ],
+    "seatTop": 22.4,
+    "seatSize": [
+     0.42,
+     0.4
+    ],
+    "backRestToward": "tower center"
+   },
+   "facing": [
+    0.707,
+    0,
+    -0.707
+   ],
+   "sitWrite": [
+    1.57,
+    22,
+    -1.57
+   ],
+   "journal": [
+    1.838,
+    22.68,
+    -1.838
+   ],
+   "lanternOnDesk": [
+    1.655,
+    22.68,
+    -2.079
+   ],
+   "standGaze": {
+    "at": [
+     0.43,
+     22,
+     2.514
+    ],
+    "facing": [
+     0.168,
+     0,
+     0.986
+    ]
+   },
+   "note035": "035: 椅座 0.45→0.40、桌面 0.75→0.68（按汐 1.51 m）；build-env-s3 LAMP_FURN 同步；--only 构建不写本文件，故手改"
+  },
+  "mirrors": {
+   "window": {
+    "th": 0,
+    "r": 2.35,
+    "seatTop": 1,
+    "center": [
+     2.35,
+     1.35,
+     0
+    ]
+   },
+   "a": {
+    "th": 140,
+    "r": 1.3,
+    "y": 10.6,
+    "puzzle": 5,
+    "role": "导光镜 1",
+    "node": "guide-mirror-s3-mid-a",
+    "center": [
+     -0.9958577760546713,
+     10.6,
+     0.8356238925925014
+    ]
+   },
+   "b": {
+    "th": 350,
+    "r": 1.3,
+    "y": 16.6,
+    "puzzle": 5,
+    "role": "导光镜 2",
+    "node": "guide-mirror-s3-mid-b",
+    "center": [
+     1.2802500789158704,
+     16.6,
+     -0.2257426309670095
+    ]
+   }
+  },
+  "ignitionPort": [
+   0,
+   21.85,
+   0
+  ],
+  "lightPath": [
+   [
+    9.5,
+    4.6,
+    0.6
+   ],
+   [
+    2.35,
+    1.35,
+    0
+   ],
+   [
+    -0.9958577760546713,
+    10.6,
+    0.8356238925925014
+   ],
+   [
+    1.2802500789158704,
+    16.6,
+    -0.2257426309670095
+   ],
+   [
+    0,
+    21.85,
+    0
+   ]
+  ],
+  "lightPathCheck": {
+   "method": "返工 1029：打到点火口判定半径 0.3 m（窗口镜双轴直达导光镜 1 镜心；导光镜单轴，固定俯仰，yaw 最优）",
+   "guideMirrorTiltDeg": {
+    "guide1_A": -1.1,
+    "guide2_B": 4.4
+   },
+   "result": {
+    "perpMissAtB": 0.009,
+    "pitchA": -1.1,
+    "pitchB": 4.4,
+    "yawA": -19.777,
+    "yawB": 160.755,
+    "offsetOnB": 0.028,
+    "hitOnB": [
+     1.282,
+     16.628,
+     -0.227
+    ],
+    "hitAtPort": [
+     0.009,
+     21.85,
+     -0.002
+    ],
+    "missM": 0.009,
+    "radius": 0.3,
+    "hit": true,
+    "idealPitchA": -1.138,
+    "idealYawA": -19.787,
+    "idealPitchB": 4.354,
+    "idealYawB": 160.772,
+    "segLen": [
+     9.872,
+     6.531,
+     5.38
+    ]
+   },
+   "guide1Vertical": {
+    "perpMissAtB": 0.257,
+    "pitchA": 0,
+    "pitchB": 4.4,
+    "yawA": -19.511,
+    "yawB": 160.561,
+    "offsetOnB": 0.932,
+    "hitOnB": [
+     1.345,
+     17.529,
+     -0.256
+    ],
+    "hitAtPort": [
+     0.462,
+     21.85,
+     -0.103
+    ],
+    "missM": 0.474,
+    "radius": 0.3,
+    "hit": false,
+    "idealPitchA": -1.138,
+    "idealYawA": -19.787,
+    "idealPitchB": 1.442,
+    "idealYawB": 161.593,
+    "segLen": [
+     9.872,
+     7.395,
+     4.413
+    ]
+   },
+   "tiltToleranceDeg": {
+    "pitchAWithB44": [
+     -1.8,
+     -0.45
+    ],
+    "pitchBWithA11": [
+     2.85,
+     5.9
+    ],
+    "pitchBWithA0": [
+     0.45,
+     3.45
+    ]
+   },
+   "stairwellMaxR": [
+    {
+     "seg": "1->2",
+     "maxR": 2.283
+    },
+    {
+     "seg": "2->3",
+     "maxR": 1.252
+    },
+    {
+     "seg": "3->4",
+     "maxR": 1.274
+    }
+   ]
+  },
+  "doorPlatform": {
+   "s0": 3.3,
+   "s1": 7.6,
+   "t0": -2.4,
+   "t1": 2.4,
+   "top": 2.4
+  },
+  "bridge": {
+   "s0": 8.5,
+   "s1": 33,
+   "w": 1.5,
+   "deck": 3,
+   "parapetW": 0.3,
+   "parapetH": 0.5,
+   "piers": [
+    14,
+    19.5,
+    25
+   ],
+   "spring": 0.2,
+   "archR": 2.35
+  },
+  "igniteLever": {
+   "interact": [
+    1.45,
+    22,
+    -0.15
+   ],
+   "facing": [
+    -1,
+    0,
+    0
+   ],
+   "pivot": [
+    0.9,
+    22.74,
+    0
+   ],
+   "gripRest": [
+    1.05,
+    23,
+    0
+   ],
+   "gripPulled": [
+    1.2,
+    22.74,
+    0
+   ],
+   "len": 0.3,
+   "pullDeg": -60,
+   "pullAxis": "pivot 节点局部 +X（= 世界 +Z）",
+   "xiLocal": {
+    "pivot": [
+     0.15,
+     0.74,
+     0.55
+    ],
+    "gripRest": [
+     0.15,
+     1,
+     0.4
+    ],
+    "gripPulled": [
+     0.15,
+     0.74,
+     0.25
+    ]
+   },
+   "distToNoteRead": {
+    "pivot": 1.977,
+    "interact": 2.408,
+    "min": 1.5
+   }
+  }
+ },
+ "worldFrame": {
+  "authority": "game/src/levels/s1/layout.ts S3_WORLD_FRAME",
+  "pos": [
+   39.73,
+   0,
+   -122.75
+  ],
+  "rotY": 2.35619,
+  "rotYDeg": 135,
+  "formula": "world = R_y(rotY)·local + pos（three.js R_y：x' = x·cos + z·sin，z' = −x·sin + z·cos）",
+  "towerBaseY": {
+   "s3Scene": 0,
+   "s1Socket": 6.6,
+   "note": "015 注意：S3 场景塔基 y 0（低潮 0）；S1 远景插槽里同一座塔的实例底在 y 6.6（远景摆位，非同一套潮位）。两处不要混用"
+  }
+ },
+ "silhouettes": [
+  {
+   "id": "F1",
+   "world": [
+    23.1,
+    -0.5,
+    -321.9
+   ],
+   "local": [
+    152.58,
+    -0.5,
+    129.06
+   ],
+   "thDeg": 40.2,
+   "dist": 199.8,
+   "note": "另一座（备选眺望目标）"
+  },
+  {
+   "id": "F2",
+   "world": [
+    142.9,
+    -0.5,
+    -268.5
+   ],
+   "local": [
+    30.11,
+    -0.5,
+    176.01
+   ],
+   "thDeg": 80.3,
+   "dist": 178.6,
+   "note": "lamp-room-stand-gaze 朝向此塔"
+  }
+ ],
+ "triangles": {
+  "lod": [
+   308612,
+   155628,
+   74913
+  ],
+  "budget": [
+   4000000,
+   2300000,
+   1000000
+  ]
+ }
+}

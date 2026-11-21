@@ -1,0 +1,30 @@
+// batch14 BUG-020：S2 石屋 / 地窖、S3 塔内 —— 有雨 / 关雨 两张对比；窗外 / 门外看雨还在
+import { open, sleep, SH14 } from './b14lib.mjs';
+import { writeFileSync, mkdirSync } from 'node:fs';
+const T = 'b14-rain';
+const sc = process.argv[2] ?? 's2';
+const D = `${SH14}/rain`; mkdirSync(D, { recursive: true });
+const { page, ev, must, url, rec, step, done } = await open(5593, { width: 960, height: 540 });
+const out = { shots: [] };
+const ticks = async (n) => { const f0 = await ev('__game.time.fixedTick'); await page.waitFor(`__game.time.fixedTick >= ${f0 + n}`, 120000, 50); };
+const S = `__${sc}`;
+await page.goto(url(`?smoke=1&debug=1&scene=${sc}&art=1&quality=standard&atmo=rain-night`));
+await must(`!!window.${S}?.rig && !!${S}.art && __game.input.context === 'explore'`, 400000, sc);
+if (process.argv[4]) await ev(process.argv[4]);
+await ticks(20);
+out.info = await ev(`(() => { const s = ${S}, r = s.rain; const M = s.camera.matrixWorld.constructor; return { rainVisible: r?.visible, indoorN: r?.indoor?.length, uN: r?.material?.uniforms?.uIndoorN?.value ?? null, shapes: (r?.indoor ?? []).map(sh => { const m = new M().copy(sh.inverse).invert(); const p = new s.camera.position.constructor().setFromMatrixPosition(m); return { c: p.toArray().map(v => +v.toFixed(2)), half: sh.half.toArray().map(v => +v.toFixed(2)), cyl: sh.cylinder }; }) }; })()`);
+rec(T, sc + ' info', 'INFO', out.info);
+const tp = (x, y, z, yaw) => ev(`(() => { const s = ${S}; s.rig.body.teleport(new s.rig.body.body.position.constructor(${x}, ${y}, ${z})); s.rig.body.velocity?.set?.(0,0,0); ${yaw != null ? `s.cameraFollow.yaw = ${yaw} * Math.PI / 180; s.cameraFollow.pitch = -0.2;` : ''} return 1; })()`);
+const pair = async (name) => {
+  await ticks(30); await sleep(300);
+  const st = await ev(`(() => { const s = ${S}; const c = s.camera.position; return { cam: c.toArray().map(v => +v.toFixed(2)), camIndoor: s.cameraFollow.indoor, camInRainVol: s.rain.culledAt(c), player: s.rig.body.position.toArray().map(v => +v.toFixed(2)) }; })()`);
+  await page.screenshot(`${D}/${sc}-${name}-rain.png`);
+  await ev(`(${S}.rain.visible = false, 1)`); await ticks(2); await sleep(200);
+  await page.screenshot(`${D}/${sc}-${name}-norain.png`);
+  await ev(`(${S}.rain.visible = true, 1)`);
+  out.shots.push({ name, ...st }); rec(T, name, 'INFO', st);
+};
+const P = JSON.parse(process.argv[3] ?? '[]');
+for (const [name, x, y, z, yaw] of P) await step(T, name, async () => { await tp(x, y, z, yaw); await pair(name); });
+writeFileSync(`${D}/${sc}.json`, JSON.stringify(out, null, 1));
+await done(); console.log('DONE');

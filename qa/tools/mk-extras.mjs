@@ -1,0 +1,13 @@
+import { readFileSync, writeFileSync } from 'node:fs';
+const [src, dst, key, val] = process.argv.slice(2);
+const b = readFileSync(src);
+const jsonLen = b.readUInt32LE(12);
+const json = JSON.parse(b.subarray(20, 20 + jsonLen).toString('utf8'));
+const rest = b.subarray(20 + jsonLen);
+const n = json.nodes[json.scenes[json.scene ?? 0].nodes[0]];
+n.extras = { ...(n.extras ?? {}), [key]: JSON.parse(val) };
+let js = Buffer.from(JSON.stringify(json), 'utf8');
+js = Buffer.concat([js, Buffer.alloc((4 - (js.length % 4)) % 4, 0x20)]);
+const head = Buffer.alloc(20); head.write('glTF', 0); head.writeUInt32LE(2, 4); head.writeUInt32LE(20 + js.length + rest.length, 8); head.writeUInt32LE(js.length, 12); head.write('JSON', 16);
+writeFileSync(dst, Buffer.concat([head, js, rest]));
+console.log('node', n.name, 'extras', JSON.stringify(n.extras));

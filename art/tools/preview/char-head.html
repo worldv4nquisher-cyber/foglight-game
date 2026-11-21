@@ -1,0 +1,174 @@
+<!doctype html>
+<!-- 汐头部 r2 预览（头部特写 / 游戏跟随镜头 / 父亲 hand-on-head 复查）。由 ../render-preview-web.mjs --page char-head.html --jobs jobs.json 驱动。
+     ?view=head-front | head-34 | head-side | head-back | head-back34 | head-top | head-x&yaw=&el= | gamecam&yaw=180&pitch=-17.2 | hoh-side&f=80 | hoh-game&f=80
+     &glb=/models/characters/char-xi.glb  &tex=/textures（sdf 所在目录） &outline=new|old
+     outline=new：描边色 = 该像素 albedo × 0.4 再偏冷（不再是统一的 #2A2F36），宽度 = 1.5 px@1080p × COLOR_0.a（r2 脸 0.6、发梢 0.3），alpha 碎发不描实边
+     outline=old：r1 预览的描边（#2A2F36，2.2 px 特写 / 1.6 px，宽度不分部位）——只用于改前对比
+     head-*：静止姿势（不加 quietPose），相机在中线上（x = 0，r1 预览的 face 相机偏在 x = 0.12，看起来脸是歪的）
+     gamecam：游戏跟随相机参数（gameplay.ts camera：fov 55、distance 4.0、pivotHeight 1.35、shoulderOffset 0.4、默认 pitch −0.3 rad），汐播 xi-idle -->
+<html><head><meta charset="utf-8"><style>html,body{margin:0;background:#8FA0AE;overflow:hidden}</style>
+<script type="importmap">{"imports":{"three":"/three/build/three.module.js","three/addons/":"/three/examples/jsm/"}}</script>
+</head><body>
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
+import { KTX2Loader } from 'three/addons/loaders/KTX2Loader.js';
+
+const Q = new URLSearchParams(location.search);
+const view = Q.get('view') ?? 'head-front';
+const GLB = Q.get('glb') ?? '/models/characters/char-xi.glb', TEX = Q.get('tex') ?? '/textures', OUTL = Q.get('outline') ?? 'new';
+const W = innerWidth, H = innerHeight;
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(1); renderer.setSize(W, H);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.AgXToneMapping; renderer.toneMappingExposure = 1.1;
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color('#8FA0AE');
+scene.fog = new THREE.Fog('#8FA0AE', 6, 18);
+scene.add(new THREE.HemisphereLight('#A9B8C4', '#4A535A', 1.7));
+const sun = new THREE.DirectionalLight('#C9D6E0', 1.1);
+sun.position.set(2.0, 4, 3); sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.01;
+Object.assign(sun.shadow.camera, { left: -2.5, right: 2.5, top: 2.5, bottom: -1, near: 0.1, far: 12 }); sun.shadow.radius = 5;
+scene.add(sun);
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(40, 40), new THREE.MeshToonMaterial({ color: '#5E6870' }));
+ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
+
+const mkRamp = (vals) => { const d = new Uint8Array(vals.flatMap((v) => [v, v, v, 255])); const t = new THREE.DataTexture(d, vals.length, 1); t.minFilter = t.magFilter = THREE.NearestFilter; t.needsUpdate = true; return t; };
+const ramp2 = mkRamp([150, 255]), rampFace = mkRamp([222, 255]);
+
+const outlineMat = (px, map, useA, fixed) => new THREE.ShaderMaterial({
+  side: THREE.BackSide,
+  uniforms: { px: { value: px }, res: { value: new THREE.Vector2(W, H) }, map: { value: map }, useA: { value: useA ? 1 : 0 }, fixedCol: { value: new THREE.Color(fixed ?? '#000000') }, useFixed: { value: fixed ? 1 : 0 } },
+  vertexShader: `#include <common>
+    #include <skinning_pars_vertex>
+    attribute vec4 color; uniform float px; uniform vec2 res; uniform float useA; varying vec2 vUv;
+    void main(){
+      vUv = uv;
+      vec3 objectNormal = color.xyz*2.0-1.0; vec3 transformed = position;
+      #include <skinbase_vertex>
+      #include <skinnormal_vertex>
+      #include <skinning_vertex>
+      vec4 c = projectionMatrix*modelViewMatrix*vec4(transformed,1.0);
+      vec3 nv = normalize(normalMatrix*objectNormal); vec2 d = length(nv.xy)>1e-4 ? normalize(nv.xy) : vec2(0.0);
+      float w = mix(1.0, color.a, useA);
+      c.xy += d*px*w*2.0/res*c.w; gl_Position = c; }`,
+  fragmentShader: `uniform sampler2D map; uniform vec3 fixedCol; uniform float useFixed; varying vec2 vUv;
+    void main(){
+      vec4 t = texture2D(map, vUv);
+      if (useFixed < 0.5 && t.a < 0.5) discard;
+      vec3 c = t.rgb * 0.40;
+      float l = dot(c, vec3(0.299, 0.587, 0.114));
+      c = mix(c, l * vec3(0.86, 0.96, 1.16), 0.45);             // 压暗 60% 后偏冷
+      gl_FragColor = vec4(useFixed > 0.5 ? fixedCol : c, 1.0);
+      #include <colorspace_fragment>
+    }`,
+});
+
+function prepare(root, closeup) {
+  const extra = [];
+  const px = OUTL === 'old' ? (closeup ? 2.2 : 1.6) : 1.5 * H / 1080;
+  root.traverse((o) => {
+    if (/-collider$/.test(o.name)) { o.visible = false; return; }
+    if (!o.isMesh) return;
+    const m = o.material;
+    const gm = m.name === 'mat-char-xi-face' ? rampFace : ramp2;
+    o.material = new THREE.MeshToonMaterial({ name: m.name, map: m.map, normalMap: m.normalMap, gradientMap: gm, alphaTest: m.alphaTest || (m.transparent ? 0.5 : 0), transparent: false, side: m.side });
+    o.castShadow = o.receiveShadow = true;
+    const om = outlineMat(px, m.map, OUTL !== 'old', OUTL === 'old' ? '#2A2F36' : null);
+    const ol = o.isSkinnedMesh ? new THREE.SkinnedMesh(o.geometry, om) : new THREE.Mesh(o.geometry, om);
+    ol.name = o.name + '-outline'; ol.frustumCulled = false; o.frustumCulled = false; extra.push([o, ol]);
+  });
+  for (const [o, ol] of extra) { o.parent.add(ol); if (o.isSkinnedMesh) ol.bind(o.skeleton, o.bindMatrix); else { ol.position.copy(o.position); ol.quaternion.copy(o.quaternion); ol.scale.copy(o.scale); } }
+}
+// 脸：SDF 两阶明暗（与 char.html 相同；TEXCOORD_1 = uv1；lit = θ <= sdf；光从角色左侧来时 u 翻转）
+let sdfTex = null;
+function faceSDF(root, restHead) {
+  const head = root.getObjectByName('head'); if (!head || !sdfTex) return;
+  const dq = head.getWorldQuaternion(new THREE.Quaternion()).multiply(restHead.clone().invert());
+  const fwd = new THREE.Vector3(0, 0, 1).applyQuaternion(dq), right = new THREE.Vector3(-1, 0, 0).applyQuaternion(dq);
+  const L = sun.position.clone().normalize(); const f = L.dot(fwd), r = L.dot(right);
+  const theta = Math.min(1, Math.max(0, Math.atan2(Math.abs(r), f) / (Math.PI / 2)));
+  root.traverse((o) => {
+    if (!o.isMesh || o.material.name !== 'mat-char-xi-face') return;
+    const m = new THREE.MeshBasicMaterial({ name: o.material.name, map: o.material.map, lightMap: sdfTex });
+    m.onBeforeCompile = (sh) => {
+      sh.uniforms.uTheta = { value: theta }; sh.uniforms.uFlip = { value: r < 0 ? 1 : 0 };
+      sh.fragmentShader = sh.fragmentShader.replace('#include <lightmap_pars_fragment>', '#include <lightmap_pars_fragment>\nuniform float uTheta; uniform float uFlip;')
+        .replace(/vec4 lightMapTexel = texture2D\( lightMap, vLightMapUv \);\s*reflectedLight\.indirectDiffuse \+= [^;]*;/,
+          `vec2 suv = vLightMapUv; if (uFlip > 0.5) suv.x = 1.0 - suv.x;
+           float sdfv = texture2D(lightMap, suv).r;
+           float lit = smoothstep(uTheta - 0.015, uTheta + 0.015, sdfv);
+           reflectedLight.indirectDiffuse += mix(vec3(0.76, 0.68, 0.72), vec3(0.97), lit);`);
+    };
+    o.material = m;
+  });
+}
+const showLod = (root, lv) => root.traverse((o) => { const m = /_lod(\d)$/.exec(o.name); if (m) o.visible = +m[1] === lv; });
+
+const ktx2 = new KTX2Loader().setTranscoderPath('/three/examples/jsm/libs/basis/').detectSupport(renderer);
+const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).setKTX2Loader(ktx2);
+const loadG = (u) => new Promise((ok, err) => loader.load(u, ok, undefined, err));
+try {
+  const xg = await loadG(GLB); const c = xg.scene;
+  const lod = +(Q.get('lod') ?? 0);
+  prepare(c, view.startsWith('head')); showLod(c, lod); scene.add(c);
+  c.updateMatrixWorld(true); const restHead = c.getObjectByName('head').getWorldQuaternion(new THREE.Quaternion());
+  sdfTex = await new Promise((ok, err) => ktx2.load(TEX + '/tex-xi-sdf-face.ktx2', ok, undefined, err));
+  sdfTex.colorSpace = THREE.NoColorSpace; sdfTex.channel = 1; sdfTex.flipY = false;
+  let cam;
+  const look = (pos, tgt) => { cam.position.copy(pos); cam.lookAt(tgt); };
+  if (view.startsWith('body-')) {
+    cam = new THREE.PerspectiveCamera(18, W / H, 0.05, 60);
+    // 回归检查：全身 / 下摆 / 袖口（改前改后同机位）
+      const [yy, cy2, D2, fv] = { 'body-front': [0, 0.78, 4.4, 18], 'body-back': [180, 0.78, 4.4, 18], 'body-hem-back': [180, 0.72, 1.6, 18], 'body-hem-front': [0, 0.72, 1.6, 18], 'body-cuff': [150, 0.98, 1.2, 18] }[view];
+      const a2 = THREE.MathUtils.degToRad(yy); cam.fov = fv; cam.updateProjectionMatrix();
+      const tx = view === 'body-cuff' ? -0.62 : 0;
+      look(new THREE.Vector3(tx + D2 * Math.sin(a2), cy2 + 0.04, D2 * Math.cos(a2)), new THREE.Vector3(tx, cy2, 0));
+  } else if (view.startsWith('head')) {
+    cam = new THREE.PerspectiveCamera(+(Q.get('fov') ?? 18), W / H, 0.05, 60);
+    const yawd = { 'head-front': 0, 'head-34': 35, 'head-side': 90, 'head-back': 180, 'head-back34': 215, 'head-top': 0 }[view] ?? +(Q.get('yaw') ?? 0); const a = THREE.MathUtils.degToRad(yawd), D = 0.95, cy = 1.355;
+    const el = view === 'head-top' ? 0.9 : THREE.MathUtils.degToRad(+(Q.get('el') ?? 0));   // r4：head-back / head-back34 / head-top（头发检查）
+    look(new THREE.Vector3(D * Math.sin(a) * Math.cos(el), cy + D * Math.sin(el), D * Math.cos(a) * Math.cos(el)), new THREE.Vector3(0, cy, 0));
+  } else if (view === 'gamecam') {
+    const ag = await loadG('/models/characters/char-xi-anims.glb');
+    const mx = new THREE.AnimationMixer(c); const act = mx.clipAction(ag.animations.find((k) => k.name === (Q.get('clip') ?? 'xi-idle'))); act.play(); act.time = +(Q.get('t') ?? 0.5); mx.update(0);
+    // CameraFollowSystem：euler(pitch, yaw, 0, 'YXZ')；back = (0,0,1)·q；right = (cos yaw, 0, −sin yaw)；pivot = 脚底 + pivotHeight + right·shoulderOffset；cam = pivot + back·distance
+    const yaw = THREE.MathUtils.degToRad(+(Q.get('yaw') ?? 180)), pitch = THREE.MathUtils.degToRad(+(Q.get('pitch') ?? -17.19));
+    cam = new THREE.PerspectiveCamera(55, W / H, 0.05, 60);
+    const qq = new THREE.Quaternion().setFromEuler(new THREE.Euler(pitch, yaw, 0, 'YXZ'));
+    const back = new THREE.Vector3(0, 0, 1).applyQuaternion(qq), right = new THREE.Vector3(Math.cos(yaw), 0, -Math.sin(yaw));
+    const pivot = new THREE.Vector3(0, 1.35, 0).addScaledVector(right, 0.4);
+    cam.position.copy(pivot).addScaledVector(back, +(Q.get('dist') ?? 4.0)); cam.quaternion.copy(qq);
+    if (Q.get('zoom')) {   // 同一机位（遮挡关系不变），只把镜头对准头、缩小 FOV：看游戏机位下刘海是否挡眼
+      c.updateMatrixWorld(true); const hp = new THREE.Vector3(); c.getObjectByName('head').getWorldPosition(hp); hp.y += 0.06;
+      cam.fov = +Q.get('zoom'); cam.updateProjectionMatrix(); cam.lookAt(hp);
+    }
+  } else if (view.startsWith('hoh')) {
+    const [fg, fa] = await Promise.all([loadG('/models/characters/char-father.glb'), loadG('/models/characters/char-father-anims.glb')]);
+    const hx = fa.parser.json.animations.find((x) => x.name === 'father-hand-on-head').extras, al = hx.align.handOnHead;
+    const fc = fg.scene; prepare(fc, false); showLod(fc, 0); scene.add(fc);
+    fc.position.fromArray(al.fatherRootInXiSpace); fc.rotation.set(0, THREE.MathUtils.degToRad(al.fatherYawDegInXiSpace), 0);
+    const xag = await loadG('/models/characters/char-xi-anims.glb');
+    const f = +(Q.get('f') ?? 80);
+    const xm = new THREE.AnimationMixer(c), xa = xm.clipAction(xag.animations.find((k) => k.name === al.xiClip)); xa.play();
+    const fm = new THREE.AnimationMixer(fc), fac = fm.clipAction(fa.animations.find((k) => k.name === 'father-hand-on-head')); fac.setLoop(THREE.LoopOnce); fac.clampWhenFinished = true; fac.play();
+    fac.time = f / hx.fps; xa.time = f / hx.fps; fm.update(0); xm.update(0); scene.updateMatrixWorld(true);
+    const hp = new THREE.Vector3(); c.getObjectByName('head').getWorldPosition(hp);
+    if (view === 'hoh-side') {
+      const s = 0.42; cam = new THREE.OrthographicCamera(-s * W / H / 2, s * W / H / 2, s / 2, -s / 2, 0.05, 20);
+      look(new THREE.Vector3(-3, 1.42, 0.06), new THREE.Vector3(0, 1.42, 0.06));   // 从汐右侧（−X）看：父亲右臂从 +X 侧伸过来，不挡
+    } else {   // 汐身后 2 m、俯 15°、FOV 55（与 r4b 对比图同一机位）
+      cam = new THREE.PerspectiveCamera(55, W / H, 0.05, 60);
+      const p15 = THREE.MathUtils.degToRad(15); look(new THREE.Vector3(0.25, 1.35 + 2 * Math.sin(p15), -2 * Math.cos(p15)), new THREE.Vector3(0, 1.30, 0.2));
+    }
+  }
+  scene.updateMatrixWorld(true);
+  faceSDF(c, restHead);
+  renderer.render(scene, cam);
+  document.title = 'done';
+} catch (e) { document.title = 'error: ' + e.message; document.body.insertAdjacentText('beforeend', String(e.stack)); }
+</script></body></html>

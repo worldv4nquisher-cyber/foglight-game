@@ -1,0 +1,33 @@
+{
+ "file": "mus-s1-ebb-shore.ogg",
+ "vorbisQ": 6,
+ "bytes": 2526324,
+ "seconds": 150.0,
+ "samples": 6615000,
+ "srcSamples": 6615000,
+ "kbps": 134.7,
+ "lufs": -20.0,
+ "lra": 6.6,
+ "truePeakDb": -1.41,
+ "limiter": {
+  "maxGrDb": 0.24,
+  "grSeconds": 0.0
+ },
+ "seamSrc": [
+  -85.8,
+  -67.6,
+  -21.9
+ ],
+ "seamDec": [
+  -48.9,
+  -67.4,
+  -21.8
+ ],
+ "seamDecVsTrackStepP999": -48.9,
+ "shortTermLufs": {
+  "p50": -20.9,
+  "p90": -17.5,
+  "max": -15.2
+ },
+ "path": "art/audio/music/mus-s1-ebb-shore.ogg"
+}

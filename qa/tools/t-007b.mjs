@@ -1,0 +1,32 @@
+import { open, sleep, SH } from './b4lib.mjs';
+const T = 'v0.1-007';
+const P = await open(5252);
+const { page, ev, must, clickSel, url, rec, step } = P;
+await page.goto(url('?smoke=1')); await must('!!window.__game'); await ev('localStorage.clear()');
+await page.goto(url('?smoke=1&hintScale=0.05'));
+await must(`window.__game?.scenes.current?.name === 'menu' && !document.querySelector('.main-menu').hidden`, 90000); await sleep(800);
+await clickSel('.main-menu [data-act="new"]');
+await must(`window.__game?.scenes.current?.name === 's1-ebb-shore' && !!__game.scenes.current.rig && !__game.flow.transitioning && __game.input.context === 'explore'`, 240000, 'S1');
+await sleep(1500);
+const used = () => ev(`JSON.parse(localStorage.getItem('foglight.save.v1') || 'null')?.hintsUsed`);
+const pressH = async () => { await page.tap('KeyH'); for (let i = 0; i < 40; i++) { if (await ev('__game.ui.hints.isOpen')) break; await sleep(150); } };
+const closeH = async () => { await page.tap('KeyH'); for (let i = 0; i < 40; i++) { if (!(await ev('__game.ui.hints.isOpen'))) break; await sleep(150); } };
+await step(T, '真实流程（新游戏 S1）hintsUsed 立即落盘 + 高亮 3 s', async () => {
+  const target = await ev(`(() => { const s = __game.scenes.current; const it = s.interaction.items[0]; return it?.id ?? null; })()`);
+  const tgt = target ?? (await ev(`__game.scenes.current.scene.children.find(c => c.isMesh)?.name || null`));
+  await ev(`(() => { const s = __game.scenes.current; const p = s.rig.body.position; const c = { x: p.x, z: p.z }; s.hints.add({ id: 'qa-p', zone: (q) => (q.x - c.x) ** 2 + (q.z - c.z) ** 2 <= 9, l1: 'ch1.hint.p1.l1', l2: 'ch1.hint.p1.l2', l3: 'ch1.hint.p1.l3', highlight: [${JSON.stringify(tgt)}] }); })()`);
+  const u0 = await used();
+  await must(`__game.scenes.current.hints.time('qa-p') >= 9.05`, 240000, '9s');
+  await pressH(); const u1 = await used(); await page.screenshot(`${SH}/007-s1-panel-l1.png`); await closeH();
+  await must(`__game.scenes.current.hints.time('qa-p') >= 18.05`, 240000, '18s');
+  await pressH();
+  const e0 = await ev('__game.time.elapsed'); const u2 = await used();
+  const hl0 = await ev(`[...__game.scenes.current.interaction.highlighter.keys()]`);
+  await must(`![...__game.scenes.current.interaction.highlighter.keys()].some(k => k.startsWith('hint:'))`, 120000, '高亮结束');
+  const e1 = await ev('__game.time.elapsed');
+  await closeH(); await pressH(); const u3 = await used(); await closeH();
+  rec(T, '真实流程（新游戏 S1）hintsUsed 立即落盘 + 高亮 3 s', u1 === 1 && u2 === 2 && u3 === 2 && hl0.includes('hint:' + tgt) ? 'PASS' : 'FAIL',
+    `S1 尚无正式谜题（013–015 才登记），用 smoke 句柄在出生点临时登记一个测试谜题（p1 文本，高亮 ${tgt}）。开始 hintsUsed=${u0}；9 s 后开 H → 存档 ${u1}；18 s 后开 H → ${u2}，高亮 ${JSON.stringify(hl0)}，持续 ${(e1 - e0).toFixed(2)} s（time.elapsed 游戏时间，含轮询误差）；再开 H → ${u3}`);
+});
+P.save('b4-007b'); console.log('errors', JSON.stringify(page.errors));
+await P.done(); process.exit(0);

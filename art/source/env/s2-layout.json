@@ -1,0 +1,422 @@
+{
+ "note": "019 占位布局（014 白盒 / layout.ts 尚未交付）：坐标由美术按 014 / 019 / GDD §6 文字推定，白盒到了按白盒对位（误差要求 ≤ 5 cm）。+Z 北、右手系 ⇒ 东 = -X、西 = +X；局部 y = 世界高度。",
+ "instances": [],
+ "nodes": {
+  "env-keeper-house-ch1": {
+   "file": "models/env/env-keeper-house-ch1.glb",
+   "translation": [
+    -2,
+    0,
+    1
+   ],
+   "rotationY": 0
+  },
+  "env-keeper-house-ch1-interior": {
+   "file": "models/env/env-keeper-house-ch1-interior.glb",
+   "translation": [
+    -2,
+    0,
+    1
+   ],
+   "rotationY": 0
+  },
+  "env-cellar-door-s2": {
+   "file": "models/env/env-cellar-door-s2.glb",
+   "translation": [
+    0.9850000000000001,
+    0,
+    3.86
+   ],
+   "rotationY": 0
+  },
+  "env-cellar-s2": {
+   "file": "models/env/env-cellar-s2.glb",
+   "translation": [
+    -2,
+    0,
+    1
+   ],
+   "rotationY": 0
+  },
+  "env-courtyard-wall-s2": {
+   "file": "models/env/env-courtyard-wall-s2.glb",
+   "translation": [
+    -10.625,
+    0,
+    0.75
+   ],
+   "rotationY": 0
+  },
+  "env-laundry-rack": {
+   "file": "models/env/env-laundry-rack.glb",
+   "translation": [
+    -8.15,
+    0,
+    -2.5
+   ],
+   "rotationY": 0
+  },
+  "env-clifftop-s2": {
+   "file": "models/env/env-clifftop-s2.glb",
+   "translation": [
+    0,
+    0,
+    0
+   ],
+   "rotationY": 0
+  }
+ },
+ "axes": {
+  "north": "+Z",
+  "east": "-X",
+  "west": "+X",
+  "up": "+Y",
+  "units": "m"
+ },
+ "keyHeights": {
+  "groundFloor": 0,
+  "upperFloor": 3,
+  "westWindowSill": 3.9,
+  "lightLockY": 0.85,
+  "tableTop": 0.75,
+  "deskTop": 3.75,
+  "lampBaseTop": 0,
+  "lampStand": 1,
+  "beamPlane": 0.85,
+  "lampEmitY": 0.846,
+  "cellarFloor": -2.4,
+  "cellarShelfTop": -1.3,
+  "cellarShelfTopAboveFloor": 1.1,
+  "cellarKeyY": -1.3,
+  "eave": 5.6,
+  "ridge": 8.3
+ },
+ "points": {
+  "house": {
+   "center": [
+    -2,
+    0,
+    1
+   ],
+   "footprint": {
+    "x": [
+     -6,
+     2
+    ],
+    "z": [
+     -2,
+     4
+    ]
+   },
+   "wallThickness": 0.6
+  },
+  "openings": {
+   "frontDoor": {
+    "wall": "S",
+    "a": -4.6,
+    "b": -3.6,
+    "y0": 0,
+    "y1": 2.05,
+    "door": true
+   },
+   "winS2": {
+    "wall": "S",
+    "a": -1.25,
+    "b": -0.45,
+    "y0": 4,
+    "y1": 5
+   },
+   "winW2": {
+    "wall": "W",
+    "a": 0.55,
+    "b": 1.45,
+    "y0": 3.9,
+    "y1": 5.1,
+    "puzzleFrame": true
+   },
+   "winN1": {
+    "wall": "N",
+    "a": -3.2,
+    "b": -2.4,
+    "y0": 1,
+    "y1": 2
+   },
+   "cellarDoor": {
+    "wall": "N",
+    "a": 0.2,
+    "b": 1.05,
+    "y0": 0,
+    "y1": 1.85,
+    "door": true
+   },
+   "winE1": {
+    "wall": "E",
+    "a": 2.2,
+    "b": 3,
+    "y0": 0.95,
+    "y1": 2.05
+   },
+   "winE2": {
+    "wall": "E",
+    "a": -0.65,
+    "b": -0.05,
+    "y0": 3.95,
+    "y1": 4.65,
+    "lanternGlow": true
+   }
+  },
+  "lightLock": [
+   -4.8,
+   0.85,
+   4
+  ],
+  "viewpointS2": {
+   "eye": [
+    0.95,
+    4.35,
+    1
+   ],
+   "lookAt": [
+    18,
+    0.2,
+    1
+   ],
+   "fov": 30,
+   "placeholder": true
+  },
+  "stonesArea": {
+   "x0": 14,
+   "x1": 22,
+   "z0": -2.5,
+   "z1": 4.5,
+   "center": [
+    18,
+    0,
+    1
+   ]
+  },
+  "yard": {
+   "x0": -15,
+   "x1": -6.25,
+   "z0": -8,
+   "z1": 9.5,
+   "gate": [
+    -9.6,
+    -8.4
+   ],
+   "wallH": 1.1
+  },
+  "lamps": {
+   "east": [
+    -13.2,
+    0,
+    -5
+   ],
+   "west": [
+    -8,
+    0,
+    -5
+   ]
+  },
+  "rack": {
+   "at": [
+    -8.15,
+    0,
+    -2.5
+   ],
+   "len": 2.6
+  },
+  "mirrors": {
+   "a": [
+    -13.2,
+    0.85,
+    3
+   ],
+   "b": [
+    -7.2,
+    0.85,
+    8.6
+   ]
+  },
+  "northGate": {
+   "x": [
+    3.4,
+    5
+   ],
+   "z": 11.5
+  },
+  "exitToS3": [
+   5,
+   0,
+   23
+  ],
+  "stairsTop": [
+   0,
+   0,
+   -13.5
+  ],
+  "spawn": [
+   0,
+   0,
+   -12.5
+  ],
+  "deskInteract": [
+   -4.6,
+   3,
+   -0.25
+  ],
+  "cellarShelf": {
+   "x": [
+    -2.56,
+    -2.14
+   ],
+   "z": [
+    1,
+    2.2
+   ],
+   "topAboveFloor": 1.1,
+   "topY": -1.3,
+   "shelvesAboveFloor": [
+    0.365,
+    0.735,
+    1.1,
+    1.515
+   ]
+  },
+  "cellarKey": [
+   -2.35,
+   -1.3,
+   1.35
+  ],
+  "cellarSketch": [
+   -2.35,
+   -1.3,
+   1.8
+  ],
+  "cellarShelfInteract": [
+   -1.9,
+   -2.4,
+   1.4
+  ],
+  "cellarPickupClip": "xi-pickup-shelf（钥匙正前 0.45 m、偏右 5 cm，架面 1.10；grab 22 / lift 25，见 art/models/characters/README.md）",
+  "lanternSocket": [
+   -5.05,
+   3.75,
+   -0.35
+  ],
+  "eastWindowGlow": {
+   "wall": "E",
+   "z": [
+    -0.65,
+    -0.05
+   ],
+   "y": [
+    3.95,
+    4.65
+   ]
+  }
+ },
+ "placeholders": {
+  "whiteStones": [
+   [
+    15.2,
+    -0.563,
+    -1.6
+   ],
+   [
+    16.6,
+    -0.667,
+    2.8
+   ],
+   [
+    17.4,
+    -0.684,
+    0.3
+   ],
+   [
+    18.6,
+    -0.825,
+    -2
+   ],
+   [
+    19.3,
+    -0.875,
+    3.6
+   ],
+   [
+    20.4,
+    -0.969,
+    1.2
+   ],
+   [
+    21.2,
+    -1.028,
+    -0.8
+   ],
+   [
+    15.8,
+    -0.625,
+    4.1
+   ]
+  ]
+ },
+ "worldFrames": {
+  "s2": {
+   "rotationY": 2.0944,
+   "rotationYDeg": 120,
+   "origin": [
+    1.225,
+    16,
+    14.75
+   ],
+   "source": "game/src/levels/s2/layout.ts S2_WORLD_FRAME（014 白盒）：world = origin + R_y(120°)·local；入口 spawn (0,0,-12.5) 落在 S1 出口 (-9.6, ·, 21)；S2 地面 = 世界 y 16"
+  },
+  "s3": {
+   "towerCenter": [
+    39.73,
+    0,
+    -122.75
+   ],
+   "rotationY": 2.35619,
+   "rotationYDeg": 135,
+   "socketY": 6.6,
+   "source": "game/src/levels/s1/layout.ts S3_WORLD_FRAME（013 白盒）",
+   "inS2Local": {
+    "towerCenter": [
+     99.83,
+     -16,
+     102.1
+    ],
+    "azimuthDeg": 315.6,
+    "distanceM": 142.8,
+    "note": "方位 0 = 北(+Z)、90 = 东(-X)；S3 灯塔在小屋西北，和 014 白盒注释「局部方位 ≈ 315°」一致"
+   }
+  },
+  "note": "返工 2026-10-29 写入。下面 silhouettes 仍是 019 的远景占位（260, -30, 520，方位约 333°），程序按 worldFrames.s3 放真塔时以 worldFrames 为准"
+ },
+ "silhouettes": [
+  {
+   "file": "models/env/env-lighthouse-silhouette-far.glb",
+   "translation": [
+    260,
+    -30,
+    520
+   ],
+   "rotationY": 0.4,
+   "scale": 1,
+   "note": "S3 灯塔剪影在西北地平线（+X +Z），复用 018 剪影"
+  }
+ ],
+ "triangles": {
+  "lod": [
+   278191,
+   138557,
+   69555
+  ],
+  "budget": [
+   4000000,
+   2300000,
+   1000000
+  ]
+ }
+}

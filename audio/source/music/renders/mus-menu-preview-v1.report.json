@@ -1,0 +1,21 @@
+{
+ "file": "mus-menu-preview-v1.ogg", "path": "art/audio/music/preview/mus-menu-preview-v1.ogg",
+ "bytes": 1943708,
+ "seconds": 106.667,
+ "samples": 4704000,
+ "srcSamples": 4704000,
+ "kbps": 145.8,
+ "lufs": -20.0,
+ "lra": 9.2,
+ "truePeakDb": -1.09,
+ "seamSrc": [
+  -76.2,
+  -63.6,
+  -22.1
+ ],
+ "seamDec": [
+  -60.8,
+  -64.3,
+  -22.1
+ ]
+}

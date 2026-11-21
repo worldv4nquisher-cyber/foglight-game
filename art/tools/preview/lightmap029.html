@@ -1,0 +1,119 @@
+<!doctype html>
+<!-- v0.1-029 S1 光照贴图对比页（给程序对照解码结果）。由 ../render-preview-web.mjs --page lightmap029.html --jobs … 驱动。
+     ?mode=irr   只看光照贴图：白色 MeshBasicMaterial + lightMap（RGBM8 解码）× π → 屏幕 = 线性 E（three 辐照度单位），sRGB 输出，无色调映射、无雾、无实时光
+          lit   游戏灯光（melancholy-dusk）：太阳实时（带阴影）+ 光照贴图；挂了光照贴图的材质去掉半球光（光照贴图已含天光），礁石等未挂的仍用半球光；AgX
+          hemi  现状（不挂光照贴图，只有半球光 + 太阳），做前后对比
+     &view=opening（S1.openingCam）| ledge | pier | flat | shed | cliff   &norocks=1（不放礁石实例）   &lod=0|1|2（看 LOD1/2 转过去的 UV2 有没有接缝） -->
+<html><head><meta charset="utf-8"><style>html,body{margin:0;background:#000;overflow:hidden}#cap{position:absolute;left:10px;bottom:8px;color:#e8ecee;text-shadow:0 1px 2px #000;font:13px sans-serif}</style>
+<script type="importmap">{"imports":{"three":"/three/build/three.module.js","three/addons/":"/three/examples/jsm/"}}</script>
+</head><body><div id="cap"></div>
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
+import { KTX2Loader } from 'three/addons/loaders/KTX2Loader.js';
+const Q = new URLSearchParams(location.search);
+const mode = Q.get('mode') ?? 'irr', view = Q.get('view') ?? 'opening', LOD = +(Q.get('lod') ?? 0);
+const W = innerWidth, H = innerHeight;
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(1); renderer.setSize(W, H); renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = mode === 'irr' ? THREE.NoToneMapping : THREE.AgXToneMapping;
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(mode === 'irr' ? '#202428' : '#B9C2C8');
+if (mode !== 'irr') scene.fog = new THREE.FogExp2('#B9C2C8', 0.009);
+// game/src/config/atmosphere.ts melancholy-dusk
+if (mode !== 'irr') {
+  scene.add(new THREE.HemisphereLight(0x8c9cab, 0x1c2024, 1.6));
+  const sun = new THREE.DirectionalLight(0xa9b8c8, 2.4); sun.position.set(-12, 18, -8).normalize().multiplyScalar(60);
+  sun.castShadow = true; sun.shadow.mapSize.set(4096, 4096); Object.assign(sun.shadow.camera, { left: -45, right: 45, top: 45, bottom: -45, near: 1, far: 160 });
+  sun.shadow.bias = -0.0005; sun.shadow.normalBias = 0.03; scene.add(sun, sun.target);
+}
+const ktx2 = new KTX2Loader().setTranscoderPath('/three/examples/jsm/libs/basis/').detectSupport(renderer);
+const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).setKTX2Loader(ktx2);
+const load = (u) => new Promise((ok, err) => loader.load(u, (g) => ok(g.scene), undefined, err));
+const loadTex = (u) => new Promise((ok, err) => ktx2.load(u, ok, undefined, err));
+const L = await (await fetch('/source/env/s1-layout.json')).json();
+
+// ---- RGBM8 解码（= 交付说明里给程序的写法）：lightMap 采样 rgb·a·8；挂了光照贴图就不再加半球光
+function rgbmLightMap(mat) {
+  mat.onBeforeCompile = (sh) => {
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <lights_fragment_begin>', THREE.ShaderChunk.lights_fragment_begin.replace('irradiance += getHemisphereLightIrradiance( hemisphereLights[ i ], geometryNormal );', ''))
+      .replace('#include <lights_fragment_maps>', THREE.ShaderChunk.lights_fragment_maps.replace('vec3 lightMapIrradiance = lightMapTexel.rgb * lightMapIntensity;', 'vec3 lightMapIrradiance = lightMapTexel.rgb * lightMapTexel.a * 8.0 * lightMapIntensity;'))
+      // MeshBasicMaterial 的光照贴图在主体 frag 里
+      .replace('reflectedLight.indirectDiffuse += lightMapTexel.rgb * lightMapIntensity * RECIPROCAL_PI;', 'reflectedLight.indirectDiffuse += lightMapTexel.rgb * lightMapTexel.a * 8.0 * lightMapIntensity * RECIPROCAL_PI;');
+  };
+  mat.customProgramCacheKey = () => 'rgbm8';
+}
+const lmCache = {};
+const getLM = async (name) => (lmCache[name] ??= loadTex(`/textures/${name}`).catch((e) => { (window.lmErr ??= []).push(`${name}: ${e?.message ?? e}`); console.error('lightmap load', name, e); return null; }).then((t) => { if (!t) return null; t.channel = 1; t.colorSpace = THREE.NoColorSpace; t.flipY = false; t.needsUpdate = true; return t; }));
+
+const S1_LM = ['env-tidal-flat-s1', 'env-cliff-s1', 'env-shore-ledge-s1', 'env-pier-wood-ch1', 'env-fish-shed-ruin', 'env-net-rack-a', 'env-net-rack-b'];
+const white = new THREE.MeshBasicMaterial({ color: 0xffffff });
+async function prep(root, lmName) {
+  const lm = lmName && mode !== 'hemi' ? await getLM(lmName) : null;
+  const todo = [];
+  root.traverse((o) => {
+    if (!o.isMesh) return;
+    const n = o.name;
+    if (/-(collider|wall)$/.test(n)) { o.visible = false; return; }
+    const m = /_lod(\d)$/.exec(n); if (m && +m[1] !== LOD) { o.visible = false; return; }
+    if (/rope-high$/.test(n)) { o.visible = false; return; }
+    if (o.isLOD) return;
+    todo.push(o);
+  });
+  root.traverse((o) => { if (o.isLOD) { o.autoUpdate = false; o.levels.forEach((l, i) => (l.object.visible = i === LOD)); } });
+  for (const o of todo) {
+    o.castShadow = o.receiveShadow = true;
+    const mats = Array.isArray(o.material) ? o.material : [o.material];
+    const out = mats.map((mt) => {
+      mt.vertexColors = false;
+      if (mode === 'irr') {
+        if (!lm) { const b = new THREE.MeshBasicMaterial({ color: 0x404448 }); return b; }
+        const b = new THREE.MeshBasicMaterial({ color: 0xffffff, lightMap: lm, lightMapIntensity: Math.PI, alphaMap: mt.alphaMap, alphaTest: mt.alphaTest, alphaHash: mt.alphaHash, map: null });
+        if (mt.alphaHash || mt.transparent) { b.map = mt.map; b.color.set(0xffffff); }
+        rgbmLightMap(b); return b;
+      }
+      if (lm) { const c = mt.clone(); c.lightMap = lm; c.lightMapIntensity = 1.0; rgbmLightMap(c); return c; }
+      return mt;
+    });
+    o.material = Array.isArray(o.material) ? out : out[0];
+  }
+  return root;
+}
+const place = (o, pl) => { o.position.set(...pl.translation); o.rotation.order = 'YXZ'; o.rotation.y = pl.rotationY ?? 0; };
+try {
+  for (const n of S1_LM) { const pl = L.nodes[n]; const o = await prep(await load(`/${pl.file}`), null); 
+    // 读 GLB 根 extras.lightmap.texture
+    let tex = null; o.traverse((q) => { if (!tex && q.userData?.lightmap?.texture) tex = q.userData.lightmap.texture; });
+    if (tex && mode !== 'hemi') await prep(o, tex);
+    place(o, pl); scene.add(o); }
+  // 遮挡物道具（同 s1-lightmap.json occluders：潮汐钟挂岸台锚点、沉船；不挂光照贴图，irr 下为灰）
+  const occMat = (m) => (mode === 'irr' ? new THREE.MeshBasicMaterial({ color: 0x404448 }) : m);
+  const prepOcc = (o) => { o.traverse((q) => { if (!q.isMesh) return; if (/-(collider|wall|interact)$/.test(q.name)) { q.visible = false; return; } const m = /_lod(\d)$/.exec(q.name); if (m && +m[1] !== 0) { q.visible = false; return; } q.castShadow = q.receiveShadow = true; if (q.material) q.material.vertexColors = false; q.material = occMat(q.material); }); o.traverse((q) => { if (q.isLOD) { q.autoUpdate = false; q.levels.forEach((l, i) => (l.object.visible = i === 0)); } }); return o; };
+  { const bell = prepOcc(await load('/models/props/prop-tide-bell.glb')); scene.updateMatrixWorld(true); const anc = scene.getObjectByName('env-shore-ledge-s1-bell-anchor'); if (anc) anc.add(bell); }
+  { const boat = prepOcc(await load('/models/props/prop-boat-rowboat-sunken.glb')); boat.position.set(10.2, -1.15, -17); boat.rotation.order = 'YXZ'; boat.rotation.set(9 * Math.PI / 180, 34.3775 * Math.PI / 180, -21 * Math.PI / 180); scene.add(boat); }
+  // 礁石实例（不挂光照贴图）
+  const by = {}; for (const q of L.instances) (by[q.rock] ??= []).push(q);
+  if (!Q.has('norocks')) for (const [k, list] of Object.entries(by)) {
+    const g = await load(`/models/env/env-rock-shore-${k}.glb`); const mesh = g.getObjectByName(`env-rock-shore-${k}_lod0`);
+    let mat = mesh.material; mat.vertexColors = false; if (mode === 'irr') mat = new THREE.MeshBasicMaterial({ color: 0x404448 });
+    const im = new THREE.InstancedMesh(mesh.geometry, mat, list.length); const m4 = new THREE.Matrix4(); mesh.updateMatrix();
+    list.forEach((q, i) => im.setMatrixAt(i, m4.compose(new THREE.Vector3(...q.translation), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, q.rotationY, 0)), new THREE.Vector3(...q.scale)).multiply(mesh.matrix)));
+    im.castShadow = im.receiveShadow = true; scene.add(im);
+  }
+  const cam = new THREE.PerspectiveCamera(40, W / H, 0.1, 3000);
+  const look = (p, t, fov) => { cam.position.set(...p); cam.lookAt(...t); cam.fov = fov; cam.updateProjectionMatrix(); };
+  if (view === 'opening') look([-0.9, 4.2, 9.5], [6.58, 4.2, -29.78], 40);   // game/src/levels/s1/layout.ts S1.openingCam
+  if (view === 'ledge') look([-18.2, 6.4, -12.6], [-6, 0.4, -0.5], 50);
+  if (view === 'pier') look([2.5, 3.2, -3.5], [-5, 0.6, -11], 50);
+  if (view === 'flat') look([12, 9, 8], [4, 0, -6], 55);
+  if (view === 'cliff') look([1, 3.5, 1], [4, 4.5, 17], 60);
+  if (view === 'shed') look([10, 3.5, 4], [18.7, 1.2, 1.5], 50);
+  document.getElementById('cap').textContent = Q.has('cap') ? Q.get('cap') : `029 S1 ${mode} · ${view} · LOD${LOD}` + (window.lmErr ? ` · ⚠ ${window.lmErr.join(' / ')}` : '');
+  renderer.render(scene, cam); renderer.render(scene, cam);
+  document.title = 'done';
+} catch (e) { console.error(e); document.title = 'done'; document.body.insertAdjacentHTML('beforeend', `<pre style="color:#f88;position:absolute;top:0">${e.stack}</pre>`); }
+</script></body></html>

@@ -4,3 +4,28 @@ dist-*/
 *.local
 .DS_Store
 .vite/
+
+# art/source：只入库测试 / 生成脚本需要的小文件，其余（Blender 工程、原始贴图、烘焙 exr、源字体等）
+# 在 Release「art-source-2026-11-21」的 zip 里，解压到这里后不会被 git 跟踪
+/art/source/*
+!/art/source/env/
+/art/source/env/*
+!/art/source/env/s1-layout.json
+!/art/source/env/s2-layout.json
+!/art/source/env/s3-layout.json
+!/art/source/env/README-s1-layout.md
+!/art/source/env/README-s2-layout.md
+!/art/source/env/README-s3-layout.md
+!/art/source/atmosphere/
+/art/source/atmosphere/*
+!/art/source/atmosphere/atmosphere-028.json
+!/art/source/atmosphere/README-028.md
+
+# QA 运行产物（快照、日志、输出），不入库
+/qa/tools/snap-*/
+/qa/tools/logs/
+/qa/tools/out/
+/qa/tools/scratch-*/
+__pycache__/
+*.pyc
+*.blend1

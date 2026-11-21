@@ -1,0 +1,3 @@
+import { QA_DIR } from './paths.mjs';
+process.env.QA_GAME = (QA_DIR + '/snap-7097d7f/game');
+process.env.QA_VITE = (QA_DIR + '/snap-7097d7f/game/node_modules');

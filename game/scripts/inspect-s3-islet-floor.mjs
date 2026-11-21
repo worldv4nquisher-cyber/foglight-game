@@ -1,11 +1,12 @@
 import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import * as THREE from 'three';
 import { S3 } from '@/levels/s3/layout';
 globalThis.self ??= globalThis;
 const { GLTFLoader } = await import('three/examples/jsm/loaders/GLTFLoader.js');
 const { MeshoptDecoder } = await import('three/examples/jsm/libs/meshopt_decoder.module.js');
 const ktx2Stub = { load: (_u, onLoad) => onLoad(new THREE.CompressedTexture([], 1, 1)) };
-const ART = '/workspace/game-studio/art/models';
+const ART = fileURLToPath(new URL('../../art/models', import.meta.url)); // 仓库根下 art/models
 async function load(f) { const buf = readFileSync(f); return (await new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).setKTX2Loader(ktx2Stub).parseAsync(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength), '')).scene; }
 const COLL = /-(collider|wall)(\.\d+)?$/i;
 const islet = await load(`${ART}/env/env-rock-islet-a.glb`);

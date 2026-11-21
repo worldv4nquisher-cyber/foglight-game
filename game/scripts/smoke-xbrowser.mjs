@@ -1,7 +1,7 @@
 /**
  * v0.1-M7 兼容性冒烟（Firefox / WebKit，playwright）：主菜单 → 新游戏 → S1 首帧 → 出口 → S2 → 出口 → S3。
- * 不进 npm 依赖：playwright 装在仓库外，用 PW_MODULE 指过去（M7 时装在 /workspace/pw-tools，浏览器在 /workspace/pw-browsers）。
- *   PW_MODULE=/workspace/pw-tools/node_modules/playwright/index.mjs PLAYWRIGHT_BROWSERS_PATH=/workspace/pw-browsers \
+ * 不进 npm 依赖：playwright 装在仓库外，用 PW_MODULE 指过去（例如装在仓库外的 pw-tools 目录，浏览器在 pw-browsers 目录）。
+ *   PW_MODULE=<pw-tools>/node_modules/playwright/index.mjs PLAYWRIGHT_BROWSERS_PATH=<pw-browsers> \
  *   XB_BROWSER=firefox|webkit|chromium npm run smoke:xb
  * 用测试构建（vite build --mode smoke，临时建在 /tmp、跑完删；SMOKE_DIST=已建好的测试构建 可复用），?smoke=1；生产 dist 不含 __game 钩子（batch25）。任一 console.error / 未捕获异常记为失败（与 smoke-browser 同口径）。
  * 手机模拟：XB_DEVICE='iPhone 15'（webkit）/ 'Pixel 7'（chromium，XB_CHROMIUM_PATH 指系统 Chrome）——只模拟视口 / UA / 触摸 / DPR，

@@ -1,0 +1,62 @@
+{
+ "file": "mus-s3-lighthouse.ogg",
+ "path": "art/audio/music/mus-s3-lighthouse.ogg",
+ "vorbisQ": 6.5,
+ "bytes": 2416936,
+ "kbps": 128.9,
+ "seconds": 150.0,
+ "samples": 6615000,
+ "lufs": -20.0,
+ "lra": 4.8,
+ "truePeakDb": -5.2,
+ "seamDec": [
+  -52.9,
+  -58.3,
+  -21.5
+ ],
+ "seamDecVsTrackStepP999": -54.1,
+ "shortTermLufs": {
+  "p50": -20.3,
+  "p90": -18.1,
+  "max": -16.7
+ },
+ "seamSrc": [
+  -72.9,
+  -58.5,
+  -21.5
+ ],
+ "layerPair": "mus-s3-lighthouse-upper.ogg",
+ "sum": {
+  "note": "底层 + 上层（上层增益 1，即淡入到顶），解码后相加",
+  "seconds": 150.0,
+  "samples": 6615000,
+  "lufs": -17.5,
+  "lra": 3.2,
+  "truePeakDb": -3.17,
+  "seamDec": [
+   -50.3,
+   -49.8,
+   -19.4
+  ],
+  "seamDecVsTrackStepP999": -44.3,
+  "shortTermLufs": {
+   "p50": -17.7,
+   "p90": -16.2,
+   "max": -15.2
+  },
+  "seamSrc": [
+   -56.3,
+   -49.8,
+   -19.4
+  ]
+ },
+ "sumHalf": {
+  "note": "底层 + 0.5 × 上层",
+  "lufs": -19.2,
+  "truePeakDb": -4.13
+ },
+ "limiterMaxGrDb": 0.0,
+ "upperDb": 1.5,
+ "rotateSamples": 496125,
+ "rotateBeats": 7.5
+}

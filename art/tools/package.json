@@ -1,0 +1,8 @@
+{
+  "name": "game-studio-art-tools",
+  "private": true,
+  "description": "美术管线工具（gltf-transform CLI）。在本目录 npm install。",
+  "devDependencies": {
+    "@gltf-transform/cli": "^4.2.0"
+  }
+}

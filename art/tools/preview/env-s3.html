@@ -1,0 +1,161 @@
+<!doctype html>
+<!-- S3 初望灯塔组装预览（020）：按 art/source/env/s3-layout.json 摆放全部大件 + 透镜。
+     阴天冷光、雾、3 阶明暗、深度描边、冷调色。环境里没有暖光（点火前）；022 道具（镜子、阀门、点火口、潮钟）用灰色方块占位，光路用细线标出（只在预览里）。
+     由 ../render-preview-web.mjs --s3 驱动。?view=exterior | concept | overview | stairs | lookup | lamp | window | s1far -->
+<html><head><meta charset="utf-8"><style>html,body{margin:0;background:#9AA3AB;overflow:hidden;font:12px/1.2 sans-serif}
+.lbl{position:absolute;color:#1d2328;background:rgba(220,225,228,.82);padding:2px 5px;border-radius:3px;white-space:nowrap;transform:translate(-50%,-120%)}
+#cap{position:absolute;left:10px;bottom:8px;color:#e8ecee;text-shadow:0 1px 2px #000;font-size:13px}</style>
+<script type="importmap">{"imports":{"three":"/three/build/three.module.js","three/addons/":"/three/examples/jsm/"}}</script>
+</head><body><div id="cap"></div>
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
+import { KTX2Loader } from 'three/addons/loaders/KTX2Loader.js';
+import { RectAreaLightUniformsLib } from 'three/addons/lights/RectAreaLightUniformsLib.js';
+
+const Q = new URLSearchParams(location.search);
+const view = Q.get('view') ?? 'exterior';
+const INDOOR = ['stairs', 'lookup', 'lamp', 'window'].includes(view);
+const SS = 2, W = innerWidth, H = innerHeight;
+const renderer = new THREE.WebGLRenderer({ antialias: false, preserveDrawingBuffer: true });
+renderer.setPixelRatio(1); renderer.setSize(W, H);
+renderer.outputColorSpace = THREE.SRGBColorSpace; renderer.toneMapping = THREE.AgXToneMapping; renderer.toneMappingExposure = INDOOR ? 1.25 : 1.05;
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+document.body.appendChild(renderer.domElement);
+RectAreaLightUniformsLib.init();
+const FOG = new THREE.Color('#B4BEC5');
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2(FOG, INDOOR ? 0.004 : view === 's1far' ? 0.0045 : view === 'overview' ? 0.0028 : 0.008);
+// 灯光：冷色天光 + 云后漫射主光（无环境暖光）
+const hemi = new THREE.HemisphereLight('#AEBCC7', '#4B545B', INDOOR ? 0.22 : 1.5); scene.add(hemi);
+const sun = new THREE.DirectionalLight('#CFD9E1', INDOOR ? 0.55 : 0.9);
+sun.castShadow = true; sun.shadow.mapSize.set(4096, 4096);
+Object.assign(sun.shadow.camera, { left: -30, right: 30, top: 30, bottom: -30, near: 1, far: 160 });
+sun.shadow.bias = -0.0005; sun.shadow.normalBias = 0.03; sun.shadow.radius = 4;
+sun.target.position.set(0, 8, -3); sun.position.set(30, 45, 12).add(sun.target.position); scene.add(sun, sun.target);
+// 天空
+const sky = new THREE.Mesh(new THREE.SphereGeometry(1500, 48, 24), new THREE.ShaderMaterial({ side: THREE.BackSide, depthWrite: false, fog: false,
+  uniforms: { top: { value: new THREE.Color('#4A535B') }, mid: { value: new THREE.Color('#97A0A8') }, hor: { value: new THREE.Color('#C4CBD0') } },
+  vertexShader: `varying vec3 vDir; void main(){ vDir = normalize(position); vec4 p = projectionMatrix*modelViewMatrix*vec4(position,1.0); gl_Position = p.xyww; }`,
+  fragmentShader: `varying vec3 vDir; uniform vec3 top, mid, hor;
+    float h(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }
+    float n(vec2 p){ vec2 i=floor(p), f=fract(p); f=f*f*(3.0-2.0*f); return mix(mix(h(i),h(i+vec2(1,0)),f.x), mix(h(i+vec2(0,1)),h(i+vec2(1,1)),f.x), f.y); }
+    float fbm(vec2 p){ float s=0.0,a=0.5; for(int i=0;i<6;i++){ s+=a*n(p); p=p*2.03+vec2(1.7,9.2); a*=0.5; } return s; }
+    void main(){ vec3 d = normalize(vDir); float e = max(d.y, 0.0);
+      vec3 c = mix(hor, mid, smoothstep(0.0, 0.18, e)); c = mix(c, top, smoothstep(0.18, 0.7, e));
+      vec2 uv = d.xz / (d.y + 0.12) * 1.4; float cl = fbm(uv*0.9 + vec2(3.0, 1.0));
+      c = mix(c, top*0.72, smoothstep(0.45, 0.8, cl) * smoothstep(0.02, 0.25, e) * 0.8);
+      c = mix(c, hor, 1.0 - smoothstep(0.0, 0.05, e)); gl_FragColor = vec4(c, 1.0); }` }));
+sky.renderOrder = -10; sky.frustumCulled = false; scene.add(sky);
+// 海面（崖下 -16 m，平色 + 雾）
+const sea = new THREE.Mesh(new THREE.PlaneGeometry(4000, 4000), new THREE.MeshStandardMaterial({ color: '#3A464E', roughness: 0.35, metalness: 0 }));
+sea.rotation.x = -Math.PI / 2; sea.position.y = INDOOR ? -0.3 : 0.9; scene.add(sea);
+
+const physChunk = THREE.ShaderChunk.lights_physical_pars_fragment.replace(
+  'float dotNL = saturate( dot( geometryNormal, directLight.direction ) );',
+  'float dotNL = saturate( dot( geometryNormal, directLight.direction ) ); dotNL = smoothstep(0.02,0.1,dotNL)*0.42 + smoothstep(0.38,0.5,dotNL)*0.58;');
+function prepare(root, opt = {}) {
+  root.traverse((o) => {
+    if (/-(collider|wall)$/.test(o.name)) { o.visible = false; return; }
+    const m = /_lod(\d)$/.exec(o.name); if (m) o.visible = +m[1] === (opt.lod ?? 0);
+    if (!o.isMesh) return;
+    o.castShadow = opt.cast ?? true; o.receiveShadow = true;
+    for (const mt of Array.isArray(o.material) ? o.material : [o.material]) {
+      if (mt.userData.__p) continue; mt.userData.__p = true;
+      if (mt.name === 'mat-env-silhouette-far') { o.material = new THREE.MeshBasicMaterial({ color: new THREE.Color('#5A656E').lerp(FOG, 0.45), fog: false }); o.castShadow = false; continue; }
+      if (mt.name === 'mat-prop-lantern-glow') { mt.vertexColors = false; mt.emissiveIntensity = 3; continue; }
+      mt.vertexColors = false; if (mt.map) mt.map.anisotropy = 8;
+      if (mt.name === 'mat-env-lighthouse-weather' || mt.name === 'mat-prop-fresnel-glass') { o.castShadow = false; mt.depthWrite = false; mt.polygonOffset = true; mt.polygonOffsetFactor = -1; mt.polygonOffsetUnits = -2; continue; }
+      if (mt.name === 'mat-env-glass-window') { o.castShadow = false; mt.depthWrite = false; continue; }
+      mt.onBeforeCompile = (sh) => { sh.fragmentShader = sh.fragmentShader.replace('#include <lights_physical_pars_fragment>', physChunk); };
+      mt.customProgramCacheKey = () => 'env-s3'; mt.needsUpdate = true;
+    }
+  });
+  return root;
+}
+const ktx2 = new KTX2Loader().setTranscoderPath('/three/examples/jsm/libs/basis/').detectSupport(renderer);
+const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).setKTX2Loader(ktx2);
+const load = (u) => new Promise((ok, err) => loader.load(u, (g) => ok(g.scene), undefined, err));
+const L = await (await fetch('/source/env/s3-layout.json')).json();
+const labels = []; const label = (t, p) => labels.push([t, new THREE.Vector3(...p)]);
+try {
+  const cam = new THREE.PerspectiveCamera(40, W / H, 0.05, 3000);
+  const look = (p, t, fov = 40) => { cam.position.set(...p); cam.lookAt(...t); cam.fov = fov; cam.updateProjectionMatrix(); };
+  const P = L.points, D2R = Math.PI / 180, polar = (r, th, y) => [r * Math.cos(th * D2R), y, r * Math.sin(th * D2R)];
+  const lod = view === 's1far' ? 2 : 0;
+  for (const [n, pl] of Object.entries(L.nodes)) {
+    if (view === 's1far' && n !== 'env-lighthouse-ch1') continue;
+    if ((new URLSearchParams(location.search).get('hide') ?? '').split(',').includes(n)) continue;
+    const o = prepare(await load(`/${pl.file}`), { lod: n === 'prop-fresnel-lens-ch1' ? 0 : lod });
+    o.position.set(...pl.translation); o.rotation.y = pl.rotationY ?? 0; scene.add(o);
+  }
+  if (view === 's1far') {
+    // S1 远景对比：左 = S1 现有 env-lighthouse-island-main（19.7 m 塔），右 = 020 灯塔 LOD2（放在同一礁岛台面高度 7.4）
+    const s1 = prepare(await load('/models/env/env-lighthouse-island-main.glb'), { lod: 2 }); s1.position.set(-24, 0, 0); scene.add(s1);
+    const s1b = prepare(await load('/models/env/env-lighthouse-island-main-s3tower.glb'), { lod: 2 }); s1b.position.set(24, 0, 0); scene.add(s1b);
+    scene.children.filter((o) => o.name === 'env-lighthouse-ch1').forEach((o) => o.position.set(24, 7.4 - 0.8, 0));
+    label('S1 现状 env-lighthouse-island-main（塔顶 27.1）', [-24, 30, 0]); label('S1 无塔礁丘 + 020 灯塔 LOD2（插槽，塔顶 32.6）', [24, 36, 0]);
+  }
+  // 022 道具占位（灰方块）+ 光路细线（预览专用）
+  const grey = new THREE.MeshStandardMaterial({ color: '#8D969D', roughness: 0.4, metalness: 0.5 });
+  const box = (s, p, ry = 0) => { const m = new THREE.Mesh(new THREE.BoxGeometry(...s), grey); m.position.set(...p); m.rotation.y = ry; m.castShadow = true; scene.add(m); return m; };
+  if (view !== 's1far') {
+    box([0.06, 0.5, 0.55], P.mirrors.window.center, 0.3); box([0.5, 0.5, 0.05], P.mirrors.a.center, -P.mirrors.a.th * D2R + 0.7); box([0.5, 0.5, 0.05], P.mirrors.b.center, -P.mirrors.b.th * D2R + 0.7);
+    box([0.25, 0.25, 0.12], polar(2.86, 70, 0.9), -70 * D2R);
+    const lp = P.lightPath.map((p) => new THREE.Vector3(...p));
+    const beam = new THREE.Mesh(new THREE.TubeGeometry((() => { const c = new THREE.CurvePath(); for (let i = 1; i < lp.length; i++) c.add(new THREE.LineCurve3(lp[i - 1], lp[i])); return c; })(), 200, 0.025, 6), new THREE.MeshBasicMaterial({ color: '#DDEBF2', transparent: true, opacity: 0.8, fog: false }));
+    if (['lookup', 'stairs', 'overview', 'window'].includes(view)) scene.add(beam);
+  }
+  // 室内：门窗洞口冷色面光（模拟天光从洞口进来）
+  if (INDOOR) {
+    for (const o of [P.door, P.westWindow, ...P.stairWindows]) {
+      const cy = (o.y0 + o.y1) / 2, ra = new THREE.RectAreaLight('#BFCCD6', o === P.westWindow ? 14 : 8, o.w + 0.3, o.y1 - o.y0);
+      ra.position.set(...polar(2.95, o.th, cy)); ra.lookAt(...polar(0, o.th, cy)); scene.add(ra);
+    }
+    const fill = new THREE.PointLight('#AFC0CC', 6, 14, 1.5); fill.position.set(0, view === 'lamp' ? 23.8 : 6, 0); scene.add(fill);
+    if (view === 'lamp') { hemi.intensity = 0.9; }
+  }
+  if (view === 'exterior') look([-31, 4.5, -25], [0, 12.0, 0], 50);
+  if (view === 'concept') look([-16.5, 3.4, -16.5], [0, 13.2, 0], 60);
+  if (view === 'overview') {
+    look([-44, 58, -40], [0, 6, -4], 46);
+    for (const [t, p] of [['门（东南 θ225，门槛 2.4）', polar(4.2, 225, 3.4)], ['门外平台 2.4 / 送回点', [-4.2, 2.6, -4.2]], ['石桥 桥面 3.0 → S2', [-12, 3.2, -12]], ['西窗（窗台 1.0）', polar(4.3, 0, 1.6)], ['灯室地面 22', [0, 22.5, 3.6]], ['N(+Z) ↑ 东 = -X', [-8, 1, 9]]]) label(t, p);
+  }
+  if (view === 'stairs') look(polar(2.55, 220, 3.9), polar(1.6, 120, 8.4), 70);
+  if (view === 'lookup') { look([0.05, 1.6, 0.0], [0.0, 22, 0.02], 78); label('平台 A y10', polar(2.4, P.mirrors.a.th, 10)); label('平台 B y16', polar(2.4, P.mirrors.b.th, 16)); label('点火口 y21.85', [0, 21.7, 0]); }
+  if (view === 'window') { look(polar(1.6, 205, 2.3), polar(2.6, 0, 1.2), 64); label('窗镜座 台面 1.0', [2.35, 1.05, 0]); label('油阀座 y0.9', polar(2.86, 70, 0.95)); label('潮痕 y1.6', polar(2.95, 330, 1.6)); }
+  if (view === 'lamp') look(polar(2.55, 300, 23.65), [0, 23.0, 0], 70);
+  if (view === 's1far') look([0, 12, -170], [0, 15, 0], 24);
+  if (Q.get('cam')) { const c = Q.get('cam').split('_').map(Number); look(c.slice(0, 3), c.slice(3, 6), c[6] ?? 40); }   // 调试机位 ?cam=px_py_pz_tx_ty_tz_fov
+  { const { addMarkers } = await import('./markers.js'); addMarkers(THREE, scene, Q.get('mark'), label); }   // ?mark=正则：节点标记（返工 2026-10-29）
+  const capT = { exterior: '外观（东南，礁岛 + 门外平台 + 石桥头，水位 0.9）', concept: '与概念图同机位（近景仰视）', overview: '总图（占位布局）', stairs: '螺旋楼梯（门内平台往上看）', lookup: '底层中心仰视：两层平台、镜臂、点火口；白线 = 光路占位', lamp: '灯室：透镜 + 主灯机构（未点火，无暖光）', window: '底层机房：西窗、窗镜石座、油阀座、潮痕', s1far: 'S1 远景距离（170 m，LOD2）：右 = S1 现有塔，左 = 无塔礁丘 + 020 灯塔' };
+  document.getElementById('cap').textContent = `S3 初望灯塔 · ${capT[view]}`;
+  const rt = new THREE.WebGLRenderTarget(W * SS, H * SS, { type: THREE.HalfFloatType, depthTexture: new THREE.DepthTexture(W * SS, H * SS, THREE.FloatType) });
+  const post = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMaterial({
+    uniforms: { tC: { value: rt.texture }, tD: { value: rt.depthTexture }, px: { value: new THREE.Vector2(1 / (W * SS), 1 / (H * SS)) }, near: { value: 0.05 }, far: { value: 3000 }, ol: { value: new THREE.Color('#2A2F36') }, ss: { value: SS } },
+    vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
+    fragmentShader: `uniform sampler2D tC, tD; uniform vec2 px; uniform float near, far, ss; uniform vec3 ol; varying vec2 vUv;
+      float lin(vec2 uv){ float z = texture2D(tD, uv).x * 2.0 - 1.0; return 2.0*near*far / (far + near - z*(far - near)); }
+      float edgeAt(vec2 uv){ float d = lin(uv); float s = 1.4*ss; float m = 0.0;
+        for (int i = 0; i < 4; i++) { vec2 o = (i==0? vec2(s,0.0) : i==1? vec2(-s,0.0) : i==2? vec2(0.0,s) : vec2(0.0,-s)) * px; m = max(m, lin(uv + o) - d); }
+        return smoothstep(0.035, 0.09, m / d) * (1.0 - smoothstep(25.0, 110.0, d)); }
+      void main(){ vec3 c = vec3(0.0); float e = 0.0;
+        for (int i = 0; i < 4; i++) { vec2 o = (vec2(float(i/2), float(i - (i/2)*2)) - 0.5) * px * (ss*0.5); c += texture2D(tC, vUv + o).rgb; e += edgeAt(vUv + o); }
+        c *= 0.25; e *= 0.25; c = mix(c, ol * 0.55, e * 0.6);
+        float l = dot(c, vec3(0.2126, 0.7152, 0.0722)); c = mix(vec3(l), c, 0.86) * vec3(0.97, 1.0, 1.04);
+        vec2 q = vUv - 0.5; c *= 1.0 - dot(q, q) * 0.55;
+        float g = fract(sin(dot(vUv*vec2(1271.0, 3117.0), vec2(12.9898, 78.233))) * 43758.5453); c += (g - 0.5) * 0.018;
+        gl_FragColor = vec4(c, 1.0);
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+      }` }));
+  post.material.toneMapped = true;
+  const postScene = new THREE.Scene(); postScene.add(post); const postCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+  renderer.setRenderTarget(rt); renderer.render(scene, cam); renderer.setRenderTarget(null); renderer.render(postScene, postCam);
+  cam.updateMatrixWorld();
+  for (const [t, p] of labels) { const v = p.clone().project(cam); const d = document.createElement('div'); d.className = 'lbl'; d.textContent = t; d.style.left = `${(v.x * 0.5 + 0.5) * W}px`; d.style.top = `${(-v.y * 0.5 + 0.5) * H}px`; document.body.appendChild(d); }
+  await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+  document.title = 'done';
+} catch (e) { console.error(e); document.title = 'error ' + (e?.stack ?? e); }
+</script></body></html>

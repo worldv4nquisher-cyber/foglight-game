@@ -1,7 +1,7 @@
 > box 上是无头 Chrome + swiftshader 软件渲染，帧率 / 帧时间 / GPU 开销 / 着色器编译卡顿 / 真实显存都量不准。下面是**制作人桌面真 GPU 实测清单**：**RTX 3060 · 2560×1440 · 极致档 · 目标 60 fps**（GDD §14）。结果填到下面「记录表」，帧率栏最终由用户 M8 实机复填到第 1 节；发现问题记 `docs/bugs/`。
 
 ### 0 准备（一次）
-- 本地自检包（**不是发布版**，发布须用户确认）：`cd /workspace/game-studio/game && npm run preview:smoke`（batch25 起生产 dist 不含 `__game` / `__perfSpot` 钩子；这条命令临时建一份带钩子的测试构建到 /tmp——和生产构建同配置、同样压缩——在 4173 起服务，Ctrl+C 退出时删掉），打开 `http://localhost:4173/`。
+- 本地自检包（**不是发布版**，发布须用户确认）：`cd game && npm run preview:smoke`（在仓库根下执行）（batch25 起生产 dist 不含 `__game` / `__perfSpot` 钩子；这条命令临时建一份带钩子的测试构建到 /tmp——和生产构建同配置、同样压缩——在 4173 起服务，Ctrl+C 退出时删掉），打开 `http://localhost:4173/`。
 - 浏览器全屏（F11）到 2560×1440，Windows 缩放 100%（不是 100% 时实际渲染分辨率会变，记下来）；关掉其它标签页 / 录屏软件；笔记本插电、独显。
 - `chrome://gpu` 确认「WebGL2: Hardware accelerated」，记下 GPU 型号、驱动版本、Chrome 版本。
 

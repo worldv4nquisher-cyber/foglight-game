@@ -1,0 +1,33 @@
+{
+ "file": "mus-s2-keeper-house.ogg",
+ "vorbisQ": 5.5,
+ "bytes": 2577617,
+ "seconds": 151.111,
+ "samples": 6664000,
+ "srcSamples": 6664000,
+ "kbps": 136.5,
+ "lufs": -20.0,
+ "lra": 10.0,
+ "truePeakDb": -1.76,
+ "limiter": {
+  "maxGrDb": 0.0,
+  "grSeconds": 0.0
+ },
+ "seamSrc": [
+  -74.2,
+  -66.3,
+  -22.8
+ ],
+ "seamDec": [
+  -63.9,
+  -66.2,
+  -22.8
+ ],
+ "seamDecVsTrackStepP999": -51.4,
+ "shortTermLufs": {
+  "p50": -21.3,
+  "p90": -18.1,
+  "max": -16.4
+ },
+ "path": "art/audio/music/mus-s2-keeper-house.ogg"
+}
