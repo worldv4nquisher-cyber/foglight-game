@@ -95,7 +95,7 @@ export function createPlayer(game: Game, physics: PhysicsSystem, spawn: THREE.Ve
     const sdf = game.assets.has(XI_SDF_KEY) ? game.assets.getTexture(XI_SDF_KEY) : null;
     look = entity.add(new XiLookComponent(applyXiMaterials(model, { ramp: game.assets.getTexture(XI_RAMP_KEY), sdf })));
   }
-  // 023 外扩描边：三档 outlineHull 都含 'character'，汐始终描（头发走同一张贴图的 alpha test）
+  // 023 外扩描边：极致 / 高 / 标准档 outlineHull 都含 'character'，汐始终描（头发走同一张贴图的 alpha test）；最低档由 LevelScene.applyQuality 把壳隐藏
   if (model && outlineHullEnabled) model.userData.outlineHull = addOutlineHull(model);
   return { entity, body, controller, visual, ...(animator ? { animator } : {}), ...(look ? { look } : {}) };
 }

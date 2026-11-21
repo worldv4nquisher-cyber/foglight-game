@@ -29,6 +29,18 @@ export interface HullStats {
   skipped: string[];
 }
 
+/** 显隐子树里所有描边壳（画质档 outlineHull 不含 'character' 时关：最低档省掉角色壳的背面整遍着色） */
+export function setOutlineHullsVisible(root: THREE.Object3D, on: boolean): number {
+  let n = 0;
+  root.traverse((o) => {
+    if ((o as THREE.Mesh).isMesh && o.userData[HULL_TAG] === true) {
+      o.visible = on;
+      n++;
+    }
+  });
+  return n;
+}
+
 /** 外扩量（NDC，y 方向）：恒定 px@1080 → 2·px/1080；x 方向再除以宽高比 */
 export function hullNdcOffset(aspect: number): { x: number; y: number } {
   const y = (2 * HULL_PX_1080) / 1080;

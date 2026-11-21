@@ -100,6 +100,8 @@ export interface QualityPreset {
   shadowRadius: number;
   /** 相机远裁剪面（米） */
   viewDistance: number;
+  /** 大水面（600 m）网格细分：每边段数（最低档少一半，面数 1/4） */
+  waterSegments: number;
 }
 
 export const QUALITY_PRESETS: Record<QualityTier, QualityPreset> = {
@@ -143,6 +145,7 @@ export const QUALITY_PRESETS: Record<QualityTier, QualityPreset> = {
     aoQuality: 'High',
     shadowRadius: 3,
     viewDistance: 600,
+    waterSegments: 200,
   },
   high: {
     tier: 'high',
@@ -182,6 +185,7 @@ export const QUALITY_PRESETS: Record<QualityTier, QualityPreset> = {
     aoQuality: 'Medium',
     shadowRadius: 2.5,
     viewDistance: 400,
+    waterSegments: 200,
   },
   standard: {
     tier: 'standard',
@@ -221,11 +225,12 @@ export const QUALITY_PRESETS: Record<QualityTier, QualityPreset> = {
     aoQuality: 'Low',
     shadowRadius: 2,
     viewDistance: 250,
+    waterSegments: 200,
   },
   low: {
     tier: 'low',
     labelId: 'ui.settings.quality_low',
-    renderScale: 0.5,
+    renderScale: 0.35,
     maxPixelRatio: 1,
     heroCharTris: 25_000,
     npcCharTris: 12_000,
@@ -234,7 +239,8 @@ export const QUALITY_PRESETS: Record<QualityTier, QualityPreset> = {
     textureMaxSize: 1024,
     textureMaxSizeEnv: 512,
     anisotropy: 1,
-    outlineHull: ['character', 'interactive'],
+    // 角色外扩描边壳关掉（背面整遍着色，软件渲染下很贵）
+    outlineHull: ['interactive'],
     outlinePost: { enabled: false, resolution: 'full', inputs: [], maxDistance: 0 },
     fogMode: 'cards',
     fogFroxels: null,
@@ -255,8 +261,9 @@ export const QUALITY_PRESETS: Record<QualityTier, QualityPreset> = {
     filmGrain: false,
     vignette: false,
     antialias: 'SMAA',
-    lodDistances: [5, 12, 30],
-    impostorDistance: 250,
+    lodDistances: [2, 4, 8],
+    // 没有 impostor：实例散石超过这个距离直接不画（雾里本来就看不清）
+    impostorDistance: 90,
     grassDensity: 0.2,
     // 后处理整条关掉：直出 + ACES（颜色和 AgX / LUT 不一样，只用来跑流程找问题）
     postprocessing: false,
@@ -264,6 +271,7 @@ export const QUALITY_PRESETS: Record<QualityTier, QualityPreset> = {
     shadowRadius: 1,
     // 视距不降：S1 远景雾墙在 175 m，标准档的 250 m 才包得住
     viewDistance: 250,
+    waterSegments: 100,
   },
 };
 

@@ -241,6 +241,16 @@ export class Water extends THREE.Mesh<THREE.PlaneGeometry, THREE.MeshStandardMat
     }
   }
 
+  /** 网格细分（画质档 waterSegments；浪是顶点位移，细分只影响浪形精度）。数值没变不重建 */
+  setSegments(segments: number): void {
+    const p = this.geometry.parameters;
+    if (p.widthSegments === segments) return;
+    const geometry = new THREE.PlaneGeometry(p.width, p.height, segments, segments);
+    geometry.rotateX(-Math.PI / 2);
+    this.geometry.dispose();
+    this.geometry = geometry;
+  }
+
   /** 当前倒影强度（测试用） */
   get reflectionStrength(): number {
     return this.uniforms.uReflK.value;

@@ -173,7 +173,7 @@ glTF/GLB 用 Draco 或 Meshopt 压缩几何（推荐 Meshopt）；贴图用 **KT
 
 | 参数（key） | 极致 `ultra`（默认） | 高 `high` | 标准 `standard`（兜底） | 最低 `low`（无独显 / 软件渲染） |
 |---|---|---|---|---|
-| `renderScale` 渲染分辨率缩放 | 1.0 | 1.0 | 0.8 | 0.5 |
+| `renderScale` 渲染分辨率缩放 | 1.0 | 1.0 | 0.8 | 0.35 |
 | `maxPixelRatio` | 2.0 | 1.5 | 1.0 | 1.0 |
 | `heroCharTris` 主角（汐）三角面 | 120k（lod0） | 50k（lod1，高档和标准档共用） | 50k（lod2 ≤ 25k 用于远景） | 25k（lod2） |
 | `npcCharTris` NPC 三角面 | 60k | 40k | 25k | 12k |
@@ -182,7 +182,7 @@ glTF/GLB 用 Draco 或 Meshopt 压缩几何（推荐 Meshopt）；贴图用 **KT
 | `textureMaxSize` 角色/重点道具 | 4096 | 2048 | 2048 | 1024 |
 | `textureMaxSizeEnv` 普通环境贴图 | 2048 | 2048 | 1024 | 512 |
 | `anisotropy` | 16 | 8 | 4 | 1 |
-| `outlineHull` 外扩描边 | 角色+道具+近景 | 角色+道具 | 仅角色和可交互物 | 仅角色和可交互物 |
+| `outlineHull` 外扩描边 | 角色+道具+近景 | 角色+道具 | 仅角色和可交互物 | 仅可交互物（角色不描边） |
 | `outlinePost` 后处理描边 | 全分辨率，法线+深度+ID，最远 300 m | 全分辨率，法线+深度，最远 150 m | 关闭（远景不描边） | 关闭 |
 | `fogMode` 雾 | `volumetric`（froxel 160×90×128） | `volumetric`（半分辨率 froxel 80×45×64） | `cards`（假体积贴片） | `cards`（同标准） |
 | `fogCards` 雾墙/雾贴片数 | 远景 5 层 + 补充 ≤ 20 | 远景 5 层 + ≤ 30 | 远景 4 层 + ≤ 40 | 远景 4 层 + ≤ 40（同标准） |
@@ -198,8 +198,8 @@ glTF/GLB 用 Draco 或 Meshopt 压缩几何（推荐 Meshopt）；贴图用 **KT
 | `lut` / `toneMapping` | 开 / AgX | 开 / AgX | 开 / AgX | — / —（后处理关闭，直出 ACES） |
 | `filmGrain` / `vignette` | 开 / 开 | 开 / 开 | 关 / 开 | 关 / 关 |
 | `antialias` | TAA | SMAA | SMAA | 无（后处理关闭） |
-| `lodDistances` [LOD0, LOD1, LOD2] m | [60, 150, 400] | [40, 100, 250] | [25, 60, 150] | [5, 12, 30] |
-| `impostorDistance` m | 600 | 400 | 250 | 250 |
+| `lodDistances` [LOD0, LOD1, LOD2] m | [60, 150, 400] | [40, 100, 250] | [25, 60, 150] | [2, 4, 8] |
+| `impostorDistance` m | 600 | 400 | 250 | 90（无 impostor，实例散石超过此距离不画） |
 | `viewDistance` 视距（`camera.far`）m | 600 | 400 | 250 | 250 |
 | `grassDensity` | 1.0 | 0.7 | 0.4 | 0.2 |
 

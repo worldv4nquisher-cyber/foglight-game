@@ -240,7 +240,10 @@ export function buildS1Art(assets: AssetLoader): S1Art {
       if (boat) boat.position.y = Math.max(S1.boat.groundY, tideLevel - S1.boat.belowWater);
     },
     applyQuality(q) {
-      for (const r of rocks) r.setDistances(q.lodDistances);
+      for (const r of rocks) {
+        r.setDistances(q.lodDistances);
+        r.setCulling(q.shadowType.cascades === 0, q.impostorDistance);
+      }
       const k = TOWER_LOD_BY_TIER[q.tier];
       for (const lod of towerLods) lod.levels.forEach((l, i) => (l.distance = i <= k ? 0 : Infinity));
     },

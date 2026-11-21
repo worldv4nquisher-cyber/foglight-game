@@ -13,7 +13,7 @@ import { DEFAULT_SETTINGS, SETTINGS_KEY, Settings } from '@/systems/save/Setting
 
 /** style-guide §8 表（2026-10-29 版；heroCharTris 高档按拆单裁定第 4 条为 50k） */
 const SPEC = {
-  renderScale: [1.0, 1.0, 0.8, 0.5],
+  renderScale: [1.0, 1.0, 0.8, 0.35],
   maxPixelRatio: [2.0, 1.5, 1.0, 1.0],
   heroCharTris: [120_000, 50_000, 50_000, 25_000],
   npcCharTris: [60_000, 40_000, 25_000, 12_000],
@@ -22,7 +22,7 @@ const SPEC = {
   textureMaxSize: [4096, 2048, 2048, 1024],
   textureMaxSizeEnv: [2048, 2048, 1024, 512],
   anisotropy: [16, 8, 4, 1],
-  outlineHull: [['character', 'prop', 'near'], ['character', 'prop'], ['character', 'interactive'], ['character', 'interactive']],
+  outlineHull: [['character', 'prop', 'near'], ['character', 'prop'], ['character', 'interactive'], ['interactive']],
   outlinePost: [
     { enabled: true, resolution: 'full', inputs: ['normal', 'depth', 'id'], maxDistance: 300 },
     { enabled: true, resolution: 'full', inputs: ['normal', 'depth'], maxDistance: 150 },
@@ -87,8 +87,8 @@ const SPEC = {
   filmGrain: [true, true, false, false],
   vignette: [true, true, true, false],
   antialias: ['TAA', 'SMAA', 'SMAA', 'SMAA'],
-  lodDistances: [[60, 150, 400], [40, 100, 250], [25, 60, 150], [5, 12, 30]],
-  impostorDistance: [600, 400, 250, 250],
+  lodDistances: [[60, 150, 400], [40, 100, 250], [25, 60, 150], [2, 4, 8]],
+  impostorDistance: [600, 400, 250, 90],
   grassDensity: [1.0, 0.7, 0.4, 0.2],
 };
 const TIERS = ['ultra', 'high', 'standard', 'low'];

@@ -25,6 +25,8 @@ interface Level {
 const HYSTERESIS = 0.1;
 const tmp = new THREE.Matrix4();
 const v = new THREE.Vector3();
+const frustum = new THREE.Frustum();
+const sphere = new THREE.Sphere();
 
 /** 摆放矩阵（T·R_y·S） */
 export function placementMatrix(p: InstancePlacement, out = new THREE.Matrix4()): THREE.Matrix4 {
@@ -82,6 +84,10 @@ export class InstancedLodSet extends THREE.Group {
   private assigned: Int8Array;
   private distances: LodDistances = [Infinity, Infinity, Infinity];
   private readonly centers: THREE.Vector3[];
+  /** 每个实例 LOD0 的包围球（本组坐标系），视锥剔除用 */
+  private readonly spheres: THREE.Sphere[];
+  private cull = false;
+  private cullDistance = Infinity;
 
   constructor(model: THREE.Object3D, placements: readonly InstancePlacement[], opts: { name?: string; material?: (m: THREE.Material) => THREE.Material } = {}) {
     super();
@@ -106,6 +112,10 @@ export class InstancedLodSet extends THREE.Group {
       this.add(im);
       return { mesh: im, local };
     });
+    const l0 = this.levels[0]!;
+    if (!l0.mesh.geometry.boundingSphere) l0.mesh.geometry.computeBoundingSphere();
+    const base = l0.mesh.geometry.boundingSphere!;
+    this.spheres = this.placements.map((m) => base.clone().applyMatrix4(tmp.multiplyMatrices(m, l0.local)));
     this.assigned = new Int8Array(n).fill(-1);
     // 默认全部 LOD0（没有相机时）
     this.assignAll(() => 0);
@@ -119,6 +129,15 @@ export class InstancedLodSet extends THREE.Group {
 
   setDistances(d: LodDistances): void {
     this.distances = d;
+  }
+
+  /**
+   * 逐实例视锥剔除（不在画面里的实例不画），并且超过 maxDistance 的实例也不画。
+   * 只在不投阴影时开：画面外的石头也会把影子投进画面里。
+   */
+  setCulling(on: boolean, maxDistance = Infinity): void {
+    this.cull = on;
+    this.cullDistance = maxDistance;
   }
 
   /** 各级当前实例数 */
@@ -150,6 +169,7 @@ export class InstancedLodSet extends THREE.Group {
     const counts = this.levels.map(() => 0);
     for (let k = 0; k < next.length; k++) {
       const li = next[k]!;
+      if (li < 0) continue;
       const l = this.levels[li]!;
       l.mesh.setMatrixAt(counts[li]!++, tmp.multiplyMatrices(this.placements[k]!, l.local));
     }
@@ -166,6 +186,12 @@ export class InstancedLodSet extends THREE.Group {
     const inv = tmp.copy(this.matrixWorld).invert();
     const local = v.applyMatrix4(inv);
     const scale = this.matrixWorld.getMaxScaleOnAxis() || 1;
-    this.assignAll((k, cur) => this.levelFor(this.centers[k]!.distanceTo(local) * scale, cur));
+    if (this.cull) frustum.setFromProjectionMatrix(tmp.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
+    this.assignAll((k, cur) => {
+      if (this.cull && !frustum.intersectsSphere(sphere.copy(this.spheres[k]!).applyMatrix4(this.matrixWorld))) return -1;
+      const dist = this.centers[k]!.distanceTo(local) * scale;
+      if (this.cull && dist > this.cullDistance) return -1;
+      return this.levelFor(dist, cur);
+    });
   }
 }

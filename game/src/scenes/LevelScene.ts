@@ -21,6 +21,7 @@ import { Water, WATER_NORMAL_KEY, RAIN_RIPPLE_KEY } from '@/world/Water';
 import { ATMO028, type Atmo028Tier } from '@/config/atmosphere028';
 import { Rain, RAIN_STREAK_KEY, RAIN_SPLASH_KEY, collectIndoorShapes } from '@/world/Rain';
 import { applyCharLodCaps, applyLodDistances } from '@/render/lod';
+import { setOutlineHullsVisible } from '@/render/OutlineHull';
 import { applySceneLightmaps, presetLightmapScale, type LightmapHandle } from '@/render/lightmap';
 import { TEST_BUILD, lightmapEnabled, testParam, testSearch } from '@/config/debug';
 import { manifest } from '@/assets/manifest';
@@ -476,6 +477,7 @@ export abstract class LevelScene extends BaseScene {
     this.rain?.setTier(at, q.rainParticles.count);
     this.qualityTier = at;
     this.water?.setRipples(ATMO028.rainTiers[at].ripples);
+    this.water?.setSegments(q.waterSegments);
     // 025：反射分辨率 = 画质档 reflections.planar（极致 0.5 / 高 0.5 / 标准 0.25；极致 1 → 0.5 见 0f42f4a）；?reflect= 调试覆盖
     if (this.reflection) {
       this.reflection.scale = this.reflectOverride ?? q.reflections.planar;
@@ -498,6 +500,7 @@ export abstract class LevelScene extends BaseScene {
     applyLodDistances(this.scene, q.lodDistances);
     // 角色面数上限（裁定第 4 条）：高 / 标准档汐最高用 lod1（≤ 50k），父亲按 npcCharTris（高 40k / 标准 25k → lod1）
     applyCharLodCaps(this.scene, { hero: q.heroCharTris, npc: q.npcCharTris });
+    setOutlineHullsVisible(this.scene, q.outlineHull.includes('character'));
     // 037：按档跳过 KTX2 高级 mip（口径同 verify-budget：角色 / 道具 ≤ textureMaxSize，环境 ≤ textureMaxSizeEnv；极致档不跳）。
     // 进场时在首次上传前截；换档即时生效（从保留的完整 mip 链按新上限重新上传，不重新下载）
     applyTextureMipCaps(this.scene, q);
