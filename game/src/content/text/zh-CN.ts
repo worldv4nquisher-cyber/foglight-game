@@ -1,5 +1,5 @@
 // 自动生成：node scripts/import-text.mjs（来源 docs/gdd/text-ch1.json），不要手改。
-// 章节 ch1 · zh-CN · v1 · 179 条
+// 章节 ch1 · zh-CN · v1 · 180 条
 
 export const TEXT_ZH_CN = {
   "ch1.common.journal_updated": "日志已更新",
@@ -165,6 +165,7 @@ export const TEXT_ZH_CN = {
   "ui.settings.quality_auto_note": "已根据这台电脑自动选择画质，可以随时改回。",
   "ui.settings.quality_detected": "自动检测结果　{tier}",
   "ui.settings.quality_high": "高",
+  "ui.settings.quality_low": "最低",
   "ui.settings.quality_standard": "标准",
   "ui.settings.quality_ultra": "极致",
   "ui.settings.quality_undetected": "尚未完成自动检测",
@@ -356,6 +357,7 @@ export const TEXT_META: Record<keyof typeof TEXT_ZH_CN, TextMeta> = {
   "ui.settings.quality_auto_note": {"type":"ui","speaker":"system"},
   "ui.settings.quality_detected": {"type":"ui","speaker":"system"},
   "ui.settings.quality_high": {"type":"ui","speaker":"system"},
+  "ui.settings.quality_low": {"type":"ui","speaker":"system"},
   "ui.settings.quality_standard": {"type":"ui","speaker":"system"},
   "ui.settings.quality_ultra": {"type":"ui","speaker":"system"},
   "ui.settings.quality_undetected": {"type":"ui","speaker":"system"},

@@ -10,7 +10,7 @@ import { S1, S3_WORLD_FRAME, v3 } from './layout';
 import { S1_ROCKS, type RockId } from './rocks';
 
 /** 远景塔（S3 塔座实例）每档固定的 LOD 级（s1-layout.json socketInstances.lodByTier） */
-const TOWER_LOD_BY_TIER = { ultra: 1, high: 2, standard: 2 } as const;
+const TOWER_LOD_BY_TIER = { ultra: 1, high: 2, standard: 2, low: 2 } as const;
 const COLLIDER_NAME = /-(collider|wall)(\.\d+)?$/i;
 
 /** 按潮位切换可见性的一组节点（船绳涨 / 退潮两版）；找不到任一版 = null（保持现状） */

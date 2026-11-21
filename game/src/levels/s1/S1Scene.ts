@@ -4,6 +4,7 @@ import { missingGreyboxNodes, mountArtSlots, snapToArt, type ArtSlots } from '..
 import { S1_ART_SLOTS } from './artSlots';
 import type { Game } from '@/core/Game';
 import { gameplay } from '@/config/gameplay';
+import { atmoTier } from '@/config/quality';
 import { TEST_BUILD, greyboxVisible, testParam } from '@/config/debug';
 import { LevelScene, type SpawnPoint } from '@/scenes/LevelScene';
 import { LEVELS } from '@/scenes/levels';
@@ -206,7 +207,7 @@ export class S1Scene extends LevelScene {
   protected override applyQuality(): void {
     super.applyQuality();
     this.art?.applyQuality(this.game.quality.preset);
-    this.fog028?.applyQuality(this.game.quality.preset.tier);
+    this.fog028?.applyQuality(atmoTier(this.game.quality.preset.tier));
   }
 
   protected override applyAtmosphere(a: AtmospherePreset): void {

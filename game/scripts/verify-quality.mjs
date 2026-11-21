@@ -5,7 +5,7 @@
 // 3) QualityBenchmark：simulateFps 降档 / 重测 / 最多连降两档、只跑一次、手动改后不再自动改、恢复默认回到检测结果
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { QUALITY_PRESETS, QualityManager, isSoftwareRenderer, qualityFromSearch } from '@/config/quality';
+import { QUALITY_PRESETS, QualityManager, atmoTier, isSoftwareRenderer, qualityFromSearch } from '@/config/quality';
 import { EventBus } from '@/core/EventBus';
 import { watchDevicePixelRatio } from '@/platform/dprWatch';
 import { QualityBenchmark, parseSimulateFps } from '@/systems/QualityBenchmark';
@@ -13,52 +13,59 @@ import { DEFAULT_SETTINGS, SETTINGS_KEY, Settings } from '@/systems/save/Setting
 
 /** style-guide §8 表（2026-10-29 版；heroCharTris 高档按拆单裁定第 4 条为 50k） */
 const SPEC = {
-  renderScale: [1.0, 1.0, 0.8],
-  maxPixelRatio: [2.0, 1.5, 1.0],
-  heroCharTris: [120_000, 50_000, 50_000],
-  npcCharTris: [60_000, 40_000, 25_000],
-  sceneVisibleTris: [6_000_000, 3_500_000, 1_500_000],
-  maxDrawCalls: [2000, 1200, 600],
-  textureMaxSize: [4096, 2048, 2048],
-  textureMaxSizeEnv: [2048, 2048, 1024],
-  anisotropy: [16, 8, 4],
-  outlineHull: [['character', 'prop', 'near'], ['character', 'prop'], ['character', 'interactive']],
+  renderScale: [1.0, 1.0, 0.8, 0.5],
+  maxPixelRatio: [2.0, 1.5, 1.0, 1.0],
+  heroCharTris: [120_000, 50_000, 50_000, 25_000],
+  npcCharTris: [60_000, 40_000, 25_000, 12_000],
+  sceneVisibleTris: [6_000_000, 3_500_000, 1_500_000, 1_000_000],
+  maxDrawCalls: [2000, 1200, 600, 400],
+  textureMaxSize: [4096, 2048, 2048, 1024],
+  textureMaxSizeEnv: [2048, 2048, 1024, 512],
+  anisotropy: [16, 8, 4, 1],
+  outlineHull: [['character', 'prop', 'near'], ['character', 'prop'], ['character', 'interactive'], ['character', 'interactive']],
   outlinePost: [
     { enabled: true, resolution: 'full', inputs: ['normal', 'depth', 'id'], maxDistance: 300 },
     { enabled: true, resolution: 'full', inputs: ['normal', 'depth'], maxDistance: 150 },
     { enabled: false, resolution: 'full', inputs: [], maxDistance: 0 },
+    { enabled: false, resolution: 'full', inputs: [], maxDistance: 0 },
   ],
-  fogMode: ['volumetric', 'volumetric', 'cards'],
-  fogFroxels: [[160, 90, 128], [80, 45, 64], null],
+  fogMode: ['volumetric', 'volumetric', 'cards', 'cards'],
+  fogFroxels: [[160, 90, 128], [80, 45, 64], null, null],
   fogCards: [
     { farLayers: 5, extraMax: 20 },
     { farLayers: 5, extraMax: 30 },
+    { farLayers: 4, extraMax: 40 },
     { farLayers: 4, extraMax: 40 },
   ],
   lightShafts: [
     { mode: 'raymarch', steps: 64, halfRes: false },
     { mode: 'raymarch', steps: 32, halfRes: true },
     { mode: 'mesh', steps: 0, halfRes: false },
+    { mode: 'mesh', steps: 0, halfRes: false },
   ],
-  softParticles: [true, true, true],
+  softParticles: [true, true, true, false],
   rainParticles: [
     { count: 30_000, ripples: true, lensDroplets: true },
     { count: 15_000, ripples: true, lensDroplets: false },
     { count: 6000, ripples: true, lensDroplets: false },
+    { count: 1500, ripples: true, lensDroplets: false },
   ],
   shadowType: [
     { cascades: 4, mapSize: 4096, filter: 'PCSS', contactShadows: true },
     { cascades: 3, mapSize: 2048, filter: 'PCF_SOFT', contactShadows: false },
     { cascades: 2, mapSize: 2048, filter: 'PCF', contactShadows: false },
+    { cascades: 0, mapSize: 512, filter: 'PCF', contactShadows: false }, // 最低档：不投阴影
   ],
   pointLightShadows: [
     { count: 2, mapSize: 1024 },
     { count: 1, mapSize: 1024 },
     { count: 1, mapSize: 512 },
+    { count: 0, mapSize: 512 },
   ],
   ao: [
     { gtao: 'full', baked: true },
     { gtao: 'half', baked: true },
+    { gtao: 'off', baked: true },
     { gtao: 'off', baked: true },
   ],
   reflections: [
@@ -66,23 +73,25 @@ const SPEC = {
     { ssr: 'full', ssrWetOnly: false, planar: 0.5, probes: false, planarStrength: 0.5 }, // 037：planar 1 → 0.5（强度 0.5 后看不出差别，省 3/4 RT 像素）
     { ssr: 'half', ssrWetOnly: true, planar: 0.5, probes: false, planarStrength: 0.5 },
     { ssr: 'off', ssrWetOnly: false, planar: 0.25, probes: true, planarStrength: 0.5 },
+    { ssr: 'off', ssrWetOnly: false, planar: 0, probes: true, planarStrength: 0.5 }, // 最低档：不画平面反射
   ],
-  dof: ['bokeh', 'gaussian-cutscene', 'off'],
+  dof: ['bokeh', 'gaussian-cutscene', 'off', 'off'],
   bloom: [
     { enabled: true, mipLevels: 6 },
     { enabled: true, mipLevels: 5 },
     { enabled: true, mipLevels: 4 },
+    { enabled: false, mipLevels: 4 },
   ],
-  lut: [true, true, true],
-  toneMapping: ['AgX', 'AgX', 'AgX'],
-  filmGrain: [true, true, false],
-  vignette: [true, true, true],
-  antialias: ['TAA', 'SMAA', 'SMAA'],
-  lodDistances: [[60, 150, 400], [40, 100, 250], [25, 60, 150]],
-  impostorDistance: [600, 400, 250],
-  grassDensity: [1.0, 0.7, 0.4],
+  lut: [true, true, true, true],
+  toneMapping: ['AgX', 'AgX', 'AgX', 'AgX'],
+  filmGrain: [true, true, false, false],
+  vignette: [true, true, true, false],
+  antialias: ['TAA', 'SMAA', 'SMAA', 'SMAA'],
+  lodDistances: [[60, 150, 400], [40, 100, 250], [25, 60, 150], [15, 35, 90]],
+  impostorDistance: [600, 400, 250, 250],
+  grassDensity: [1.0, 0.7, 0.4, 0.2],
 };
-const TIERS = ['ultra', 'high', 'standard'];
+const TIERS = ['ultra', 'high', 'standard', 'low'];
 /** 旧字段：与 §8 冲突 / 重复，已并入 §8 键（rainCount → rainParticles.count，shadowMapSize → shadowType.mapSize …） */
 const REMOVED = ['rainCount', 'shadowMapSize', 'shadows', 'smaa', 'aoHalfRes', 'bloomMipmapBlur'];
 
@@ -137,7 +146,7 @@ function test(name, fn) {
 }
 
 // ---------------------------------------------------------------- 1) 参数表
-test('quality.ts 含 style-guide §8 全部键，三档数值与表一致', () => {
+test('quality.ts 含 style-guide §8 全部键，四档数值与表一致', () => {
   const bad = [];
   for (const [key, vals] of Object.entries(SPEC)) {
     TIERS.forEach((t, i) => {
@@ -159,12 +168,12 @@ test('quality.ts 含 style-guide §8 全部键，三档数值与表一致', () =
 
 test('与 §8 冲突的旧字段已去掉（雨 30k/15k/6k、阴影 4096/2048/2048 只认 §8 键）', () => {
   for (const t of TIERS) for (const k of REMOVED) assert.ok(!(k in QUALITY_PRESETS[t]), `${t} 仍有旧字段 ${k}`);
-  assert.deepEqual(TIERS.map((t) => QUALITY_PRESETS[t].rainParticles.count), [30000, 15000, 6000]);
-  assert.deepEqual(TIERS.map((t) => QUALITY_PRESETS[t].shadowType.mapSize), [4096, 2048, 2048]);
+  assert.deepEqual(TIERS.map((t) => QUALITY_PRESETS[t].rainParticles.count), [30000, 15000, 6000, 1500]);
+  assert.deepEqual(TIERS.map((t) => QUALITY_PRESETS[t].shadowType.mapSize), [4096, 2048, 2048, 512]);
 });
 
-test('三档 label / tier 对应，视距覆盖 impostor 距离', () => {
-  assert.deepEqual(TIERS.map((t) => QUALITY_PRESETS[t].labelId), ['ui.settings.quality_ultra', 'ui.settings.quality_high', 'ui.settings.quality_standard']);
+test('四档 label / tier 对应，视距覆盖 impostor 距离', () => {
+  assert.deepEqual(TIERS.map((t) => QUALITY_PRESETS[t].labelId), ['ui.settings.quality_ultra', 'ui.settings.quality_high', 'ui.settings.quality_standard', 'ui.settings.quality_low']);
   for (const t of TIERS) {
     assert.equal(QUALITY_PRESETS[t].tier, t);
     assert.ok(QUALITY_PRESETS[t].viewDistance >= QUALITY_PRESETS[t].impostorDistance);
@@ -390,6 +399,26 @@ test('URL ?quality= 临时覆盖：不跑检测、不写盘；parseSimulateFps',
   assert.deepEqual(parseSimulateFps('?simulateFps=40,55'), [40, 55]);
   assert.equal(parseSimulateFps('?simulateFps=abc'), null);
   assert.equal(parseSimulateFps(''), null);
+});
+
+test('最低档：设置里可选并写盘；自动检测最低只降到标准；雨 / 雾墙沿用标准档的 028 参数', () => {
+  assert.deepEqual(QualityManager.tiers, TIERS);
+  const st = new MemStorage();
+  const b = boot(st);
+  b.quality.set('low');
+  assert.equal(b.quality.tier, 'low');
+  assert.equal(JSON.parse(st.getItem(SETTINGS_KEY)).quality, 'low');
+  assert.equal(boot(st).quality.tier, 'low', '重启后没保留最低档');
+  assert.equal(boot(new MemStorage(), { search: '?quality=low' }).quality.tier, 'low');
+  const slow = boot(new MemStorage(), { simulate: [5] });
+  assert.equal(slow.bench.start(), true);
+  for (let i = 0; i < 5; i++) run(slow, { fps: 5, t0: { v: i * 10_000 } });
+  assert.equal(slow.quality.tier, 'standard', '自动检测不该降到最低档');
+  assert.deepEqual(TIERS.map(atmoTier), ['ultra', 'high', 'standard', 'standard']);
+  const low = QUALITY_PRESETS.low;
+  assert.equal(low.postprocessing, false);
+  assert.equal(low.shadowType.cascades, 0);
+  assert.equal(low.reflections.planar, 0);
 });
 
 console.info = realInfo;

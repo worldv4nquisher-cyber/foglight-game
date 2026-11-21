@@ -3,6 +3,7 @@ import type { EventBus } from '@/core/EventBus';
 import type { LodDistances } from '@/render/lod';
 import type { Settings } from '@/systems/save/Settings';
 import type { TextId } from '@/content/text';
+import type { Atmo028Tier } from '@/config/atmosphere028';
 import { TEST_BUILD, testParam, testSearch } from '@/config/debug';
 
 /**
@@ -10,6 +11,7 @@ import { TEST_BUILD, testParam, testSearch } from '@/config/debug';
  * - ultra 极致：默认档，基准 RTX 3060 / 1440p / 60 fps
  * - high 高：首次启动 3 秒检测 < 50 fps 时降到这里
  * - standard 标准：兜底（最低 GTX 1650）
+ * - low 最低：没有独显 / 软件渲染（云端 SwiftShader）也能跑完流程、找问题用；只在设置里手动选（或 ?quality=low），自动检测不会降到这里
  *
  * 表里很多键对应的渲染特性还没做（体积雾、CSM、描边、反射、TAA 等在 023–026 实现），
  * 那些系统做的时候直接从这里读参数；`scripts/verify-quality.mjs` 逐项核对本表与 §8。
@@ -22,7 +24,7 @@ import { TEST_BUILD, testParam, testSearch } from '@/config/debug';
  */
 export const PLANAR_REFLECTION_STRENGTH = 0.5;
 
-export type QualityTier = 'ultra' | 'high' | 'standard';
+export type QualityTier = 'ultra' | 'high' | 'standard' | 'low';
 
 /** 外扩描边（反面外扩壳）覆盖对象：角色 / 道具 / 近景 / 可交互物 */
 export type OutlineHullTarget = 'character' | 'prop' | 'near' | 'interactive';
@@ -220,15 +222,63 @@ export const QUALITY_PRESETS: Record<QualityTier, QualityPreset> = {
     shadowRadius: 2,
     viewDistance: 250,
   },
+  low: {
+    tier: 'low',
+    labelId: 'ui.settings.quality_low',
+    renderScale: 0.5,
+    maxPixelRatio: 1,
+    heroCharTris: 25_000,
+    npcCharTris: 12_000,
+    sceneVisibleTris: 1_000_000,
+    maxDrawCalls: 400,
+    textureMaxSize: 1024,
+    textureMaxSizeEnv: 512,
+    anisotropy: 1,
+    outlineHull: ['character', 'interactive'],
+    outlinePost: { enabled: false, resolution: 'full', inputs: [], maxDistance: 0 },
+    fogMode: 'cards',
+    fogFroxels: null,
+    fogCards: { farLayers: 4, extraMax: 40 },
+    lightShafts: { mode: 'mesh', steps: 0, halfRes: false },
+    softParticles: false,
+    rainParticles: { count: 1500, ripples: true, lensDroplets: false },
+    // cascades 0 = 不投阴影（平行光 castShadow 关掉，省掉阴影 pass）
+    shadowType: { cascades: 0, mapSize: 512, filter: 'PCF', contactShadows: false },
+    pointLightShadows: { count: 0, mapSize: 512 },
+    ao: { gtao: 'off', baked: true },
+    // planar 0 = 不画平面反射（Reflections 直接 skip）
+    reflections: { ssr: 'off', ssrWetOnly: false, planar: 0, probes: true, planarStrength: PLANAR_REFLECTION_STRENGTH },
+    dof: 'off',
+    bloom: { enabled: false, mipLevels: 4 },
+    lut: true,
+    toneMapping: 'AgX',
+    filmGrain: false,
+    vignette: false,
+    antialias: 'SMAA',
+    lodDistances: [15, 35, 90],
+    impostorDistance: 250,
+    grassDensity: 0.2,
+    // 后处理整条关掉：直出 + ACES（颜色和 AgX / LUT 不一样，只用来跑流程找问题）
+    postprocessing: false,
+    aoQuality: 'Performance',
+    shadowRadius: 1,
+    // 视距不降：S1 远景雾墙在 175 m，标准档的 250 m 才包得住
+    viewDistance: 250,
+  },
 };
 
-const TIERS: readonly QualityTier[] = ['ultra', 'high', 'standard'];
+const TIERS: readonly QualityTier[] = ['ultra', 'high', 'standard', 'low'];
+
+/** 028 大气表（雨 / 雾墙）只有三档：最低档沿用标准档的参数（雨滴数仍按 rainParticles.count） */
+export function atmoTier(t: QualityTier): Atmo028Tier {
+  return t === 'low' ? 'standard' : t;
+}
 
 export function isTier(v: unknown): v is QualityTier {
   return typeof v === 'string' && (TIERS as readonly string[]).includes(v);
 }
 
-/** 低一档（标准档返回 null） */
+/** 低一档（最低档返回 null） */
 export function lowerTier(t: QualityTier): QualityTier | null {
   const i = TIERS.indexOf(t);
   return i >= 0 && i < TIERS.length - 1 ? TIERS[i + 1]! : null;

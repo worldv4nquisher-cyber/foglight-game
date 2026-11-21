@@ -4,6 +4,7 @@ import { applyTextureMipCaps } from '@/render/mipCap';
 import { BaseScene } from './BaseScene';
 import type { Game } from '@/core/Game';
 import { gameplay } from '@/config/gameplay';
+import { atmoTier } from '@/config/quality';
 import { getAtmosphere, type AtmospherePreset } from '@/config/atmosphere';
 import { EntityManager } from '@/entities/EntityManager';
 import { Entity } from '@/entities/Entity';
@@ -471,9 +472,10 @@ export abstract class LevelScene extends BaseScene {
     const q = this.game.quality.preset;
     this.camera.far = q.viewDistance;
     this.camera.updateProjectionMatrix();
-    this.rain?.setTier(q.tier, q.rainParticles.count);
-    this.qualityTier = q.tier;
-    this.water?.setRipples(ATMO028.rainTiers[q.tier].ripples);
+    const at = atmoTier(q.tier);
+    this.rain?.setTier(at, q.rainParticles.count);
+    this.qualityTier = at;
+    this.water?.setRipples(ATMO028.rainTiers[at].ripples);
     // 025：反射分辨率 = 画质档 reflections.planar（极致 0.5 / 高 0.5 / 标准 0.25；极致 1 → 0.5 见 0f42f4a）；?reflect= 调试覆盖
     if (this.reflection) {
       this.reflection.scale = this.reflectOverride ?? q.reflections.planar;
@@ -490,7 +492,8 @@ export abstract class LevelScene extends BaseScene {
     }
     s.radius = q.shadowRadius;
     s.blurSamples = 16;
-    this.sun.castShadow = true;
+    // 最低档 cascades 0：不投阴影
+    this.sun.castShadow = q.shadowType.cascades > 0;
     // LOD 切换距离随档位变化；puzzleCritical 物体不受影响
     applyLodDistances(this.scene, q.lodDistances);
     // 角色面数上限（裁定第 4 条）：高 / 标准档汐最高用 lod1（≤ 50k），父亲按 npcCharTris（高 40k / 标准 25k → lod1）

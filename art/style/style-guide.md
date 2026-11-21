@@ -167,41 +167,41 @@ glTF/GLB 用 Draco 或 Meshopt 压缩几何（推荐 Meshopt）；贴图用 **KT
 
 ## 8. 画质分档
 
-三档都针对桌面。**默认「极致」**。画质自动检测只在首次启动后第一次进入 S1 时跑一次：每轮 3 秒，第 1 轮在开场演出尾段的建立镜头内测极致档，平均 < 50 fps 就降一档重测；最多连降两档，第 3 轮只测标准档并记录结果，不再往下降（详见 009）。玩家在设置里手动选的档位和 URL 参数 `?quality=` 优先于检测结果。
+四档都针对桌面。**默认「极致」**。「最低」档给没有独显、浏览器走软件渲染的机器（如云端调试机）跑流程、找问题用：只在设置里手动选（或 `?quality=low`），自动检测不会降到这一档；它关掉阴影、平面反射和整条后处理，画面颜色和其余三档不同。画质自动检测只在首次启动后第一次进入 S1 时跑一次：每轮 3 秒，第 1 轮在开场演出尾段的建立镜头内测极致档，平均 < 50 fps 就降一档重测；最多连降两档，第 3 轮只测标准档并记录结果，不再往下降（详见 009）。玩家在设置里手动选的档位和 URL 参数 `?quality=` 优先于检测结果。
 
 下表的参数键名可以直接放进 `game/src/config/quality.ts`：
 
-| 参数（key） | 极致 `ultra`（默认） | 高 `high` | 标准 `standard`（兜底） |
-|---|---|---|---|
-| `renderScale` 渲染分辨率缩放 | 1.0 | 1.0 | 0.8 |
-| `maxPixelRatio` | 2.0 | 1.5 | 1.0 |
-| `heroCharTris` 主角（汐）三角面 | 120k（lod0） | 50k（lod1，高档和标准档共用） | 50k（lod2 ≤ 25k 用于远景） |
-| `npcCharTris` NPC 三角面 | 60k | 40k | 25k |
-| `sceneVisibleTris` 可见场景总面数 | 6M | 3.5M | 1.5M |
-| `maxDrawCalls` | 2000 | 1200 | 600 |
-| `textureMaxSize` 角色/重点道具 | 4096 | 2048 | 2048 |
-| `textureMaxSizeEnv` 普通环境贴图 | 2048 | 2048 | 1024 |
-| `anisotropy` | 16 | 8 | 4 |
-| `outlineHull` 外扩描边 | 角色+道具+近景 | 角色+道具 | 仅角色和可交互物 |
-| `outlinePost` 后处理描边 | 全分辨率，法线+深度+ID，最远 300 m | 全分辨率，法线+深度，最远 150 m | 关闭（远景不描边） |
-| `fogMode` 雾 | `volumetric`（froxel 160×90×128） | `volumetric`（半分辨率 froxel 80×45×64） | `cards`（假体积贴片） |
-| `fogCards` 雾墙/雾贴片数 | 远景 5 层 + 补充 ≤ 20 | 远景 5 层 + ≤ 30 | 远景 4 层 + ≤ 40 |
-| `lightShafts` 光束 | raymarch 64 步 | raymarch 32 步，半分辨率 | 加法锥形网格 + 公告板 |
-| `softParticles` | 开 | 开 | 开 |
-| `rainParticles` | 30k GPU 粒子 + 雨圈 + 镜头水滴 | 15k + 雨圈 | 6k + 雨圈 |
-| `shadowType` | CSM 4 级 4096 + PCSS + 接触阴影 | CSM 3 级 2048 + PCF 软阴影 | CSM 2 级 2048 + PCF |
-| `pointLightShadows` | 2 盏（1024） | 1 盏（1024） | 1 盏（512） |
-| `ao` | GTAO 全分辨率 + 烘焙 AO | GTAO 半分辨率 + 烘焙 AO | 只用烘焙 AO |
-| `reflections` | SSR + 平面反射（1.0×） | 平面反射（0.5×）+ 湿地面 SSR 半分辨率 | 反射探针（cubemap）+ 平面反射（0.25×） |
-| `dof` | bokeh 景深 | 高斯景深（只在过场） | 关 |
-| `bloom` | 开（mip 6 级） | 开（mip 5 级） | 开（mip 4 级） |
-| `lut` / `toneMapping` | 开 / AgX | 开 / AgX | 开 / AgX |
-| `filmGrain` / `vignette` | 开 / 开 | 开 / 开 | 关 / 开 |
-| `antialias` | TAA | SMAA | SMAA |
-| `lodDistances` [LOD0, LOD1, LOD2] m | [60, 150, 400] | [40, 100, 250] | [25, 60, 150] |
-| `impostorDistance` m | 600 | 400 | 250 |
-| `viewDistance` 视距（`camera.far`）m | 600 | 400 | 250 |
-| `grassDensity` | 1.0 | 0.7 | 0.4 |
+| 参数（key） | 极致 `ultra`（默认） | 高 `high` | 标准 `standard`（兜底） | 最低 `low`（无独显 / 软件渲染） |
+|---|---|---|---|---|
+| `renderScale` 渲染分辨率缩放 | 1.0 | 1.0 | 0.8 | 0.5 |
+| `maxPixelRatio` | 2.0 | 1.5 | 1.0 | 1.0 |
+| `heroCharTris` 主角（汐）三角面 | 120k（lod0） | 50k（lod1，高档和标准档共用） | 50k（lod2 ≤ 25k 用于远景） | 25k（lod2） |
+| `npcCharTris` NPC 三角面 | 60k | 40k | 25k | 12k |
+| `sceneVisibleTris` 可见场景总面数 | 6M | 3.5M | 1.5M | 1M |
+| `maxDrawCalls` | 2000 | 1200 | 600 | 400 |
+| `textureMaxSize` 角色/重点道具 | 4096 | 2048 | 2048 | 1024 |
+| `textureMaxSizeEnv` 普通环境贴图 | 2048 | 2048 | 1024 | 512 |
+| `anisotropy` | 16 | 8 | 4 | 1 |
+| `outlineHull` 外扩描边 | 角色+道具+近景 | 角色+道具 | 仅角色和可交互物 | 仅角色和可交互物 |
+| `outlinePost` 后处理描边 | 全分辨率，法线+深度+ID，最远 300 m | 全分辨率，法线+深度，最远 150 m | 关闭（远景不描边） | 关闭 |
+| `fogMode` 雾 | `volumetric`（froxel 160×90×128） | `volumetric`（半分辨率 froxel 80×45×64） | `cards`（假体积贴片） | `cards`（同标准） |
+| `fogCards` 雾墙/雾贴片数 | 远景 5 层 + 补充 ≤ 20 | 远景 5 层 + ≤ 30 | 远景 4 层 + ≤ 40 | 远景 4 层 + ≤ 40（同标准） |
+| `lightShafts` 光束 | raymarch 64 步 | raymarch 32 步，半分辨率 | 加法锥形网格 + 公告板 | 加法锥形网格 + 公告板 |
+| `softParticles` | 开 | 开 | 开 | 关 |
+| `rainParticles` | 30k GPU 粒子 + 雨圈 + 镜头水滴 | 15k + 雨圈 | 6k + 雨圈 | 1.5k + 雨圈 |
+| `shadowType` | CSM 4 级 4096 + PCSS + 接触阴影 | CSM 3 级 2048 + PCF 软阴影 | CSM 2 级 2048 + PCF | 不投阴影 |
+| `pointLightShadows` | 2 盏（1024） | 1 盏（1024） | 1 盏（512） | 0 盏 |
+| `ao` | GTAO 全分辨率 + 烘焙 AO | GTAO 半分辨率 + 烘焙 AO | 只用烘焙 AO | 只用烘焙 AO |
+| `reflections` | SSR + 平面反射（1.0×） | 平面反射（0.5×）+ 湿地面 SSR 半分辨率 | 反射探针（cubemap）+ 平面反射（0.25×） | 反射探针，不画平面反射 |
+| `dof` | bokeh 景深 | 高斯景深（只在过场） | 关 | 关 |
+| `bloom` | 开（mip 6 级） | 开（mip 5 级） | 开（mip 4 级） | 关（整条后处理关闭） |
+| `lut` / `toneMapping` | 开 / AgX | 开 / AgX | 开 / AgX | — / —（后处理关闭，直出 ACES） |
+| `filmGrain` / `vignette` | 开 / 开 | 开 / 开 | 关 / 开 | 关 / 关 |
+| `antialias` | TAA | SMAA | SMAA | 无（后处理关闭） |
+| `lodDistances` [LOD0, LOD1, LOD2] m | [60, 150, 400] | [40, 100, 250] | [25, 60, 150] | [15, 35, 90] |
+| `impostorDistance` m | 600 | 400 | 250 | 250 |
+| `viewDistance` 视距（`camera.far`）m | 600 | 400 | 250 | 250 |
+| `grassDensity` | 1.0 | 0.7 | 0.4 | 0.2 |
 
 **通用规则**
 - 同一类重复物件（石头、木桩、绳结、草）一律用 `InstancedMesh` / `BatchedMesh`。

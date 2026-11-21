@@ -52,7 +52,7 @@ export const DEFAULT_SETTINGS: Readonly<SettingsData> = Object.freeze({
   showFps: false,
 });
 
-const TIERS: readonly string[] = ['ultra', 'high', 'standard'];
+const TIERS: readonly string[] = ['ultra', 'high', 'standard', 'low'];
 
 function pickEnum<T extends string>(v: unknown, allowed: readonly string[], fallback: T): T {
   return typeof v === 'string' && allowed.includes(v) ? (v as T) : fallback;
