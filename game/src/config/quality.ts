@@ -255,7 +255,7 @@ export const QUALITY_PRESETS: Record<QualityTier, QualityPreset> = {
     filmGrain: false,
     vignette: false,
     antialias: 'SMAA',
-    lodDistances: [15, 35, 90],
+    lodDistances: [5, 12, 30],
     impostorDistance: 250,
     grassDensity: 0.2,
     // 后处理整条关掉：直出 + ACES（颜色和 AgX / LUT 不一样，只用来跑流程找问题）

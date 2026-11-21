@@ -198,7 +198,7 @@ glTF/GLB 用 Draco 或 Meshopt 压缩几何（推荐 Meshopt）；贴图用 **KT
 | `lut` / `toneMapping` | 开 / AgX | 开 / AgX | 开 / AgX | — / —（后处理关闭，直出 ACES） |
 | `filmGrain` / `vignette` | 开 / 开 | 开 / 开 | 关 / 开 | 关 / 关 |
 | `antialias` | TAA | SMAA | SMAA | 无（后处理关闭） |
-| `lodDistances` [LOD0, LOD1, LOD2] m | [60, 150, 400] | [40, 100, 250] | [25, 60, 150] | [15, 35, 90] |
+| `lodDistances` [LOD0, LOD1, LOD2] m | [60, 150, 400] | [40, 100, 250] | [25, 60, 150] | [5, 12, 30] |
 | `impostorDistance` m | 600 | 400 | 250 | 250 |
 | `viewDistance` 视距（`camera.far`）m | 600 | 400 | 250 | 250 |
 | `grassDensity` | 1.0 | 0.7 | 0.4 | 0.2 |

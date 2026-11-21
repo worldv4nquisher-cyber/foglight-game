@@ -87,7 +87,7 @@ const SPEC = {
   filmGrain: [true, true, false, false],
   vignette: [true, true, true, false],
   antialias: ['TAA', 'SMAA', 'SMAA', 'SMAA'],
-  lodDistances: [[60, 150, 400], [40, 100, 250], [25, 60, 150], [15, 35, 90]],
+  lodDistances: [[60, 150, 400], [40, 100, 250], [25, 60, 150], [5, 12, 30]],
   impostorDistance: [600, 400, 250, 250],
   grassDensity: [1.0, 0.7, 0.4, 0.2],
 };
