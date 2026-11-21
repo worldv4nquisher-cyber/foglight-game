@@ -1095,15 +1095,15 @@ function inventoryScene(level, art) {
 
 function checkInventoryTarget(env, it, floor, otherFloors) {
   it.enabled = true;
-  const minRise = { 's1-boat': 1.5 - S1.pier.deckY, 'stone-slot-s1': S1.sandY + 0.15 - S1.nearPlatform.topY }[it.id];
+  const minRise = { 's1-boat': 1.5 - S1.pier.deckY - 0.1, 'stone-slot-s1': S1.sandY + 0.15 - S1.nearPlatform.topY - 0.1 }[it.id];
   assert.equal(it.minRise, minRise, `${it.id}: 高度覆盖`);
   assert.equal(it.maxRise, undefined, `${it.id}: 无高度覆盖`);
   // 隔离流程条件：放置点持有匹配物品、拾取点空手；不触发动作或自动走位。
   env.ix.held.current = it.kind === 'place' ? { id: it.item, object: new THREE.Object3D() } : null;
   if (it.socket) env.ix.held.sockets.delete(it.socket.name);
   const focus = it.focus(new THREE.Vector3());
-  for (const feet of [floor, ...otherFloors]) {
-    const eligible = feet === floor;
+  for (const feet of [floor, floor + 1e-6, ...otherFloors]) {
+    const eligible = !otherFloors.includes(feet);
     env.body.teleport(new THREE.Vector3(focus.x, feet, focus.z + 1));
     env.actor.facing = Math.PI;
     env.camera.position.copy(focus).add(new THREE.Vector3(0, 0, 4));
@@ -1140,7 +1140,7 @@ for (const art of [false, true]) {
         if (!env.puzzles.raft.afloat) checkInventoryTarget(env, env.ix.get('raft-s1'), S1.raft.home[1], []);
         const boat = env.ix.get('s1-boat');
         const focus = boat.focus(new THREE.Vector3());
-        env.body.teleport(new THREE.Vector3(focus.x, S1.pier.deckY + 0.01, focus.z + 1));
+        env.body.teleport(new THREE.Vector3(focus.x, S1.pier.deckY + 0.2, focus.z + 1));
         assert.equal(env.ix.canInteract(boat), false, '覆盖不超出码头甲板');
         assert.equal(env.ix.markers().some((m) => m.id === boat.id), false);
       }
