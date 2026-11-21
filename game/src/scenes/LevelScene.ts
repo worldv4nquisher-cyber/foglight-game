@@ -116,6 +116,8 @@ export abstract class LevelScene extends BaseScene {
   readonly spawns = new Map<string, SpawnPoint>();
   /** 出口（addExit 创建） */
   readonly exits: SceneExit[] = [];
+  /** fixedUpdate 因场景切换加的输入锁（切换结束时解开） */
+  private transitionLocked = false;
   /** 本次进入用的入口 id */
   entryId = '';
   /** 场景有没有室外水面 / 雨（室内场景关掉） */
@@ -510,8 +512,18 @@ export abstract class LevelScene extends BaseScene {
 
   override fixedUpdate(dt: number): void {
     if (!this.rig) return;
-    // 场景切换黑场期间：角色停住（新场景会重新创建角色，不用解锁）
-    if (this.game.flow.transitioning) this.rig.controller.locked = true;
+    // 场景切换黑场期间：角色停住。新场景在黑场后半段（换场景之后的全黑 + 淡入）就已开始跑，
+    // 所以切换结束要把这里加的锁解开，否则新场景的角色一直被锁（F01）
+    const c = this.rig.controller;
+    if (this.game.flow.transitioning) {
+      if (!c.locked) {
+        c.locked = true;
+        this.transitionLocked = true;
+      }
+    } else if (this.transitionLocked) {
+      this.transitionLocked = false;
+      c.locked = false;
+    }
     this.interaction.fixedUpdate(dt);
     this.pushLoop?.update(dt);
     this.entities.fixedUpdate(dt);
