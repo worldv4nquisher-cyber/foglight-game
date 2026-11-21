@@ -1,5 +1,5 @@
 // 自动生成：node scripts/import-text.mjs（来源 docs/gdd/text-ch1.json），不要手改。
-// 章节 ch1 · zh-CN · v1 · 180 条
+// 章节 ch1 · zh-CN · v1 · 181 条
 
 export const TEXT_ZH_CN = {
   "ch1.common.journal_updated": "日志已更新",
@@ -146,7 +146,8 @@ export const TEXT_ZH_CN = {
   "ui.prompt.place": "E 放下",
   "ui.prompt.pointer_lock": "点击画面继续",
   "ui.prompt.push": "按住 E 推",
-  "ui.prompt.puzzle_bar": "鼠标 旋转　Shift 精调　Q·E 切换　R 重置　右键 退出",
+  "ui.prompt.puzzle_bar": "A·D 偏航　W·S 俯仰　鼠标 旋转　Shift 精调　Q·E / 滚轮 切换　R 重置　右键 / Tab 退出",
+  "ui.prompt.puzzle_bar_dial": "A·D / 鼠标 拨盘　Q·E / 滚轮 切换　R 重置　右键 / Tab 退出",
   "ui.prompt.read": "E 阅读",
   "ui.prompt.reader_bar": "A·D 翻页　右键 关闭",
   "ui.prompt.reset_raft": "R 放回浮台",
@@ -339,6 +340,7 @@ export const TEXT_META: Record<keyof typeof TEXT_ZH_CN, TextMeta> = {
   "ui.prompt.pointer_lock": {"type":"prompt","speaker":"system"},
   "ui.prompt.push": {"type":"prompt","speaker":"system"},
   "ui.prompt.puzzle_bar": {"type":"prompt","speaker":"system"},
+  "ui.prompt.puzzle_bar_dial": {"type":"prompt","speaker":"system"},
   "ui.prompt.read": {"type":"prompt","speaker":"system"},
   "ui.prompt.reader_bar": {"type":"prompt","speaker":"system"},
   "ui.prompt.reset_raft": {"type":"prompt","speaker":"system"},

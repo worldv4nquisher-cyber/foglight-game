@@ -261,6 +261,8 @@ out.push('动线：二层观察点 / 书桌 / 地窖（门开才进得去）/ �
       const d = new THREE.Group();
       d.name = `dial-gate-s2-dial-${i}`;
       d.rotation.y = Math.PI;
+      const face = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 0.02));
+      d.add(face);
       gb.dialGate.add(d);
       return d;
     });
@@ -269,6 +271,7 @@ out.push('动线：二层观察点 / 书桌 / 地窖（门开才进得去）/ �
     const slots = mountArtSlots({ has: (x) => x === spec.key, getModel: () => gate }, world, [spec]);
     assert.equal(slots.mounted.length, 1);
     assert.deepEqual(slots.mounted[0].missingNodes, [], '铁门约定节点齐');
+    for (const dial of fakeDials) assert.equal(dial.children[0].visible, true, '美术挂载保留程序拨盘数字与选择描边');
     assert.equal(gate.parent?.name, 'env-clifftop-s2-gate-socket', '铁门挂崖顶 gate-socket');
     const door = findNode(gate, 'gate-door');
     const hw = door.getWorldPosition(new THREE.Vector3());

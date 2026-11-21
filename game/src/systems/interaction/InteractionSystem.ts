@@ -58,6 +58,7 @@ export interface InteractionSystemOptions {
   input: InputManager;
   physics: PhysicsSystem;
   actor: InteractionActor;
+  puzzleActor?: THREE.Object3D;
   camera: THREE.Camera;
   cameraFollow: PuzzleCamera;
   hud: InteractionHud;
@@ -143,6 +144,7 @@ export class InteractionSystem {
       camera: opts.cameraFollow,
       highlighter: this.highlighter,
       hud: opts.hud,
+      actor: opts.puzzleActor,
     });
     this.puzzle.onExit = () => {
       if (this.action.kind === 'puzzle') this.endAction();
@@ -293,7 +295,7 @@ export class InteractionSystem {
 
   /** 中止当前动作（场景切换 / 演出接管） */
   cancel(): void {
-    if (this.action.kind === 'puzzle') this.puzzle.exit();
+    this.puzzle.exit();
     this.endAction();
   }
 

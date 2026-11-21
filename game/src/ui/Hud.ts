@@ -152,6 +152,7 @@ export class Hud implements InteractionHud {
   /** 机关模式底部按键提示条，null 隐藏 */
   setPuzzleBar(text: string | null): void {
     this.puzzleBar.hidden = text === null;
+    this.hint.hidden = text !== null;
     if (text !== null) this.puzzleBar.textContent = text;
   }
 

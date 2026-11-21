@@ -34,5 +34,6 @@ export const S2_ART_SLOTS: readonly ArtSlotSpec[] = [
       { art: 'dial-2', logic: 'dial-gate-s2-dial-3' },
     ],
     hide: ['s2-dial-gate-hinge'],
+    keep: ['dial-gate-s2-panel', 'dial-gate-s2-dial-1', 'dial-gate-s2-dial-2', 'dial-gate-s2-dial-3', 'dial-gate-s2-pointer-1', 'dial-gate-s2-pointer-2', 'dial-gate-s2-pointer-3'],
   },
 ];
