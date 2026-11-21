@@ -1537,10 +1537,11 @@ function buildUnloadingShore() {
   });
   parts.push(boxUV(bank, MATS.rock.tile, [0.13, 0.41]));
 
-  // 码头板在石砌桥座的木承梁上收口；轮廓留在原甲板和钟台的行走面下。
-  const [pierX, pierZ] = PIER.land;
-  masonryPlatform(parts, pierX - 0.6, pierX + 0.42, pierZ - 1.43, pierZ + 1.43, -0.85, PIER.deckY - 0.16, 2010, { sides: ['w', 's', 'n'] });
-  beam(parts, [pierX + 0.30, PIER.deckY - 0.13, pierZ - 1.35], [pierX + 0.30, PIER.deckY - 0.13, pierZ + 1.35], 0.19, 0.20, 'beam', 21);
+  // 原石台承托码头；收口梁留在甲板碰撞范围内，退潮时不挡桥下通道。
+  const yBearing = PIER.deckY - 0.19, zBearing = PIER.length / 2;
+  const bearingHalfWidth = PIER.width / 2 - 0.03;
+  beam(parts, pierToWorld(-bearingHalfWidth, yBearing, zBearing),
+    pierToWorld(bearingHalfWidth, yBearing, zBearing), 0.20, 0.17, 'beam', 21);
 
   // 钟台原调查点改成嵌铁刻度的石柱，位置与白盒相同。
   const gx = -14.2, gz = -7.6;

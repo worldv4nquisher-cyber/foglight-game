@@ -848,6 +848,30 @@ if (hasArt) {
     return `9 块网格 / 挡人盒都在避让区外（网格最北 z ${maxZ.toFixed(2)} < −3）；开场 ${targets.length + tower.length} 条、小径尽头 ${targets.length} 条视线（脚印 20 点、路线 22 点、塔身 4 点）无遮挡`;
   });
 
+  await test('S1 码头：各级卸货岸网格不侵入退潮桥下通道', async () => {
+    const { S1 } = await import('@/levels/s1/layout');
+    const shore = await loadGlb('models/env/env-unloading-shore-s1.glb');
+    shore.updateMatrixWorld(true);
+    const edge = S1.ledge.max[0];
+    const ray = new THREE.Raycaster(undefined, undefined, 0, 0.63);
+    const landward = new THREE.Vector3(-1, 0, 0);
+    for (let i = 0; i < 3; i++) {
+      const meshes = [];
+      shore.traverse((o) => {
+        if (!o.isMesh || !o.name.startsWith(`env-unloading-shore-s1_lod${i}_`)) return;
+        o.material.side = THREE.DoubleSide;
+        meshes.push(o);
+      });
+      assert.ok(meshes.length, `卸货岸 LOD${i}`);
+      for (const dz of [-1.25, -0.5, 0, 0.5, 1.25]) {
+        for (const y of [S1.sandY + 0.15, 0.8, 1.4, S1.pier.deckY - 0.301]) {
+          ray.set(new THREE.Vector3(edge + 0.65, y, S1.pier.landEnd[1] + dz), landward);
+          assert.equal(ray.intersectObjects(meshes, false).length, 0, `LOD${i} 码头下 y=${y}，z 偏移 ${dz}`);
+        }
+      }
+    }
+  });
+
   await test('S1 浮台对岸：各级地形都不穿过平台和底部台阶', async () => {
     const { S1 } = await import('@/levels/s1/layout');
     const flat = await loadGlb('models/env/env-tidal-flat-s1.glb');
