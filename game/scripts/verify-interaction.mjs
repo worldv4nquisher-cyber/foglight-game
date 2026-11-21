@@ -55,6 +55,7 @@ function setup({ floor = true, linkPriority } = {}) {
     setPuzzleBar: (s) => log.bar.push(s),
   };
   const actor = { body, facing: Math.PI, locked: false, busy: false, halt() {}, hand: new THREE.Object3D() };
+  const visual = new THREE.Group();
   scene.add(actor.hand);
   const cameraFollow = {
     enterPuzzleView: (node, opts) => log.camera.push(['enter', node.name, opts]),
@@ -65,6 +66,7 @@ function setup({ floor = true, linkPriority } = {}) {
     input,
     physics,
     actor,
+    puzzleActor: visual,
     camera,
     cameraFollow,
     hud,
@@ -75,7 +77,7 @@ function setup({ floor = true, linkPriority } = {}) {
   const fired = [];
   for (const ev of ['interact:used', 'interact:pushEnd', 'item:pickup', 'item:place', 'puzzle:enter', 'puzzle:exit', 'puzzle:partSelected', 'puzzle:partRotated', 'puzzle:reset', 'highlight:start', 'highlight:end'])
     events.on(ev, (p) => fired.push([ev, p]));
-  const env = { events, input, physics, scene, body, camera, actor, ix, log, fired };
+  const env = { events, input, physics, scene, body, camera, actor, visual, ix, log, fired };
   env.look = () => {
     // 相机在角色身后，看向角色朝向前方 2 m 处
     const f = new THREE.Vector3(Math.sin(actor.facing), 0, Math.cos(actor.facing));
@@ -702,6 +704,32 @@ test('机关操作条：轴、精调、拨盘与切换中的当前部件一致',
   env.ix.puzzle.exit();
   assert.equal(env.log.bar.at(-1), null);
   assert.throws(() => new PuzzleGroup({ id: 'empty', parts: [], camNode: new THREE.Object3D() }), /没有部件/);
+});
+
+test('机关近景：隐藏角色，退出 / 切换 / 取消 / 释放恢复原显隐', () => {
+  const { env, group } = puzzleEnv();
+  const puzzle = env.ix.puzzle;
+  puzzle.enter(group);
+  assert.equal(env.visual.visible, false);
+  puzzle.enter(new PuzzleGroup({ id: 'next', parts: [...group.parts], camNode: group.camNode }));
+  assert.equal(env.visual.visible, false);
+  puzzle.exit();
+  assert.equal(env.visual.visible, true);
+  puzzle.exit();
+  assert.equal(env.visual.visible, true);
+  env.visual.visible = false;
+  puzzle.enter(group);
+  puzzle.exit();
+  assert.equal(env.visual.visible, false, '原本隐藏的角色不应被强行显示');
+  env.visual.visible = true;
+  puzzle.enter(group);
+  env.ix.cancel();
+  assert.equal(env.visual.visible, true);
+  assert.equal(puzzle.active, null);
+  puzzle.enter(group);
+  env.ix.dispose();
+  assert.equal(env.visual.visible, true);
+  assert.equal(puzzle.active, null);
 });
 
 // ---------------------------------------------------------------- 高亮

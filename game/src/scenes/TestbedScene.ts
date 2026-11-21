@@ -114,6 +114,7 @@ export class TestbedScene extends BaseScene {
       input: this.game.input,
       physics: this.physics,
       actor: actorFromRig(this.rig),
+      puzzleActor: this.rig.visual,
       camera: this.camera,
       cameraFollow: this.cameraFollow,
       hud: this.game.ui.hud,
@@ -339,12 +340,14 @@ export class TestbedScene extends BaseScene {
   }
 
   override exit(): void {
+    this.interaction?.cancel();
     this.game.ui.hud.hide();
     this.game.ui.hud.setPrompt(null);
     this.game.ui.fade.set(0);
   }
 
   override dispose(): void {
+    this.interaction?.cancel();
     this.entities.clear();
     this.physics.clear();
     super.dispose();

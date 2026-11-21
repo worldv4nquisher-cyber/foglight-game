@@ -395,6 +395,7 @@ export abstract class LevelScene extends BaseScene {
       input: this.game.input,
       physics: this.physics,
       actor: actorFromRig(this.rig),
+      puzzleActor: this.rig.visual,
       camera: this.camera,
       cameraFollow: this.cameraFollow,
       hud: this.game.ui.hud,
@@ -614,6 +615,7 @@ export abstract class LevelScene extends BaseScene {
   }
 
   override exit(): void {
+    this.interaction?.cancel();
     this.lensAmt = 0;
     this.game.postfx.setLensDroplets(0);
     this.game.ui.hud.hide();
@@ -623,6 +625,7 @@ export abstract class LevelScene extends BaseScene {
 
   override dispose(): void {
     this.disposed = true;
+    this.interaction?.cancel();
     // 实体（汐 / 父亲 / 道具…）先从场景摘下，场景 dispose 遍历不到它们：单独释放，否则每进一次关卡就漏一套
     // 克隆材质（着色器程序跟着留下）、骨骼纹理和非缓存几何体（v0.1-037）
     const roots = this.entities.clear();
