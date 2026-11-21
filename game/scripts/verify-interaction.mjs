@@ -681,6 +681,29 @@ test('单部件机关：操作条不显示 Q·E', () => {
   assert.match(puzzleBarText(1), /R/);
 });
 
+test('机关操作条：轴、精调、拨盘与切换中的当前部件一致', () => {
+  const { env, group, dial, mirror } = puzzleEnv();
+  assert.match(puzzleBarText(1, dial), /A·D/);
+  assert.doesNotMatch(puzzleBarText(1, dial), /W·S/);
+  assert.match(puzzleBarText(1, mirror), /W·S/);
+  assert.match(puzzleBarText(1, mirror), /Shift/);
+  assert.match(puzzleBarText(1, mirror), /右键 \/ Tab/);
+  const codeDial = new RotatablePart({ id: 'code', node: new THREE.Group(), axes: [{ axis: 'z' }], stepDeg: 36, fineStepDeg: 36 });
+  const bar = puzzleBarText(3, codeDial, 1);
+  assert.match(bar, /拨盘/);
+  assert.match(bar, /Q·E \/ 滚轮/);
+  assert.match(bar, /2\/3/);
+  assert.doesNotMatch(bar, /W·S|Shift|偏航/);
+  env.ix.puzzle.enter(group);
+  assert.doesNotMatch(env.log.bar.at(-1), /W·S/);
+  env.ix.puzzle.select(1);
+  assert.match(env.log.bar.at(-1), /W·S/);
+  assert.match(env.log.bar.at(-1), /2\/2/);
+  env.ix.puzzle.exit();
+  assert.equal(env.log.bar.at(-1), null);
+  assert.throws(() => new PuzzleGroup({ id: 'empty', parts: [], camNode: new THREE.Object3D() }), /没有部件/);
+});
+
 // ---------------------------------------------------------------- 高亮
 
 test('提示高亮：描边 3 s 后消失并发 highlight:end', () => {

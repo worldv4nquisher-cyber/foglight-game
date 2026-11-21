@@ -26,12 +26,11 @@ export const S3_BEAM = {
   mirrorHalf: 0.35,
   /**
    * 机位（局部，lookAt 按 frame() 取两/三个目标方向的平分线，FOV 按 16:9 框住所有目标再留余量）：
-   * - 窗口镜：镜面朝上偏西，看得到镜面正面的位置都看不到 10 m 导光镜（夹角 ≥ 100°）→ 从镜子下侧贴西墙仰拍：
-   *   窗外天光 + 窗口镜（侧背面）+ 楼梯井上方导光镜 1 的光斑
+   * - 窗口镜：楼梯内沿以内俯拍窗口与镜面，出射光向画面上方延伸
    * - 导光镜 1 / 2：悬在楼梯井里（玩家到不了），能看到镜面正面和下一目标
    */
   cams: {
-    window: { position: [2.5, 0.6, -0.8] as const, targets: ['window', 'a', 'windowOuter'] as const, fov: 64 },
+    window: { position: [1, 2.6, -0.9] as const, targets: ['window', 'windowOuter'] as const, fov: 64 },
     a: { position: [0.3, 9.4, 1.4] as const, targets: ['a', 'b'] as const, fov: 58 },
     b: { position: [0.3, 15.2, 1.2] as const, targets: ['b', 'port'] as const, fov: 56 },
   },

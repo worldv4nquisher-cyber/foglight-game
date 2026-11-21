@@ -118,6 +118,24 @@ export class S3Scene extends LevelScene {
     this.tides.add(this.puzzles.tide);
     this.bells.push(this.puzzles.bell);
     this.cleanups.push(() => this.puzzles.dispose());
+    const windowPuzzle = this.puzzles.beam.mirrors.window.puzzle.id;
+    let windowActorVisible: boolean | null = null;
+    const restoreActor = (): void => {
+      if (windowActorVisible === null) return;
+      this.rig.visual.visible = windowActorVisible;
+      windowActorVisible = null;
+    };
+    this.cleanups.push(
+      this.game.events.on('puzzle:enter', ({ group }) => {
+        if (group !== windowPuzzle) return;
+        windowActorVisible = this.rig.visual.visible;
+        this.rig.visual.visible = false;
+      }),
+      this.game.events.on('puzzle:exit', ({ group }) => {
+        if (group === windowPuzzle) restoreActor();
+      }),
+      restoreActor,
+    );
     // 021 / 022 未交付道具的替换入口（文件到了自动挂上，白盒逻辑不变）
     this.artSlots = mountArtSlots(this.game.assets, this.scene, S3_ART_SLOTS, { showGreybox: greyboxVisible });
     // 021 潮汐钟：汐的站位直接读美术 prop-tide-bell-interact（白盒 1.05 m → 模型 0.98 m）

@@ -5,7 +5,7 @@
     "locale": "zh-CN",
     "source": "docs/gdd/text-ch1.md",
     "version": 1,
-    "count": 180
+    "count": 181
   },
   "strings": {
     "ch1.intro.title_card": "第一章 · 归岸",
@@ -125,7 +125,8 @@
     "ui.prompt.turn_hold": "按住 E 拧开",
     "ui.prompt.unlock": "E 开锁",
     "ui.prompt.open": "E 打开",
-    "ui.prompt.puzzle_bar": "鼠标 旋转　Shift 精调　Q·E 切换　R 重置　右键 退出",
+    "ui.prompt.puzzle_bar": "A·D 偏航　W·S 俯仰　鼠标 旋转　Shift 精调　Q·E / 滚轮 切换　R 重置　右键 / Tab 退出",
+    "ui.prompt.puzzle_bar_dial": "A·D / 鼠标 拨盘　Q·E / 滚轮 切换　R 重置　右键 / Tab 退出",
     "ui.prompt.reader_bar": "A·D 翻页　右键 关闭",
     "ui.prompt.pointer_lock": "点击画面继续",
     "ui.title": "雾灯",
@@ -1205,8 +1206,18 @@
       "id": "ui.prompt.puzzle_bar",
       "type": "prompt",
       "speaker": "system",
-      "text": "鼠标 旋转　Shift 精调　Q·E 切换　R 重置　右键 退出",
-      "trigger": "机关模式底部按键提示条（单部件机关隐藏「Q·E 切换」）",
+      "text": "A·D 偏航　W·S 俯仰　鼠标 旋转　Shift 精调　Q·E / 滚轮 切换　R 重置　右键 / Tab 退出",
+      "trigger": "机关模式底部按键提示条（按当前部件轴数、精调与部件数量显示）",
+      "duration": "常驻（条件满足期间）",
+      "note": ""
+    },
+    {
+      "section": "prompt",
+      "id": "ui.prompt.puzzle_bar_dial",
+      "type": "prompt",
+      "speaker": "system",
+      "text": "A·D / 鼠标 拨盘　Q·E / 滚轮 切换　R 重置　右键 / Tab 退出",
+      "trigger": "拨盘机关底部按键提示条",
       "duration": "常驻（条件满足期间）",
       "note": ""
     },

@@ -40,14 +40,15 @@ export interface PuzzleBarHud {
   setPuzzleBar(text: string | null): void;
 }
 
-/** 底部按键提示条：只有一个部件时去掉「Q·E 切换」 */
-export function puzzleBarText(partCount: number): string {
-  const full = t('ui.prompt.puzzle_bar');
-  if (partCount > 1) return full;
-  return full
+/** 底部按键提示条按当前部件的轴与档位显示。 */
+export function puzzleBarText(partCount: number, part?: RotatablePart, index = 0): string {
+  const dial = part?.axes[0]?.axis === 'z';
+  const full = t(dial ? 'ui.prompt.puzzle_bar_dial' : 'ui.prompt.puzzle_bar');
+  const bar = full
     .split('　')
-    .filter((seg) => !/Q·E/.test(seg))
+    .filter((seg) => (partCount > 1 || !/Q·E/.test(seg)) && (part?.dualAxis || !/W·S/.test(seg)) && (!part || part.fineStepDeg !== part.stepDeg || !/Shift/.test(seg)))
     .join('　');
+  return partCount > 1 ? `${bar}\u3000${index + 1}/${partCount}` : bar;
 }
 
 interface KeyRepeat {
@@ -90,7 +91,7 @@ export class PuzzleMode {
     this.active = group;
     this.pop = this.input.pushContext('puzzle');
     this.camera.enterPuzzleView(group.camNode, { freeLook: false });
-    this.hud.setPuzzleBar(puzzleBarText(group.parts.length));
+    this.hud.setPuzzleBar(puzzleBarText(group.parts.length, group.current, group.index));
     this.accX = this.accY = 0;
     this.keyX = { dir: 0, t: 0 };
     this.keyY = { dir: 0, t: 0 };
@@ -119,6 +120,7 @@ export class PuzzleMode {
     if (i === g.index) return;
     this.unmark(g);
     g.index = i;
+    this.hud.setPuzzleBar(puzzleBarText(g.parts.length, g.current, g.index));
     this.markCurrent();
     this.events.emit('puzzle:partSelected', { group: g.id, part: g.current.id, index: i });
   }

@@ -240,6 +240,9 @@ const beam = buildS3Beam(ph, frameRoot);
   assert.equal(beam.mirrors.window.part.angles[0], sol.windowYaw, 'R 重置导光镜 1 不应动窗口镜');
   assert.equal(beam.mirrors.a.part.angles[0], 0);
   // 机位：目标都在 16:9 视锥内
+  const windowCam = new THREE.Vector3(...S3_BEAM.cams.window.position);
+  assert.ok(Math.hypot(windowCam.x, windowCam.z) < S3.stair.r[0], '窗口机位应在楼梯 / 栏杆内沿以内');
+  assert.ok(windowCam.y > S3.mirrors.window.center[1], '窗口机位从上方框住镜面而非贴墙仰拍');
   const camLines = [];
   for (const rig of Object.values(beam.mirrors)) {
     const cs = S3_BEAM.cams[rig.key];
