@@ -99,6 +99,8 @@ foglight-game/
 
 ## 文档
 
+项目交接说明（当前状态、已定决策、Bug 状态、遗留事项与接手步骤）见 [`HANDOVER.md`](HANDOVER.md)。
+
 `docs/gdd/` 是已定稿的游戏设计文档，**包含完整剧情与全部结局，阅读即会遇到剧透**。版本计划、兼容与性能报告在 `docs/releases/`，缺陷单与 QA 报告在 `docs/bugs/`，需求单在 `docs/tasks/`。内部工程说明见 [`game/docs/engineering.md`](game/docs/engineering.md)。
 
 ## 浏览器与性能
