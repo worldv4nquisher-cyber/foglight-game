@@ -91,8 +91,13 @@ foglight-game/
 │  ├─ src/               场景、系统、UI 与文案
 │  └─ scripts/           校验、字体子集、冒烟测试
 ├─ art/                  运行时模型、贴图、音频、UI（开发时映射为 /assets/art/）
+│  ├─ style/             美术风格指南与概念图
+│  ├─ tools/             美术构建与检查脚本
+│  └─ source/            源文件：仓库只含布局等小文件，完整内容见 Release 附件
+├─ audio/                音频授权摘要与配乐生成脚本（source/music/）
 ├─ docs/                 设计文档、版本计划、缺陷与测试报告
-├─ audio/CREDITS.md      音频授权摘要
+├─ qa/                   v0.1 QA 工具脚本（历史）
+├─ HANDOVER.md           项目交接说明
 ├─ LICENSE               MIT 许可证
 └─ README.md
 ```
@@ -100,6 +105,8 @@ foglight-game/
 ## 文档
 
 项目交接说明（当前状态、已定决策、Bug 状态、遗留事项与接手步骤）见 [`HANDOVER.md`](HANDOVER.md)。
+
+美术源文件（Blender 工程、原始贴图、烘焙数据、源字体，约 1.4 GiB）不在 git 里，在 Release [`art-source-2026-11-21`](https://github.com/worldv4nquisher-cyber/foglight-game/releases/tag/art-source-2026-11-21) 的附件中（这不是游戏版本发布），在仓库根目录解压即可。
 
 `docs/gdd/` 是已定稿的游戏设计文档，**包含完整剧情与全部结局，阅读即会遇到剧透**。版本计划、兼容与性能报告在 `docs/releases/`，缺陷单与 QA 报告在 `docs/bugs/`，需求单在 `docs/tasks/`。内部工程说明见 [`game/docs/engineering.md`](game/docs/engineering.md)。
 

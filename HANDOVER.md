@@ -6,7 +6,7 @@
 
 ## 0. 先读这几条（硬规矩）
 
-1. **v0.1 还没有获准发布。** 是否发布由仓库所有者（用户）在真机试玩后决定。拿到明确同意之前，不发 GitHub Release、不部署任何公开地址、不往任何平台上传。
+1. **v0.1 还没有获准发布。** 是否发布由仓库所有者（用户）在真机试玩后决定。拿到明确同意之前，不发游戏版本的 GitHub Release、不部署任何公开地址、不往任何平台上传。（仓库里现有的 Release `art-source-2026-11-21` 只放美术源文件，是用户同意后挂上的，不是游戏发布。）
 2. **不编造进度和测试结果。** 没有亲自跑过的东西，就写"未测"。
 3. **帧率只认用户在真机上测的结果。** 用户的机器是 RTX 3060，基准是 1440p 极致档 60 fps。无头 Chrome + SwiftShader 量出来的帧率不算数。
 4. **美术方向要改，先问用户。**
@@ -25,10 +25,14 @@
 |---|---|
 | `game/` | 游戏工程，带完整的 git 开发历史。工程说明见 `game/docs/engineering.md`（命令、URL 调试参数、架构、资源规范、已知限制） |
 | `art/` | 运行时美术，约 493 MB：`models/` 301 MB、`textures/` 169 MB、`audio/` 23 MB、`ui/` 1.6 MB，以及 `CREDITS.md`。Vite 从 `game/` 的上一级读取它们 |
-| `audio/` | 只有 `CREDITS.md` |
+| `art/style/` | 风格指南 `style-guide.md`（§8 画质分档表）、调色板、第一章概念图、汐发型概念图 A/B/C，4.4 MiB |
+| `art/tools/` | 美术构建、检查脚本和预览页（`README.md` 有完整流程），1.1 MiB |
+| `art/source/` | 只入库测试和生成脚本要用的小文件：`env/s1/s2/s3-layout.json` 及其 README、`atmosphere/atmosphere-028.json` 及其 README，约 0.1 MiB。其余源文件在 Release 附件里，见第 8 节 |
+| `audio/` | `CREDITS.md`，以及 `source/music/`（配乐生成、混音的 Python 脚本，0.2 MiB） |
+| `qa/` | 原制作人 QA 工具（`qa/tools/`，400 个文件，5.4 MiB，含 `cases/` 反例 GLB），说明见 `qa/README.md` |
 | `docs/gdd/` | GDD（已定稿）和文本表 `text-ch1.json` / `.md` |
 | `docs/releases/` | `v0.1.md`（版本计划和 31 条裁定）、`v0.1-compat-report.md`、`v0.1-perf-report.md`、`v0.1-qa-hooks.md`、`perf/`（量测原始数据） |
-| `docs/bugs/` | `BUG-NNN.md` 和 `qa-v0.1-batch1…28.md`（QA 报告正文；截图目录没有进仓库，见第 7 节） |
+| `docs/bugs/` | `BUG-NNN.md` 和 `qa-v0.1-batch1…28.md`（QA 报告正文；截图目录没有进仓库，见第 8 节） |
 | `docs/tasks/` | 37 张 v0.1 需求单（索引见 `v0.1-index.md`）、进度记录 `progress-*.md` 和冒烟日志 |
 | `docs/studio-framework.md` | 原团队的分工和流水线 |
 
@@ -63,9 +67,14 @@ npm run preview:smoke  # 临时生成一份带测试钩子的测试构建（--mo
 | `npm run smoke` | 无头 Chrome 冒烟，51 项，覆盖完整通关，`SMOKE_ONLY='名称'` 可单跑 | 需要 Chrome，可用 `CHROME=路径` 指定 |
 | `npm run smoke:xb` | Firefox / WebKit 兼容冒烟 | Playwright 不在项目依赖里，需另装并设置 `PW_MODULE` / `PLAYWRIGHT_BROWSERS_PATH`，见 `docs/releases/v0.1-qa-hooks.md` |
 | `npm run verify:glb -- <文件>` | GLB 交付自检 | — |
-| `npm run fonts` / `test:fonts` | 重新生成或检查字体子集 | 重新生成要用 `art/source/fonts/`（不在仓库里），检查不需要 |
+| `npm run fonts` / `test:fonts` | 重新生成或检查字体子集 | 重新生成要用 `art/source/fonts/`（在 Release 附件里，见第 8 节），检查不需要 |
 
-> **注意（2026-11-21 在全新克隆上实测）：** `npm ci`、`npm run build`、`npm run lint` 都能通过。但 `npm run test` 会在 `test:render` 失败，因为 `scripts/verify-render.mjs:452` 要读 `art/source/env/s1-layout.json`，而 `art/source/` 不在仓库里。`test:render` 后面那几组单独跑都能通过：atmo、lightmap、dressing、flow、s2、s3、xi、father、cutscene、fonts。所以在拿到 `art/source` 之前，`npm run test` 和 `npm run check` 在全新克隆上都是红的，**这不是游戏本身的问题**。另外，`gen-s1-rocks.mjs`、`gen-atmo028.mjs`、`export-blockout-s2/s3.mjs`、`verify-s2/s3` 的布局核对也会读 `art/source`，没有这些文件时，部分脚本会跳过对应步骤。`verify-assets.mjs:751`、`inspect-s3-islet-floor.mjs` 里还写死了原机器的路径 `/workspace/game-studio/...`。
+> **全新克隆实测（2026-11-21 20:12–20:20 UTC+7，box：Linux、无独立 GPU、Node 24、Chrome 在 `/opt/google/chrome/chrome`）：**
+> - `npm ci` ✓；`npm run build` ✓；`npm run lint` ✓；`npm run test` ✓（26 组全过）；`npm run check` ✓（typecheck + lint + test + build + prod-hooks + size + css）。
+> - `npm run check:release` ✓（EXIT 0，44 项 ✓，与 QA batch28 相同）：包体 5.48 / 126.72 / 132.20 MB；主菜单出现 879 ms，S1 首帧 3224 ms；另有 4 项已知预算警告（标准档 S1 面数，裁定 28）。它要用本机 Chrome，按 SwiftShader 软件渲染量面数、加载和内存，**不量帧率**。
+> - 这次没跑：`npm run smoke`（51 项完整通关冒烟，约 1.5 小时，要 Chrome）；`npm run smoke:xb`（要另装 Playwright、Firefox、WebKit）。最近一次全量结果见 `docs/bugs/qa-v0.1-batch28.md`（48/51，挂的 3 项空闲单跑都过）。
+> - 帧率、真 GPU 画面、Safari / Edge 真机这些，在无 GPU 的环境里都测不了，要用户在真机上测（perf-report §1/§6、compat-report §7）。
+> - 之前全新克隆上 `test:render` 失败，是因为缺 `art/source/env/s1-layout.json`。布局 json 入库后已经解决。原来写死 `/workspace/...` 的几个脚本已改成相对仓库根解析：`verify-assets.mjs`、`inspect-s3-islet-floor.mjs`、`verify-lightmap.mjs`（修复前备份改用可选环境变量 `BK029_BADPACK`）。`qa/tools/`、`art/tools/`、`audio/source/` 里的路径也改成了相对路径或环境变量。
 
 ## 3. 当前状态
 
@@ -84,7 +93,7 @@ npm run preview:smoke  # 临时生成一份带测试钩子的测试构建（--mo
 | 2026-10-29 | 性能基准是 RTX 3060 级、1440p、60 fps；首场景包上限 150 MB，主菜单 15 MB | v0.1.md |
 | 2026-10-29 | 谜题 5 改成由汐按 E「点灯」亲手点燃 | 裁定 11 |
 | 2026-10-31 | 主菜单主题样张 v1 通过；汐的头部重做 | 裁定 22 |
-| v0.1 期间 | 汐的发型用概念 A（马尾，模型为低马尾），概念图 `concept-xi-hair-a-ponytail.jpg` 在 `art/style/`（不在仓库里） | 原团队记录 |
+| v0.1 期间 | 汐的发型用概念 A（马尾，模型为低马尾），概念图 `concept-xi-hair-a-ponytail.jpg` 在 `art/style/` | 原团队记录 |
 | 2026-10-31 | S2 小屋曲和第一章结局曲先按现版本用，首版完成后再统一精修 | 裁定 24 |
 | 2026-10-31 | 汐脸部暗面保持冷色，不用 warm | 裁定 26，裁定 30 再次确认 |
 | 2026-10-31 | 水面反射强度默认 0.5（`PLANAR_REFLECTION_STRENGTH`），极致档反射 RT 倍率 0.5 | 裁定 28 |
@@ -116,7 +125,7 @@ npm run preview:smoke  # 临时生成一份带测试钩子的测试构建（--mo
 
 1. **游戏内制作名单还显示「—」。** `game/src/config/gameConfig.ts` 的 `credits` 五项都是 `'—'` 占位。代码冻结期间没改，解冻后按 README 的署名（用户 GitHub 名 worldv4nquisher-cyber、Grok Bot）填写，填之前先和用户确认写法。
 2. **`npm ci` 后 `npm audit` 报 9 个中等漏洞**，都在 lint 工具链里（minimatch → eslint / typescript-eslint），不进游戏运行时，还没处理。`npm audit fix` 要等解冻后再做，并回归 lint 和 build。
-3. **`npm run test` 在没有 `art/source` 的环境里会失败**（见第 2 节），可以考虑让 `verify-render` 在缺布局文件时跳过，或者把布局 JSON 放进仓库。
+3. ~~`npm run test` 在没有 `art/source` 的环境里会失败~~：已解决，布局 json 已入库，全新克隆上 test / check / check:release 全绿（见第 2 节）。`gen-s1-rocks.mjs`、`gen-atmo028.mjs` 用的输入已入库；只有 `npm run fonts`（重新生成字体子集）还要先解压 Release 附件，拿到 `art/source/fonts/`。
 4. **`docs/releases/v0.1-compat-report.md` §6 里 BUG-038 那一行还写着"待 QA 复跑通过后关闭"**，但 `BUG-038.md` 已经关闭（batch28）。这是 batch28「给程序」第 1 条，还没改。
 5. batch28「给程序」的其余几条：
    - 第 2 条：check-prod-hooks 的规则自检缺一个只能靠 `location\s*\[` 规则拦住的样例。
@@ -149,26 +158,42 @@ npm run preview:smoke  # 临时生成一份带测试钩子的测试构建（--mo
 
 **素材：** 只用自己生成的，或者可商用、免版权的素材。来源记在 `art/CREDITS.md`、`audio/CREDITS.md`、`docs/audio-credits.md`。
 
-## 8. 不在仓库里的东西
+## 8. 美术源文件（Release 附件）和仍不在仓库里的东西
 
-下面这些留在原团队的工作机器上，**需要另外向仓库所有者索取**。大小是 2026-11-21 实测的。
+### 8.1 美术源文件：Release `art-source-2026-11-21`
 
-| 内容 | 大小 | 主要内容 | 影响 |
-|---|---|---|---|
-| `art/source/` | 约 1.4 GiB（1442 MiB，498 个文件） | `characters/` 823 MB（汐和父亲的 `.blend`、动画 `.blend`、构建脚本）、`textures/` 219 MB、`bake/` 185 MB（S1–S3 光照烘焙 `.blend` 和 `.exr`）、`ui/` 78 MB、`env/` 73 MB（场景装配 `.blend`、`s1/s2/s3-layout.json`）、`fonts/` 40 MB（Noto Sans / Serif SC 的 OTF 源字体）、`atmosphere/` 28 MB、`blockout/`、`audio/`、`props/`。文件类型以 png（314）、py（56）、json（53）、html、exr、ktx2、blend（8 个）为主 | 改模型、重新烘焙、重做贴图、重新生成字体子集都要用；`npm run test` 的 `test:render` 也要用 |
-| `art/style/` | 4.4 MiB | `style-guide.md`（画质分档表 §8 是 test:quality 的依据）、`palette.png`、4 张第一章概念图、3 张汐发型概念图（A 马尾、B 短发、C 辫子） | 美术方向的基准 |
-| `art/tools/` | 1.1 MiB | 美术构建和检查脚本：26 个 mjs（build-env-s1/s2/s3、build-char-xi、finish-*-anims 等）、7 个 py、10 个预览 html、`README.md`（材质公式 §5） | 重新生成美术资源时要用 |
-| `audio/source/` | 0.2 MiB | `music/`：配乐生成和混音的 Python 脚本（score_*.py、gen_music.py、master.py 等）和 json | 精修音乐时要用 |
-| QA 截图和证据目录 | 约 1.3 GiB（1342 MiB） | `docs/bugs/qa-v0.1-batch*/`、`BUG-008-probe/`、`docs/tasks/shots-*`、`docs/tasks/d2` 等，主要是 png 截图、日志和 json | QA 报告正文里引用了这些路径，在仓库里点不开 |
-| QA 工具和快照 `qa-tools/` | 约 1.9 GiB | `snap-fcd796a/`（M8 最终包快照，主要是 1.9 GB 美术副本加 4.6 MB 游戏代码）；其余约 11 MB 是 275 个 mjs 和 111 个 sh 的测试脚本、`cases/`、`logs/` | 复现历次 QA 用；最终包的代码就是本仓库的 `a314f00` |
+- 地址：https://github.com/worldv4nquisher-cyber/foglight-game/releases/tag/art-source-2026-11-21（标记为 prerelease，**不是游戏版本发布**，不含游戏构建包）
+- 附件 `foglight-art-source-2026-11-21.zip`：920,726,269 字节（约 878 MiB），解压后是 `art/source/`，约 1442 MiB，498 个文件
+- SHA-256：`940432f88e4a6a5b94e99e3db1abf7c9d90d51ea51b87ddd5e5034c8962543df`
+- 内容：`characters/` 823 MB（汐、父亲的 `.blend` 和动画 `.blend`、构建脚本）、`textures/` 219 MB、`bake/` 185 MB（S1–S3 光照烘焙 `.blend` / `.exr`）、`ui/` 78 MB、`env/` 73 MB（`s1-shore-assembly.blend`、布局 json）、`fonts/` 40 MB（思源黑体 / 宋体 OTF）、`atmosphere/` 28 MB，以及 `blockout/`、`audio/`、`props/`。
+- 许可：MIT。`fonts/` 例外，遵循 SIL OFL 1.1（包内 `ofl-noto-cjk.txt`）。
 
-> 交接方式还在和仓库所有者商量。拿到之前，写代码、构建、运行、跑大部分测试和冒烟都不受影响。
+用法（在仓库根目录执行；压缩包自带 `art/source/` 前缀，`.gitignore` 已设好，解压出来的大文件不会被 git 跟踪）：
+
+```bash
+curl -LO https://github.com/worldv4nquisher-cyber/foglight-game/releases/download/art-source-2026-11-21/foglight-art-source-2026-11-21.zip
+sha256sum foglight-art-source-2026-11-21.zip
+unzip -n foglight-art-source-2026-11-21.zip   # -n 不覆盖仓库里已有的同名小文件（内容相同）
+```
+
+改模型、重新烘焙、重做贴图、重新生成字体子集（`npm run fonts`）时需要这些文件；写代码、构建、跑 test / check / check:release 不需要。
+
+### 8.2 已入库的原「仓库外」小件
+
+`art/style/`（4.4 MiB）、`art/tools/`（1.1 MiB）、`audio/source/`（0.2 MiB）、`art/source/` 里的布局和大气 json（约 0.1 MiB）、`qa/tools/`（5.4 MiB），见第 1 节表格。2026-11-21 入库前做过 secrets 扫描（token / key / 密码 / 私钥 / 邮箱等模式），没有发现问题。
+
+### 8.3 仍不在仓库里、也不提供的
+
+| 内容 | 大小 | 说明 |
+|---|---|---|
+| QA 截图和证据目录 | 约 1.3 GiB（1342 MiB） | `docs/bugs/qa-v0.1-batch*/`、`BUG-008-probe/`、`docs/tasks/shots-*`、`docs/tasks/d2` 等。用户决定不传，QA 报告正文里引用的这些路径在仓库里打不开 |
+| QA 快照 `snap-fcd796a/` 和 QA 日志 `logs/` | 约 1.9 GiB / 4.4 MiB | 快照的代码就是本仓库的 `a314f00`，美术与 `art/` 相同，可以用 `git archive` 重建；日志属于证据，不入库 |
 
 ## 9. 建议的接手第一步
 
 1. 通读本文档、`README.md`、`docs/releases/v0.1.md`（31 条裁定）、`docs/bugs/qa-v0.1-batch28.md`、`game/docs/engineering.md`。GDD 按需读，有剧透。
-2. 在 `game/` 里跑 `npm ci && npm run build && npm run preview`，确认能进主菜单并完整通关一次。再跑 `npm run lint` 和 `npm run test`（`test:render` 失败是已知问题，见第 2 节）。
+2. 在 `game/` 里跑 `npm ci && npm run build && npm run preview`，确认能进主菜单并完整通关一次。再跑 `npm run lint`、`npm run test`、`npm run check`（全新克隆上应全绿，见第 2 节）。
 3. 准备本机 Chrome，跑一次 `npm run check:release`，以及 `npm run smoke` 的一两项，搭好自己的测试环境。
 4. **先不改代码。** 先问用户 v0.1 真机实测的结果，帧率按 perf-report §1 填表，再等用户决定发不发布。发布前所有修改都要回归一遍。
-5. 向用户索取第 8 节的源文件。
-6. 拿到用户同意、确定解冻以后，再按第 6 节处理遗留：制作名单、npm audit、compat-report 的 BUG-038 行、test:render 的依赖等。新 Bug 从 BUG-039 开始编号。
+5. 要动美术时，从第 8 节的 Release 下载 `art/source` 压缩包，解压到仓库根目录。
+6. 拿到用户同意、确定解冻以后，再按第 6 节处理遗留：制作名单、npm audit、compat-report 的 BUG-038 行等。新 Bug 从 BUG-039 开始编号。
