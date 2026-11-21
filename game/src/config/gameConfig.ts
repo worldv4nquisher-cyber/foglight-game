@@ -31,12 +31,11 @@ export const gameConfig = {
 
 /**
  * 制作名单署名（text-ch1 `ui.credits.body` 的 {producer} 等占位，v0.1-008）。
- * 文本表注明「{} 由制作人填署名」，制作人给出名字前用「—」占位。
  */
 export const credits = {
-  producer: '—',
-  designer: '—',
-  artist: '—',
-  programmer: '—',
-  audio: '—',
+  producer: 'worldv4nquisher-cyber',
+  designer: 'worldv4nquisher-cyber',
+  artist: 'worldv4nquisher-cyber、Grok Bot、Devin Bot',
+  programmer: 'worldv4nquisher-cyber、Grok Bot、Devin Bot',
+  audio: 'worldv4nquisher-cyber、Grok Bot、Devin Bot',
 };
