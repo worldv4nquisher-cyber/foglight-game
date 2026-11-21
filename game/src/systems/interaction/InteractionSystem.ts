@@ -68,6 +68,9 @@ export interface InteractionSystemOptions {
   linkPriority?: () => number | null;
   /** 屏幕尺寸（图标投影用），默认取 window */
   viewport?: () => { width: number; height: number };
+  /** 焦点相对角色脚底的高度范围（m），默认 −0.5…2.0。 */
+  minRise?: number;
+  maxRise?: number;
 }
 
 type Then = 'use' | 'hold' | 'push' | 'pickup' | 'place';
@@ -113,8 +116,8 @@ function angleDiff(a: number, b: number): number {
  * 场景每个物理步在 entities.fixedUpdate 之前调 fixedUpdate（先于角色控制器消费 E，跨越点只在没有交互候选时生效），
  * 每帧在相机更新之后调 update（图标投影、机关模式鼠标输入、高亮计时）。
  *
- * 判定：角色到物体焦点的水平距离 − reach ≤ 1.8 m，且角色朝向与物体方向夹角 ≤ 60°；多个候选取投影离屏幕中心最近的。
- * 3.5 m 内显示冷色小图标，可交互时显示文字提示。
+ * 判定：焦点在脚底高度带内，水平距离 − reach ≤ 1.8 m，且朝向夹角 ≤ 60°；多个候选取投影离屏幕中心最近的。
+ * 高度带内、水平 3.5 m 内显示冷色小图标，可交互时显示文字提示。
  */
 export class InteractionSystem {
   readonly items: Interactable[] = [];
@@ -187,6 +190,7 @@ export class InteractionSystem {
     if (!it.available || !this.kindReady(it)) return false;
     const body = this.o.actor.body;
     it.focus(tmpA);
+    if (!this.withinHeightBand(it, tmpA.y)) return false;
     const dx = tmpA.x - body.position.x;
     const dz = tmpA.z - body.position.z;
     const dist = Math.hypot(dx, dz) - it.reach;
@@ -234,6 +238,7 @@ export class InteractionSystem {
     for (const it of this.items) {
       if (!it.available || !this.kindReady(it)) continue;
       it.focus(tmpA);
+      if (!this.withinHeightBand(it, tmpA.y)) continue;
       const d = Math.hypot(tmpA.x - body.position.x, tmpA.z - body.position.z) - it.reach;
       if (d > cfg.iconDistance) continue;
       ndc.copy(tmpA).project(this.o.camera);
@@ -367,6 +372,11 @@ export class InteractionSystem {
   }
 
   // ---------------------------------------------------------------- 内部
+
+  private withinHeightBand(it: Interactable, focusY: number): boolean {
+    const rise = focusY - this.o.actor.body.position.y;
+    return rise >= (it.minRise ?? this.o.minRise ?? -0.5) && rise <= (it.maxRise ?? this.o.maxRise ?? 2.0);
+  }
 
   /** 类型条件：pickup 要空手，place 要拿着它接受的东西且 socket 空着 */
   private kindReady(it: Interactable): boolean {

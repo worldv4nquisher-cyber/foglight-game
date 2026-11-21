@@ -46,6 +46,9 @@ export interface InteractableOptions {
   focus?: THREE.Object3D | THREE.Vector3;
   /** 物体「半径」（m）：判定距离 = 到焦点的水平距离 − reach（大物体如灯塔） */
   reach?: number;
+  /** 焦点相对脚底的高度范围覆盖值（m），未设置时沿用交互系统。 */
+  minRise?: number;
+  maxRise?: number;
   enabled?: boolean;
   /** hold：按住时长（s），默认 2 */
   holdSeconds?: number;
@@ -108,6 +111,8 @@ export class Interactable extends Component {
   textId: TextId | null;
   override enabled: boolean;
   readonly reach: number;
+  readonly minRise: number | undefined;
+  readonly maxRise: number | undefined;
   readonly holdSeconds: number;
   readonly track: PushTrack | null;
   readonly puzzle: PuzzleGroup | null;
@@ -141,6 +146,8 @@ export class Interactable extends Component {
     this.textId = opts.textId ?? null;
     this.enabled = opts.enabled ?? true;
     this.reach = opts.reach ?? 0;
+    this.minRise = opts.minRise;
+    this.maxRise = opts.maxRise;
     this.holdSeconds = opts.holdSeconds ?? gameplay.interaction.holdSeconds;
     this.track = opts.track ?? null;
     this.puzzle = opts.puzzle ?? null;

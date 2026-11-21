@@ -4,6 +4,9 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
+import { manifest } from '@/assets/manifest';
 import { gameplay } from '@/config/gameplay';
 import { EventBus } from '@/core/EventBus';
 import { InputManager } from '@/systems/input/InputManager';
@@ -15,7 +18,24 @@ import { RotatablePart, nextDetent } from '@/systems/interaction/RotatablePart';
 import { PuzzleGroup, puzzleBarText } from '@/systems/interaction/PuzzleMode';
 import { t as text } from '@/content/text';
 import { asXiClip, pushRate } from '@/entities/xi/clips';
-import { S3, toWorld } from '@/levels/s3/layout';
+import { S1 } from '@/levels/s1/layout';
+import { buildS1Greybox } from '@/levels/s1/greybox';
+import { buildS1Art } from '@/levels/s1/art';
+import { buildS1Puzzles } from '@/levels/s1/puzzles';
+import { s1DressingSpecs } from '@/levels/s1/dressing';
+import { S1_ART_SLOTS } from '@/levels/s1/artSlots';
+import { mountArtSlots, snapToArt } from '@/levels/artSlots';
+import { S2, slopeY } from '@/levels/s2/layout';
+import { buildS2Greybox } from '@/levels/s2/greybox';
+import { buildS2Art } from '@/levels/s2/art';
+import { buildS2Puzzles } from '@/levels/s2/puzzles';
+import { s2DressingSpecs } from '@/levels/s2/dressing';
+import { S3, S3_FRAME, toWorld } from '@/levels/s3/layout';
+import { buildS3Greybox } from '@/levels/s3/greybox';
+import { buildS3Art } from '@/levels/s3/art';
+import { buildS3Puzzles } from '@/levels/s3/puzzles';
+import { s3DressingSpecs } from '@/levels/s3/dressing';
+import { interactNode, mountDressing } from '@/levels/dressing';
 
 const DT = 1 / 60;
 let now = 0;
@@ -30,7 +50,7 @@ function test(name, fn) {
 }
 
 /** 一个最小场景：地面 + 角色 + 相机（站在角色身后 3 m 看向 -z） */
-function setup({ floor = true, linkPriority } = {}) {
+function setup({ floor = true, linkPriority, minRise, maxRise } = {}) {
   now = 0;
   const events = new EventBus();
   const input = new InputManager(events, () => now);
@@ -70,6 +90,8 @@ function setup({ floor = true, linkPriority } = {}) {
     hud,
     presenters: { say: (id) => log.said.push(id), read: (id) => log.read.push(id) },
     viewport: () => ({ width: 1600, height: 900 }),
+    minRise,
+    maxRise,
     ...(linkPriority ? { linkPriority } : {}),
   });
   const fired = [];
@@ -119,6 +141,48 @@ function setup({ floor = true, linkPriority } = {}) {
 const used = (env, id) => env.fired.filter(([e, p]) => e === 'interact:used' && p.id === id).length;
 
 // ---------------------------------------------------------------- 判定
+
+test('F02 高度带：包含 −0.5 / 2.0 边界，拒绝楼上 / 楼下；提示和图标共用，空候选清空提示', () => {
+  const env = setup({ floor: false });
+  const focus = new THREE.Vector3(0, 0, -1);
+  const it = env.ix.add(new Interactable({ id: 'height-band', kind: 'inspect', object: new THREE.Object3D(), focus, textId: 'ch1.s1.nets.inspect' }));
+  for (const feet of [0, 16]) {
+    env.body.teleport(new THREE.Vector3(0, feet, 0));
+    env.camera.position.set(0, feet + 0.75, 4);
+    env.camera.lookAt(0, feet + 0.75, -1);
+    env.camera.updateMatrixWorld(true);
+    for (const [rise, eligible] of [[-1, false], [-0.5001, false], [-0.5, true], [0, true], [1.6, true], [2, true], [2.0001, false], [3.18, false]]) {
+      focus.y = feet + rise;
+      assert.equal(env.ix.canInteract(it), eligible, `feet ${feet}, rise ${rise}`);
+      assert.equal(env.ix.markers().some((m) => m.id === it.id), eligible, `marker: feet ${feet}, rise ${rise}`);
+      env.ix.fixedUpdate(DT);
+      assert.equal(env.ix.current, eligible ? it : null);
+      assert.equal((env.log.prompt.at(-1) ?? null) !== null, eligible);
+    }
+  }
+  env.ix.items.length = 0;
+  env.ix.fixedUpdate(DT);
+  assert.equal(env.ix.current, null);
+  assert.deepEqual(env.ix.markers(), []);
+  assert.equal(env.log.prompt.at(-1), null);
+});
+
+test('F02 高度带：系统配置及物体覆盖同时作用于交互与图标', () => {
+  const env = setup({ minRise: -0.1, maxRise: 1 });
+  const focus = new THREE.Vector3(0, 1.5, -1);
+  const make = (id, band = {}) => env.ix.add(new Interactable({ id, kind: 'inspect', object: new THREE.Object3D(), focus, textId: 'ch1.s1.nets.inspect', ...band }));
+  const plain = make('plain-band');
+  const override = make('override-band', { minRise: -0.3, maxRise: 1.5 });
+  for (const rise of [1.5, -0.2]) {
+    focus.y = rise;
+    env.camera.position.set(0, rise, 4);
+    env.camera.lookAt(focus);
+    env.camera.updateMatrixWorld(true);
+    assert.equal(env.ix.canInteract(plain), false);
+    assert.equal(env.ix.canInteract(override), true);
+    assert.deepEqual(env.ix.markers().map((m) => m.id), [override.id]);
+  }
+});
 
 test('优先级：附近有跨越点（默认 10）时 inspect / read（0）让位，E 留给跨越；操作类（20）不让；离开跨越点恢复', () => {
   let link = null;
@@ -941,6 +1005,213 @@ test('017 推：pushStartRamp 起止 0 / 1、单调、moveAt = 0.5 ≤ 0.6（gam
   assert.equal(pushStartRamp(0.3, 1.2, 1.2), 0, 'start ≤ moveAt：不加速段');
   assert.equal(pushStartRamp(1.3, 1.2, 1.2), 1);
 });
+
+// ---------------------------------------------------------------- F02 实际关卡交互清单
+
+globalThis.self ??= globalThis;
+const modelKeys = new Set([
+  ...Object.keys(S1.artNodes), 'prop-boat-rowboat',
+  ...S1_ART_SLOTS.map((s) => s.key), ...s1DressingSpecs().map((s) => s.key),
+  'env-keeper-house-ch1-interior', 'env-courtyard-wall-s2', 'env-cellar-s2',
+  'prop-key-lighthouse', 'prop-lantern-brass', 'prop-lantern-stand-s2',
+  'env-lighthouse-ch1-interior', 'env-lamp-room-ch1',
+  ...s2DressingSpecs().map((s) => s.key), ...s3DressingSpecs().map((s) => s.key),
+]);
+const models = new Map();
+const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).setKTX2Loader({
+  load: (_url, onLoad) => onLoad(new THREE.CompressedTexture([], 1, 1)),
+});
+for (const key of modelKeys) {
+  const entry = manifest.find((a) => a.key === key);
+  assert.ok(entry, `manifest: ${key}`);
+  const buf = readFileSync(new URL(`../../art/${entry.url.split('assets/art/')[1]}`, import.meta.url));
+  const gltf = await loader.parseAsync(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength), '');
+  models.set(key, gltf.scene);
+}
+
+function inventoryScene(level, art) {
+  const env = setup({ floor: false });
+  const assets = {
+    has: (key) => art && models.has(key),
+    getModel: (key) => models.get(key).clone(true),
+  };
+  const game = { events: env.events, assets };
+  const hints = { add() {} };
+  const rig = { body: { position: env.body.position, body: env.body }, controller: env.actor, visual: new THREE.Group() };
+  const deps = {
+    game, scene: env.scene, physics: env.physics, interaction: env.ix, hints,
+    camera: env.camera, cameraFollow: {}, collider: () => undefined, beamDebug: false,
+  };
+  let puzzles;
+  let sceneArt;
+  let specs;
+  let focusId;
+  let dressingId;
+  if (level === 's1') {
+    const greybox = buildS1Greybox();
+    env.scene.add(greybox.root);
+    sceneArt = buildS1Art(assets);
+    env.scene.add(sceneArt.root);
+    puzzles = buildS1Puzzles({ ...deps, root: env.scene, tideColliders: [], entities: { add() {} }, wood: new THREE.MeshStandardMaterial(), metal: new THREE.MeshStandardMaterial(), addLink() {} });
+    const slots = mountArtSlots(assets, env.scene, S1_ART_SLOTS, { showGreybox: false });
+    snapToArt(slots, 'prop-tide-bell', 'prop-tide-bell-interact', puzzles.bell.interactable.interactPoint);
+    snapToArt(slots, 'prop-raft-s1', 'prop-raft-s1-interact', puzzles.raftPush.interactPoint);
+    specs = s1DressingSpecs();
+    focusId = 's1-notice';
+    dressingId = 'prop-notice-board-s1';
+  } else if (level === 's2') {
+    const greybox = buildS2Greybox();
+    env.scene.add(greybox.root);
+    const sceneArt = buildS2Art(assets);
+    env.scene.add(sceneArt.root);
+    puzzles = buildS2Puzzles({ ...deps, greybox, rig, artRoot: sceneArt.root, artKey: sceneArt.cellarKey, artLantern: sceneArt.lantern, artLampStands: sceneArt.lampStands });
+    specs = s2DressingSpecs();
+    focusId = 'journal-s2';
+    dressingId = 'prop-journal-father-s2';
+  } else {
+    const frame = new THREE.Group();
+    frame.position.set(...S3_FRAME.position);
+    frame.rotation.y = S3_FRAME.rotationY;
+    env.scene.add(frame);
+    const greybox = buildS3Greybox();
+    frame.add(greybox.root);
+    const sceneArt = buildS3Art(assets);
+    frame.add(sceneArt.root);
+    frame.updateMatrixWorld(true);
+    puzzles = buildS3Puzzles({ ...deps, frame, greybox, rig: () => rig, artRoot: sceneArt.root, onIgnite() {} });
+    specs = s3DressingSpecs();
+    focusId = 'logbook-s3';
+    dressingId = 'prop-logbook-s3';
+  }
+  const dressing = mountDressing(assets, env.scene, specs, { showGreybox: false });
+  const focus = interactNode(dressing.find((m) => m.id === dressingId));
+  if (art) {
+    assert.ok(focus, `${level} 美术焦点`);
+    env.ix.get(focusId).setFocus(focus);
+  }
+  env.scene.updateMatrixWorld(true);
+  return { ...env, puzzles, sceneArt };
+}
+
+function checkInventoryTarget(env, it, floor, otherFloors) {
+  it.enabled = true;
+  const minRise = { 's1-boat': 1.5 - S1.pier.deckY - 0.1, 'stone-slot-s1': S1.sandY + 0.15 - S1.nearPlatform.topY - 0.1 }[it.id];
+  assert.equal(it.minRise, minRise, `${it.id}: 高度覆盖`);
+  assert.equal(it.maxRise, undefined, `${it.id}: 无高度覆盖`);
+  // 隔离流程条件：放置点持有匹配物品、拾取点空手；不触发动作或自动走位。
+  env.ix.held.current = it.kind === 'place' ? { id: it.item, object: new THREE.Object3D() } : null;
+  if (it.socket) env.ix.held.sockets.delete(it.socket.name);
+  const focus = it.focus(new THREE.Vector3());
+  for (const feet of [floor, floor + 1e-6, ...otherFloors]) {
+    const eligible = !otherFloors.includes(feet);
+    env.body.teleport(new THREE.Vector3(focus.x, feet, focus.z + 1));
+    env.actor.facing = Math.PI;
+    env.camera.position.copy(focus).add(new THREE.Vector3(0, 0, 4));
+    env.camera.lookAt(focus);
+    env.camera.updateMatrixWorld(true);
+    assert.equal(env.ix.canInteract(it), eligible, `${it.id}: focus ${focus.y}, feet ${feet}`);
+    assert.equal(env.ix.markers().some((m) => m.id === it.id), eligible, `${it.id} marker: feet ${feet}`);
+  }
+}
+
+for (const art of [false, true]) {
+  test(`F02 S1 实际清单（art=${art}）：码头 / 岸台 / 沙地与潮位；小船覆盖仅到甲板`, () => {
+    const env = inventoryScene('s1', art);
+    const floors = {
+      'tide-bell-s1': S1.ledge.topY, 's1-tide-pillar': S1.ledge.topY,
+      's1-boat': S1.pier.deckY, 's1-notice': S1.pier.deckY,
+      'raft-s1': S1.sandY, 'stone-slot-s1': S1.sandY,
+      's1-nets-a': S1.sandY, 's1-nets-b': S1.sandY,
+      's1-shed': S1.sandY, 's1-neighbor-note': S1.sandY,
+    };
+    assert.deepEqual(env.ix.items.map((it) => it.id).sort(), Object.keys(floors).sort(), '新交互必须加入站位清单');
+    try {
+      for (const level of [S1.tide.low, (S1.tide.low + S1.tide.high) / 2, S1.tide.high]) {
+        env.puzzles.raft.snap(level);
+        env.sceneArt.update(env.camera, level);
+        env.scene.updateMatrixWorld(true);
+        if (env.puzzles.raft.afloat) assert.equal(env.ix.canInteract(env.puzzles.raftPush), false, '浮起时仍不可推');
+        for (const [id, floor] of Object.entries(floors)) {
+          if (id === 'raft-s1' && env.puzzles.raft.afloat) continue;
+          checkInventoryTarget(env, env.ix.get(id), floor, []);
+        }
+        checkInventoryTarget(env, env.ix.get('stone-slot-s1'), S1.nearPlatform.topY, []);
+        checkInventoryTarget(env, env.ix.get('s1-notice'), S1.ledge.topY, []);
+        if (!env.puzzles.raft.afloat) checkInventoryTarget(env, env.ix.get('raft-s1'), S1.raft.home[1], []);
+        const boat = env.ix.get('s1-boat');
+        const focus = boat.focus(new THREE.Vector3());
+        env.body.teleport(new THREE.Vector3(focus.x, S1.pier.deckY + 0.2, focus.z + 1));
+        assert.equal(env.ix.canInteract(boat), false, '覆盖不超出码头甲板');
+        assert.equal(env.ix.markers().some((m) => m.id === boat.id), false);
+      }
+      for (const it of env.ix.items) console.log(`  F02 S1 art=${art} ${it.id}: focus=${it.focus(new THREE.Vector3()).y.toFixed(6)} feet=${floors[it.id]}`);
+    } finally {
+      env.puzzles.dispose();
+    }
+  });
+
+  test(`F02 S2 实际清单（art=${art}）：本层可选、其他楼层拒绝；坡地 ±2.4 m；风灯桌面 / 两灯台`, () => {
+    const env = inventoryScene('s2', art);
+    const floors = {
+      'journal-s2': 3, 'xi-note-s2': 3, 'reply-draft-s2': 3, 'chart-s2': 3, 'desk-lantern-s2': 3,
+      'cups-s2': 0, 'stove-s2': 0, 'bed-s2': 3, 'west-window-s2': 3,
+      'lamp-stand-east-s2': 0, 'lamp-stand-west-s2': 0,
+      'mirror-stand-s2-a': 0, 'mirror-stand-s2-b': 0, 'light-lock-s2': 0,
+      'cellar-key-s2': -2.4, 'sketch-s2': -2.4, 'dial-gate-s2': 0,
+    };
+    const stoneIds = S2.whiteStones.map((_, i) => `white-stone-s2-${i}`);
+    assert.deepEqual(env.ix.items.map((it) => it.id).sort(), [...Object.keys(floors), ...stoneIds, 'lantern-s2'].sort(), '新交互必须加入楼层清单');
+    try {
+      for (const [id, floor] of Object.entries(floors)) {
+        checkInventoryTarget(env, env.ix.get(id), floor, [-2.4, 0, 3].filter((y) => y !== floor));
+        if (floor === 3) checkInventoryTarget(env, env.ix.get(id), floor - S2.stair.rise, []);
+      }
+      for (const id of stoneIds) {
+        const it = env.ix.get(id);
+        const terrain = slopeY(it.focus(new THREE.Vector3()).x);
+        checkInventoryTarget(env, it, terrain, [terrain - 2.4, terrain + 2.4]);
+      }
+      const lantern = env.ix.get('lantern-s2');
+      const sockets = [
+        [env.ix.get('desk-lantern-s2').socket, 3],
+        [env.puzzles.beam.lamps.east.socket, 0],
+        [env.puzzles.beam.lamps.west.socket, 0],
+      ];
+      for (const [socket, floor] of sockets) {
+        env.ix.held.current = null;
+        assert.ok(env.ix.held.pickUp('lantern', env.puzzles.lantern));
+        assert.ok(env.ix.held.place(socket));
+        env.scene.updateMatrixWorld(true);
+        const rise = lantern.focus(new THREE.Vector3()).y - floor;
+        assert.ok(rise >= -0.5 && rise <= 2, `${socket.name}: 风灯 bbox 高差 ${rise}`);
+        console.log(`  F02 lantern art=${art} ${socket.name}: rise=${rise.toFixed(6)}`);
+        checkInventoryTarget(env, lantern, floor, [-2.4, 0, 3].filter((y) => y !== floor));
+      }
+    } finally {
+      env.puzzles.dispose();
+    }
+  });
+
+  test(`F02 S3 实际清单（art=${art}）：透镜 / 值班簿 / 所有交互仅本层可选，图标同判定`, () => {
+    const env = inventoryScene('s3', art);
+    const floors = {
+      'tide-bell-s3': 2.4, 'door-s3': 2.4, 'logbook-s3': 2.4, 'oil-valve-s3': 0.2,
+      [S3.mirrors.window.id]: 0.2, [S3.mirrors.a.id]: 10, [S3.mirrors.b.id]: 16,
+      'ignite-lever-s3': 22, 'ignition-note-s3': 22, 'lens-s3': 22,
+    };
+    assert.deepEqual(env.ix.items.map((it) => it.id).sort(), Object.keys(floors).sort(), '新交互必须加入楼层清单');
+    try {
+      for (const [id, floor] of Object.entries(floors)) {
+        const it = env.ix.get(id);
+        checkInventoryTarget(env, it, floor, [0.2, 2.4, 5, 10, 16, 22].filter((y) => y !== floor));
+        // 门内平台 / 灯室楼梯口相邻踏步仍可交互。
+        if (floor === 2.4 || floor === 22) checkInventoryTarget(env, it, floor - S3.stair.rise, []);
+      }
+    } finally {
+      env.puzzles.dispose();
+    }
+  });
+}
 
 // ---------------------------------------------------------------- 汇总
 

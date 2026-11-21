@@ -5,6 +5,7 @@ let nextId = 1;
 
 /** 实体 = 一个 Object3D（可视/变换）+ 一组组件 */
 export class Entity {
+  name: string;
   readonly id = nextId++;
   readonly object3D: THREE.Object3D;
   readonly tags = new Set<string>();
@@ -12,9 +13,10 @@ export class Entity {
   destroyed = false;
 
   constructor(
-    public name: string,
+    name: string,
     object3D: THREE.Object3D = new THREE.Group(),
   ) {
+    this.name = name;
     this.object3D = object3D;
     this.object3D.name = name;
     this.object3D.userData.entityId = this.id;
