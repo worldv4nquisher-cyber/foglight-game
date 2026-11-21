@@ -174,6 +174,7 @@ export const S1 = {
     'env-pier-wood-ch1': { translation: [-3.39, 0, -9.8], rotationY: -1.23594 },
     'env-shore-ledge-s1': { translation: [-12.74, 0, -6.25], rotationY: 0 },
     'env-cliff-s1': { translation: [4, 0, 17], rotationY: 0 },
+    'env-unloading-shore-s1': { translation: [0, 0, 0], rotationY: 0 },
     'env-fish-shed-ruin': { translation: [18.73, 0, 1.46], rotationY: 0 },
     'env-net-rack-a': { translation: [16.25, 0, -2.25], rotationY: 0 },
     'env-net-rack-b': { translation: [17.31, 0, 8.13], rotationY: 0 },

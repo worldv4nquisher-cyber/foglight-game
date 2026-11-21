@@ -2,16 +2,19 @@ import * as THREE from 'three';
 import type { AssetLoader } from '@/assets/AssetLoader';
 import type { QualityPreset } from '@/config/quality';
 import { InstancedLodSet } from '@/render/instancedLod';
+import { applyLodDistances } from '@/render/lod';
 import { applyObjectFog, readFogHint, type ObjectFogHandle } from '@/render/objectFog';
 import { makeSkyLayer, type SkyLayerHandle } from '@/render/skyLayer';
 import { applyMaterialHints } from '@/render/materialHints';
 import { withTideLevel, WET_LINE_GLSL } from '@/render/tideUniforms';
 import { S1, S3_WORLD_FRAME, v3 } from './layout';
-import { S1_ROCKS, type RockId } from './rocks';
+import { S1_ROCKS, type RockInstance } from './rocks';
 
 /** 远景塔（S3 塔座实例）每档固定的 LOD 级（s1-layout.json socketInstances.lodByTier） */
 const TOWER_LOD_BY_TIER = { ultra: 1, high: 2, standard: 2, low: 2 } as const;
 const COLLIDER_NAME = /-(collider|wall)(\.\d+)?$/i;
+const STANDARD_DECOR_ROCK_LOD = [5, 12, 150] as const;
+const STANDARD_TIDAL_FLAT_LOD = [7, 28, 150] as const;
 
 /** 按潮位切换可见性的一组节点（船绳涨 / 退潮两版）；找不到任一版 = null（保持现状） */
 export interface TideVariantSwitch {
@@ -126,6 +129,7 @@ export function buildS1Art(assets: AssetLoader): S1Art {
 
   let loaded = false;
   for (const [key, n] of Object.entries(S1.artNodes)) if (place(key, n.translation, n.rotationY)) loaded = true;
+  const tidalFlat = root.getObjectByName('env-tidal-flat-s1');
 
   // 小船（y 随水位）/ 沉船
   const boat = place('prop-boat-rowboat', S1.boat.position, S1.boat.rotationY);
@@ -135,16 +139,24 @@ export function buildS1Art(assets: AssetLoader): S1Art {
 
   // 礁石实例
   const rocks: InstancedLodSet[] = [];
-  const byRock = new Map<RockId, typeof S1_ROCKS[number][]>();
-  for (const r of S1_ROCKS) {
-    const list = byRock.get(r.rock) ?? [];
-    list.push(r);
-    byRock.set(r.rock, list);
+  const decorRocks = new Set<InstancedLodSet>();
+  const byModel = new Map<string, { list: RockInstance[]; onRoute: boolean }>();
+  const foreground = new Set(S1.foregroundRocks.map(([index]) => index));
+  for (const [index, rock] of S1_ROCKS.entries()) {
+    const onRoute = rock.role === 'reef-path' || foreground.has(index);
+    const id = onRoute ? `${rock.rock}-route` : rock.rock;
+    let batch = byModel.get(id);
+    if (!batch) {
+      batch = { list: [], onRoute };
+      byModel.set(id, batch);
+    }
+    batch.list.push(rock);
   }
-  for (const [id, list] of byRock) {
-    const key = `env-rock-shore-${id}`;
-    if (!has(key)) continue;
-    const set = new InstancedLodSet(prepare(assets.getModel(key)), list, { name: `s1-rocks-${id}`, material: wet });
+  for (const [id, { list, onRoute }] of byModel) {
+    const asset = `env-rock-shore-${list[0]!.rock}`;
+    if (!has(asset)) continue;
+    const set = new InstancedLodSet(prepare(assets.getModel(asset)), list, { name: `s1-rocks-${id}`, material: wet });
+    if (!onRoute) decorRocks.add(set);
     root.add(set);
     rocks.push(set);
     loaded = true;
@@ -240,8 +252,9 @@ export function buildS1Art(assets: AssetLoader): S1Art {
       if (boat) boat.position.y = Math.max(S1.boat.groundY, tideLevel - S1.boat.belowWater);
     },
     applyQuality(q) {
+      if (tidalFlat && q.tier === 'standard') applyLodDistances(tidalFlat, STANDARD_TIDAL_FLAT_LOD);
       for (const r of rocks) {
-        r.setDistances(q.lodDistances);
+        r.setDistances(q.tier === 'standard' && decorRocks.has(r) ? STANDARD_DECOR_ROCK_LOD : q.lodDistances);
         r.setCulling(q.shadowType.cascades === 0, q.impostorDistance);
       }
       const k = TOWER_LOD_BY_TIER[q.tier];

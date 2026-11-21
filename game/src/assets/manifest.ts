@@ -142,6 +142,7 @@ export const manifest: AssetEntry[] = [
   { key: 'env-pier-wood-ch1', type: 'gltf', url: 'assets/art/models/env/env-pier-wood-ch1.glb', group: 's1', optional: true, art: true },
   { key: 'env-shore-ledge-s1', type: 'gltf', url: 'assets/art/models/env/env-shore-ledge-s1.glb', group: 's1', optional: true, art: true },
   { key: 'env-cliff-s1', type: 'gltf', url: 'assets/art/models/env/env-cliff-s1.glb', group: 's1', optional: true, art: true },
+  { key: 'env-unloading-shore-s1', type: 'gltf', url: 'assets/art/models/env/env-unloading-shore-s1.glb', group: 's1', optional: true, art: true },
   { key: 'env-fish-shed-ruin', type: 'gltf', url: 'assets/art/models/env/env-fish-shed-ruin.glb', group: 's1', optional: true, art: true },
   { key: 'env-net-rack-a', type: 'gltf', url: 'assets/art/models/env/env-net-rack-a.glb', group: 's1', optional: true, art: true },
   { key: 'env-net-rack-b', type: 'gltf', url: 'assets/art/models/env/env-net-rack-b.glb', group: 's1', optional: true, art: true },

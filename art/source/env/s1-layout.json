@@ -2589,6 +2589,15 @@
    ],
    "rotationY": 0
   },
+  "env-unloading-shore-s1": {
+   "file": "models/env/env-unloading-shore-s1.glb",
+   "translation": [
+    0,
+    0,
+    0
+   ],
+   "rotationY": 0
+  },
   "env-fish-shed-ruin": {
    "file": "models/env/env-fish-shed-ruin.glb",
    "translation": [
@@ -2887,9 +2896,9 @@
  },
  "triangles": {
   "lod": [
-   3119116,
-   1561094,
-   764473
+   3165972,
+   1584521,
+   776186
   ],
   "instances": 164,
   "instanceTris": [

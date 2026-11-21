@@ -848,6 +848,31 @@ if (hasArt) {
     return `9 块网格 / 挡人盒都在避让区外（网格最北 z ${maxZ.toFixed(2)} < −3）；开场 ${targets.length + tower.length} 条、小径尽头 ${targets.length} 条视线（脚印 20 点、路线 22 点、塔身 4 点）无遮挡`;
   });
 
+  await test('S1 浮台对岸：各级地形都不穿过平台和底部台阶', async () => {
+    const { S1 } = await import('@/levels/s1/layout');
+    const flat = await loadGlb('models/env/env-tidal-flat-s1.glb');
+    flat.position.set(...S1.artNodes['env-tidal-flat-s1'].translation);
+    flat.updateMatrixWorld(true);
+    const ray = new THREE.Raycaster();
+    const down = new THREE.Vector3(0, -1, 0);
+    const f = S1.farSteps;
+    for (let i = 0; i < 3; i++) {
+      const meshes = [];
+      flat.traverse((o) => {
+        if (o.isMesh && o.name.startsWith(`env-tidal-flat-s1_lod${i}_`)) meshes.push(o);
+      });
+      assert.ok(meshes.length, `地形 LOD${i}`);
+      for (const x of [f.x[0] + 0.18, S1.linkFar[0], f.x[1] - 0.18]) {
+        for (const z of [f.z0 + 0.2, f.z0 + 0.85, 13.72, 13.86, 13.98]) {
+          const tread = f.baseY + Math.max(0, Math.ceil((z - f.z0 - f.landing) / f.run)) * f.rise;
+          ray.set(new THREE.Vector3(x, 8, z), down);
+          const hit = ray.intersectObjects(meshes, false)[0];
+          assert.ok(hit && hit.point.y <= tread - 0.1, `LOD${i} 地形 (${x}, ${z}) y=${hit?.point.y}，踏面 y=${tread}`);
+        }
+      }
+    }
+  });
+
   await test('S1 深水区 = 美术海床（env-tidal-flat-s1 LOD0）：区内海床 < −0.3（送回水深），区外滩地北段 / 合法路线不在区内', async () => {
     const { S1 } = await import('@/levels/s1/layout');
     const { polygonRegion } = await import('@/systems/tide/TideController');
