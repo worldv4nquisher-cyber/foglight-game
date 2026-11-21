@@ -5,7 +5,7 @@
     "locale": "zh-CN",
     "source": "docs/gdd/text-ch1.md",
     "version": 1,
-    "count": 179
+    "count": 180
   },
   "strings": {
     "ch1.intro.title_card": "第一章 · 归岸",
@@ -154,6 +154,7 @@
     "ui.settings.quality_ultra": "极致",
     "ui.settings.quality_high": "高",
     "ui.settings.quality_standard": "标准",
+    "ui.settings.quality_low": "最低",
     "ui.settings.quality_auto_note": "已根据这台电脑自动选择画质，可以随时改回。",
     "ui.settings.mouse_sensitivity": "鼠标灵敏度",
     "ui.settings.invert_y": "Y 轴反转",
@@ -1498,6 +1499,16 @@
       "trigger": "画质选项",
       "duration": "常驻（界面打开期间）",
       "note": ""
+    },
+    {
+      "section": "ui",
+      "id": "ui.settings.quality_low",
+      "type": "ui",
+      "speaker": "system",
+      "text": "最低",
+      "trigger": "画质选项",
+      "duration": "常驻（界面打开期间）",
+      "note": "程序补充：没有独显 / 软件渲染时用的最低画质"
     },
     {
       "section": "ui",

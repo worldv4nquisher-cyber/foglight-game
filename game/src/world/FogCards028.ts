@@ -1,7 +1,6 @@
 import * as THREE from 'three';
 import type { AtmospherePreset } from '@/config/atmosphere';
-import { ATMO028 } from '@/config/atmosphere028';
-import type { QualityTier } from '@/config/quality';
+import { ATMO028, type Atmo028Tier } from '@/config/atmosphere028';
 
 /**
  * v0.1-028 S1 雾片（README-028 §3，照搬 art/tools/preview/atmo028.js addS1Fog）：
@@ -140,7 +139,7 @@ export class FogCards028 extends THREE.Group {
     for (const w of this.walls) w.mesh.material.color.setRGB((p.r * w.tint.r) / BASE_TINT.r, (p.g * w.tint.g) / BASE_TINT.g, (p.b * w.tint.b) / BASE_TINT.b);
   }
 
-  applyQuality(tier: QualityTier): void {
+  applyQuality(tier: Atmo028Tier): void {
     const t = ATMO028.fogTiers[tier];
     this.walls.forEach((w, i) => (w.mesh.visible = i < t.farLayers));
     const mul = 'groundFogOpacityMul' in t ? (t.groundFogOpacityMul as number) : 1;

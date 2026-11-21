@@ -448,6 +448,26 @@ await test('实例 LOD 分级：按相机距离和画质 lodDistances 分到各�
   return 'ultra / high / standard ✓，回滞 ✓';
 });
 
+await test('实例 LOD 视锥剔除（最低档不投阴影时开）：相机背后 / 超出剔除距离的实例不画，关掉后恢复', () => {
+  const pl = [-30, 30].map((z) => ({ translation: [0, 0, z], rotationY: 0, scale: 1 }));
+  const set = new InstancedLodSet(syntheticRock(), pl);
+  const cam = new THREE.PerspectiveCamera(60, 16 / 9, 0.1, 500);
+  cam.updateMatrixWorld();
+  set.setDistances(QUALITY_PRESETS.low.lodDistances);
+  set.update(cam);
+  assert.equal(set.counts.reduce((a, b) => a + b, 0), 2);
+  set.setCulling(QUALITY_PRESETS.low.shadowType.cascades === 0);
+  set.update(cam);
+  assert.equal(set.counts.reduce((a, b) => a + b, 0), 1, '背后的实例没剔掉');
+  set.setCulling(true, 20);
+  set.update(cam);
+  assert.equal(set.counts.reduce((a, b) => a + b, 0), 0, '超出剔除距离的实例没剔掉');
+  set.setCulling(false, 20);
+  set.update(cam);
+  assert.equal(set.counts.reduce((a, b) => a + b, 0), 2);
+  return '剔除 ✓';
+});
+
 if (hasArt) {
   const layout = JSON.parse(readFileSync(resolve(ART, 'source/env/s1-layout.json'), 'utf8'));
   await test('岩石实例化（美术 env-rock-shore-a..f，KHR_mesh_quantization）：小径石顶面 = s1-layout topY，各级矩阵一致', async () => {

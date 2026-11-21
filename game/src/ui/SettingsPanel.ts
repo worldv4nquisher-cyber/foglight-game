@@ -8,6 +8,7 @@ export const QUALITY_LABELS: Record<QualityTier, TextId> = {
   ultra: 'ui.settings.quality_ultra',
   high: 'ui.settings.quality_high',
   standard: 'ui.settings.quality_standard',
+  low: 'ui.settings.quality_low',
 };
 
 const SUBTITLE_SIZE_LABELS: Record<SubtitleSize, TextId> = {
