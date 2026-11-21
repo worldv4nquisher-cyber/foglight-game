@@ -18,6 +18,13 @@ import { RotatablePart, nextDetent } from '@/systems/interaction/RotatablePart';
 import { PuzzleGroup, puzzleBarText } from '@/systems/interaction/PuzzleMode';
 import { t as text } from '@/content/text';
 import { asXiClip, pushRate } from '@/entities/xi/clips';
+import { S1 } from '@/levels/s1/layout';
+import { buildS1Greybox } from '@/levels/s1/greybox';
+import { buildS1Art } from '@/levels/s1/art';
+import { buildS1Puzzles } from '@/levels/s1/puzzles';
+import { s1DressingSpecs } from '@/levels/s1/dressing';
+import { S1_ART_SLOTS } from '@/levels/s1/artSlots';
+import { mountArtSlots, snapToArt } from '@/levels/artSlots';
 import { S2, slopeY } from '@/levels/s2/layout';
 import { buildS2Greybox } from '@/levels/s2/greybox';
 import { buildS2Art } from '@/levels/s2/art';
@@ -1003,6 +1010,8 @@ test('017 推：pushStartRamp 起止 0 / 1、单调、moveAt = 0.5 ≤ 0.6（gam
 
 globalThis.self ??= globalThis;
 const modelKeys = new Set([
+  ...Object.keys(S1.artNodes), 'prop-boat-rowboat',
+  ...S1_ART_SLOTS.map((s) => s.key), ...s1DressingSpecs().map((s) => s.key),
   'env-keeper-house-ch1-interior', 'env-courtyard-wall-s2', 'env-cellar-s2',
   'prop-key-lighthouse', 'prop-lantern-brass', 'prop-lantern-stand-s2',
   'env-lighthouse-ch1-interior', 'env-lamp-room-ch1',
@@ -1034,10 +1043,23 @@ function inventoryScene(level, art) {
     camera: env.camera, cameraFollow: {}, collider: () => undefined, beamDebug: false,
   };
   let puzzles;
+  let sceneArt;
   let specs;
   let focusId;
   let dressingId;
-  if (level === 's2') {
+  if (level === 's1') {
+    const greybox = buildS1Greybox();
+    env.scene.add(greybox.root);
+    sceneArt = buildS1Art(assets);
+    env.scene.add(sceneArt.root);
+    puzzles = buildS1Puzzles({ ...deps, root: env.scene, tideColliders: [], entities: { add() {} }, wood: new THREE.MeshStandardMaterial(), metal: new THREE.MeshStandardMaterial(), addLink() {} });
+    const slots = mountArtSlots(assets, env.scene, S1_ART_SLOTS, { showGreybox: false });
+    snapToArt(slots, 'prop-tide-bell', 'prop-tide-bell-interact', puzzles.bell.interactable.interactPoint);
+    snapToArt(slots, 'prop-raft-s1', 'prop-raft-s1-interact', puzzles.raftPush.interactPoint);
+    specs = s1DressingSpecs();
+    focusId = 's1-notice';
+    dressingId = 'prop-notice-board-s1';
+  } else if (level === 's2') {
     const greybox = buildS2Greybox();
     env.scene.add(greybox.root);
     const sceneArt = buildS2Art(assets);
@@ -1068,12 +1090,13 @@ function inventoryScene(level, art) {
     env.ix.get(focusId).setFocus(focus);
   }
   env.scene.updateMatrixWorld(true);
-  return { ...env, puzzles };
+  return { ...env, puzzles, sceneArt };
 }
 
 function checkInventoryTarget(env, it, floor, otherFloors) {
   it.enabled = true;
-  assert.equal(it.minRise, undefined, `${it.id}: 无高度覆盖`);
+  const minRise = { 's1-boat': 1.5 - S1.pier.deckY, 'stone-slot-s1': S1.sandY + 0.15 - S1.nearPlatform.topY }[it.id];
+  assert.equal(it.minRise, minRise, `${it.id}: 高度覆盖`);
   assert.equal(it.maxRise, undefined, `${it.id}: 无高度覆盖`);
   // 隔离流程条件：放置点持有匹配物品、拾取点空手；不触发动作或自动走位。
   env.ix.held.current = it.kind === 'place' ? { id: it.item, object: new THREE.Object3D() } : null;
@@ -1092,6 +1115,41 @@ function checkInventoryTarget(env, it, floor, otherFloors) {
 }
 
 for (const art of [false, true]) {
+  test(`F02 S1 实际清单（art=${art}）：码头 / 岸台 / 沙地与潮位；小船覆盖仅到甲板`, () => {
+    const env = inventoryScene('s1', art);
+    const floors = {
+      'tide-bell-s1': S1.ledge.topY, 's1-tide-pillar': S1.ledge.topY,
+      's1-boat': S1.pier.deckY, 's1-notice': S1.pier.deckY,
+      'raft-s1': S1.sandY, 'stone-slot-s1': S1.sandY,
+      's1-nets-a': S1.sandY, 's1-nets-b': S1.sandY,
+      's1-shed': S1.sandY, 's1-neighbor-note': S1.sandY,
+    };
+    assert.deepEqual(env.ix.items.map((it) => it.id).sort(), Object.keys(floors).sort(), '新交互必须加入站位清单');
+    try {
+      for (const level of [S1.tide.low, (S1.tide.low + S1.tide.high) / 2, S1.tide.high]) {
+        env.puzzles.raft.snap(level);
+        env.sceneArt.update(env.camera, level);
+        env.scene.updateMatrixWorld(true);
+        if (env.puzzles.raft.afloat) assert.equal(env.ix.canInteract(env.puzzles.raftPush), false, '浮起时仍不可推');
+        for (const [id, floor] of Object.entries(floors)) {
+          if (id === 'raft-s1' && env.puzzles.raft.afloat) continue;
+          checkInventoryTarget(env, env.ix.get(id), floor, []);
+        }
+        checkInventoryTarget(env, env.ix.get('stone-slot-s1'), S1.nearPlatform.topY, []);
+        checkInventoryTarget(env, env.ix.get('s1-notice'), S1.ledge.topY, []);
+        if (!env.puzzles.raft.afloat) checkInventoryTarget(env, env.ix.get('raft-s1'), S1.raft.home[1], []);
+        const boat = env.ix.get('s1-boat');
+        const focus = boat.focus(new THREE.Vector3());
+        env.body.teleport(new THREE.Vector3(focus.x, S1.pier.deckY + 0.01, focus.z + 1));
+        assert.equal(env.ix.canInteract(boat), false, '覆盖不超出码头甲板');
+        assert.equal(env.ix.markers().some((m) => m.id === boat.id), false);
+      }
+      for (const it of env.ix.items) console.log(`  F02 S1 art=${art} ${it.id}: focus=${it.focus(new THREE.Vector3()).y.toFixed(6)} feet=${floors[it.id]}`);
+    } finally {
+      env.puzzles.dispose();
+    }
+  });
+
   test(`F02 S2 实际清单（art=${art}）：本层可选、其他楼层拒绝；坡地 ±2.4 m；风灯桌面 / 两灯台`, () => {
     const env = inventoryScene('s2', art);
     const floors = {
