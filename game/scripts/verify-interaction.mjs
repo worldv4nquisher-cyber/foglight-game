@@ -942,6 +942,46 @@ test('017 敲钟 xi-ring-bell：interact:used（钟声 / 退潮）在第 30 帧'
   assert.ok(n * DT >= 1 - DT && n * DT <= 1 + gameplay.interaction.approachMaxTime + 2 * DT, `ring 在 ${(n * DT).toFixed(2)} s`);
 });
 
+test('push：只能站在推的那一侧推（离站位 > pushStandRadius 不出提示），站位被挡时按 E 不会原地凭空推', () => {
+  const mk = () => {
+    const env = setup();
+    const raft = env.box('raft', [0, 0.25, -1.5], [1, 0.5, 1]);
+    const p = new THREE.Object3D();
+    p.name = 'raft-interact';
+    p.position.set(0, -0.25, 0.75);
+    p.rotation.y = Math.PI;
+    raft.add(p);
+    raft.updateMatrixWorld(true);
+    const it = env.ix.add(new Interactable({ id: 'raft', kind: 'push', object: raft, reach: 0.9, track: { from: new THREE.Vector3(0, 0.25, -1.5), to: new THREE.Vector3(0, 0.25, -3.5) } }));
+    return { env, raft, it };
+  };
+  assert.equal(gameplay.interaction.pushStandRadius, 1.0);
+  const at = (env, x, z, facing) => { env.body.teleport(new THREE.Vector3(x, 0, z)); env.actor.facing = facing; env.step(1); };
+  {
+    const { env, raft, it } = mk();
+    at(env, 0, -2.6, 0);
+    assert.equal(env.ix.canInteract(it), false, '对面（隔着木筏）不能推');
+    at(env, 1.2, -1.5, -Math.PI / 2);
+    assert.equal(env.ix.canInteract(it), false, '侧面不能推');
+    env.step(1, { press: ['KeyE'] });
+    env.step(3, { release: ['KeyE'] });
+    assert.equal(env.ix.actionKind, 'none');
+    assert.equal(raft.position.z, -1.5, '侧面按 E 木筏不动');
+    at(env, 0.3, 0.1, Math.PI);
+    assert.equal(env.ix.canInteract(it), true, '推的一侧可以推');
+  }
+  {
+    const { env, raft } = mk();
+    const wall = env.box('wall', [0, 0.6, -0.3], [3, 1.2, 0.1]);
+    env.physics.addMesh(wall);
+    at(env, 0, 0.2, Math.PI);
+    env.step(1, { press: ['KeyE'] });
+    env.step(30);
+    assert.notEqual(env.ix.actionKind, 'push', '站位被挡：不进入推');
+    assert.equal(raft.position.z, -1.5, '站位被挡：木筏不动');
+  }
+});
+
 test('017 推：push-loop 播放率 = 推速 / 0.8，结束停循环；没有动画时交互即时生效（白盒不变）', () => {
   const env = setup();
   const anim = fakeAnim(env, ['xi-push-loop']);
@@ -1155,9 +1195,11 @@ function checkInventoryTarget(env, it, floor, otherFloors) {
   const focus = it.focus(new THREE.Vector3());
   for (const feet of [floor, floor + 1e-6, ...otherFloors]) {
     const eligible = !otherFloors.includes(feet);
-    env.body.teleport(new THREE.Vector3(focus.x, feet, focus.z + 1));
-    env.actor.facing = Math.PI;
-    env.camera.position.copy(focus).add(new THREE.Vector3(0, 0, 4));
+    // push 只能在站位上推：从站位看向焦点；其余从焦点 +Z 1 m 处
+    const stand = it.standRadius !== null ? it.standPoint(new THREE.Vector3()).position : new THREE.Vector3(focus.x, 0, focus.z + 1);
+    env.body.teleport(new THREE.Vector3(stand.x, feet, stand.z));
+    env.actor.facing = Math.atan2(focus.x - stand.x, focus.z - stand.z);
+    env.camera.position.copy(focus).add(new THREE.Vector3(stand.x - focus.x, 0, stand.z - focus.z).normalize().multiplyScalar(4));
     env.camera.lookAt(focus);
     env.camera.updateMatrixWorld(true);
     assert.equal(env.ix.canInteract(it), eligible, `${it.id}: focus ${focus.y}, feet ${feet}`);

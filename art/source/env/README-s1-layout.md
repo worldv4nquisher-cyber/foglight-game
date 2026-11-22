@@ -11,6 +11,16 @@
   node art/tools/build-env-s1.mjs --only=env-unloading-shore-s1,env-tidal-flat-s1
   node art/tools/glb-pack-ktx2.mjs --uv-bits 14 art/models/env/{env-unloading-shore-s1,env-tidal-flat-s1}.glb
   ```
+- `env-cliff-s1` 的光照贴图 UV2 是 029 烘焙时换成的图集坐标，生成器重建后会丢。改了悬崖 / 石脊几何后（原点固定在 (4, 0, 17)）：
+
+  ```sh
+  git show <改前提交>:art/models/env/env-cliff-s1.glb > art/models/env/_cliff-baked.glb
+  node art/tools/build-env-s1.mjs   # 会重写全部 S1 GLB，只保留要改的几个，其余 git checkout
+  node art/tools/lightmap-uv2-transfer.mjs art/models/env/_cliff-baked.glb art/models/env/env-cliff-s1.glb
+  node art/tools/glb-pack-ktx2.mjs --uv-bits 14 art/models/env/env-cliff-s1.glb && rm art/models/env/_cliff-baked.glb
+  ```
+
+  改动部分按最近面取原烘焙的光照，几何变化大时应重烘。
 
 **状态（返工 2026-10-29）：已按 013 白盒 `game/src/levels/s1/layout.ts`（权威，只读）对位，见文末「返工 1029」。** 下表是 018 时的占位记录，冲突一律以文末和 layout.ts 为准。要再调，改 `art/tools/build-env-s1.mjs` 顶部的常量、重跑一遍（约 10 s）即可，所有资产和 `s1-layout.json` 会一起更新。
 

@@ -103,11 +103,23 @@ export function buildS1Greybox(mats: GreyboxMaterials = defaultGreyboxMaterials(
   const ch = S1.channel;
   addBox('s1-flat', [B.minX, -2, B.minZ], [B.maxX, sand, ch.z[0]], mats.sand, 'collider');
   addBox('s1-channel-track', [ch.trackMinX, -2, ch.z[0]], [B.maxX, sand, ch.z[1]], mats.sand, 'collider');
+  // 石槽两侧挡石（美术 env-cliff-s1 石槽 kerb 0.28，低于台阶高 0.3，可以跨上去）
+  for (const [z0, z1] of [[ch.z[0], ch.z[0] + 0.4], [ch.z[1] - 0.4, ch.z[1]]] as const) {
+    addBox(`s1-channel-kerb-${z0}`, [ch.trackMinX, -0.65, z0], [0.62, 0.28, z1], mats.stone, 'collider');
+  }
+  // 对岸台阶东侧的岩坡脚（美术 env-cliff-s1 在潮沟北沿 x 1.2…2.6 抬到 ~1 m），挡住别走进石头里
+  addBox('s1-farsteps-toe-e', [1.2, -0.65, 11.6], [2.6, 1.0, ch.z[1]], mats.reef, 'collider');
   addBox('s1-channel-deep', [-4.6, -2, ch.z[0]], [ch.trackMinX, ch.deepFloorY, ch.z[1]], mats.reef, 'collider');
 
   // ---- 岸台（钟台）
   const L = S1.ledge;
   addBox('s1-ledge', [L.min[0], -2, L.min[1]], [L.max[0], L.topY, L.max[1]], mats.stone, 'collider');
+
+  // 岸台南沿 / 东沿的残破矮墙（美术 env-shore-ledge-s1 同位置，按最高段 0.58 连续挡），钟后护墙
+  addBox('s1-ledge-parapet-s', [L.min[0] + 0.2, L.topY - 0.1, L.min[1] + 0.2], [L.max[0] - 0.4, L.topY + 0.6, L.min[1] + 0.56], mats.stone, 'collider');
+  addBox('s1-ledge-parapet-e', [L.min[0] + 0.2, L.topY - 0.1, L.min[1] + 0.2], [L.min[0] + 0.56, L.topY + 0.6, L.max[1] - 0.3], mats.stone, 'collider');
+  const BW = S1.bellWall;
+  addBox('s1-bell-wall', [BW.min[0], L.topY - 0.1, BW.min[1]], [BW.max[0], BW.topY, BW.max[1]], mats.stone, 'collider');
 
   // ---- 码头：甲板 0.3 厚（下面可以在退潮时钻过去）+ 桩
   const P = S1.pier;

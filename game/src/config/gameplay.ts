@@ -266,6 +266,8 @@ export const gameplay = {
     pushStartMoveAt: 0.5,
     /** push（没有 xi-push-start 时，白盒 / art=0）：按住即推，速度 smoothstep 缓入到 pushSpeed 的时间（s）（batch8 小点：不再 0 → 满速一步跳） */
     pushEaseIn: 0.25,
+    /** push：角色离推的站位（-interact 节点）超过这么远（m，水平）就不出提示，不能从侧面 / 对面隔着物体推 */
+    pushStandRadius: 1.0,
     /** 高亮默认时长（s，提示系统二级提示） */
     highlightSeconds: 3,
   },
