@@ -1519,6 +1519,100 @@ function beam(parts, a, b, w, h, reg = 'beam', seed = 0) {
 }
 
 const BELL_WALL = { x0: -16.62, x1: -16.22, z0: -7.1, z1: -4.9, top: 3.3 };   // layout.ts bellWall
+// 卸货吊杆（岸台南沿、码头上岸口旁）：桅杆 + 斜撑 + 伸向海面的吊臂，臂端滑轮垂下一兜货网；桅脚绞盘。
+// 白盒 s1-derrick / s1-winch 同位置挡人（greybox.ts）。
+const DERRICK = { x: -11.25, z: -9.55, top: 6.9, r: 0.17 };
+function buildDerrick(parts) {
+  const { x, z, top, r } = DERRICK, y0 = LEDGE.top;
+  const [mast, cap] = woodPost(r, 0, top - y0, 3101, 12, 'beam');
+  parts.push(xform(mast, T(x, y0, z)), xform(cap, T(x, y0, z)));
+  masonryPlatform(parts, x - 0.34, x + 0.34, z - 0.34, z + 0.34, y0 - 0.05, y0 + 0.22, 3102);
+  for (const [dx, dz] of [[-0.9, 0.4], [0.6, -0.32], [-0.2, -0.35]]) {
+    beam(parts, [x + dx, y0 + 0.08, z + dz], [x + dx * 0.12, y0 + 2.4, z + dz * 0.12], 0.11, 0.11, 'beam', 3103 + dx);
+  }
+  // 吊臂：桅杆 2.1 m 处铰接，斜出到码头外侧水面上方
+  const heel = [x + 0.05, y0 + 2.1, z - 0.05], tip = [-7.6, y0 + 4.9, -12.6];
+  beam(parts, heel, tip, 0.16, 0.14, 'beam', 3110);
+  beam(parts, [x, top - 0.25, z], tip, 0.035, 0.035, 'iron');
+  beam(parts, [x, top - 0.2, z], [x - 1.7, y0 + 0.62, z - 0.25], 0.03, 0.03, 'iron');
+  const hook = [tip[0], tip[1] - 2.6, tip[2]];
+  parts.push(ropeTube([tip, [tip[0], tip[1] - 1.3, tip[2] + 0.02], hook], 0.022, 10, 6));
+  parts.push(ropeTube([[tip[0] - 0.1, tip[1] - 0.1, tip[2]], [x - 0.3, y0 + 1.9, z + 0.1], [x - 1.05, y0 + 0.5, z + 0.2]], 0.016, 16, 6));
+  // 吊钩下一捆货：两只叠放木箱，十字吊带兜底
+  const cb = [hook[0], hook[1] - 0.95, hook[2]];
+  beam(parts, [cb[0] - 0.3, cb[1], cb[2]], [cb[0] + 0.3, cb[1], cb[2]], 0.5, 0.42, 'deck', 3130);
+  beam(parts, [cb[0] - 0.2, cb[1] + 0.38, cb[2] + 0.03], [cb[0] + 0.22, cb[1] + 0.38, cb[2] - 0.04], 0.36, 0.32, 'deck', 3131);
+  for (const [sx, sz] of [[0.33, 0], [0, 0.28]]) {
+    parts.push(ropeTube([hook, [cb[0] + sx, cb[1] + 0.25, cb[2] + sz], [cb[0] + sx, cb[1] - 0.23, cb[2] + sz], [cb[0] - sx, cb[1] - 0.23, cb[2] - sz], [cb[0] - sx, cb[1] + 0.25, cb[2] - sz], hook], 0.016, 24, 6));
+  }
+  // 桅脚绞盘：两片侧板 + 卷筒
+  const wx = x - 1.05, wz = z + 0.2;
+  for (const s of [-1, 1]) beam(parts, [wx - 0.32, y0 + 0.05, wz + s * 0.28], [wx + 0.32, y0 + 0.62, wz + s * 0.28], 0.07, 0.42, 'beam', 3140 + s);
+  beam(parts, [wx, y0 + 0.42, wz - 0.3], [wx, y0 + 0.42, wz + 0.3], 0.2, 0.2, 'beam', 3142);
+  beam(parts, [wx + 0.05, y0 + 0.42, wz + 0.3], [wx + 0.05, y0 + 0.42, wz + 0.55], 0.04, 0.04, 'iron');
+}
+
+// 岸台背后的旧仓房（嵌进岬角，不可进）：砌石台基接岸台，山墙对着上岸口，门用木板钉死，屋顶塌了一半露出椽子。
+function buildStorehouse(parts) {
+  const x0 = -24.2, x1 = -19.25, z0 = -9.4, z1 = -3.6, yb = LEDGE.top - 0.1, eave = yb + 3.0, ridge = eave + 1.7, zc = (z0 + z1) / 2;
+  masonryPlatform(parts, x0 - 0.3, x1 + 0.15, z0 - 0.3, z1 + 0.3, -0.8, yb + 0.1, 3201);
+  courseWall(parts, [x0, z0], [x1, z0], yb, eave, [0, -1], 3202, { depth: 0.45, course: 0.3 });
+  courseWall(parts, [x1, z1], [x0, z1], yb, eave, [0, 1], 3203, { depth: 0.45, course: 0.3 });
+  courseWall(parts, [x0, z1], [x0, z0], yb, eave, [-1, 0], 3204, { depth: 0.45, course: 0.3 });
+  // 前山墙（朝 +X、岸台）：门洞两侧墙垛 + 过梁 + 逐层收窄的山尖
+  const dz0 = zc - 0.65, dz1 = zc + 0.65, door = yb + 2.1;
+  courseWall(parts, [x1, z0], [x1, dz0], yb, eave, [1, 0], 3205, { depth: 0.45, course: 0.3 });
+  courseWall(parts, [x1, dz1], [x1, z1], yb, eave, [1, 0], 3206, { depth: 0.45, course: 0.3 });
+  courseWall(parts, [x1, dz0 - 0.25], [x1, dz1 + 0.25], door, eave, [1, 0], 3207, { depth: 0.45, course: 0.3 });
+  for (const gx of [x1, x0]) {
+    const n = 6;
+    for (let k = 0; k < n; k++) {
+      const t0 = k / n, t1 = (k + 1) / n, half = ((z1 - z0) / 2) * (1 - t1) + 0.12;
+      courseWall(parts, [gx, zc - half], [gx, zc + half], eave + (ridge - eave) * t0, eave + (ridge - eave) * t1, [gx === x1 ? 1 : -1, 0], 3210 + k + (gx === x1 ? 0 : 20), { depth: 0.4, course: 0.3 });
+    }
+  }
+  for (let i = 0; i < 6; i++) {
+    const zz = dz0 + 0.12 + i * 0.22;
+    beam(parts, [x1 + 0.08, yb + 0.05, zz], [x1 + 0.08, door - 0.02, zz + (i % 2 ? 0.02 : -0.02)], 0.21, 0.05, 'shed', 3230 + i);
+  }
+  for (const y of [yb + 0.55, yb + 1.55]) beam(parts, [x1 + 0.14, y, dz0 - 0.05], [x1 + 0.14, y + 0.08, dz1 + 0.05], 0.12, 0.05, 'shed', 3240 + y);
+  // 屋顶：脊檩 + 椽子；南坡保留屋面板，北坡塌落只剩几根椽
+  beam(parts, [x0 - 0.3, ridge + 0.05, zc], [x1 + 0.35, ridge + 0.05, zc], 0.18, 0.18, 'beam', 3250);
+  for (let i = 0; i <= 7; i++) {
+    const xx = lerp(x0 - 0.15, x1 + 0.2, i / 7);
+    beam(parts, [xx, ridge, zc], [xx, eave - 0.15, z0 - 0.45], 0.09, 0.12, 'beam', 3260 + i);
+    if (i % 3 !== 1) beam(parts, [xx, ridge, zc], [xx, eave - 0.15 - (i === 4 ? 1.1 : 0), z1 + 0.45 - (i === 4 ? 0.8 : 0)], 0.09, 0.12, 'beam', 3270 + i);
+  }
+  for (let j = 0; j < 9; j++) {
+    const t = (j + 0.5) / 9, zz = lerp(zc, z0 - 0.4, t), yy = lerp(ridge + 0.08, eave - 0.07, t);
+    beam(parts, [x0 - 0.3, yy, zz], [x1 + 0.3 - (j > 6 ? 1.2 : 0), yy, zz], 0.28, 0.035, 'shed', 3280 + j);
+  }
+}
+
+// 湾口两侧的海蚀柱：在送回区外的远海，框住上岸视线。
+function rockPillar(parts, cx, cz, r0, r1, h, seed, lean = [0, 0]) {
+  const p = grid(18, Math.max(8, Math.round(h / 0.6)), (u, v) => {
+    const a = u * Math.PI * 2, y = -1.2 + (h + 1.2) * v;
+    const rr = lerp(r0, r1, v) * (1 + (fbm(Math.cos(a) * 1.5 + seed, y * 0.35, Math.sin(a) * 1.5, 3) - 0.5) * 0.55 + 0.12 * Math.sin(y * 3.1 + seed));
+    return [cx + Math.cos(a) * rr + lean[0] * v * h, y, cz - Math.sin(a) * rr + lean[1] * v * h];
+  }, 'rock', true);
+  weldNormals(p);
+  parts.push(boxUV(p, MATS.rock.tile, [0.13, 0.41]));
+  const cap = orientUp(rockSurface(8, 8, (u, v) => {
+    const a = u * Math.PI * 2, rr = r1 * (1 - v) * 1.05;
+    return [cx + lean[0] * h + Math.cos(a) * rr, h + v * r1 * 0.35 + (fbm(u * 3, v * 3, seed, 2) - 0.5) * 0.3, cz + lean[1] * h - Math.sin(a) * rr];
+  }));
+  parts.push(boxUV(cap, MATS.rock.tile, [0.13, 0.41]));
+}
+function buildSeaStacks(parts) {
+  // 避开开场镜头看主灯塔的视线（z −20…−35 段约 x −5…15）
+  rockPillar(parts, -20, -24, 1.9, 1.1, 7.5, 3301, [0.03, 0]);
+  rockPillar(parts, -26.5, -19, 1.5, 0.9, 5.2, 3302, [-0.02, 0.02]);
+  rockPillar(parts, -15.5, -30.5, 1.2, 0.7, 4.2, 3303);
+  rockPillar(parts, 19, -25.5, 1.7, 1.0, 5.6, 3304, [0, 0.03]);
+  rockPillar(parts, 23.5, -20.5, 1.0, 0.6, 3.2, 3305);
+}
+
 function buildUnloadingShore() {
   const parts = [];
   // 岸台背后的岬角向内陆升高，露出连续的层岩轮廓；高处留在可走边界外。
@@ -1605,6 +1699,9 @@ function buildUnloadingShore() {
   for (const [lo, hi] of [[FAR.x[0] - 0.61, FAR.x[0]], [FAR.x[1], FAR.x[1] + 0.57]]) {
     masonryPlatform(parts, lo, hi, FAR.z0 - 0.16, FAR.z0 + FAR.landing + 0.8, -0.65, FAR.baseY + 0.39, 2030 + lo * 10);
   }
+  buildDerrick(parts);
+  buildStorehouse(parts);
+  buildSeaStacks(parts);
   return finishAsset({ name: 'env-unloading-shore-s1', origin: [0, 0, 0], parts, uv2Size: 1024 });
 }
 
