@@ -937,7 +937,7 @@ if (hasArt) {
           nIn++;
           if (h < -gameplay.tide.recallDepth) deepIn++;
           worst = Math.max(worst, h);
-        } else if (x > -10 && x < 12.5) {
+        } else if (x > -10 && x < 15.6) {
           nOut++;
           if (h < -gameplay.tide.recallDepth) deepOut++;
         }

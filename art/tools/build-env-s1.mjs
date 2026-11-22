@@ -803,7 +803,9 @@ function terrainAt(x, z, forCollider = false) {
   const mSouth = sstep(0.66, 0.73, fbm(x * 0.12, 9, z * 0.12, 3)) * sstep(-6, -9, z);
   let m = Math.max(mReef, mWest, mEast, mNorth, mBank, mSouth);
   let h = lerp(hs, hr, m);
-  h += 1.75 * sstep(15.6, 22, x) + 1.6 * sstep(24, 31, x) + (fbm(x * 0.3, 2, z * 0.3, 3) - 0.5) * 0.5 * sstep(16, 21, x); // 西侧抬高的乱石岸（从可走外框 x 15.6 外才起坡）
+  // 西侧抬高的乱石岸：滩地北段从可走外框 x 15.6 外才起坡；往南入海段仍从 x 12 起坡，海床与深水送回多边形（layout deepWater 西沿）对齐
+  const wSea = sstep(-3.5, -8.5, z);
+  h += 1.75 * sstep(lerp(15.6, 12, wSea), lerp(22, 21, wSea), x) + 1.6 * sstep(24, 31, x) + (fbm(x * 0.3, 2, z * 0.3, 3) - 0.5) * 0.5 * sstep(lerp(16, 14, wSea), lerp(21, 20, wSea), x);
   h += 0.75 * sstep(-10.5, -15, x) * sstep(-6, -2.5, z); // 石台以北的东侧岩坡
   h += 0.45 * mBank * sstep(5, 8, z); // 潮沟南沿的岩坎（约 0.5）
   h += (z - 12.5) * 1.6 * mNorth; // 崖脚

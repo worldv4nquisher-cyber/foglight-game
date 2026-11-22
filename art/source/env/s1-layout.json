@@ -753,7 +753,7 @@
    "role": "dressing",
    "translation": [
     20.27,
-    0.649,
+    0.936,
     -10.31
    ],
    "rotationY": 0.838,
@@ -1113,13 +1113,13 @@
    "role": "dressing-hightide",
    "translation": [
     17.49,
-    -1.95,
+    -1.909,
     -22.08
    ],
    "rotationY": 2.538,
    "scale": [
     0.776,
-    6.368,
+    6.307,
     0.696
    ]
   },
@@ -1128,13 +1128,13 @@
    "role": "dressing-hightide",
    "translation": [
     15.67,
-    -1.851,
+    -1.251,
     -19.48
    ],
    "rotationY": -0.785,
    "scale": [
     1.696,
-    3.731,
+    3.185,
     1.132
    ]
   },
@@ -1158,13 +1158,13 @@
    "role": "dressing-hightide",
    "translation": [
     17.47,
-    -0.859,
+    -0.45,
     -18.4
    ],
    "rotationY": 5.391,
    "scale": [
     0.62,
-    4.212,
+    3.61,
     0.574
    ]
   },
@@ -1173,13 +1173,13 @@
    "role": "dressing-hightide",
    "translation": [
     13.89,
-    -1.95,
+    -1.795,
     -19.79
    ],
    "rotationY": 2.644,
    "scale": [
     1.006,
-    6.387,
+    6.159,
     1.201
    ]
   },
@@ -1188,13 +1188,13 @@
    "role": "dressing-hightide",
    "translation": [
     17.14,
-    -1.265,
+    -0.508,
     -19.1
    ],
    "rotationY": 5.238,
    "scale": [
     0.941,
-    2.977,
+    2.289,
     1.082
    ]
   },
@@ -1203,13 +1203,13 @@
    "role": "dressing-hightide",
    "translation": [
     16.37,
-    -0.98,
+    -0.45,
     -17.72
    ],
    "rotationY": 2.106,
    "scale": [
     0.689,
-    2.97,
+    2.489,
     0.656
    ]
   },
@@ -1218,13 +1218,13 @@
    "role": "dressing-hightide",
    "translation": [
     16.64,
-    -0.939,
+    -0.45,
     -17.91
    ],
    "rotationY": 0.183,
    "scale": [
     1.551,
-    1.863,
+    1.558,
     1.034
    ]
   },
@@ -1248,13 +1248,13 @@
    "role": "dressing-hightide",
    "translation": [
     14.91,
-    -1.15,
+    -0.728,
     -18.45
    ],
    "rotationY": 1.606,
    "scale": [
     1.183,
-    3.124,
+    2.74,
     1.047
    ]
   },
@@ -1263,13 +1263,13 @@
    "role": "dressing-hightide",
    "translation": [
     16.57,
-    -0.942,
+    -0.45,
     -17.77
    ],
    "rotationY": 4.676,
    "scale": [
     0.625,
-    5.998,
+    5.106,
     0.725
    ]
   },
@@ -1293,13 +1293,13 @@
    "role": "dressing-hightide",
    "translation": [
     14.8,
-    -1.513,
+    -1.119,
     -19.05
    ],
    "rotationY": 4.942,
    "scale": [
     0.669,
-    5.413,
+    4.833,
     0.663
    ]
   },
@@ -1323,13 +1323,13 @@
    "role": "dressing-hightide",
    "translation": [
     15.01,
-    -0.923,
+    -0.476,
     -17.68
    ],
    "rotationY": 4.458,
    "scale": [
     0.818,
-    5.408,
+    4.598,
     0.895
    ]
   },
@@ -1338,13 +1338,13 @@
    "role": "dressing-hightide",
    "translation": [
     17.09,
-    -1.478,
+    -0.73,
     -19.43
    ],
    "rotationY": 6.173,
    "scale": [
     0.839,
-    1.427,
+    1.152,
     0.763
    ]
   },
@@ -1383,13 +1383,13 @@
    "role": "dressing-hightide",
    "translation": [
     19.89,
-    -0.579,
+    -0.45,
     -19.58
    ],
    "rotationY": 3.423,
    "scale": [
     0.995,
-    2.185,
+    2.067,
     1.153
    ]
   },

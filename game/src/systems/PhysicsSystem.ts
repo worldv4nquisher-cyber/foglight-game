@@ -164,6 +164,7 @@ const castL = new THREE.Vector3();
 const castBox = new THREE.Box3();
 const castCands: Collider[] = [];
 const closest = { point: new THREE.Vector3(), distance: 0, faceIndex: 0 };
+const PROBE_LIFT = 0.002;
 const PROBE_OFFSETS: ReadonlyArray<readonly [number, number]> = [
   [0, 0],
   [0.6, 0],
@@ -520,14 +521,15 @@ export class PhysicsSystem {
     const r = b.radius;
     let best = -Infinity;
     let found = false;
-    const total = up + down;
+    // 射线起点略高于 up：正好高出 up 的台面（如搁浅浮台 0.1 → 0.4）起点不落在面上、照样能迈上去
+    const total = up + down + PROBE_LIFT;
     const count = centerOnly ? 1 : PROBE_OFFSETS.length;
     for (let i = 0; i < count; i++) {
       const off = PROBE_OFFSETS[i];
       if (!off) continue;
       const ox = p.x + off[0] * r;
       const oz = p.z + off[1] * r;
-      const top = p.y + up;
+      const top = p.y + up + PROBE_LIFT;
       rayBox.min.set(ox - 1e-3, top - total, oz - 1e-3);
       rayBox.max.set(ox + 1e-3, top, oz + 1e-3);
       for (const c of this.colliders) {

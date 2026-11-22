@@ -80,7 +80,10 @@ function nearest(x, y, z, mat, chart) {
         if (d < bd) { bd = d; best = idx; bb = bc.slice(); }
       }
     }
-    if (best >= 0 && Math.sqrt(bd) <= (r + 0.5) * C) return { idx: best, b: bb, d: Math.sqrt(bd) };
+    // 已搜立方体内的结果只有不远于「查询点到立方体最近边界」时才确定是最近的；否则扩大一圈
+    const lo = [ci - r, cj - r, ck - r].map((c) => c * C), hi = [ci + r + 1, cj + r + 1, ck + r + 1].map((c) => c * C);
+    const bound = Math.min(x - lo[0], hi[0] - x, y - lo[1], hi[1] - y, z - lo[2], hi[2] - z);
+    if (best >= 0 && (Math.sqrt(bd) <= bound || r === 8)) return { idx: best, b: bb, d: Math.sqrt(bd) };
   }
   return null;
 }
