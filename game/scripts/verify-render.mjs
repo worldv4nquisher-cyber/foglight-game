@@ -30,7 +30,7 @@ import { S3_ART_SLOTS } from '@/levels/s3/artSlots';
 import { manifest } from '@/assets/manifest';
 import { disposeObject3D } from '@/core/dispose';
 import { applyTextureMipCaps, capTextureMips } from '@/render/mipCap';
-import { S2 } from '@/levels/s2/layout';
+import { S2, slopeY } from '@/levels/s2/layout';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const ART = resolve(ROOT, '../art');
@@ -1610,6 +1610,77 @@ await test('KTX2 mip 跳级：角色 / 道具用 textureMaxSize、环境（含�
   assert.equal(QUALITY_PRESETS.ultra.textureMaxSize, 4096, '极致档不跳（角色 4096 原尺寸）');
   return out.join('，');
 });
+
+if (hasArt) {
+  const lod0 = (root, prefix, pick = () => true) => {
+    root.updateMatrixWorld(true);
+    const ms = [];
+    root.traverse((o) => { if (o.isMesh && o.name.startsWith(`${prefix}_lod0`) && pick(o)) ms.push(o); });
+    return ms;
+  };
+  await test('S2 草皮贴地：env-clifftop-s2 LOD0 草皮在可走范围（崖顶平台 y 0 / 西坡 slopeY / 北崖径）离白盒地面 −5…+3 cm（不陷脚、不悬空）；白石组石底不悬在草上', async () => {
+    const top = await loadGlb('models/env/env-clifftop-s2.glb');
+    const ms = lod0(top, 'env-clifftop-s2', (o) => /turf/.test([].concat(o.material).map((m) => m.name).join()));
+    assert.ok(ms.length, '找不到草皮网格');
+    const ray = new THREE.Raycaster();
+    const H = S2.house;
+    let n = 0, lo = 0, hi = 0;
+    const sample = (x, z, want) => {
+      ray.set(new THREE.Vector3(x, 5, z), new THREE.Vector3(0, -1, 0));
+      const hit = ray.intersectObjects(ms, false)[0];
+      if (!hit) return;
+      const d = hit.point.y - want;
+      n++; lo = Math.min(lo, d); hi = Math.max(hi, d);
+      assert.ok(d > -0.05 && d < 0.03, `(${x}, ${z}) 草皮 ${hit.point.y.toFixed(3)}，白盒 ${want.toFixed(3)}`);
+    };
+    for (let x = S2.platform.x[0] + 0.5; x <= 24.5; x += 0.5) for (let z = S2.platform.z[0] + 0.5; z <= S2.platform.z[1] - 0.5; z += 0.5) {
+      if (x > H.x0 - 0.3 && x < H.x1 + 0.3 && z > H.z0 - 0.3 && z < H.z1 + 0.3) continue;
+      sample(x, z, slopeY(x));
+    }
+    for (let x = S2.northPath.x[0] + 0.5; x <= S2.northPath.x[1] - 0.5; x += 0.5) for (let z = S2.northPath.z[0] + 0.5; z <= S2.northPath.endZ; z += 0.5) sample(x, z, 0);
+    assert.ok(n > 2500, `采样太少 ${n}`);
+    const stones = await loadGlb('models/props/prop-white-stones-s2.glb');
+    stones.updateMatrixWorld(true);
+    let gap = -Infinity, k = 0;
+    const v = new THREE.Vector3();
+    stones.traverse((o) => {
+      if (!o.isMesh || /_lod[12]|collider/.test(o.name)) return;
+      const p = o.geometry.attributes.position;
+      let y0 = Infinity, sx = 0, sz = 0;
+      for (let i = 0; i < p.count; i++) { v.fromBufferAttribute(p, i).applyMatrix4(o.matrixWorld); y0 = Math.min(y0, v.y); sx += v.x; sz += v.z; }
+      ray.set(new THREE.Vector3(sx / p.count, 5, sz / p.count), new THREE.Vector3(0, -1, 0));
+      const g = ray.intersectObjects(ms, false)[0];
+      assert.ok(g, `${o.name} 底下没草皮`);
+      assert.ok(y0 - g.point.y < 0.015, `${o.name} 悬空 ${(y0 - g.point.y).toFixed(3)}`);
+      gap = Math.max(gap, y0 - g.point.y); k++;
+    });
+    return `${n} 点，草皮 − 白盒 ${(lo * 100).toFixed(1)} … +${(hi * 100).toFixed(1)} cm；白石 ${k} 块石底 − 草皮 ≤ ${(gap * 100).toFixed(1)} cm`;
+  });
+
+  await test('S2 修理院 env-repair-yard-s2：-footprint 节点 = layout S2.props；每件陈设落地（占地内最低点 ≤ 2 cm）、碰撞盒不高出美术（不撞空气墙）；草皮下不埋太深', async () => {
+    const yard = await loadGlb('models/env/env-repair-yard-s2.glb');
+    const ms = lod0(yard, 'env-repair-yard-s2');
+    const pts = [];
+    const v = new THREE.Vector3();
+    for (const m of ms) { const pos = m.geometry.attributes.position; for (let i = 0; i < pos.count; i++) pts.push(v.fromBufferAttribute(pos, i).applyMatrix4(m.matrixWorld).toArray()); }
+    let minAll = Infinity;
+    for (const p of pts) minAll = Math.min(minAll, p[1]);
+    assert.ok(minAll > -0.12, `最低点 ${minAll.toFixed(3)}`);
+    const out = [];
+    for (const [k, c] of Object.entries(S2.props)) {
+      const node = yard.getObjectByName(`env-repair-yard-s2-${k}-footprint`);
+      assert.ok(node, `缺 ${k}-footprint`);
+      assert.deepEqual(node.userData.collider, [...c], `${k} 碰撞盒与 layout 不一致`);
+      const [cx, cz, w, d, h] = c;
+      let lo = Infinity, hi = -Infinity;
+      for (const [x, y, z] of pts) if (Math.abs(x - cx) <= w / 2 + 0.02 && Math.abs(z - cz) <= d / 2 + 0.02) { lo = Math.min(lo, y); hi = Math.max(hi, y); }
+      assert.ok(lo <= 0.02, `${k} 悬空：占地内最低点 ${lo.toFixed(3)}`);
+      assert.ok(hi >= h - 0.15, `${k} 美术矮于碰撞盒：${hi.toFixed(2)} < ${h}`);
+      out.push(k);
+    }
+    return `${out.length} 件落地，最低点 ${minAll.toFixed(3)}`;
+  });
+}
 
 let failed = 0;
 for (const [name, err, out] of results) {

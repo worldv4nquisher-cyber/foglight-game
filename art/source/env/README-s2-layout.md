@@ -12,6 +12,7 @@
 | env-courtyard-wall-s2.glb | 小院围墙、两座灯台底座（挂点朝 +Z，光平面 y 0.85，灯座上提灯出光 0.846）、院门挂点 |
 | env-laundry-rack.glb | 晾衣架；`-collider` extras `{collider:true, blocksLight:true}` |
 | env-clifftop-s2.glb | 崖顶平台约 30×25 m（西坡延伸到 x≈25 以容纳白石区）、南台阶顶、北路通 S3 |
+| env-repair-yard-s2.glb | 父亲的航标修理院与住家陈设：工棚 + 工作台 / 工具板 / 透镜箱、斜靠东墙的杆标、顶标、横躺的罐形浮标、沉块 + 锚链、灯油桶；门前石板路、长凳、雨水桶、菜畦；屋后搬运道、柴垛、手推车；北门警示牌、崖径绳栏。碰撞盒 = `layout.ts` `S2.props` / `S2.rail` |
 
 ## puzzleCritical
 019 资产本身都不是 puzzleCritical（正常切 LOD）。灯头、镜子、光感锁、白石、铁门都是 021 道具；019 只提供 `-socket` 空节点，extras 里写 `forPuzzleCritical`。
@@ -70,3 +71,14 @@
 
 ### 白石组真文件（2026-10-30，裁定 16）
 `placeholders.whiteStones` 8 块占位已由 `art/models/props/prop-white-stones-s2.glb` 取代（挂 env-clifftop-s2 根零变换，石块按崖顶坐标摆在 stonesArea 里，贴 LOD0 地形）。观察眼位 = `points.viewpointS2`（0.95, 4.35, 1.0 → 18, 0.2, 1，FOV 30）。详见 `art/models/props/README.md` 白石组一节。
+
+## 住家 + 修理院重建（2026-11，TASK-11）
+- 场景逻辑：南石阶上来是**住家**（石板路通前门，门边长凳、雨水桶接屋檐落水、西侧菜畦）；东边围墙小院是**父亲修航标的院子**（南墙下单坡工棚和工作台，拆下的灯头透镜在台上；东墙靠着待漆的杆标，北角木枕上躺着罐形浮标和沉块，院口灯油桶）；院子北口沿屋后**搬运道**通地窖门（柴垛贴北墙、手推车停道边），再一条石板路通**北门**，门外崖径有绳栏和警示牌，读作「管着的危险路」。
+- 光路两侧 ≥ 0.5 m 不放陈设（`test:s2` 的光路 / 西窗视线检查把 env-repair-yard-s2 也算进去）。
+- 地面：`terrainAt()` 在可走范围（`WALK` = 白盒 platform / slope / northPath）把草皮压到白盒地面 −4…+1.5 cm（原来 ±0.35 m，脚会陷进草里或悬空）；白石区只往上起伏，石底不悬空。`test:render` 两项「S2 草皮贴地」「S2 修理院」核对。
+- 重建（在 game/ 下；art/tools 先 `npm ci`）：
+  ```sh
+  node ../art/tools/build-env-s2.mjs --only=env-repair-yard-s2,env-clifftop-s2
+  node ../art/tools/glb-pack-ktx2.mjs --uv-bits 14 ../art/models/env/{env-repair-yard-s2,env-clifftop-s2}.glb
+  ```
+- 同机位前后对比截图：`node --import ./scripts/register-ts-paths.mjs scripts/shots-s2-layout.mjs`（`SHOTS_OUT`、`CHROME` 环境变量）。
