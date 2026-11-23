@@ -308,6 +308,8 @@ export function buildS2Greybox(mats: S2GreyboxMaterials = defaultS2GreyboxMateri
 
   // ---- 修理院 / 住家陈设（env-repair-yard-s2）碰撞，底面 y 0；北崖径绳栏桩
   for (const [k, [cx, cz, w, d, h]] of Object.entries(S2.props)) addBox(`s2-prop-${k}`, [cx - w / 2, 0, cz - d / 2], [cx + w / 2, h, cz + d / 2], mats.wood);
+  addBox('s2-shed-roof', [...S2.shed.roof[0]], [...S2.shed.roof[1]], mats.wood);
+  addBox('s2-shed-board', [...S2.shed.board[0]], [...S2.shed.board[1]], mats.wood);
   for (const x of S2.rail.x) for (const z of S2.rail.z) {
     const r = S2.rail.post / 2;
     addBox(`s2-rail-post-${x}-${z}`, [x - r, 0, z - r], [x + r, S2.rail.h, z + r], mats.wood);

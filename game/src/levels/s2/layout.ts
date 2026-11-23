@@ -119,6 +119,8 @@ export const S2 = {
     sparRack: [-12.0, -9.4, 3.0, 0.8, 1.2], chainPile: [-15.6, -12.6, 0.9, 0.9, 0.2], outhouse: [5.6, -9.0, 2.2, 2.0, 2.5], beacon: [-11.4, -12.6, 1.6, 1.6, 5.4], gardenWall: [3.6, -8.9, 0.45, 4.2, 0.62],
   } as Record<string, readonly [number, number, number, number, number]>,
   /** 北崖径绳栏桩（门外两侧，高 1.0） */
+  /** 工棚顶 / 工具板：玩家够不着，只给第三人称相机碰撞用（相机碰上前拉，不再被木板糊住画面） */
+  shed: { roof: [[-12.75, 2.1, -7.95], [-9.75, 2.62, -6.15]] as readonly [V3, V3], board: [[-12.25, 1.27, -7.49], [-10.25, 1.97, -7.43]] as readonly [V3, V3] },
   rail: { x: [1.8, 8.2] as V2, z: [13, 16, 19, 22, 25] as readonly number[], h: 1.0, post: 0.11 },
   /** 立镜镜心（y = beamY） */
   mirrors: { a: [-13.2, 0.85, 3.0] as V3, b: [-7.2, 0.85, 8.6] as V3 },
