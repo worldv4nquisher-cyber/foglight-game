@@ -60,7 +60,7 @@ export const JOURNAL_ENTRY_SEC = 6.0;
  * 开关落在镜头切点上（42 s 进 regaze、58 s 切过肩），段内不跳变；别的镜头不受影响。
  */
 /** 眺望站位往塔心退多少（m）：父亲根在汐前 0.48 m，美术站位离矮墙内面只有 0.45 m，不退父亲背会插进矮墙（test:father 的 verify-hoh-035 量） */
-export const GAZE_BACKOFF = 0.2;
+export const GAZE_BACKOFF = 0.30;
 
 /**
  * 制作人裁定（1031，035 镜头 02）：点灯后第一个镜头（塔外远景 far-exterior，lens 4 s → fog_open 14 s）灯束太淡，

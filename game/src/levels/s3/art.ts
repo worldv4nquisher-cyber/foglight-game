@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import type { AssetLoader } from '@/assets/AssetLoader';
 import { applyMaterialHints } from '@/render/materialHints';
 import { findNode } from '../artSlots';
+import { buildS3Facility } from './facility';
 
 const COLLIDER_NAME = /-(collider|wall)(\.\d+)?$/i;
 
@@ -83,6 +84,7 @@ export function buildS3Art(assets: AssetLoader): S3Art {
     if (key === 'prop-fresnel-lens-ch1') lens = o;
     loaded = true;
   }
+  buildS3Facility(root);
   let door: THREE.Object3D | null = null;
   const doorKey = S3_DOOR_KEYS.find((k) => assets.has(k));
   if (doorKey) {
