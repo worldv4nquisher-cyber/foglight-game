@@ -17,7 +17,7 @@ import type { CameraKey } from '@/systems/camera/CameraTrack';
 import type { TextId } from '@/content/text';
 import type { Collider } from '@/systems/PhysicsSystem';
 import { S3, S3_FRAME, alongDoor, cameraYawFacing, toLocal, toWorld } from './layout';
-import { buildS3Greybox, defaultS3GreyboxMaterials, type S3Greybox } from './greybox';
+import { buildS3Greybox, defaultS3GreyboxMaterials, setS3FixtureFallbacks, type S3Greybox } from './greybox';
 import { buildS3Art, S3_DOOR_PROP_KEY, type S3Art } from './art';
 import { buildS3Puzzles, type S3Puzzles } from './puzzles';
 import { S3Ending } from './ending';
@@ -201,10 +201,11 @@ export class S3Scene extends LevelScene {
     }
   }
 
-  /** 白盒外观开关（碰撞不受影响；空气墙始终不可见）。门扇：有美术门扇时跟着白盒开关 */
+  /** 白盒外观开关（碰撞不变）；门扇和家具在各自美术缺失时保留白盒外观。 */
   setGreyboxVisible(on: boolean): void {
     for (const m of this.greybox.colliders) m.visible = on;
     for (const d of this.greybox.decor) d.visible = on;
+    setS3FixtureFallbacks(this.greybox, this.art.root, on);
     this.greybox.doorLeaf.visible = on || !this.art.door;
   }
 

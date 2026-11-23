@@ -5,7 +5,7 @@ import { readFileSync, existsSync } from 'node:fs';
 import * as THREE from 'three';
 import { S3, S3_FRAME, toWorld, toLocal, treadSpan, treadTop, cameraYawFacing, alongDoor, polar } from '@/levels/s3/layout';
 import { bearingFrom } from '@/levels/s1/layout';
-import { buildS3Greybox, defaultS3GreyboxMaterials } from '@/levels/s3/greybox';
+import { buildS3Greybox, defaultS3GreyboxMaterials, setS3FixtureFallbacks } from '@/levels/s3/greybox';
 import { buildS3Facility } from '@/levels/s3/facility';
 import { collectIndoorVolumes } from '@/systems/CameraFollowSystem';
 import { xiWetTarget } from '@/entities/xi/XiLook';
@@ -180,6 +180,20 @@ const beam = buildS3Beam(ph, frameRoot);
     meshRoot.name = name;
     art.add(meshRoot);
   }
+  setS3FixtureFallbacks(gb, art, false);
+  assert.ok(gb.fixtureFallbacks.every(({ mesh }) => !mesh.visible), '美术齐全时不显示白盒家具');
+  setS3FixtureFallbacks(gb, art, true);
+  assert.ok(gb.fixtureFallbacks.every(({ mesh }) => mesh.visible), '白盒叠加应显示家具碰撞轮廓');
+  assert.ok(gb.walls.filter((mesh) => !gb.fixtureFallbacks.some((piece) => piece.mesh === mesh)).every((mesh) => !mesh.visible), '白盒叠加不应显示空气墙');
+  const interior = art.getObjectByName('env-lighthouse-ch1-interior');
+  art.remove(interior);
+  setS3FixtureFallbacks(gb, art, false);
+  for (const { mesh, artKey } of gb.fixtureFallbacks) {
+    assert.equal(mesh.visible, artKey === interior.name, `${mesh.name} 缺各自美术时才显示白盒`);
+  }
+  art.add(interior);
+  setS3FixtureFallbacks(gb, new THREE.Group(), false);
+  assert.ok(gb.fixtureFallbacks.every(({ mesh }) => mesh.visible), '无美术时不应有隐形家具障碍');
   buildS3Facility(art);
   art.updateMatrixWorld(true);
   const solved = S3.lightPath.map((p) => new THREE.Vector3(...p));
