@@ -120,6 +120,10 @@ export function buildS1Greybox(mats: GreyboxMaterials = defaultGreyboxMaterials(
   addBox('s1-ledge-parapet-e', [L.min[0] + 0.2, L.topY - 0.1, L.min[1] + 0.2], [L.min[0] + 0.56, L.topY + 0.6, L.max[1] - 0.3], mats.stone, 'collider');
   const BW = S1.bellWall;
   addBox('s1-bell-wall', [BW.min[0], L.topY - 0.1, BW.min[1]], [BW.max[0], BW.topY, BW.max[1]], mats.stone, 'collider');
+  // 卸货吊杆桅脚与绞盘（art: build-env-s1.mjs DERRICK）
+  addBox('s1-derrick', [-11.5, L.topY - 0.1, -9.8], [-11.0, L.topY + 4.5, -9.3], mats.stone, 'collider');
+  addBox('s1-derrick-braces', [-12.2, L.topY - 0.1, -9.95], [-10.6, L.topY + 0.9, -9.1], mats.stone, 'collider');
+  addBox('s1-winch', [-12.65, L.topY - 0.1, -9.7], [-11.95, L.topY + 0.7, -9.0], mats.stone, 'collider');
 
   // ---- 码头：甲板 0.3 厚（下面可以在退潮时钻过去）+ 桩
   const P = S1.pier;
