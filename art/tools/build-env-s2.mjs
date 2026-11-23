@@ -1545,11 +1545,11 @@ function buildLaundryRack() {
 //   光路（东灯 → 镜 A → 镜 B → 光感锁、西灯往北）两侧 ≥ 0.5 m 不放东西。
 // =====================================================================================
 const PROPS = {
-  workbench: [-12.75, -7.1, 2.6, 0.7, 0.9], shedPostE: [-14.3, -6.45, 0.18, 0.18, 2.1], shedPostW: [-11.2, -6.45, 0.18, 0.18, 2.1],
-  lensCrate: [-10.6, -7.15, 0.62, 0.5, 0.5], spars: [-14.22, -0.7, 0.56, 2.6, 0.75], topmark: [-14.0, -2.7, 0.6, 0.6, 1.0],
+  workbench: [-11.2, -7.1, 2.2, 0.7, 0.9], shedPostE: [-12.3, -6.45, 0.18, 0.18, 2.1], shedPostW: [-10.2, -6.45, 0.18, 0.18, 2.1],
+  lensCrate: [-14.2, -7.15, 0.62, 0.5, 0.5], spars: [-14.22, -0.7, 0.56, 2.6, 0.75], topmark: [-14.0, -2.7, 0.6, 0.6, 1.0],
   buoy: [-13.55, 7.6, 1.9, 1.4, 1.55], sinker: [-11.6, 8.55, 1.0, 0.7, 0.5], drums: [-7.3, -6.95, 0.9, 0.8, 0.9],
   handcart: [-2.5, 6.3, 1.5, 0.8, 0.95], woodpile: [-2.6, 4.32, 1.6, 0.6, 0.95], bench: [-5.3, -2.45, 0.9, 0.38, 0.46],
-  waterButt: [1.45, -2.5, 0.8, 0.8, 0.95], bedA: [1.7, -6.3, 1.3, 2.4, 0.28], bedB: [1.7, -9.3, 1.3, 2.0, 0.28], gateSign: [2.7, 11.05, 0.22, 0.22, 1.7],
+  waterButt: [1.45, -2.5, 0.8, 0.8, 0.95], bedA: [1.7, -6.3, 1.3, 2.4, 0.45], bedB: [1.7, -9.3, 1.3, 2.0, 0.45], gateSign: [2.7, 11.05, 0.22, 0.22, 1.7],
   craneMast: [-14.3, 8.75, 0.26, 0.26, 4.2], lanternHead: [-7.8, 0.8, 1.8, 1.8, 2.88], canBuoy: [-15.6, -10.2, 1.2, 1.2, 1.9], coneBuoy: [-13.8, -11.6, 1.3, 1.3, 2.1],
   sparRack: [-12.0, -9.4, 3.0, 0.8, 1.2], chainPile: [-15.6, -12.6, 0.9, 0.9, 0.2], outhouse: [5.6, -9.0, 2.2, 2.0, 2.5], beacon: [-11.4, -12.6, 1.6, 1.6, 5.4], gardenWall: [3.6, -8.9, 0.45, 4.2, 0.62],
 };
@@ -1581,8 +1581,8 @@ function buildRepairYard() {
     helpers.push({ name: `env-repair-yard-s2-${k}-footprint`, t: [cx, 0, cz], r: quatLookY(0), extras: { collider: [cx, cz, w, d, h], groundY: 0 } });
   }
   // ---- 工棚：靠院子南墙（墙顶 1.1）的单坡棚，后柱立在墙顶上，前柱落地；棚下是修灯头的工作台
-  const SH = { x0: -14.6, x1: -10.9, zB: -7.75, zF: -6.45, yB: 2.45, yF: 2.1 };
-  for (const x of [-14.3, -11.2]) {
+  const SH = { x0: -12.6, x1: -9.9, zB: -7.75, zF: -6.45, yB: 2.45, yF: 2.1 };
+  for (const x of [-12.3, -10.2]) {
     woodPiece(parts, [x, SH.yF / 2, SH.zF], [0.16, SH.yF, 0.16], 'beam', 'y');
     woodPiece(parts, [x, (1.1 + SH.yB) / 2, SH.zB], [0.14, SH.yB - 1.1, 0.14], 'beam', 'y');
     beam(parts, [x, SH.yB + 0.06, SH.zB - 0.15], [x, SH.yF + 0.06, SH.zF + 0.25], 0.08, 0.12, 'beam', x);   // 椽
@@ -1592,8 +1592,8 @@ function buildRepairYard() {
   { const n = 9, a = SH.zB - 0.2, b = SH.zF + 0.3; for (let i = 0; i < n; i++) { const z0 = lerp(a, b, i / n), z1 = lerp(a, b, (i + 1) / n), y = (zz) => lerp(SH.yB, SH.yF, (zz - SH.zB) / (SH.zF - SH.zB)) + 0.15;
     beam(parts, [SH.x0 - 0.1, y((z0 + z1) / 2) + (i % 2) * 0.012, (z0 + z1) / 2], [SH.x1 + 0.1, y((z0 + z1) / 2) + (i % 2) * 0.012, (z0 + z1) / 2], z1 - z0 + 0.03, 0.025, 'beam', i + 0.5); } }
   // 工具板（挂在后柱之间、墙顶之上）+ 挂着的扳手 / 钳子 / 灯罩卡箍
-  woodPiece(parts, [-12.75, 1.62, -7.46], [2.9, 0.7, 0.03], 'furn', 'x');
-  for (let i = 0; i < 7; i++) { const x = -13.95 + i * 0.4, L = 0.28 + (i % 3) * 0.08; ironPiece(parts, [x, 1.72 - L / 2, -7.43], [0.035, L, 0.012]); ironPiece(parts, [x, 1.72 - L, -7.43], [0.09, 0.05, 0.014]); }
+  woodPiece(parts, [-11.25, 1.62, -7.46], [2.0, 0.7, 0.03], 'furn', 'x');
+  for (let i = 0; i < 5; i++) { const x = -12.05 + i * 0.4, L = 0.28 + (i % 3) * 0.08; ironPiece(parts, [x, 1.72 - L / 2, -7.43], [0.035, L, 0.012]); ironPiece(parts, [x, 1.72 - L, -7.43], [0.09, 0.05, 0.014]); }
   // 工作台：四腿 + 台面 + 下层隔板；台上虎钳、灯头透镜（拆下来擦的）、油壶
   const [bx, bz, bw, bd, bh] = PROPS.workbench;
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) woodPiece(parts, [bx + sx * (bw / 2 - 0.07), (bh - 0.06) / 2, bz + sz * (bd / 2 - 0.07)], [0.09, bh - 0.06, 0.09], 'beam', 'y');
@@ -1657,9 +1657,9 @@ function buildRepairYard() {
       const n = Math.max(2, Math.round(len / 0.45));
       for (let i = 0; i < n; i++) { const o = -len / 2 + (i + 0.5) * len / n, bx2 = ax + Math.cos(rot) * o, bz2 = az + Math.sin(rot) * o; parts.push(stonePart(len / n - 0.02, h - R() * 0.03, 0.16, 2730 + i + cz, [bx2, (h - 0.015) / 2, bz2], -rot)); }
     }
-    const soil = orientUp(grid(10, 14, (u, v) => [lerp(cx - w / 2 + 0.16, cx + w / 2 - 0.16, u), 0.2 + 0.03 * Math.sin(u * Math.PI * 6) * (fbm(u * 3, v * 9, cz, 2) + 0.3), lerp(cz - d / 2 + 0.16, cz + d / 2 - 0.16, v)], 'rock'));
+    const soil = orientUp(grid(10, 14, (u, v) => [lerp(cx - w / 2 + 0.16, cx + w / 2 - 0.16, u), h - 0.08 + 0.03 * Math.sin(u * Math.PI * 6) * (fbm(u * 3, v * 9, cz, 2) + 0.3), lerp(cz - d / 2 + 0.16, cz + d / 2 - 0.16, v)], 'rock'));
     parts.push(boxUV(soil, MATS.rock.tile));
-    woodPiece(parts, [cx - 0.6, 0.5, cz + d / 2 - 0.25], [0.04, 0.6, 0.04], 'beam', 'y');   // 豆架桩
+    woodPiece(parts, [cx - 0.6, h + 0.25, cz + d / 2 - 0.25], [0.04, 0.6, 0.04], 'beam', 'y');   // 豆架桩
   }
   // ---- 屋后：院子北口 → 地窖门的搬运石板道；柴垛贴北墙（窗台 1.0 下）；手推车停在道边
   flagPath(parts, [[-6.2, 5.15], [-3.6, 5.2], [0.62, 5.2], [0.62, 4.0]], 0.9, 2801);
