@@ -71,6 +71,7 @@ export class S1Scene extends LevelScene {
     if (this.art.farFog) this.midFogs.push(this.art.farFog);
     if (this.art.sky) this.farSilhouettes.push({ handle: this.art.sky, fog: 'none' });
     this.scene.add(this.art.root);
+    for (const m of this.art.rockColliders) this.physics.addMesh(m);
     // 028 雾墙 / 岛边地面雾（贴图缺失时不建）
     this.fog028 = buildFogCards028(this.game.assets);
     if (this.fog028) this.scene.add(this.fog028);
