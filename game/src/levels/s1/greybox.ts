@@ -124,6 +124,14 @@ export function buildS1Greybox(mats: GreyboxMaterials = defaultGreyboxMaterials(
   addBox('s1-derrick', [-11.5, L.topY - 0.1, -9.8], [-11.0, L.topY + 4.5, -9.3], mats.stone, 'collider');
   addBox('s1-derrick-braces', [-12.2, L.topY - 0.1, -9.95], [-10.6, L.topY + 0.9, -9.1], mats.stone, 'collider');
   addBox('s1-winch', [-12.65, L.topY - 0.1, -9.7], [-11.95, L.topY + 0.7, -9.0], mats.stone, 'collider');
+  // 石台上倒落的墙石（build-env-s1.mjs buildLedge，高 0.29 < 台阶高，可踩上去）
+  for (const [k, [x0, z0, x1, z1]] of [[-16.62, -9.68, -16.01, -9.03], [-12.1, -9.61, -11.59, -8.91], [-18.24, -4.89, -17.56, -4.37], [-18.25, -8.42, -17.39, -7.88]].entries())
+    addBox(`s1-ledge-fallen-${k}`, [x0!, L.topY - 0.05, z0!], [x1!, L.topY + 0.29, z1!], mats.stone, 'collider');
+  // 美术崖脚 / 卸货岸凸出到滩地上的部分（env-cliff-s1 / env-unloading-shore-s1）
+  addBox('s1-near-toe', [-6.05, -0.5, 6.75], [-4.6, 0.85, 8.25], mats.stone, 'collider');
+  addBox('s1-channel-north-toe', [8.75, -0.5, 12.1], [12.25, 0.38, 12.5], mats.stone, 'collider');
+  addBox('s1-channel-north-rock', [2.75, -0.5, 12.05], [3.3, 0.62, 12.5], mats.stone, 'collider');
+  addBox('s1-shore-post', [-10.3, -0.5, 2.75], [-9.95, 2.15, 3.3], mats.stone, 'collider');
 
   // ---- 码头：甲板 0.3 厚（下面可以在退潮时钻过去）+ 桩
   const P = S1.pier;
@@ -161,6 +169,22 @@ export function buildS1Greybox(mats: GreyboxMaterials = defaultGreyboxMaterials(
   pierWall('s1-pier-deep-n', 0, P.width / 2 + 0.1, P.length, false);
   pierWall('s1-pier-deep-s', 0, -(P.width / 2 + 0.1), P.length, false);
   pierWall('s1-pier-deep-sea', -P.length / 2 - 0.1, 0, P.width + 0.4, true);
+  // 美术码头（build-env-s1.mjs buildPier）上下的实物：+X 侧高桩系绳栏、−X 铁缆桩、每排桩之间的交叉斜撑
+  const pierBox = (name: string, along: number, side: number, y0: number, y1: number, lenAlong: number, wSide: number, kind: 'collider' | 'wall'): void => {
+    const c = pierPoint(along, side, (y0 + y1) / 2);
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(wSide, y1 - y0, lenAlong), kind === 'wall' ? wallMat : mats.wood);
+    mesh.name = `${name}-${kind}`;
+    mesh.position.copy(c);
+    mesh.rotation.y = P.rotationY;
+    if (kind === 'wall') {
+      mesh.visible = false;
+      walls.push(mesh);
+    } else colliders.push(mesh);
+    root.add(mesh);
+  };
+  pierBox('s1-pier-rope-rail', -1.01, 1.05, P.deckY, P.deckY + 1.0, 12.0, 0.24, 'wall');
+  pierBox('s1-pier-bollard', -6.4, -1.0, P.deckY - 0.05, P.deckY + 0.4, 0.36, 0.36, 'collider');
+  for (let i = 0; i < 8; i++) pierBox(`s1-pier-bent-${i}`, -6.8 + (i * 13.5) / 7, 0, S1.pileBottomY, pileTop, 0.25, 2.1, 'wall');
 
   // ---- 右下前景礁石（018 打磨，S1.foregroundRocks）：退潮滩地上，挡人
   for (const [idx, hx, hz, topY] of S1.foregroundRocks) {

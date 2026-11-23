@@ -69,6 +69,8 @@ export interface S1Art {
   /** 有没有加载到美术（没有 = 只有白盒） */
   readonly loaded: boolean;
   rocks: InstancedLodSet[];
+  /** 非礁石小径的石头按 LOD0 实际形状做的碰撞网格（世界空间），低石可踩、高石挡人，脚不再陷进石头 */
+  rockColliders: THREE.Mesh[];
   boat: THREE.Object3D | null;
   island: THREE.Object3D | null;
   tower: THREE.Object3D | null;
@@ -139,6 +141,7 @@ export function buildS1Art(assets: AssetLoader): S1Art {
 
   // 礁石实例
   const rocks: InstancedLodSet[] = [];
+  const rockColliders: THREE.Mesh[] = [];
   const decorRocks = new Set<InstancedLodSet>();
   const byModel = new Map<string, { list: RockInstance[]; onRoute: boolean }>();
   const foreground = new Set(S1.foregroundRocks.map(([index]) => index));
@@ -157,6 +160,23 @@ export function buildS1Art(assets: AssetLoader): S1Art {
     if (!has(asset)) continue;
     const set = new InstancedLodSet(prepare(assets.getModel(asset)), list, { name: `s1-rocks-${id}`, material: wet });
     if (!onRoute) decorRocks.add(set);
+    // 碰撞用 LOD1（形状和 LOD0 差几厘米，顶点少一截）；量化（归一化 int16）顶点烘到世界空间会被夹到 ±1，先转成 float
+    const lv = Math.min(1, set.levels.length - 1);
+    const src = set.levels[lv]!.mesh.geometry;
+    const sp = src.getAttribute('position');
+    const fp = new Float32Array(sp.count * 3);
+    for (let i = 0; i < sp.count; i++) fp.set([sp.getX(i), sp.getY(i), sp.getZ(i)], i * 3);
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(fp, 3));
+    if (src.index) geo.setIndex(src.index);
+    const m4 = new THREE.Matrix4();
+    list.forEach((rock, k) => {
+      if (rock.role === 'reef-path') return;
+      const m = new THREE.Mesh(geo);
+      m.name = `${set.name}-${k}-collider`;
+      set.instanceMatrix(k, lv, m4).decompose(m.position, m.quaternion, m.scale);
+      rockColliders.push(m);
+    });
     root.add(set);
     rocks.push(set);
     loaded = true;
@@ -240,6 +260,7 @@ export function buildS1Art(assets: AssetLoader): S1Art {
     root,
     loaded,
     rocks,
+    rockColliders,
     boat,
     island,
     tower,
