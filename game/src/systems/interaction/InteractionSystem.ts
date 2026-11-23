@@ -103,6 +103,7 @@ export function pushStartRamp(t: number, moveAt: number, start: number): number 
 const tmpA = new THREE.Vector3();
 const tmpB = new THREE.Vector3();
 const tmpC = new THREE.Vector3();
+const tmpD = new THREE.Vector3();
 const ndc = new THREE.Vector3();
 
 function angleDiff(a: number, b: number): number {
@@ -197,6 +198,10 @@ export class InteractionSystem {
     const dz = tmpA.z - body.position.z;
     const dist = Math.hypot(dx, dz) - it.reach;
     if (dist > cfg.distance) return false;
+    if (it.standRadius !== null) {
+      const s = it.standPoint(tmpD).position;
+      if (Math.hypot(s.x - body.position.x, s.z - body.position.z) > it.standRadius) return false;
+    }
     if (Math.hypot(dx, dz) < 1e-3) return true;
     const dirYaw = Math.atan2(dx, dz);
     return Math.abs(angleDiff(this.o.actor.facing, dirYaw)) <= THREE.MathUtils.degToRad(cfg.angleDeg) + 1e-6;
@@ -451,7 +456,11 @@ export class InteractionSystem {
     const to = new THREE.Vector3(stand.position.x, from.y, stand.position.z);
     const dist = Math.hypot(to.x - from.x, to.z - from.z);
     // 不穿模：路径上有碰撞体挡着就不走，原地转身（物理每步也会把角色推出碰撞体）
-    if (dist > 1e-3 && !this.pathClear(from, to, body)) to.copy(from);
+    if (dist > 1e-3 && !this.pathClear(from, to, body)) {
+      // 有站位半径的（push）站不过去就不动作：不能隔着物体 / 碰撞体原地凭空推
+      if (it.standRadius !== null) return;
+      to.copy(from);
+    }
     const moveDist = from.distanceTo(to);
     const turn = Math.abs(angleDiff(actor.facing, stand.facing));
     // 时长：平移按 2.5 m/s、转身按 180°/approachMaxTime 取较长者，限制在 [approachMinTime, approachMaxTime]；已经站好且朝向对了就不走

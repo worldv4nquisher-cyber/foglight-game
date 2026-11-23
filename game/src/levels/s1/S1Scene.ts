@@ -111,6 +111,8 @@ export class S1Scene extends LevelScene {
     for (const m of this.greybox.colliders) m.visible = on;
     // 033：白盒脚印暗斑 s1-footprint-* 跟其他白盒外观一起开关（美术模式下全部隐藏：它们在小径板高度，美术地面上是悬空的深色方块）
     for (const d of this.greybox.decor) d.visible = on;
+    const pillar = this.scene.getObjectByName('s1-tide-pillar');
+    if (pillar) pillar.visible = on || !this.art?.root.getObjectByName('env-unloading-shore-s1');
   }
 
   protected override buildInteractables(): void {

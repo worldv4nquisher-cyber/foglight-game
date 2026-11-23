@@ -770,6 +770,40 @@ test('batch15 #157 礁石：9 块前景礁石挡人体与深水区边界之间�
   console.log(`  （前景礁石挡人体离深水边界：${notes.join('、')} m（要求 ≥ ${D.toFixed(2)}）；#157 南侧 ${runs.length} 条路径最近离边界 ${minSd.toFixed(2)} m）`);
 });
 
+test('台面正好高出 stepHeight（S1 搁浅浮台 0.1 → 0.4）：两侧走过去都迈上台面，不从台面里穿过', () => {
+  const ph = new PhysicsSystem();
+  const sand = new THREE.Mesh(new THREE.BoxGeometry(40, 0.2, 40));
+  sand.updateMatrixWorld(true);
+  ph.addMesh(sand);
+  const rf = S1.raft;
+  const root = new THREE.Group();
+  root.position.set(...rf.home);
+  const deck = new THREE.Mesh(new THREE.BoxGeometry(...rf.size));
+  deck.position.y = -rf.size[1] / 2;
+  root.add(deck);
+  root.updateMatrixWorld(true);
+  ph.addMesh(deck, { dynamic: true });
+  assert.ok(Math.abs(rf.home[1] - S1.sandY - gameplay.player.stepHeight) < 1e-6, '浮台搁浅台面比滩地正好高 stepHeight');
+  const b = new CharacterBody();
+  ph.addBody(b);
+  const half = rf.size[0] / 2 - b.radius;
+  for (const [sx, dx] of [[rf.home[0] - 2.6, 1], [rf.home[0] + 2.6, -1]]) {
+    b.teleport(new THREE.Vector3(sx, S1.sandY, rf.home[2]));
+    for (let i = 0; i < 30; i++) ph.step(DT);
+    let maxY = -Infinity;
+    for (let i = 0; i < 120; i++) {
+      b.velocity.set(dx * 2.5, 0, 0);
+      ph.step(DT);
+      if (Math.abs(b.position.x - rf.home[0]) < half) {
+        assert.ok(b.position.y > rf.home[1] - 0.02, `从 x ${sx} 走到 x ${b.position.x.toFixed(2)}：脚 ${b.position.y.toFixed(3)} 在台面 ${rf.home[1]} 里`);
+      }
+      maxY = Math.max(maxY, b.position.y);
+    }
+    assert.ok(maxY > rf.home[1] - 0.02, `从 x ${sx} 走过去没迈上台面（最高 ${maxY.toFixed(3)}）`);
+  }
+  ph.removeBody(b);
+});
+
 for (const [name, err] of results) {
   if (err) {
     failed++;

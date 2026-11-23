@@ -512,7 +512,7 @@ function texFile(tex, kind) {
   const dst = join(OUT_TEX, `${name}.webp`);
   if (!texDone.has(name)) {
     const src = join(SRC_TEX, `${name}.png`);
-    if (!existsSync(dst) || statSync(dst).mtimeMs < statSync(src).mtimeMs) {
+    if (!existsSync(dst) || (existsSync(src) && statSync(dst).mtimeMs < statSync(src).mtimeMs)) {
       const q = kind === 'albedo' ? 90 : 95;
       const lossless = kind === 'albedo' && tex === 'tex-net-a' ? ', lossless=True' : '';
       execFileSync('python3', ['-c', `from PIL import Image; Image.open(${JSON.stringify(src)}).save(${JSON.stringify(dst)}, 'WEBP', quality=${q}, method=6${lossless})`]);
@@ -787,6 +787,7 @@ const TER = { x0: -24, x1: 32, z0: -20, z1: 14, step: 0.125 };
 const SEA = (z) => (z > -3.5 ? 0 : z > -18 ? -(-3.5 - z) * 0.072 : -14.5 * 0.072 - (-18 - z) * 0.6);
 const softBox = (x, z, x0, x1, z0, z1, w) => sstep(0, w, Math.min(x - x0, x1 - x, z - z0, z1 - z));
 const CH_TRACK_MIN_X = -1.9;
+const CH_Z0_SAND = 8.4;
 function terrainAt(x, z, forCollider = false) {
   const n1 = fbm(x * 0.08, 0, z * 0.08, 3), n2 = fbm(x * 0.45, 1.7, z * 0.45, 3);
   let hs = 0.1 + SEA(z) + (n1 - 0.5) * 0.12 * sstep(-3, -7, z) + (n2 - 0.5) * 0.025;
@@ -802,7 +803,9 @@ function terrainAt(x, z, forCollider = false) {
   const mSouth = sstep(0.66, 0.73, fbm(x * 0.12, 9, z * 0.12, 3)) * sstep(-6, -9, z);
   let m = Math.max(mReef, mWest, mEast, mNorth, mBank, mSouth);
   let h = lerp(hs, hr, m);
-  h += 1.75 * sstep(12, 21, x) + 1.6 * sstep(24, 31, x) + (fbm(x * 0.3, 2, z * 0.3, 3) - 0.5) * 0.5 * sstep(14, 20, x); // 西侧抬高的乱石岸
+  // 西侧抬高的乱石岸：滩地北段从可走外框 x 15.6 外才起坡；往南入海段仍从 x 12 起坡，海床与深水送回多边形（layout deepWater 西沿）对齐
+  const wSea = sstep(-3.5, -8.5, z);
+  h += 1.75 * sstep(lerp(15.6, 12, wSea), lerp(22, 21, wSea), x) + 1.6 * sstep(24, 31, x) + (fbm(x * 0.3, 2, z * 0.3, 3) - 0.5) * 0.5 * sstep(lerp(16, 14, wSea), lerp(21, 20, wSea), x);
   h += 0.75 * sstep(-10.5, -15, x) * sstep(-6, -2.5, z); // 石台以北的东侧岩坡
   h += 0.45 * mBank * sstep(5, 8, z); // 潮沟南沿的岩坎（约 0.5）
   h += (z - 12.5) * 1.6 * mNorth; // 崖脚
@@ -811,6 +814,13 @@ function terrainAt(x, z, forCollider = false) {
   h = lerp(h, 0.1, tw); m = lerp(m, 0, tw);
   // 潮沟（x < 0.55）地形压到 -0.7，被潮沟几何体盖住；碰撞体在石槽段（x ≥ −1.9，layout.ts channel.trackMinX；返工 1029 原 −2.25）保持 0.1
   if (x < 0.55 && z > 8.4 && z < 12.6) { h = forCollider && x >= CH_TRACK_MIN_X ? 0.1 : -0.7; m = 1; }
+  // 可走滩地（白盒沙面碰撞 0.1、外框 x ≤ 15.6、潮沟以南）美术地面不高出 0.13，否则人脚陷进地里
+  if (!forCollider && z < CH_Z0_SAND && x > -19.6) h = Math.min(h, 0.13 + Math.max(0, x - 15.5) * 4 + Math.max(0, -19.5 - x) * 4);
+  // 北侧起坡在台阶槽内留出净空，否则崖脚会穿出登岸踏步。
+  if (!forCollider && z >= FAR.z0) {
+    const throat = sstep(-0.6, 0, Math.min(x - FAR.x[0], FAR.x[1] - x));
+    h = lerp(h, Math.min(h, stairTopAt(z) - 0.28), throat);
+  }
   return { h, m };
 }
 function buildTerrain() {
@@ -858,7 +868,8 @@ function buildTerrain() {
   ];
   return finishAsset({ name: 'env-tidal-flat-s1', lods, origin: [4, 0, -3], uv2Planar: [x0, z0, x1 - x0],
     collider: { pos: new Float32Array(cp), idx: new Uint32Array(ci) }, walls, helpers,
-    extras: { sizeM: [x1 - x0, z1 - z0], sandY: 0.1, trackZone: { x: [0.6, 10.4], z: [8.6, 12.4], y: 0.1 }, note: '沙/岩两材质按噪声遮罩分面；地形在潮沟下压到 -0.7（被 env-cliff-s1 盖住）' } });
+    extras: { sizeM: [x1 - x0, z1 - z0], sandY: 0.1, trackZone: { x: [0.6, 10.4], z: [8.6, 12.4], y: 0.1 }, note: '沙/岩两材质按噪声遮罩分面；地形在潮沟下压到 -0.7（被 env-cliff-s1 盖住）',
+      lightmap: { ticket: 'v0.1-029', texture: 'tex-s1-tidal-flat-lightmap.ktx2', encoding: 'RGBM8', uv: 'TEXCOORD_1', lightMapIntensity: 1, rect: [0, 0, 1, 1] } } });
 }
 
 // =====================================================================================
@@ -1354,7 +1365,7 @@ function cliffStrip(poly, opt) {
       d = Math.max(d, -lim);
     } else {
       const c = (j - rows) / capRows;
-      y = yt[i] + c * 1.6 + (fbm(bx * 0.2, 7, bz * 0.2, 3) - 0.5) * 1.4 * c;
+      y = yt[i] + c * (opt.capRise ?? 1.6) + (fbm(bx * 0.2, 7, bz * 0.2, 3) - 0.5) * (opt.capRoughness ?? 1.4) * c;
       d = 1.2 + c * (typeof opt.capDepth === 'function' ? opt.capDepth(bx, bz) : opt.capDepth ?? 9);
     }
     return [bx + ix * d, y, bz + iz * d];
@@ -1431,9 +1442,11 @@ function buildCliff() {
     if (ac <= 0.45) { w = (c / 0.45) * 0.8; y = top + (fbm(x * 2.2, 4, z * 2.2, 3) - 0.5) * 0.035 + (ridged(x * 5, 1, z * 5, 2) - 0.6) * 0.01; }
     else {
       const t = (ac - 0.45) / 0.55, g = terrainAt(x + nx * sg * 2.6, z + nz * sg * 2.6).h - 0.35;
-      w = sg * (0.8 + Math.pow(t, 1.4) * 2.0 + (fbm(x * 0.8, t * 3, z * 0.8, 3) - 0.5) * 0.6 * t);
       const prof = 1 - Math.pow(t, 1.6);
       y = g + (top - g) * prof + (fbm(x * 1.5, t * 4 + 9, z * 1.5, 3) - 0.5) * 0.25 * Math.sin(t * Math.PI) - sstep(0, 0.12, t) * 0.04;
+      // 沙面以上贴着石脊碰撞（宽 1.6）几乎竖直，像一道岩墙；埋进沙里才向外摊开
+      const flare = sstep(0.12, -0.35, y);
+      w = sg * (0.8 + 0.05 * t + (fbm(x * 0.8, t * 3, z * 0.8, 3) - 0.5) * 0.06 * t + flare * Math.pow(t, 1.4) * 2.0);
     }
     return [x + nx * w, y, z + nz * w];
   }));
@@ -1490,7 +1503,8 @@ function buildCliff() {
     { name: 'env-cliff-s1-plateau', t: [(PLATEAU.x[0] + PLATEAU.x[1]) / 2, PLATEAU.top, (PLATEAU.z[0] + PLATEAU.z[1]) / 2], extras: { note: '返工 1029：崖顶平台（layout.ts plateau）', min: [PLATEAU.x[0], PLATEAU.z[0]], max: [PLATEAU.x[1], PLATEAU.z[1]], topY: PLATEAU.top } },
     { name: 'env-cliff-s1-raft-slot', t: [-0.9, CH.slotTop, 10.5], extras: { note: '浮台在槽中的中心；x ∈ [-1.9, 0.1]，z ∈ [9, 12]', kerbTop: CH.kerb, stopTop: 0.5 } },
   ];
-  return finishAsset({ name: 'env-cliff-s1', lod0, uv2Size: 2048, collider: colliderFrom(cb), helpers,
+  // 原点固定在 029 烘焙时的位置（光照贴图 UV2 按它对齐）
+  return finishAsset({ name: 'env-cliff-s1', origin: [4, 0, 17], lod0, uv2Size: 2048, collider: colliderFrom(cb), helpers,
     extras: { channel: { widthM: 4, floorY: CH.floorY, z: [CH.z0, CH.z1] }, nearPlatformY: NEAR.top, farLowestStepY: 1.85, steps: { count: FAR.n, rise: FAR.rise, run: +FAR.run.toFixed(4), x: FAR.x, landingZ: FAR.landZ, z1: FAR.z1, topY: +FAR.topY.toFixed(2), direction: '+Z（北）' }, plateau: PLATEAU, slotX: [-1.9, 0.1], ridgeTopsY: RIDGE.map((r) => r[2]) } });
 }
 
@@ -1503,6 +1517,97 @@ function beam(parts, a, b, w, h, reg = 'beam', seed = 0) {
   const q = new THREE.Quaternion().setFromUnitVectors(V3(1, 0, 0), d.clone().normalize());
   parts.push(xform(p, mul(T((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2), new THREE.Matrix4().makeRotationFromQuaternion(q), RX(seed % 1))));
 }
+
+const BELL_WALL = { x0: -16.62, x1: -16.22, z0: -7.1, z1: -4.9, top: 3.3 };   // layout.ts bellWall
+function buildUnloadingShore() {
+  const parts = [];
+  // 岸台背后的岬角向内陆升高，露出连续的层岩轮廓；高处留在可走边界外。
+  const promontory = orientUp(rockSurface(76, 132, (u, v) => {
+    const z = lerp(-21, 26, v);
+    const edge = -19.45 - 2.5 * sstep(-6, -19, z) - 2.4 * sstep(10, 22, z);
+    const x = lerp(edge, -40, u);
+    const rise = 4.4 + 5.5 * sstep(-8, 18, z);
+    const inland = sstep(0, 0.47, u) * (1 - sstep(0.76, 1, u));
+    const coast = sstep(-21, -10, z) * (1 - sstep(19, 26, z));
+    const strata = 0.36 * Math.sin(u * 59 + fbm(x * 0.3, 8, z * 0.25, 3) * 4);
+    const relief = (fbm(x * 0.38, 12, z * 0.36, 3) - 0.5) * 2.3;
+    return [x, -0.95 + (rise + relief + strata) * inland * coast, z];
+  }));
+  parts.push(boxUV(promontory, MATS.rock.tile, [0.13, 0.41]));
+
+  // 钟台坐在基岩岬角上；岬角向北收窄，埋进原有的礁脊。
+  const headland = [[-22.8, -11.65], [-19.5, -11.1], [-17.1, -10.5], [-14.5, -9.75],
+    [-13.0, -7.7], [-12.6, -5.4], [-12.35, -2.2], [-11.0, 0.5], [-9.0, 3], [-6.5, 5.4]];
+  const bank = cliffStrip(headland.reverse(), {
+    step: 0.29, capRows: 5, capDepth: 4, capRise: 0.12, capRoughness: 0.16, talus: 0.35,
+    yBot: (x, z) => Math.min(-0.32, terrainAt(x, z).h - 0.3),
+    yTop: (x, z) => 1.69 - sstep(-1, 6, z) * 0.55 + (fbm(x * 0.2, 5, z * 0.25, 3) - 0.5) * 0.22,
+    maxOut: (x, y, z) => 0.18 * (1 - sstep(-2.2, 0, z)),
+  });
+  parts.push(boxUV(bank, MATS.rock.tile, [0.13, 0.41]));
+
+  // 原石台承托码头；收口梁留在甲板碰撞范围内，退潮时不挡桥下通道。
+  const yBearing = PIER.deckY - 0.19, zBearing = PIER.length / 2;
+  const bearingHalfWidth = PIER.width / 2 - 0.03;
+  beam(parts, pierToWorld(-bearingHalfWidth, yBearing, zBearing),
+    pierToWorld(bearingHalfWidth, yBearing, zBearing), 0.20, 0.17, 'beam', 21);
+
+  // 钟台原调查点改成嵌铁刻度的石柱，位置与白盒相同。
+  const gx = -14.2, gz = -7.6;
+  for (const [w, h, y, seed] of [[0.37, 0.16, 0.06, 2110], [0.28, 2.05, 1.16, 2111], [0.33, 0.09, 2.16, 2112]]) {
+    const part = stoneBlock(w, h, w, 0.025, seed);
+    parts.push(boxUV(xform(part, T(gx, LEDGE.top + y, gz)), MATS.masonry.tile, [0.18, 0.68]));
+  }
+  for (let i = 0; i < 9; i++) {
+    const y = LEDGE.top + 0.38 + i * 0.18, half = i % 2 === 0 ? 0.092 : 0.056;
+    beam(parts, [gx - half, y, gz - 0.141], [gx + half, y, gz - 0.141], 0.016, 0.012, 'iron');
+  }
+
+  // 潮汐钟落在嵌进台面的整块基石上，背后一道齐胸的护墙（白盒 s1-bell-wall 同尺寸）挡海风，铁拉杆把石柱顶拉进墙里。
+  const bpx = -15.5, bpz = -5.54;
+  parts.push(boxUV(xform(stoneBlock(0.92, 0.14, 0.92, 0.02, 2120), T(bpx, LEDGE.top - 0.035, bpz)), MATS.masonry.tile, [0.42, 0.18]));
+  for (const [dx, dz] of [[0.36, 0], [-0.36, 0], [0, 0.36], [0, -0.36]]) {
+    const wedge = stoneBlock(dx ? 0.12 : 0.5, 0.1, dz ? 0.12 : 0.5, 0.015, 2121 + dx * 10 + dz * 5);
+    parts.push(boxUV(xform(wedge, T(bpx + dx * 0.72, LEDGE.top + 0.08, bpz + dz * 0.72)), MATS.masonry.tile, [0.52, 0.2]));
+  }
+  courseWall(parts, [BELL_WALL.x1, BELL_WALL.z0], [BELL_WALL.x1, BELL_WALL.z1], LEDGE.top - 0.1, BELL_WALL.top, [1, 0], 2130, { depth: BELL_WALL.x1 - BELL_WALL.x0, course: 0.28 });
+  beam(parts, [bpx, LEDGE.top + 2.08, bpz], [BELL_WALL.x1 + 0.02, BELL_WALL.top - 0.12, bpz], 0.035, 0.035, 'iron');
+  beam(parts, [BELL_WALL.x1 + 0.03, BELL_WALL.top - 0.22, bpz - 0.09], [BELL_WALL.x1 + 0.03, BELL_WALL.top - 0.02, bpz - 0.09], 0.05, 0.03, 'iron');
+
+  // 小径的露头属于同一层基岩。石脊是高路，低路的岩层只接石阶与湿沙。
+  const path = [[LEDGE.x1 + RSTAIR.n * RSTAIR.run - 0.23, 0.2, -3],
+    ...REEF_PATH.map(([x, z], i) => [x, REEF_TOPS[i], z]), [1.8, 0.1, 3.4]];
+  const shelf = orientUp(rockSurface(84, 18, (u, v) => {
+    const f = u * (path.length - 1), i = Math.min(path.length - 2, Math.floor(f)), t = f - i, a = path[i], b = path[i + 1];
+    const x = lerp(a[0], b[0], t), z = lerp(a[2], b[2], t), top = lerp(a[1], b[1], t);
+    const prev = path[Math.max(0, i - 1)], next = path[Math.min(path.length - 1, i + 2)];
+    const ax = lerp(b[0] - prev[0], next[0] - a[0], t);
+    const az = lerp(b[2] - prev[2], next[2] - a[2], t);
+    const len = Math.hypot(ax, az), side = v * 2 - 1;
+    const as = Math.abs(side), hw = 0.66;
+    const w = Math.sign(side) * (as <= 0.7 ? (as / 0.7) * hw : hw + ((as - 0.7) / 0.3) * (0.45 + 0.3 * fbm(x, 4.3, z, 3)));
+    const wx = x - az / len * w, wz = z + ax / len * w;
+    const g = terrainAt(wx, wz).h - 0.15;
+    const relief = (fbm(wx * 2.5, 8.7, wz * 2.5, 3) - 0.5) * 0.07;
+    const y = lerp(top - 0.055 + relief, g, sstep(0.7, 0.75, as));
+    return [wx, lerp(g, y, 1 - sstep(0.88, 1, u)), wz];
+  }));
+  parts.push(boxUV(shelf, MATS.rock.tile, [0.13, 0.41]));
+
+  // 两处砌石泊位的护舷木固定在台壁，退潮推筏的沟道和涨潮跨步口均留空。
+  for (const [z, top, sign] of [[NEAR.z1, NEAR.top, 1], [FAR.z0, FAR.baseY, -1]]) {
+    for (const x of [FAR.x[0] + 0.22, FAR.x[1] - 0.22]) {
+      beam(parts, [x, 0.26, z + 0.055 * sign], [x, top + 0.20, z + 0.055 * sign], 0.16, 0.16, 'pile', x);
+    }
+    beam(parts, [FAR.x[0] + 0.11, top - 0.16, z + 0.043 * sign], [FAR.x[1] - 0.11, top - 0.16, z + 0.043 * sign], 0.095, 0.15);
+  }
+  // 对岸踏步两侧的短翼墙砌入崖脚，不在沟里另放散石。
+  for (const [lo, hi] of [[FAR.x[0] - 0.61, FAR.x[0]], [FAR.x[1], FAR.x[1] + 0.57]]) {
+    masonryPlatform(parts, lo, hi, FAR.z0 - 0.16, FAR.z0 + FAR.landing + 0.8, -0.65, FAR.baseY + 0.39, 2030 + lo * 10);
+  }
+  return finishAsset({ name: 'env-unloading-shore-s1', origin: [0, 0, 0], parts, uv2Size: 1024 });
+}
+
 function buildShed() {
   const parts = [], R = rng(1717), C = [18.2, 0, 2.5];
   const gy = (x, z) => terrainAt(x, z).h;
@@ -1764,6 +1869,12 @@ function distToPoly(x, z, poly) {
   }
   return best;
 }
+// 白盒沙面碰撞 0.1 上、退潮可走的范围（S1 外框内、潮沟以南、layout.ts deepWater 以北）
+function onWalkableSand(x, z) {
+  if (x < -19.5 || x > 15.6 || z > 8.5) return false;
+  const deepZ = x < -10.5 ? -11.25 : x < 12.5 ? -8.95 : -8.95 - (x - 12.5) * 3.6;
+  return z > deepZ;
+}
 function layoutRocks() {
   const R = rng(2468), inst = [];
   const keys = ['a', 'c', 'b', 'a', 'c', 'b'], tops = [0.42, 0.5, 0.38, 0.55, 0.45, 0.36];
@@ -1796,8 +1907,10 @@ function layoutRocks() {
       const s = k === 'f' ? 0.8 + R() * 0.6 : k === 'e' ? 0.6 + R() * 0.7 : 0.6 + R() * 0.9;
       const rad = Math.max(...r.size) * s * 0.9;
       if (avoid(x, z, rad)) continue;
-      const g = terrainAt(x, z).h;
-      inst.push({ rock: k, role: 'dressing', translation: [+x.toFixed(2), +(g - r.height * s * 0.18).toFixed(3), +z.toFixed(2)], rotationY: +(R() * 6.283).toFixed(3), scale: [+s.toFixed(3), +(s * (0.85 + R() * 0.3)).toFixed(3), +s.toFixed(3)], rad });
+      const g = terrainAt(x, z).h, ry = R(), sy = s * (0.85 + R() * 0.3);
+      // 落在可走滩地上的（没有挡人体）只露出 ≤ 0.12 m 的礁背，不然人会走进石头里
+      const y = onWalkableSand(x, z) ? Math.min(g - r.height * s * 0.18, 0.22 - r.topY * sy) : g - r.height * s * 0.18;
+      inst.push({ rock: k, role: 'dressing', translation: [+x.toFixed(2), +y.toFixed(3), +z.toFixed(2)], rotationY: +ry.toFixed(3), scale: [+s.toFixed(3), +sy.toFixed(3), +s.toFixed(3)], rad });
       placed++;
     }
   }
@@ -1884,6 +1997,7 @@ if (want('env-pier-wood-ch1')) buildPier();
 if (want('prop-boat-rowboat')) { buildBoat(false); buildBoat(true); }
 if (want('env-shore-ledge-s1')) buildLedge();
 if (want('env-cliff-s1')) buildCliff();
+if (want('env-unloading-shore-s1')) buildUnloadingShore();
 if (want('env-fish-shed-ruin')) buildShed();
 if (want('env-net-rack')) { buildNetRack('a'); buildNetRack('b'); }
 if (want('env-lighthouse-silhouette-far')) buildSilhouette();

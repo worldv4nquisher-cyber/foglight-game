@@ -63,6 +63,11 @@ export interface InteractableOptions {
   /** use / hold / push 前是否自动走到交互点，默认 true（inspect / read / pickup / place / puzzle 不走） */
   approach?: boolean;
   /**
+   * 站位半径（m）：角色离交互点站位的水平距离超过它就不当候选（不出提示、按 E 无效）。
+   * push 默认 gameplay.interaction.pushStandRadius（只能在推的那一侧推，不能隔着物体 / 从侧面凭空推）；其余默认不限。
+   */
+  standRadius?: number | null;
+  /**
    * 优先级（和跨越点比）：附近有跨越点、且它的优先级更高时，这个物体不当候选，E 归跨越。
    * 默认 inspect / read = 0（看看而已），其余 = 20（操作类）；跨越点默认 10（TraversalLink.priority）。
    * 例：站在浮台上，「E 跨过去」压过石槽的「E 查看」。
@@ -119,6 +124,8 @@ export class Interactable extends Component {
   readonly item: string | null;
   readonly socket: THREE.Object3D | null;
   readonly approach: boolean;
+  /** 见 InteractableOptions.standRadius */
+  readonly standRadius: number | null;
   /** 见 InteractableOptions.priority */
   readonly priority: number;
   /** 见 InteractableOptions.aimCone */
@@ -154,6 +161,7 @@ export class Interactable extends Component {
     this.item = opts.item ?? (opts.kind === 'pickup' ? opts.id : null);
     this.socket = opts.socket ?? (opts.kind === 'place' ? findNode(opts.object, SOCKET_NODE) : null);
     this.approach = opts.approach ?? (opts.kind === 'use' || opts.kind === 'hold' || opts.kind === 'push');
+    this.standRadius = opts.standRadius !== undefined ? opts.standRadius : opts.kind === 'push' ? gameplay.interaction.pushStandRadius : null;
     this.priority = opts.priority ?? (opts.kind === 'inspect' || opts.kind === 'read' ? 0 : 20);
     this.aimCone = opts.aimCone ?? null;
     this.point = opts.interactPoint ?? findNode(opts.object, INTERACT_NODE);

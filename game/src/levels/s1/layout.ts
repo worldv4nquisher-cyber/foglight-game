@@ -76,6 +76,8 @@ export const S1 = {
   /** 汐敲钟站位离钟轴（m）= 021 prop-tide-bell-interact 的 z 0.98（美术挂上后直接读该节点） */
   bellStandDist: 0.98,
   bellAnchor: [-15.5, 2.4, -6.2] as V3,
+  /** 钟后护墙（美术 env-unloading-shore-s1 同尺寸）：钟台东侧齐胸石墙，钟石柱顶有铁拉杆拉进墙里 */
+  bellWall: { min: [-16.62, -7.1] as V2, max: [-16.22, -4.9] as V2, topY: 3.3 },
   /** 潮汐安全点（送回点）：岸台北侧，面朝礁石小径（+X 西） */
   safePoint: [-12.5, 2.4, -4] as V3,
   safeFacing: Math.PI / 2,
@@ -174,6 +176,7 @@ export const S1 = {
     'env-pier-wood-ch1': { translation: [-3.39, 0, -9.8], rotationY: -1.23594 },
     'env-shore-ledge-s1': { translation: [-12.74, 0, -6.25], rotationY: 0 },
     'env-cliff-s1': { translation: [4, 0, 17], rotationY: 0 },
+    'env-unloading-shore-s1': { translation: [0, 0, 0], rotationY: 0 },
     'env-fish-shed-ruin': { translation: [18.73, 0, 1.46], rotationY: 0 },
     'env-net-rack-a': { translation: [16.25, 0, -2.25], rotationY: 0 },
     'env-net-rack-b': { translation: [17.31, 0, 8.13], rotationY: 0 },
