@@ -1551,7 +1551,7 @@ const PROPS = {
   handcart: [-2.5, 6.3, 1.5, 0.8, 0.95], woodpile: [-2.6, 4.32, 1.6, 0.6, 0.95], bench: [-5.3, -2.45, 0.9, 0.38, 0.46],
   waterButt: [1.45, -2.5, 0.8, 0.8, 0.95], bedA: [1.7, -6.3, 1.3, 2.4, 0.28], bedB: [1.7, -9.3, 1.3, 2.0, 0.28], gateSign: [2.7, 11.05, 0.22, 0.22, 1.7],
   craneMast: [-14.3, 8.75, 0.26, 0.26, 4.2], lanternHead: [-7.8, 0.8, 1.8, 1.8, 2.88], canBuoy: [-15.6, -10.2, 1.2, 1.2, 1.9], coneBuoy: [-13.8, -11.6, 1.3, 1.3, 2.1],
-  sparRack: [-12.0, -9.4, 3.0, 0.8, 1.2], chainPile: [-15.6, -12.6, 0.9, 0.9, 0.2], outhouse: [5.6, -9.0, 2.2, 2.0, 2.5], gardenWall: [3.6, -8.9, 0.45, 4.2, 0.62],
+  sparRack: [-12.0, -9.4, 3.0, 0.8, 1.2], chainPile: [-15.6, -12.6, 0.9, 0.9, 0.2], outhouse: [5.6, -9.0, 2.2, 2.0, 2.5], beacon: [-11.4, -12.6, 1.6, 1.6, 5.4], gardenWall: [3.6, -8.9, 0.45, 4.2, 0.62],
 };
 const RAIL = { x: [1.8, 8.2], z: [13, 16, 19, 22, 25], h: 1.0 };
 const latheReg = (prof, reg, seg = 20) => mapUVRegion(lathePart(prof, seg, 'wood'), reg, (x, y, z, u, v) => [u, v]);
@@ -1715,6 +1715,15 @@ function buildRepairYard() {
     for (let i = 0; i <= 90; i++) { const a = i / 90 * Math.PI * 7, r = 0.42 - i / 90 * 0.3; coil.push([cx + Math.cos(a) * r, 0.035 + Math.floor(i / 30) * 0.06, cz + Math.sin(a) * r]); }
     parts.push(mapUVRegion(tubePart(coil, 0.04, 160, 6, 'wood'), 'iron', (x, y, z, u, v) => [u * 10, v])); }
   flagPath(parts, [[-1.0, -11.6], [-3.6, -10.6], [-6.6, -9.4], [-9.0, -8.3]], 0.9, 2803);
+  // 堆场里立着一座换下来待刷漆的格构立标（四腿收分铁架 + 三道斜撑 + 锥形顶标），远看就是航标
+  { const [bx, bz, bw, , bh] = PROPS.beacon, r0 = bw / 2 - 0.08, r1 = 0.22, top = bh - 0.85;
+    const leg = (sx, sz, t) => [bx + sx * lerp(r0, r1, t), t * top, bz + sz * lerp(r0, r1, t)];
+    const C = [[1, 1], [-1, 1], [-1, -1], [1, -1]];
+    for (const [sx, sz] of C) { beam(parts, leg(sx, sz, 0), leg(sx, sz, 1), 0.09, 0.09, 'paint'); parts.push(stonePart(0.3, 0.12, 0.3, 3200 + sx * 3 + sz, [bx + sx * r0, 0.06, bz + sz * r0])); }
+    for (const t of [0.12, 0.42, 0.72]) for (let i = 0; i < 4; i++) { const [ax, az] = C[i], [cx2, cz2] = C[(i + 1) % 4];
+      beam(parts, leg(ax, az, t), leg(cx2, cz2, t), 0.06, 0.06, 'iron'); beam(parts, leg(ax, az, t), leg(cx2, cz2, t + 0.3), 0.04, 0.04, 'iron'); }
+    woodPiece(parts, [bx, top + 0.04, bz], [r1 * 2 + 0.3, 0.08, r1 * 2 + 0.3], 'beam');
+    parts.push(P(latheReg([[0.001, top + 0.08], [0.36, top + 0.08], [0.001, bh]], 'paint', 16), T(bx, 0, bz))); }
   // 屋西柴煤房：石墙、木板单坡顶、朝东（−X）的木门；菜园西边一道干砌石墙
   { const [cx, cz, w, d, h] = PROPS.outhouse, t = 0.3, wallH = h - 0.45;
     let sd = 3000;
