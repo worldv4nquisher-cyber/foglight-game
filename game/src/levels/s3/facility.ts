@@ -325,7 +325,7 @@ export function buildS3Facility(art: THREE.Group): void {
     const y = S3.lampRoom.floorY;
     // The column wears a bolted service casing below the original lens/lever envelope.
     lamp.rod('paint', [0, y + 0.095, 0], [0, y + 0.615, 0], 0.436, 48);
-    for (const [h, r, thick] of [[0.072, 0.494, 0.046], [0.55, 0.483, 0.073], [0.662, 0.648, 0.037]]) {
+    for (const [h, r, thick] of [[0.072, 0.494, 0.046], [0.55, 0.483, 0.073], [0.662, 0.648, 0.037]] as const) {
       lamp.rod('bronze', [0, y + h, 0], [0, y + h + thick, 0], r, 48);
     }
     for (let th = 15; th < 360; th += 30) {
