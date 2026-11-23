@@ -463,7 +463,7 @@ function texFile(tex, kind) {
   const dst = join(OUT_TEX, `${name}.webp`);
   if (!texDone.has(name)) {
     const src = join(SRC_TEX, `${name}.png`);
-    if (!existsSync(dst) || statSync(dst).mtimeMs < statSync(src).mtimeMs) {
+    if (!existsSync(dst) || (existsSync(src) && statSync(dst).mtimeMs < statSync(src).mtimeMs)) {
       const q = kind === 'albedo' ? 90 : 95;
       const lossless = kind === 'albedo' && tex === 'tex-net-a' ? ', lossless=True' : '';
       execFileSync('python3', ['-c', `from PIL import Image; Image.open(${JSON.stringify(src)}).save(${JSON.stringify(dst)}, 'WEBP', quality=${q}, method=6${lossless})`]);
@@ -881,6 +881,7 @@ const MIRRORS = { a: [-13.2, BEAM_Y, 3.0], b: [-7.2, BEAM_Y, 8.6] };       // 02
 const GATE = { x: [3.4, 5.0], z: 11.5 };
 const EXIT_S3 = [5.0, 0, 23.0];
 const STAIR_S = { x: [-1.0, 1.0], zTop: -13.5, run: 0.38, rise: 0.2, n: 12 };
+const WALK = { x: [-17.5, 25], z: [-14, 12], slopeX: 8, dropPerM: 0.0776, north: { x: [1.5, 8.5], z1: 27 } }; // 014 白盒 layout.ts platform / slope / northPath
 
 // 通用小工具
 const P = (p, ...m) => xform(p, mul(...m));
@@ -1538,6 +1539,223 @@ function buildLaundryRack() {
 }
 
 // =====================================================================================
+// 修理院与住家陈设（env-repair-yard-s2）：父亲修航标的院子（工棚、浮标、杆标、沉块、油桶、透镜箱）、
+//   住家门前（石板路、长凳、雨水桶、菜畦）、屋后搬运路（石板道、手推车、柴垛）、北门（警示牌、崖径绳栏）。
+//   全部落在白盒地面 y 0 上；碰撞盒与 game/src/levels/s2/layout.ts S2.props 一致（-footprint 节点带同一组数）。
+//   光路（东灯 → 镜 A → 镜 B → 光感锁、西灯往北）两侧 ≥ 0.5 m 不放东西。
+// =====================================================================================
+const PROPS = {
+  workbench: [-11.2, -7.1, 2.2, 0.7, 0.9], shedPostE: [-12.3, -6.45, 0.18, 0.18, 2.1], shedPostW: [-10.2, -6.45, 0.18, 0.18, 2.1],
+  lensCrate: [-14.2, -7.15, 0.62, 0.5, 0.5], spars: [-14.22, -0.7, 0.56, 2.6, 0.75], topmark: [-14.0, -2.7, 0.6, 0.6, 1.0],
+  buoy: [-13.55, 7.6, 1.9, 1.4, 1.55], sinker: [-11.6, 8.55, 1.0, 0.7, 0.5], drums: [-7.3, -6.95, 0.9, 0.8, 0.9],
+  handcart: [-2.5, 6.3, 1.5, 0.8, 0.95], woodpile: [-2.6, 4.32, 1.6, 0.6, 0.95], bench: [-5.3, -2.45, 0.9, 0.38, 0.46],
+  waterButt: [1.45, -2.5, 0.8, 0.8, 0.95], bedA: [1.7, -6.3, 1.3, 2.4, 0.45], bedB: [1.7, -9.3, 1.3, 2.0, 0.45], gateSign: [2.7, 11.05, 0.22, 0.22, 1.7],
+  craneMast: [-14.3, 8.75, 0.26, 0.26, 4.2], lanternHead: [-7.8, 0.8, 1.8, 1.8, 2.88], canBuoy: [-15.6, -10.2, 1.2, 1.2, 1.9], coneBuoy: [-13.8, -11.6, 1.3, 1.3, 2.1],
+  sparRack: [-12.0, -9.4, 3.0, 0.8, 1.2], chainPile: [-15.6, -12.6, 0.9, 0.9, 0.2], outhouse: [5.6, -9.0, 2.2, 2.0, 2.5], beacon: [-11.4, -12.6, 1.6, 1.6, 5.4], gardenWall: [3.6, -8.9, 0.45, 4.2, 0.62],
+};
+const RAIL = { x: [1.8, 8.2], z: [13, 16, 19, 22, 25], h: 1.0 };
+const latheReg = (prof, reg, seg = 20) => mapUVRegion(lathePart(prof, seg, 'wood'), reg, (x, y, z, u, v) => [u, v]);
+const stonePart = (w, h, d, seed, c, rotY = 0) => boxUV(P(stoneBlock(w, h, d, Math.min(0.03, h / 4), seed, 0.005), T(...c), RY(rotY)), MATS.masonry.tile, [seed * 0.13 % 1, seed * 0.29 % 1]);
+// 石板路：沿折线铺两列不规则石板，顶面 y 0.025（草皮 −4…+1.5 cm），底埋进土里
+function flagPath(parts, pts, width, seed) {
+  const R = rng(seed);
+  const segs = []; let total = 0;
+  for (let i = 0; i < pts.length - 1; i++) { const l = Math.hypot(pts[i + 1][0] - pts[i][0], pts[i + 1][1] - pts[i][1]); segs.push(l); total += l; }
+  for (let s = 0.3; s < total - 0.2;) {
+    const d = 0.42 + R() * 0.2;
+    let k = 0, acc = 0; while (k < segs.length - 1 && acc + segs[k] < s) acc += segs[k++];
+    const t = (s - acc) / segs[k], a = pts[k], b = pts[k + 1], x = lerp(a[0], b[0], t), z = lerp(a[1], b[1], t);
+    const yaw = Math.atan2(b[0] - a[0], b[1] - a[1]), nx = Math.cos(yaw), nz = -Math.sin(yaw);
+    const split = (R() - 0.5) * 0.25;
+    for (const [o0, o1] of [[-width / 2, split], [split, width / 2]]) {
+      const w = o1 - o0 - 0.04, o = (o0 + o1) / 2 + (R() - 0.5) * 0.03;
+      parts.push(stonePart(w, 0.09, d - 0.05, seed + s * 7 + o0, [x + nx * o, 0.025 - 0.045, z + nz * o], yaw + (R() - 0.5) * 0.08));
+    }
+    s += d;
+  }
+}
+function buildRepairYard() {
+  const parts = [], cols = [], helpers = [];
+  for (const [k, [cx, cz, w, d, h]] of Object.entries(PROPS)) {
+    cols.push(colBox(cx, h / 2, cz, w, h, d));
+    helpers.push({ name: `env-repair-yard-s2-${k}-footprint`, t: [cx, 0, cz], r: quatLookY(0), extras: { collider: [cx, cz, w, d, h], groundY: 0 } });
+  }
+  // ---- 工棚：靠院子南墙（墙顶 1.1）的单坡棚，后柱立在墙顶上，前柱落地；棚下是修灯头的工作台
+  const SH = { x0: -12.6, x1: -9.9, zB: -7.75, zF: -6.45, yB: 2.45, yF: 2.1 };
+  for (const x of [-12.3, -10.2]) {
+    woodPiece(parts, [x, SH.yF / 2, SH.zF], [0.16, SH.yF, 0.16], 'beam', 'y');
+    woodPiece(parts, [x, (1.1 + SH.yB) / 2, SH.zB], [0.14, SH.yB - 1.1, 0.14], 'beam', 'y');
+    beam(parts, [x, SH.yB + 0.06, SH.zB - 0.15], [x, SH.yF + 0.06, SH.zF + 0.25], 0.08, 0.12, 'beam', x);   // 椽
+  }
+  beam(parts, [SH.x0, SH.yF + 0.02, SH.zF], [SH.x1, SH.yF + 0.02, SH.zF], 0.12, 0.12, 'beam', 3);
+  beam(parts, [SH.x0, SH.yB + 0.02, SH.zB], [SH.x1, SH.yB + 0.02, SH.zB], 0.12, 0.12, 'beam', 4);
+  { const n = 9, a = SH.zB - 0.2, b = SH.zF + 0.3; for (let i = 0; i < n; i++) { const z0 = lerp(a, b, i / n), z1 = lerp(a, b, (i + 1) / n), y = (zz) => lerp(SH.yB, SH.yF, (zz - SH.zB) / (SH.zF - SH.zB)) + 0.15;
+    beam(parts, [SH.x0 - 0.1, y((z0 + z1) / 2) + (i % 2) * 0.012, (z0 + z1) / 2], [SH.x1 + 0.1, y((z0 + z1) / 2) + (i % 2) * 0.012, (z0 + z1) / 2], z1 - z0 + 0.03, 0.025, 'beam', i + 0.5); } }
+  // 工具板（挂在后柱之间、墙顶之上）+ 挂着的扳手 / 钳子 / 灯罩卡箍
+  woodPiece(parts, [-11.25, 1.62, -7.46], [2.0, 0.7, 0.03], 'furn', 'x');
+  for (let i = 0; i < 5; i++) { const x = -12.05 + i * 0.4, L = 0.28 + (i % 3) * 0.08; ironPiece(parts, [x, 1.72 - L / 2, -7.43], [0.035, L, 0.012]); ironPiece(parts, [x, 1.72 - L, -7.43], [0.09, 0.05, 0.014]); }
+  // 工作台：四腿 + 台面 + 下层隔板；台上虎钳、灯头透镜（拆下来擦的）、油壶
+  const [bx, bz, bw, bd, bh] = PROPS.workbench;
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) woodPiece(parts, [bx + sx * (bw / 2 - 0.07), (bh - 0.06) / 2, bz + sz * (bd / 2 - 0.07)], [0.09, bh - 0.06, 0.09], 'beam', 'y');
+  woodPiece(parts, [bx, bh - 0.03, bz], [bw, 0.06, bd], 'furn', 'x');
+  woodPiece(parts, [bx, 0.26, bz], [bw - 0.12, 0.03, bd - 0.1], 'furn', 'x');
+  ironPiece(parts, [bx - 0.9, bh + 0.06, bz + 0.22], [0.22, 0.12, 0.14]);
+  ironPiece(parts, [bx - 0.9, bh + 0.14, bz + 0.34], [0.03, 0.03, 0.2]);
+  { const ring = latheReg([[0.2, 0], [0.22, 0.02], [0.22, 0.05], [0.2, 0.07], [0.19, 0.07], [0.19, 0]], 'iron', 24); parts.push(P(ring, T(bx + 0.1, bh, bz - 0.05)));
+    const lens = lathePart([[0.001, 0.02], [0.12, 0.05], [0.185, 0.12], [0.12, 0.2], [0.001, 0.23]], 20, 'glass'); parts.push(P(lens, T(bx + 0.1, bh, bz - 0.05))); }
+  parts.push(P(latheReg([[0.001, 0], [0.07, 0], [0.075, 0.02], [0.07, 0.11], [0.02, 0.17], [0.012, 0.25], [0.001, 0.25]], 'iron', 12), T(bx + 0.8, bh, bz + 0.15)));
+  // 透镜箱（木板钉的箱子，盖子斜搭）
+  { const [cx, cz, w, d, h] = PROPS.lensCrate; for (const sx of [-1, 1]) woodPiece(parts, [cx + sx * (w / 2 - 0.012), h / 2 - 0.02, cz], [0.024, h - 0.04, d], 'furn', 'z');
+    for (const sz of [-1, 1]) woodPiece(parts, [cx, h / 2 - 0.02, cz + sz * (d / 2 - 0.012)], [w - 0.05, h - 0.04, 0.024], 'furn', 'x');
+    woodPiece(parts, [cx, 0.02, cz], [w, 0.04, d], 'furn', 'x');
+    parts.push(P(plank(w + 0.02, d + 0.02, 0.025, 'furn'), T(cx, h - 0.01, cz + 0.02), RX(-0.05))); }
+  // 杆标：三根漆过的木杆斜靠东墙（杆身贴着墙顶内沿 (-14.5, 1.1)）+ 一个铁条焊的锥形顶标
+  for (const [z, seed] of [[-1.6, 1], [-0.95, 2], [0.15, 3]]) {
+    const base = [-14.02 - seed * 0.03, 0.012, z], dx = -14.5 - base[0], dy = 1.1 + 0.07 - base[1], l = Math.hypot(dx, dy), L = 3.0;
+    const top = [base[0] + dx / l * L, base[1] + dy / l * L, z + 0.05 * seed];
+    parts.push(mapUVRegion(tubePart([base, top], 0.06, 4, 8, 'wood'), seed === 2 ? 'paint' : 'beam', (x, y, zz, u, v) => [u * 3, v]));
+  }
+  { const [tx, tz] = PROPS.topmark, apex = [tx, 1.0, tz];
+    const corners = [[-0.26, -0.26], [0.26, -0.26], [0.26, 0.26], [-0.26, 0.26]].map(([a, b]) => [tx + a, 0.02, tz + b]);
+    for (const c of corners) beam(parts, c, apex, 0.03, 0.03, 'iron');
+    for (const y of [0.02, 0.4]) { const s = 1 - y / 1.0; for (let i = 0; i < 4; i++) { const a = corners[i], b = corners[(i + 1) % 4]; beam(parts, [lerp(apex[0], a[0], s), y + 0.015, lerp(apex[2], a[2], s)], [lerp(apex[0], b[0], s), y + 0.015, lerp(apex[2], b[2], s)], 0.03, 0.03, 'iron'); } } }
+  // 罐形浮标：横躺在两道木枕上（枕木顶 0.30 = 浮标底），木楔卡住，顶上吊环
+  { const [cx, cz] = PROPS.buoy, R0 = 0.62, cy = 0.30 + R0;
+    const body = latheReg([[0.001, -0.85], [0.35, -0.85], [0.58, -0.72], [R0, -0.45], [R0, 0.55], [0.52, 0.7], [0.26, 0.85], [0.001, 0.85]], 'iron', 28);
+    const band = latheReg([[R0 + 0.004, -0.15], [R0 + 0.012, -0.12], [R0 + 0.012, 0.22], [R0 + 0.004, 0.25]], 'paint', 28);
+    for (const p of [body, band]) parts.push(P(p, T(cx, cy, cz), RZ(Math.PI / 2)));
+    for (const x of [cx - 0.6, cx + 0.6]) {
+      woodPiece(parts, [x, 0.15, cz], [0.2, 0.3, 1.3], 'beam', 'z');
+      for (const s of [-1, 1]) { const zz = s * 0.45, top = cy - Math.sqrt(R0 * R0 - zz * zz); woodPiece(parts, [x, (0.3 + top) / 2, cz + zz + s * 0.03], [0.18, top - 0.3 + 0.01, 0.14], 'beam', 'x'); }
+    }
+    parts.push(P(tubePart([...Array(13).keys()].map((i) => [Math.cos(i / 12 * Math.PI * 2) * 0.09, Math.sin(i / 12 * Math.PI * 2) * 0.09 + 0.09, 0]), 0.018, 24, 6, 'wood', true), T(cx, cy + R0 - 0.01, cz)));
+    mapUVRegion(parts[parts.length - 1], 'iron', (x, y, z, u, v) => [u, v]); }
+  // 沉块（系浮标的石坠）+ 地上盘着的锚链
+  { const [cx, cz] = PROPS.sinker; parts.push(stonePart(0.9, 0.45, 0.6, 2601, [cx, 0.225, cz]));
+    ironPiece(parts, [cx, 0.5, cz], [0.18, 0.1, 0.04]);
+    const coil = []; for (let i = 0; i <= 64; i++) { const a = i / 64 * Math.PI * 5, r = 0.32 - i / 64 * 0.12; coil.push([cx + 0.75 + Math.cos(a) * r, 0.035 + Math.floor(i / 26) * 0.05, cz - 0.15 + Math.sin(a) * r]); }
+    coil.push([cx + 0.3, 0.035, cz - 0.05], [cx + 0.05, 0.5, cz]);
+    parts.push(mapUVRegion(tubePart(coil, 0.035, 120, 6, 'wood'), 'iron', (x, y, z, u, v) => [u * 8, v])); }
+  // 油桶（灯油）
+  for (const [x, z, seed] of [[-7.52, -7.1, 0], [-7.02, -6.82, 1]]) {
+    parts.push(P(latheReg([[0.001, 0], [0.27, 0], [0.29, 0.02], [0.29, 0.86], [0.27, 0.88], [0.001, 0.88]], seed ? 'paint' : 'iron', 20), T(x, 0, z)));
+    for (const y of [0.29, 0.59]) parts.push(P(latheReg([[0.296, y - 0.02], [0.302, y], [0.296, y + 0.02]], 'iron', 20), T(x, 0, z)));
+  }
+  // ---- 住家门前：石板路（南石阶顶 → 前门），门边石脚长凳，西南角雨水桶 + 落水管，西侧两块菜畦
+  flagPath(parts, [[0, -13.35], [-0.35, -10.2], [-1.5, -7.2], [-3.0, -4.6], [-4.1, -2.0]], 1.05, 2701);
+  parts.push(stonePart(1.3, 0.12, 0.45, 2702, [-4.1, -0.03, -2.2]));                      // 门前踏石
+  { const [cx, cz, w, d, h] = PROPS.bench; for (const s of [-1, 1]) parts.push(stonePart(0.16, h - 0.06, d - 0.04, 2710 + s, [cx + s * (w / 2 - 0.12), (h - 0.06) / 2, cz]));
+    woodPiece(parts, [cx, h - 0.03, cz], [w, 0.06, d], 'furn', 'x'); }
+  { const [cx, cz, , , h] = PROPS.waterButt;
+    parts.push(P(latheReg([[0.001, 0], [0.34, 0], [0.37, 0.15], [0.39, 0.48], [0.37, 0.8], [0.35, h], [0.32, h - 0.02], [0.32, h - 0.08], [0.001, h - 0.08]], 'furn', 18), T(cx, 0, cz)));
+    for (const y of [0.12, h - 0.12]) parts.push(P(latheReg([[0.375, y - 0.025], [0.385, y], [0.375, y + 0.025]], 'iron', 18), T(cx, 0, cz)));
+    parts.push(mapUVRegion(tubePart([[1.72, 5.45, -2.05], [1.72, 1.4, -2.05], [1.6, 1.1, -2.25], [1.5, h + 0.02, -2.42]], 0.045, 24, 8, 'wood'), 'iron', (x, y, z, u, v) => [u * 4, v]));
+    ironPiece(parts, [1.72, 5.5, -2.1], [0.5, 0.08, 0.12]); }
+  for (const k of ['bedA', 'bedB']) {
+    const [cx, cz, w, d, h] = PROPS[k], R = rng(2720 + cz * 10);
+    for (const [ax, az, len, rot] of [[cx, cz - d / 2 + 0.08, w, 0], [cx, cz + d / 2 - 0.08, w, 0], [cx - w / 2 + 0.08, cz, d - 0.32, Math.PI / 2], [cx + w / 2 - 0.08, cz, d - 0.32, Math.PI / 2]]) {
+      const n = Math.max(2, Math.round(len / 0.45));
+      for (let i = 0; i < n; i++) { const o = -len / 2 + (i + 0.5) * len / n, bx2 = ax + Math.cos(rot) * o, bz2 = az + Math.sin(rot) * o; parts.push(stonePart(len / n - 0.02, h - R() * 0.03, 0.16, 2730 + i + cz, [bx2, (h - 0.015) / 2, bz2], -rot)); }
+    }
+    const soil = orientUp(grid(10, 14, (u, v) => [lerp(cx - w / 2 + 0.16, cx + w / 2 - 0.16, u), h - 0.08 + 0.03 * Math.sin(u * Math.PI * 6) * (fbm(u * 3, v * 9, cz, 2) + 0.3), lerp(cz - d / 2 + 0.16, cz + d / 2 - 0.16, v)], 'rock'));
+    parts.push(boxUV(soil, MATS.rock.tile));
+    woodPiece(parts, [cx - 0.6, h + 0.25, cz + d / 2 - 0.25], [0.04, 0.6, 0.04], 'beam', 'y');   // 豆架桩
+  }
+  // ---- 屋后：院子北口 → 地窖门的搬运石板道；柴垛贴北墙（窗台 1.0 下）；手推车停在道边
+  flagPath(parts, [[-6.2, 5.15], [-3.6, 5.2], [0.62, 5.2], [0.62, 4.0]], 0.9, 2801);
+  flagPath(parts, [[1.4, 5.3], [2.7, 7.6], [3.8, 10.0], [4.2, 11.4]], 0.85, 2802);
+  { const [cx, cz, w, d] = PROPS.woodpile, rows = [4, 4, 4, 3, 3, 2, 2], r = 0.072, R = rng(2810);
+    rows.forEach((n, j) => { for (let i = 0; i < n; i++) { const z = cz - d / 2 + r + 0.01 + i * (2 * r + 0.008) + (4 - n) * 0.02, y = r + j * r * 1.75, L = w - R() * 0.12;
+      parts.push(mapUVRegion(tubePart([[cx - L / 2, y, z], [cx + L / 2, y, z]], r * (0.85 + R() * 0.2), 3, 8, 'wood'), 'beam', (x, yy, zz, u, v) => [u, v])); } }); }
+  { const [cx, cz] = PROPS.handcart, bed = 0.55;
+    woodPiece(parts, [cx + 0.15, bed, cz], [1.1, 0.06, 0.7], 'furn', 'x');
+    for (const s of [-1, 1]) woodPiece(parts, [cx + 0.15, bed + 0.14, cz + s * 0.34], [1.1, 0.22, 0.03], 'furn', 'x');
+    woodPiece(parts, [cx + 0.69, bed + 0.14, cz], [0.03, 0.22, 0.7], 'furn', 'z');
+    for (const s of [-1, 1]) {
+      beam(parts, [cx + 0.7, bed - 0.06, cz + s * 0.3], [cx - 0.75, 0.85, cz + s * 0.3], 0.05, 0.06, 'beam', s);
+      beam(parts, [cx - 0.35, bed - 0.05, cz + s * 0.3], [cx - 0.38, 0.0, cz + s * 0.3], 0.05, 0.05, 'beam', s + 2);   // 支腿落地
+      const wheel = latheReg([[0.27, -0.03], [0.3, -0.02], [0.3, 0.02], [0.27, 0.03], [0.06, 0.04], [0.06, -0.04]], 'beam', 18);
+      parts.push(P(wheel, T(cx + 0.35, 0.3, cz + s * 0.42), RX(Math.PI / 2)));
+    }
+    beam(parts, [cx + 0.35, 0.3, cz - 0.45], [cx + 0.35, 0.3, cz + 0.45], 0.04, 0.04, 'iron');
+    for (let i = 0; i < 3; i++) parts.push(P(latheReg([[0.001, 0], [0.13, 0], [0.13, 0.2], [0.001, 0.2]], 'rope', 12), T(cx + 0.35 - i * 0.28, bed + 0.03, cz - 0.1 + (i % 2) * 0.18))); }
+  // ---- 018 大胆版：从俯瞰就读得出「家 + 航标修理院」——院角吊杆、院中修到一半的灯笼头、院南露天航标堆场、屋西石砌柴煤房和菜园石墙、通院门的石板路
+  // 吊杆：院子东北角立桅，臂伸到浮标吊环上，铁链垂下挂住
+  { const [mx, mz, , , mh] = PROPS.craneMast, [bxu, bzu] = PROPS.buoy, hookY = 0.92 + 0.62 + 0.18;
+    woodPiece(parts, [mx, mh / 2, mz], [0.24, mh, 0.24], 'beam', 'y');
+    beam(parts, [mx, mh - 0.25, mz], [bxu + 0.05, mh - 0.55, bzu], 0.14, 0.16, 'beam', 41);
+    beam(parts, [mx, 1.6, mz], [lerp(mx, bxu, 0.6), mh - 0.42, lerp(mz, bzu, 0.6)], 0.1, 0.1, 'beam', 42);
+    parts.push(mapUVRegion(tubePart([[bxu + 0.05, mh - 0.62, bzu], [bxu + 0.05, hookY, bzu]], 0.025, 6, 6, 'wood'), 'iron', (x, y, z, u, v) => [u * 6, v]));
+    ironPiece(parts, [bxu + 0.05, mh - 0.6, bzu], [0.16, 0.16, 0.12]);
+    for (const s of [-1, 1]) beam(parts, [mx, mh - 0.1, mz], [mx + s * 0.25, 1.15, mz + (s > 0 ? -0.25 : 0.25) * 0], 0.02, 0.02, 'iron'); }
+  // 灯笼头：拆回来修的航标灯室（铁座 + 八根窗棂 + 玻璃 + 穹顶 + 通风球），架在木枕上
+  { const [lx, lz] = PROPS.lanternHead;
+    for (const s of [-1, 1]) woodPiece(parts, [lx + s * 0.55, 0.12, lz], [0.22, 0.24, 1.7], 'beam', 'z');
+    const at = (p) => P(p, T(lx, 0.24, lz));
+    parts.push(at(latheReg([[0.001, 0], [0.8, 0], [0.82, 0.05], [0.82, 0.48], [0.78, 0.52], [0.001, 0.52]], 'paint', 24)));
+    parts.push(at(lathePart([[0.72, 0.52], [0.72, 1.72]], 24, 'glass')));
+    for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2; beam(parts, [lx + Math.cos(a) * 0.74, 0.76, lz + Math.sin(a) * 0.74], [lx + Math.cos(a) * 0.74, 1.96, lz + Math.sin(a) * 0.74], 0.05, 0.05, 'iron'); }
+    parts.push(at(latheReg([[0.001, 1.72], [0.84, 1.72], [0.84, 1.8], [0.62, 2.12], [0.3, 2.34], [0.08, 2.4], [0.001, 2.4]], 'iron', 24)));
+    parts.push(at(latheReg([[0.001, 2.38], [0.1, 2.44], [0.13, 2.52], [0.1, 2.6], [0.001, 2.64]], 'iron', 12)));
+    parts.push(at(latheReg([[0.001, 0.52], [0.18, 0.52], [0.2, 0.9], [0.12, 1.25], [0.001, 1.25]], 'iron', 12))); }
+  // 院南露天航标堆场：立着的罐形浮标、锥形浮标（底下坠块），木架上横放的杆标，地上一堆锚链
+  for (const [k, cone] of [['canBuoy', false], ['coneBuoy', true]]) {
+    const [cx, cz, w, , h] = PROPS[k], r = w / 2 - 0.08;
+    parts.push(stonePart(w - 0.05, 0.3, w - 0.05, 2900 + cx, [cx, 0.15, cz]));
+    const prof = cone ? [[0.001, 0.3], [r, 0.3], [r, 0.7], [r * 0.25, h - 0.15], [0.001, h - 0.12]] : [[0.001, 0.3], [r, 0.3], [r, h - 0.25], [r * 0.9, h - 0.2], [0.001, h - 0.2]];
+    parts.push(P(latheReg(prof, 'iron', 22), T(cx, 0, cz)));
+    parts.push(P(latheReg([[r + 0.008, 0.75], [r + 0.012, 0.8], [r + 0.012, cone ? 0.95 : 1.15], [r + 0.008, cone ? 1.0 : 1.2]].map(([a, b]) => [cone ? a * (1 - (b - 0.7) / (h - 0.85) * 0.75) : a, b]), 'paint', 22), T(cx, 0, cz)));
+    ironPiece(parts, [cx, (cone ? h - 0.1 : h - 0.12), cz], [0.05, 0.12, 0.05]);
+  }
+  { const [cx, cz, w, d, h] = PROPS.sparRack;
+    for (const s of [-1, 1]) { woodPiece(parts, [cx + s * (w / 2 - 0.2), h * 0.45, cz], [0.12, h * 0.9, d], 'beam', 'z'); woodPiece(parts, [cx + s * (w / 2 - 0.2), h * 0.9, cz], [0.16, 0.12, d + 0.1], 'beam', 'z'); }
+    for (let i = 0; i < 4; i++) { const z = cz - d / 2 + 0.12 + i * (d - 0.24) / 3, y = h * 0.9 + 0.06 + 0.07;
+      parts.push(mapUVRegion(tubePart([[cx - w / 2 - 0.3 + i * 0.1, y, z], [cx + w / 2 + 0.2 - i * 0.15, y, z]], 0.07, 4, 8, 'wood'), i % 2 ? 'paint' : 'beam', (x, yy, zz, u, v) => [u * 3, v])); } }
+  { const [cx, cz] = PROPS.chainPile, coil = [];
+    for (let i = 0; i <= 90; i++) { const a = i / 90 * Math.PI * 7, r = 0.42 - i / 90 * 0.3; coil.push([cx + Math.cos(a) * r, 0.035 + Math.floor(i / 30) * 0.06, cz + Math.sin(a) * r]); }
+    parts.push(mapUVRegion(tubePart(coil, 0.04, 160, 6, 'wood'), 'iron', (x, y, z, u, v) => [u * 10, v])); }
+  flagPath(parts, [[-1.0, -11.6], [-3.6, -10.6], [-6.6, -9.4], [-9.0, -8.3]], 0.9, 2803);
+  // 堆场里立着一座换下来待刷漆的格构立标（四腿收分铁架 + 三道斜撑 + 锥形顶标），远看就是航标
+  { const [bx, bz, bw, , bh] = PROPS.beacon, r0 = bw / 2 - 0.08, r1 = 0.22, top = bh - 0.85;
+    const leg = (sx, sz, t) => [bx + sx * lerp(r0, r1, t), t * top, bz + sz * lerp(r0, r1, t)];
+    const C = [[1, 1], [-1, 1], [-1, -1], [1, -1]];
+    for (const [sx, sz] of C) { beam(parts, leg(sx, sz, 0), leg(sx, sz, 1), 0.09, 0.09, 'paint'); parts.push(stonePart(0.3, 0.12, 0.3, 3200 + sx * 3 + sz, [bx + sx * r0, 0.06, bz + sz * r0])); }
+    for (const t of [0.12, 0.42, 0.72]) for (let i = 0; i < 4; i++) { const [ax, az] = C[i], [cx2, cz2] = C[(i + 1) % 4];
+      beam(parts, leg(ax, az, t), leg(cx2, cz2, t), 0.06, 0.06, 'iron'); beam(parts, leg(ax, az, t), leg(cx2, cz2, t + 0.3), 0.04, 0.04, 'iron'); }
+    woodPiece(parts, [bx, top + 0.04, bz], [r1 * 2 + 0.3, 0.08, r1 * 2 + 0.3], 'beam');
+    parts.push(P(latheReg([[0.001, top + 0.08], [0.36, top + 0.08], [0.001, bh]], 'paint', 16), T(bx, 0, bz))); }
+  // 屋西柴煤房：石墙、木板单坡顶、朝东（−X）的木门；菜园西边一道干砌石墙
+  { const [cx, cz, w, d, h] = PROPS.outhouse, t = 0.3, wallH = h - 0.45;
+    let sd = 3000;
+    const course = (x0, x1, z0, z1, skip) => { for (let y = 0; y < wallH - 0.01; y += 0.3) { const along = Math.abs(x1 - x0) > Math.abs(z1 - z0), L = along ? x1 - x0 : z1 - z0, n = Math.max(2, Math.round(L / 0.55)), off = (Math.round(y / 0.3) % 2) * 0.5;
+      for (let i = -off; i < n; i++) { const a = Math.max(0, (i) / n), b = Math.min(1, (i + 1) / n); if (b - a < 0.05) continue; const m = (a + b) / 2, x = along ? lerp(x0, x1, m) : x0, z = along ? z0 : lerp(z0, z1, m);
+        if (skip && skip(x, z, y)) continue;
+        parts.push(stonePart((b - a) * Math.abs(L) - 0.03, 0.28, t, sd++, [x, y + 0.14, z], along ? 0 : Math.PI / 2)); } } };
+    const door = (x, z, y) => z > cz - 0.45 && z < cz + 0.45 && y < 1.8;
+    course(cx - w / 2 + t / 2, cx + w / 2 - t / 2, cz - d / 2 + t / 2, cz - d / 2 + t / 2);
+    course(cx - w / 2 + t / 2, cx + w / 2 - t / 2, cz + d / 2 - t / 2, cz + d / 2 - t / 2);
+    course(cx - w / 2 + t / 2, cx - w / 2 + t / 2, cz - d / 2 + t, cz + d / 2 - t, door);
+    course(cx + w / 2 - t / 2, cx + w / 2 - t / 2, cz - d / 2 + t, cz + d / 2 - t);
+    woodPiece(parts, [cx - w / 2 + t / 2, 0.92, cz], [0.05, 1.8, 0.88], 'furn', 'y');
+    woodPiece(parts, [cx - w / 2 + t / 2, 1.95, cz], [t + 0.04, 0.12, 1.1], 'beam', 'z');
+    for (let i = 0; i < 8; i++) { const z = cz - d / 2 - 0.15 + (i + 0.5) * (d + 0.3) / 8, x0 = cx - w / 2 - 0.3, x1 = cx + w / 2 + 0.2;
+      beam(parts, [x0, h + 0.02 + (i % 2) * 0.01, z], [x1, wallH + 0.05 + (i % 2) * 0.01, z], (d + 0.3) / 8 + 0.02, 0.04, 'beam', 60 + i); } }
+  { const [gx, gz, gw, gd, gh] = PROPS.gardenWall, n = Math.round(gd / 0.5);
+    for (let j = 0; j < 2; j++) for (let i = 0; i < n; i++) parts.push(stonePart(gw - 0.06 - j * 0.06, gh / 2 - 0.02, gd / n - 0.04, 3100 + i + j * 50, [gx, gh / 4 + j * gh / 2, gz - gd / 2 + (i + 0.5 + (j ? 0.3 : 0)) * gd / n * (j && i === n - 1 ? 0.97 : 1)], 0)); }
+  // ---- 北门：门柱外侧警示牌（铁牌 + 白漆横条）；门外崖径两侧绳栏桩，告诉人这条路是管着的、危险的
+  { const [sx, sz, , , h] = PROPS.gateSign; woodPiece(parts, [sx, h / 2, sz], [0.12, h, 0.12], 'beam', 'y');
+    ironPiece(parts, [sx, 1.35, sz - 0.075], [0.55, 0.38, 0.02]);
+    woodPiece(parts, [sx, 1.35, sz - 0.088], [0.46, 0.07, 0.006], 'paint', 'x'); }
+  for (const x of RAIL.x) {
+    RAIL.z.forEach((z) => woodPiece(parts, [x, RAIL.h / 2, z], [0.11, RAIL.h, 0.11], 'beam', 'y'));
+    for (let i = 0; i < RAIL.z.length - 1; i++) { const a = RAIL.z[i], b = RAIL.z[i + 1], pts = []; for (let k = 0; k <= 8; k++) { const t = k / 8; pts.push([x, RAIL.h - 0.12 - Math.sin(t * Math.PI) * 0.12, lerp(a, b, t)]); }
+      parts.push(mapUVRegion(tubePart(pts, 0.016, 16, 5, 'wood'), 'rope', (xx, y, z, u, v) => [u * 4, v])); }
+  }
+  return finishAsset({ name: 'env-repair-yard-s2', origin: [0, 0, 0], parts, collider: colliderFrom(cols), helpers, uv2Size: 2048,
+    extras: { props: PROPS, rail: RAIL, note: '父亲的航标修理院与住家陈设；碰撞盒与 layout.ts S2.props 一致，全部底面 y 0' } });
+}
+
+// =====================================================================================
 // 崖顶地形：草皮高度场 + 崖壁 + 南石阶 + 北边界石墙 / 铁门位 + 崖径
 // =====================================================================================
 // 边界（顺时针，数学坐标 x 右 z 上 ⇒ cliffStrip 的 inward = (tz, -tx) 指向场内）
@@ -1557,6 +1775,14 @@ function terrainAt(x, z) {
   h += sstep(10, 22, z) * 0.6 * sstep(0, 5, x);                                        // 北侧崖径微微抬起
   h -= sstep(3, 0, edgeDist(x, z)) * 0.25;                                              // 崖边下压、变圆
   h = lerp(h, x < YARD.x1 + 0.6 && x > YARD.x0 - 0.2 && z > YARD.z0 - 0.2 && z < YARD.z1 + 0.2 ? -0.04 : 0, flatK);
+  // 可走范围（014 白盒地面：崖顶平台 y 0 / 西坡 slopeY / 北崖径 y 0）里草皮贴住碰撞面，只留 −4…+1.5 cm 的起伏：
+  //   原来 ±0.35 m 的起伏让角色脚陷进草里或悬在草上；地面的「精致」交给铺石、小径和陈设
+  const walk = Math.max(sstep(-0.6, 0, Math.min(x - WALK.x[0], WALK.x[1] - x, z - WALK.z[0], WALK.z[1] - z)),
+    sstep(-0.6, 0, Math.min(x - WALK.north.x[0], WALK.north.x[1] - x, z - WALK.z[1] + 0.6, WALK.north.z1 - z)));
+  const ground = x <= WALK.slopeX ? 0 : -(x - WALK.slopeX) * WALK.dropPerM;
+  //   白石组（prop-white-stones-s2 贴 slopeY 摆的）一带草皮只往上起伏，石底不悬空
+  const stoneK = sstep(-0.8, 0, Math.min(x - STONES.x0, STONES.x1 - x, z - STONES.z0, STONES.z1 - z));
+  h = lerp(h, ground + clamp((fbm(x * 0.55, z * 0.55, 13, 2) - 0.55) * 0.12, lerp(-0.04, 0, stoneK), 0.015), walk);
   return { h };
 }
 function buildClifftop() {
@@ -1653,6 +1879,7 @@ if (want('env-cellar-s2')) buildCellar();
 if (want('env-courtyard-wall-s2')) buildCourtyard();
 if (want('env-laundry-rack')) buildLaundryRack();
 if (want('env-clifftop-s2')) buildClifftop();
+if (want('env-repair-yard-s2')) buildRepairYard();
 const total = [0, 1, 2].map((l) => REPORT.reduce((s, r) => s + r.tris[l], 0));
 LAYOUT.note = '019 占位布局（014 白盒 / layout.ts 尚未交付）：坐标由美术按 014 / 019 / GDD §6 文字推定，白盒到了按白盒对位（误差要求 ≤ 5 cm）。+Z 北、右手系 ⇒ 东 = -X、西 = +X；局部 y = 世界高度。';
 LAYOUT.axes = { north: '+Z', east: '-X', west: '+X', up: '+Y', units: 'm' };

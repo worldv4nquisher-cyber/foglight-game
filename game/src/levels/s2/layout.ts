@@ -104,6 +104,24 @@ export const S2 = {
   lampEmitY: 0.846,
   /** 晾衣架（挡西灯台光路，blocksLight） */
   rack: { at: [-8.15, 0, -2.5] as V3, halfX: 1.36, halfZ: 0.45, h: 2.03 },
+  /**
+   * 修理院与住家陈设（env-repair-yard-s2）的碰撞盒 [cx, cz, w, d, h]，底面都在地面 y 0（与 art/tools/build-env-s2.mjs PROPS 一致）：
+   * 工棚工作台 / 棚柱、透镜箱、斜靠东墙的杆标、顶标、横躺的罐形浮标、沉块、油桶（院子）；手推车、柴垛（屋后搬运道）；
+   * 门边长凳、雨水桶、两块菜畦（门前）；北门警示牌。光路两侧 ≥ 0.5 m 不放。
+   */
+  props: {
+    workbench: [-11.2, -7.1, 2.2, 0.7, 0.9], shedPostE: [-12.3, -6.45, 0.18, 0.18, 2.1], shedPostW: [-10.2, -6.45, 0.18, 0.18, 2.1],
+    lensCrate: [-14.2, -7.15, 0.62, 0.5, 0.5], spars: [-14.22, -0.7, 0.56, 2.6, 0.75], topmark: [-14.0, -2.7, 0.6, 0.6, 1.0],
+    buoy: [-13.55, 7.6, 1.9, 1.4, 1.55], sinker: [-11.6, 8.55, 1.0, 0.7, 0.5], drums: [-7.3, -6.95, 0.9, 0.8, 0.9],
+    handcart: [-2.5, 6.3, 1.5, 0.8, 0.95], woodpile: [-2.6, 4.32, 1.6, 0.6, 0.95], bench: [-5.3, -2.45, 0.9, 0.38, 0.46],
+    waterButt: [1.45, -2.5, 0.8, 0.8, 0.95], bedA: [1.7, -6.3, 1.3, 2.4, 0.45], bedB: [1.7, -9.3, 1.3, 2.0, 0.45], gateSign: [2.7, 11.05, 0.22, 0.22, 1.7],
+    craneMast: [-14.3, 8.75, 0.26, 0.26, 4.2], lanternHead: [-7.8, 0.8, 1.8, 1.8, 2.88], canBuoy: [-15.6, -10.2, 1.2, 1.2, 1.9], coneBuoy: [-13.8, -11.6, 1.3, 1.3, 2.1],
+    sparRack: [-12.0, -9.4, 3.0, 0.8, 1.2], chainPile: [-15.6, -12.6, 0.9, 0.9, 0.2], outhouse: [5.6, -9.0, 2.2, 2.0, 2.5], beacon: [-11.4, -12.6, 1.6, 1.6, 5.4], gardenWall: [3.6, -8.9, 0.45, 4.2, 0.62],
+  } as Record<string, readonly [number, number, number, number, number]>,
+  /** 北崖径绳栏桩（门外两侧，高 1.0） */
+  /** 工棚顶 / 工具板：玩家够不着，只给第三人称相机碰撞用（相机碰上前拉，不再被木板糊住画面） */
+  shed: { roof: [[-12.75, 2.1, -7.95], [-9.75, 2.62, -6.15]] as readonly [V3, V3], board: [[-12.25, 1.27, -7.49], [-10.25, 1.97, -7.43]] as readonly [V3, V3] },
+  rail: { x: [1.8, 8.2] as V2, z: [13, 16, 19, 22, 25] as readonly number[], h: 1.0, post: 0.11 },
   /** 立镜镜心（y = beamY） */
   mirrors: { a: [-13.2, 0.85, 3.0] as V3, b: [-7.2, 0.85, 8.6] as V3 },
   /** 北墙（z 11.5…12，高 1.2）+ 拨盘铁门洞 x 3.4…5.0 */
@@ -137,6 +155,7 @@ export const S2 = {
     'env-cellar-s2': { translation: [-2, 0, 1], rotationY: 0 },
     'env-courtyard-wall-s2': { translation: [-10.625, 0, 0.75], rotationY: 0 },
     'env-laundry-rack': { translation: [-8.15, 0, -2.5], rotationY: 0 },
+    'env-repair-yard-s2': { translation: [0, 0, 0], rotationY: 0 },
   } as Record<string, { translation: V3; rotationY: number }>,
 
   /** 建立镜头：院墙外东南 → 扫过院墙 → 小屋二层窗口 → 角色身后 */
