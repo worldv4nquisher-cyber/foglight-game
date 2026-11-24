@@ -170,7 +170,7 @@ test('F02 高度带：包含 −0.5 / 2.0 边界，拒绝楼上 / 楼下；提�
 });
 
 test('F02 高度带：系统配置及物体覆盖同时作用于交互与图标', () => {
-  const env = setup({ minRise: -0.1, maxRise: 1 });
+  const env = setup({ floor: false, minRise: -0.1, maxRise: 1 });
   const focus = new THREE.Vector3(0, 1.5, -1);
   const make = (id, band = {}) => env.ix.add(new Interactable({ id, kind: 'inspect', object: new THREE.Object3D(), focus, textId: 'ch1.s1.nets.inspect', ...band }));
   const plain = make('plain-band');
@@ -346,6 +346,29 @@ test('图标：3.5 m 内且在屏幕内才显示；可交互的那个 active', (
   assert.deepEqual(m.map((x) => x.id).sort(), ['mid', 'near']);
   assert.ok(m.find((x) => x.id === 'near').active && !m.find((x) => x.id === 'mid').active);
   assert.ok(m.every((x) => x.x >= 0 && x.x <= 1600 && x.y >= 0 && x.y <= 900));
+});
+
+test('关闭的门挡住门内交互和图标；门自身仍可操作，打开后可读', () => {
+  const env = setup();
+  const door = env.box('door', [0, 1, -0.8], [1, 2, 0.1]);
+  const doorCollider = env.physics.addMesh(door);
+  const handle = env.ix.add(new Interactable({ id: 'door', kind: 'use', object: door, approach: false }));
+  const book = env.ix.add(new Interactable({
+    id: 'book', kind: 'read', object: env.box('book', [0, 1, -1.4]), textId: 'ch1.s3.logbook.doc',
+  }));
+  env.events.on('interact:used', ({ id }) => { if (id === handle.id) doorCollider.enabled = false; });
+
+  assert.equal(env.ix.canInteract(book), false);
+  assert.equal(env.ix.markers().some((m) => m.id === book.id), false);
+  assert.equal(env.ix.canInteract(handle), true);
+  env.tap('KeyE');
+  assert.equal(used(env, handle.id), 1);
+  assert.deepEqual(env.log.read, []);
+
+  handle.enabled = false;
+  assert.equal(env.ix.canInteract(book), true);
+  env.tap('KeyE');
+  assert.deepEqual(env.log.read, ['ch1.s3.logbook.doc']);
 });
 
 test('多个候选：取最靠近屏幕中心的那个', () => {

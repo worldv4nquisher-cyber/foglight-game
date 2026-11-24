@@ -171,8 +171,20 @@ frameRoot.updateMatrixWorld(true);
 const ph = new PhysicsSystem();
 const cols = new Map();
 for (const m of gb.colliders) cols.set(m, ph.addMesh(m));
-for (const m of gb.walls) ph.addMesh(m, { kind: 'wall' });
+for (const m of gb.walls) ph.addMesh(m, { kind: 'wall', blocksCamera: m.userData.blocksCamera === true });
 const beam = buildS3Beam(ph, frameRoot);
+{
+  const cameraWalls = ph.colliders.filter((c) => c.kind === 'wall' && c.blocksCamera);
+  assert.deepEqual(cameraWalls.map((c) => c.name), ['s3-lamp-glass-wall']);
+  for (const angle of [0, 90, 180, 270]) {
+    const from = toWorld(polar(1.4, angle, 23.25));
+    const to = toWorld(polar(4.5, angle, 23.25));
+    const dir = to.clone().sub(from).normalize();
+    assert.ok(ph.sphereCast(from, dir, 0.15, 3.1) < 1.6, `灯室玻璃应挡住后拉相机：${angle}°`);
+    assert.equal(ph.raycast(from, dir, 3.1), null, `灯室空气墙不挡光线：${angle}°`);
+  }
+  out.push('灯室玻璃限定相机、不改变光路和其他空气墙 ✓');
+}
 {
   const art = new THREE.Group();
   for (const name of ['env-stone-bridge-s3', 'env-rock-islet-a', 'env-lighthouse-ch1-interior', 'env-lamp-room-ch1']) {

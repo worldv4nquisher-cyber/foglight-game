@@ -89,7 +89,7 @@ export class S3Scene extends LevelScene {
     this.frame.add(this.greybox.root);
     this.frame.updateMatrixWorld(true);
     for (const m of this.greybox.colliders) this.colliderOf.set(m, this.physics.addMesh(m));
-    for (const m of this.greybox.walls) this.physics.addMesh(m, { kind: 'wall' });
+    for (const m of this.greybox.walls) this.physics.addMesh(m, { kind: 'wall', blocksCamera: m.userData.blocksCamera === true });
     this.cameraFollow.indoorVolumes = collectIndoorVolumes(this.greybox.root);
 
     this.art = buildS3Art(this.game.assets);

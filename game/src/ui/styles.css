@@ -1101,7 +1101,9 @@ body {
 }
 
 .main-menu {
-  justify-content: flex-start;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) auto;
   padding-left: 10vw;
   background: linear-gradient(90deg, rgba(10, 13, 16, 0.55), rgba(10, 13, 16, 0) 60%);
 }
@@ -1115,6 +1117,7 @@ body {
 }
 
 .main-menu > .settings-panel {
+  grid-area: 1 / 1 / -1;
   margin: 0 auto;
   transform: translateX(-5vw);
 }
@@ -1123,6 +1126,12 @@ body {
   display: flex;
   flex-direction: column;
   gap: 22px;
+  grid-area: 1 / 1;
+  justify-self: start;
+  max-height: 100%;
+  margin-left: -24px;
+  padding: 24px 0 0 24px;
+  overflow: auto;
 }
 
 .main-title {
@@ -1147,8 +1156,8 @@ body {
 
 .ui-logo {
   display: block;
-  width: 428px;
-  height: 203px;
+  width: auto;
+  height: min(203px, 30dvh);
   user-select: none;
   pointer-events: none;
 }
@@ -1200,6 +1209,9 @@ body {
 }
 
 .is-desktop-only .main-menu-home {
+  justify-self: center;
+  margin-left: 0;
+  padding: 0;
   align-items: center;
   text-align: center;
   gap: 0;
@@ -1247,11 +1259,9 @@ body {
 
 /* batch26 ⑤：软件渲染提示——左下角一行小字，和左侧按钮列对齐、在版本号左边；只是告知，点击穿透、不挡任何按钮 */
 .main-render-notice {
-  position: absolute;
-  left: 10vw;
-  bottom: 14px;
+  grid-area: 2 / 1;
   max-width: min(36em, 60vw);
-  margin: 0;
+  margin: 8px 0 14px;
   font-size: 13px;
   line-height: 1.6;
   color: var(--ui-text-2);

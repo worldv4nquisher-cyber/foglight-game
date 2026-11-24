@@ -128,9 +128,9 @@ export function buildS1Puzzles(o: S1PuzzleOptions): S1Puzzles {
   bellRoot.updateMatrixWorld(true);
   const frameCollider = new THREE.Mesh(new THREE.BoxGeometry(0.3, 2.2, 1.3));
   frameCollider.name = 'tide-bell-s1-frame-collider';
-  frameCollider.position.set(bx, by + 1.1, bz);
+  frameCollider.position.y = 1.1;
   frameCollider.visible = false;
-  root.add(frameCollider);
+  bellRoot.add(frameCollider);
   physics.addMesh(frameCollider);
   const bellPoint = new THREE.Object3D();
   bellPoint.name = 'tide-bell-s1-interact';

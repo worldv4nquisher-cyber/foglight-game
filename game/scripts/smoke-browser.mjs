@@ -4443,6 +4443,19 @@ CHECKS.push({
     for (let i = 0; i < 20 && m.view !== 'home'; i++) { await sleep(100); m = await st(); }
     if (m.view !== 'home' || !m.shown) throw new Error('返回首页后提示应仍在 ' + JSON.stringify({ view: m.view, shown: m.shown }));
     out.push('提示上点击穿透 ✓、真实点击 设置 → 返回 ✓、设置页里提示仍在 ✓');
+    try {
+      await send('Emulation.setDeviceMetricsOverride', { width: 800, height: 451, deviceScaleFactor: 1, mobile: false }, sessionId);
+      const compact = await st();
+      const [left, top, right, bottom] = compact.rect;
+      if (compact.vw !== 800 || compact.vh !== 451 || !compact.shown || compact.btns.length < 3) throw new Error('短视口菜单未就绪 ' + JSON.stringify(compact));
+      if (left < 0 || top < 0 || right > compact.vw || bottom > compact.vh) throw new Error('短视口提示超出边界 ' + JSON.stringify(compact));
+      for (const { act, box: [bl, bt, br, bb], hitOk } of compact.btns) {
+        if (!hitOk || (bl < right && br > left && bt < bottom && bb > top)) throw new Error('短视口菜单项被挡住 ' + act);
+      }
+      out.push('800×451 视口：提示和菜单项互不遮挡 ✓');
+    } finally {
+      await send('Emulation.clearDeviceMetricsOverride', {}, sessionId);
+    }
     // 进游戏后（主菜单关）提示跟着消失
     await cdp.goto('');
     const inGame = await evaluate(`(() => { const n = document.querySelector('.main-render-notice'); return !!n && n.checkVisibility(); })()`);

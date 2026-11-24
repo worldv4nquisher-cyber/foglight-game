@@ -27,6 +27,7 @@ export type ColliderKind = 'collider' | 'wall';
 
 export interface ColliderOptions {
   kind?: ColliderKind;
+  blocksCamera?: boolean;
   /** 会移动 / 旋转的碰撞体（每个物理步读取 source.matrixWorld） */
   dynamic?: boolean;
   name?: string;
@@ -41,6 +42,7 @@ function isMesh(o: THREE.Object3D): o is THREE.Mesh {
 export class Collider {
   readonly name: string;
   readonly kind: ColliderKind;
+  readonly blocksCamera: boolean;
   readonly dynamic: boolean;
   enabled = true;
   readonly bvh: MeshBVH;
@@ -60,6 +62,7 @@ export class Collider {
 
   constructor(geometry: THREE.BufferGeometry, source: THREE.Object3D | null, opts: ColliderOptions = {}) {
     this.kind = opts.kind ?? 'collider';
+    this.blocksCamera = opts.blocksCamera ?? this.kind === 'collider';
     this.dynamic = opts.dynamic ?? false;
     this.name = opts.name ?? source?.name ?? 'collider';
     this.source = source;
@@ -289,7 +292,7 @@ export class PhysicsSystem {
 
   /**
    * 球形扫掠：半径 radius 的球从 origin 沿 dir（单位向量）移动，返回第一次碰到碰撞体时走过的距离；
-   * 没碰到返回 maxDist；起点已经重叠返回 0。只检测 kind = 'collider'（空气墙不挡相机）。
+   * 没碰到返回 maxDist；起点已经重叠返回 0。空气墙默认不参与，可用 blocksCamera 显式启用。
    * 实现为 sphere tracing（每步前进「到最近表面的距离 - 半径」），精确且不会漏掉薄墙。
    */
   sphereCast(origin: THREE.Vector3, dir: THREE.Vector3, radius: number, maxDist: number): number {
@@ -297,7 +300,7 @@ export class PhysicsSystem {
     castP.copy(origin).addScaledVector(dir, maxDist);
     castBox.expandByPoint(castP).expandByScalar(radius + 0.01);
     castCands.length = 0;
-    for (const c of this.colliders) if (c.enabled && c.kind === 'collider' && c.bounds.intersectsBox(castBox)) castCands.push(c);
+    for (const c of this.colliders) if (c.enabled && c.blocksCamera && c.bounds.intersectsBox(castBox)) castCands.push(c);
     if (castCands.length === 0) return maxDist;
     let t = 0;
     for (let i = 0; i < 48; i++) {
@@ -311,12 +314,17 @@ export class PhysicsSystem {
   }
 
   /** 射线检测（kind = 'collider'），返回命中距离；没命中返回 null */
-  raycast(origin: THREE.Vector3, dir: THREE.Vector3, far: number): number | null {
+  raycast(origin: THREE.Vector3, dir: THREE.Vector3, far: number, target?: THREE.Object3D): number | null {
     let best: number | null = null;
     castP.copy(origin).addScaledVector(dir, far);
     castBox.makeEmpty().expandByPoint(origin).expandByPoint(castP);
     for (const c of this.colliders) {
       if (!c.enabled || c.kind !== 'collider' || !c.bounds.intersectsBox(castBox)) continue;
+      if (target) {
+        let source = c.source;
+        while (source && source !== target) source = source.parent;
+        if (source) continue;
+      }
       tmpA.copy(origin).applyMatrix4(c.inverse);
       tmpB.copy(dir).transformDirection(c.inverse);
       ray.set(tmpA, tmpB);
