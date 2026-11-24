@@ -12,6 +12,10 @@ A melancholic third-person exploration puzzle, played in the desktop browser.
   <img src="docs/images/s1-opening.webp" alt="第一章开场：汐站在雨中的码头上，远处雾里是尚未点亮的灯塔" width="880">
 </p>
 
+## 在线试玩
+
+浏览器打开 https://worldv4nquisher-cyber.github.io/foglight-game/ 即可游玩（桌面 Chrome / Edge）。main 分支每次更新后自动构建并发布到 GitHub Pages。
+
 ## 简介
 
 《雾灯》是一款面向桌面浏览器的 3D 第三人称探索解谜游戏。画风为三渲二半写实，整体偏低饱和的冷色，暖光只出现在关键处。
