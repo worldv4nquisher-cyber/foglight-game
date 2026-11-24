@@ -198,7 +198,11 @@ export class S1Opening {
   }
 
   dispose(): void {
-    if (!this.finished) this.h.game.ui.subtitles.track.endTimeline();
+    if (!this.finished) {
+      const { ui, flow } = this.h.game;
+      ui.subtitles.track.endTimeline();
+      if (!flow.transitioning) ui.fade.set(0);
+    }
     for (const off of this.clockListeners) off();
     this.title.remove();
     this.rope.removeFromParent();
