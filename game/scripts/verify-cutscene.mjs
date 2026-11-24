@@ -30,6 +30,8 @@ import { ShaderLib } from 'three';
 import { OUTRO_CUT_SEC, IGNITE_MONO_DELAY, IGNITE_MONO_SEC } from '@/levels/s3/puzzles';
 import { t as text } from '@/content/text';
 import { OPENING_T, openingBoatDistance } from '@/content/cutscenes/opening';
+import { CameraFollowSystem, CameraTrack } from '@/systems/CameraFollowSystem';
+import { InputManager } from '@/systems/input/InputManager';
 
 const out = [];
 const near = (a, b, tol, tag) => assert.ok(Math.abs(a - b) <= tol, `${tag}：${a} ≠ ${b}（±${tol}）`);
@@ -45,6 +47,27 @@ const near = (a, b, tol, tag) => assert.ok(Math.abs(a - b) <= tol, `${tag}：${a
   assert.equal(openingBoatDistance(end), 0);
   assert.equal(end - establishing, 3);
   out.push('开场：划船 → 滑行 → 停在系泊点，最后 3 s 建立镜头 ✓');
+}
+
+{
+  const input = new InputManager();
+  const camera = new CameraFollowSystem(new THREE.PerspectiveCamera(), input);
+  const track = new CameraTrack({ duration: 0.1, node: new THREE.Object3D() });
+  const events = [];
+  const finished = camera.playEstablishing(track, () => events.push(input.context));
+  void finished.then(() => events.push('blended'));
+  camera.update(0.1);
+  assert.deepEqual(events, ['cutscene']);
+  assert.equal(input.context, 'explore');
+  assert.equal(camera.blending, true);
+  camera.update(1);
+  await finished;
+  assert.deepEqual(events, ['cutscene', 'blended']);
+  const interrupted = camera.playEstablishing(track, () => events.push('interrupted'));
+  camera.dispose();
+  await interrupted;
+  assert.deepEqual(events, ['cutscene', 'blended']);
+  out.push('开场：相机过渡前、输入交还前完成存档；主动中断不存档 ✓');
 }
 
 /** 可控时钟源 */

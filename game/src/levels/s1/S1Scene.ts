@@ -203,17 +203,18 @@ export class S1Scene extends LevelScene {
     });
   }
 
-  protected override async playEstablishing(spawn: SpawnPoint): Promise<void> {
-    await super.playEstablishing(spawn);
-    if (this.disposed || !this.openingRequested) return;
-    if (this.opening) {
-      this.opening.dispose();
-      this.opening = null;
-      this.game.ui.hud.show();
-      this.game.ui.hud.setLocation(t(this.locationId));
-    }
-    this.savePoint = { chapterId: 'ch1', sceneId: this.level.id };
-    this.game.save.save(this.savePoint);
+  protected override playEstablishing(spawn: SpawnPoint): Promise<void> {
+    return super.playEstablishing(spawn, () => {
+      if (!this.openingRequested) return;
+      if (this.opening) {
+        this.opening.dispose();
+        this.opening = null;
+        this.game.ui.hud.show();
+        this.game.ui.hud.setLocation(t(this.locationId));
+      }
+      this.savePoint = { chapterId: 'ch1', sceneId: this.level.id };
+      this.game.save.save(this.savePoint);
+    });
   }
 
   protected override establishingHold(): (() => boolean) | undefined {
