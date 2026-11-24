@@ -399,7 +399,8 @@ export class CameraFollowSystem {
     }
     // 碰撞优先：实际偏移按该侧可用空间夹住
     let side = this.shoulder >= 0 ? Math.min(this.shoulder, roomR) : -Math.min(-this.shoulder, getL());
-    const framing = this.observing ? 0 : (this.targetFramingWeight?.(tp) ?? 0);
+    const lookUp = THREE.MathUtils.smoothstep(this.pitch, 0, 20 * DEG);
+    const framing = this.observing ? 0 : (this.targetFramingWeight?.(tp) ?? 0) * (1 - lookUp);
     if (framing > 0) {
       const centeredRoom = backAt(0);
       side *= 1 - framing * (1 - THREE.MathUtils.smoothstep(centeredRoom, 0.35, cfg.lowSpaceDistance));

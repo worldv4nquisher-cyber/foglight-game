@@ -238,12 +238,21 @@ const beam = buildS3Beam(ph, frameRoot);
         failures.push(`${i}:${(yaw * 180 / Math.PI).toFixed(0)}° feet=${target.position.toArray().map(n => n.toFixed(2))} head=${ndc.toArray().map(n => n.toFixed(2))} alpha=${alpha.toFixed(2)}`);
       }
       poses++;
+      if (i === 0) {
+        for (const pitch of [20, gameplay.camera.maxPitchDeg]) {
+          follow.pitch = THREE.MathUtils.degToRad(pitch);
+          follow.snap();
+          for (let step = 0; step < 60; step++) follow.update(1 / 60);
+          near(follow.forward(forward).y, Math.sin(follow.pitch), 1e-6, `贴玻璃时可仰视 ${pitch}°`);
+        }
+      }
     }
   }
   ph.removeBody(b);
   assert.ok(poses > 8_000, `灯室扫掠只覆盖 ${poses} 个机位`);
   assert.equal(failures.length, 0, `灯室 ${failures.length}/${poses} 个机位看不到汐：${failures.slice(0, 12).join('；')}`);
   out.push(`灯室、顶级台阶：${poses} 个可站立位置 / 朝向保留汐的构图 ✓`);
+  out.push('灯室贴玻璃：W 与画面方向一致，主动仰视 20° 与 55° 不被构图覆盖 ✓');
 }
 {
   const art = new THREE.Group();
