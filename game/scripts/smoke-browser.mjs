@@ -2755,6 +2755,9 @@ const CHECKS = [
       if (bad.length) throw new Error(`BUG-015：21 个视角里 ${bad.length} 个没选拉杆 ` + JSON.stringify(views));
       if (!/E\s*点灯/.test(await evaluate(prompt))) throw new Error('BUG-015 扫视角后提示不是「E 点灯」');
       out.push('BUG-015：可点灯时拉杆站位 21 个视角全选拉杆「E 点灯」，透镜让位 ✓');
+      await cdp.key('KeyH', 'h', 72);
+      const hintOpen = '__game.ui.hints.isOpen';
+      if (!(await untilG(hintOpen, 3))) throw new Error('点灯前按 H 没打开提示');
       // 按 E：锁输入（cutscene）→ 走到 -interact → xi-ignite-lever 第 34 帧（1.133 s）点燃；连按只一次
       // 「1.0 s 内不该点燃」：按 E 由真实游戏循环处理，从按下到下面 ff 之间真实循环还会推进走位 / 动作（高负载下一帧 5 步 = 0.083 s，
       // 几次 evaluate 往返就能吃掉 0.133 s 余量）→ 记下按 E 生效后谜题实际走过的游戏时间（__igT），冻结真实循环，再只用 ff 推到 1.0 s
@@ -2765,6 +2768,7 @@ const CHECKS = [
       const igT0 = await evaluate(`window.__igT`);
       st = await evaluate(`({ ctx: __s3.game.input.context, en: __s3.puzzles.leverIx.enabled, lit: __s3.puzzles.state.ignited })`);
       if (st.ctx !== 'cutscene' || st.en || st.lit) throw new Error('按 E 后应锁输入、禁用拉杆、还没点燃 ' + JSON.stringify(st));
+      if (await evaluate(hintOpen)) throw new Error('按 E 进入点灯演出后 H 提示未关闭');
       await evaluate(`__s3.game.events.emit('interact:used', { id: 'ignite-lever-s3', kind: 'use' }), 1`);
       if (igT0 > 0.9) throw new Error('按 E 到冻结之间真实循环已走 ' + igT0.toFixed(3) + ' s，测不了 1.0 s 内');
       await ff(1.0 - igT0);
@@ -2805,6 +2809,8 @@ const CHECKS = [
       if (!(await untilT(5.0))) throw new Error('演出时钟没走到 5 s');
       st = await evaluate(`({ cur: __s3.game.scenes.current === __s3, shot: __s3.endingCutscene.shot, cam: __s3.cameraFollow.cutsceneName })`);
       if (!st.cur || st.shot !== 'far-exterior' || st.cam !== 'ch1-ending') throw new Error('035：0:04 后应切塔外远景、仍在 S3（不再进结束页）' + JSON.stringify(st));
+      if (await evaluate(hintOpen + " || document.querySelector('.hint-panel').checkVisibility({ visibilityProperty: true })")) throw new Error('H 提示带入了结尾演出的塔外远景');
+      out.push('点灯关闭 H 提示、塔外远景不显示 ✓');
       // 推到演出尾：106 s 才进结束页
       await evaluate(`__s3.endingCutscene.seek(${ENDING_CUES.silence - 1.5}), 1`);
       await sleep(300);
