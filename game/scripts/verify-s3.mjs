@@ -3,11 +3,15 @@
 import assert from 'node:assert/strict';
 import { readFileSync, existsSync } from 'node:fs';
 import * as THREE from 'three';
-import { S3, S3_FRAME, toWorld, toLocal, treadSpan, treadTop, cameraYawFacing, alongDoor, polar } from '@/levels/s3/layout';
+import { S3, S3_FRAME, toWorld, toLocal, treadSpan, treadTop, cameraYawFacing, alongDoor, polar, lampRoomFramingWeight } from '@/levels/s3/layout';
 import { bearingFrom } from '@/levels/s1/layout';
 import { buildS3Greybox, defaultS3GreyboxMaterials, setS3FixtureFallbacks } from '@/levels/s3/greybox';
 import { buildS3Facility } from '@/levels/s3/facility';
-import { collectIndoorVolumes } from '@/systems/CameraFollowSystem';
+import { CameraFollowSystem, collectIndoorVolumes } from '@/systems/CameraFollowSystem';
+import { gameplay } from '@/config/gameplay';
+import { InputManager } from '@/systems/input/InputManager';
+import { EventBus } from '@/core/EventBus';
+import { nearFadeAlpha } from '@/render/nearFade';
 import { xiWetTarget } from '@/entities/xi/XiLook';
 import { buildS3Beam, S3_BEAM, rayPointDist } from '@/levels/s3/beam';
 import { PhysicsSystem, CharacterBody } from '@/systems/PhysicsSystem';
@@ -184,6 +188,59 @@ const beam = buildS3Beam(ph, frameRoot);
     assert.equal(ph.raycast(from, dir, 3.1), null, `灯室空气墙不挡光线：${angle}°`);
   }
   out.push('灯室玻璃限定相机、不改变光路和其他空气墙 ✓');
+}
+{
+  const L = S3.lampRoom;
+  const seeds = [new THREE.Vector3(41.55, 22, -120.72), toWorld(S3.points.lampRoomArrive), toWorld(S3.points.stairTop)];
+  for (let x = -2.8; x <= 2.8; x += 0.2) {
+    for (let z = -2.8; z <= 2.8; z += 0.2) {
+      if (Math.hypot(x, z) <= S3.tower.rIn) seeds.push(toWorld([x, L.floorY, z]));
+    }
+  }
+  for (let angle = 0; angle < 360; angle += 5) {
+    seeds.push(toWorld(polar(S3.tower.rIn - gameplay.player.radius - 0.002, angle, L.floorY)));
+  }
+  const [start, end] = treadSpan(S3.stair.treads);
+  for (let angle = start; angle <= end; angle++) {
+    for (let r = S3.stair.r[0]; r < S3.stair.r[1]; r += 0.1) seeds.push(toWorld(polar(r, angle, S3.points.stairTop[1])));
+  }
+
+  const camera = new THREE.PerspectiveCamera(gameplay.camera.fov, 16 / 9, 0.1, 500);
+  const follow = new CameraFollowSystem(camera, new InputManager(new EventBus()), { physics: ph });
+  follow.indoorVolumes = collectIndoorVolumes(gb.root);
+  follow.targetFramingWeight = lampRoomFramingWeight;
+  const target = new THREE.Object3D();
+  follow.target = target;
+  const b = new CharacterBody();
+  ph.addBody(b);
+  const ndc = new THREE.Vector3();
+  const yaws = Array.from({ length: 24 }, (_, i) => i * Math.PI / 12);
+  const failures = [];
+  let poses = 0;
+  for (const [i, seed] of seeds.entries()) {
+    b.teleport(seed.clone().add(new THREE.Vector3(0, 0.02, 0)));
+    for (let step = 0; step < 20; step++) ph.step(1 / 60);
+    if (!b.onGround || b.position.y < S3.points.stairTop[1] - 0.02 || b.position.distanceTo(seed) > 0.23) continue;
+    target.position.copy(b.position);
+    for (const yaw of yaws) {
+      follow.yaw = yaw;
+      follow.pitch = -0.3;
+      follow.snap();
+      follow.update(1 / 60);
+      if (i === 0) for (let step = 0; step < 60; step++) follow.update(1 / 60);
+      const alpha = nearFadeAlpha(follow.headDistance, gameplay.camera.nearFade);
+      ndc.copy(target.position).y += gameplay.camera.pivotHeight;
+      ndc.project(camera);
+      if (alpha < 0.35 || Math.abs(ndc.x) > 0.9 || Math.abs(ndc.y) > 0.9 || Math.abs(ndc.z) >= 1) {
+        failures.push(`${i}:${(yaw * 180 / Math.PI).toFixed(0)}° feet=${target.position.toArray().map(n => n.toFixed(2))} head=${ndc.toArray().map(n => n.toFixed(2))} alpha=${alpha.toFixed(2)}`);
+      }
+      poses++;
+    }
+  }
+  ph.removeBody(b);
+  assert.ok(poses > 8_000, `灯室扫掠只覆盖 ${poses} 个机位`);
+  assert.equal(failures.length, 0, `灯室 ${failures.length}/${poses} 个机位看不到汐：${failures.slice(0, 12).join('；')}`);
+  out.push(`灯室、顶级台阶：${poses} 个可站立位置 / 朝向保留汐的构图 ✓`);
 }
 {
   const art = new THREE.Group();

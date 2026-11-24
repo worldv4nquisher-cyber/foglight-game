@@ -19,6 +19,9 @@ const tmpBox = new THREE.Vector3();
 const left = new THREE.Vector3();
 const UP = new THREE.Vector3(0, 1, 0);
 const lifted = new THREE.Vector3();
+const frameDirection = new THREE.Vector3();
+const frameAxis = new THREE.Vector3();
+const frameTurn = new THREE.Quaternion();
 
 /** 固定时长的缓入缓出补间（目标变化时从当前值重新开始） */
 class Tween {
@@ -139,6 +142,7 @@ export class CameraFollowSystem {
   focusDistance = 0;
   /** 观察时的固定眼位提供者（场景设置；返回 null = 普通第三人称观察） */
   observeEye: (() => ObserveEye | null) | null = null;
+  targetFramingWeight: ((position: THREE.Vector3) => number) | null = null;
   /** 正在用固定眼位（角色模型此时应隐藏） */
   eyeActive = false;
   private eyeSaved: { yaw: number; pitch: number } | null = null;
@@ -473,7 +477,25 @@ export class CameraFollowSystem {
     this.headDistance = this.live.position.distanceTo(head);
     this.pivotPoint.copy(pivot);
 
+    const framing = this.observing ? 0 : (this.targetFramingWeight?.(tp) ?? 0);
+    if (framing > 0) this.frameTarget(head, back, framing);
     if (this.observing) this.updateFocus();
+  }
+
+  private frameTarget(head: THREE.Vector3, back: THREE.Vector3, weight: number): void {
+    frameDirection.copy(head).sub(this.live.position);
+    frameDirection.y -= 0.16;
+    frameDirection.normalize();
+    fwd.copy(back).negate();
+    const halfFov = this.live.fov * DEG / 2;
+    const margin = Math.min(halfFov, Math.atan(Math.tan(halfFov) * this.camera.aspect)) * 0.55;
+    const turn = fwd.angleTo(frameDirection) - margin;
+    if (turn <= 0) return;
+    frameAxis.crossVectors(fwd, frameDirection).normalize();
+    if (frameAxis.lengthSq() === 0) return;
+    this.live.quaternion.premultiply(frameTurn.setFromAxisAngle(frameAxis, turn * weight));
+    euler.setFromQuaternion(this.live.quaternion, 'YXZ').z = 0;
+    this.live.quaternion.setFromEuler(euler);
   }
 
   private setObserving(active: boolean): void {

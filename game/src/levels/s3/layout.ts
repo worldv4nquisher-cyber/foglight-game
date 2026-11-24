@@ -135,6 +135,11 @@ export const doorAxisYaw = Math.atan2(U.x, U.y);
 // ---------------------------------------------------------------- 世界坐标
 
 export const S3_FRAME = { position: S3_WORLD_FRAME.towerCenter, rotationY: S3_WORLD_FRAME.rotationY } as const;
+export function lampRoomFramingWeight(position: THREE.Vector3): number {
+  const [x, , z] = S3_FRAME.position;
+  if (Math.hypot(position.x - x, position.z - z) >= S3.tower.rIn) return 0;
+  return THREE.MathUtils.smoothstep(position.y, treadTop(S3.stair.treads - 2), treadTop(S3.stair.treads));
+}
 const cosR = Math.cos(S3_FRAME.rotationY);
 const sinR = Math.sin(S3_FRAME.rotationY);
 /** S3 局部 → 世界（three.js R_y：x' = x cos + z sin，z' = −x sin + z cos） */
