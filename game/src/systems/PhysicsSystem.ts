@@ -321,15 +321,15 @@ export class PhysicsSystem {
   }
 
   /** 射线检测（kind = 'collider'），返回命中距离；没命中返回 null */
-  raycast(origin: THREE.Vector3, dir: THREE.Vector3, far: number, target?: THREE.Object3D): number | null {
+  raycast(origin: THREE.Vector3, dir: THREE.Vector3, far: number, ignoreRoots?: readonly THREE.Object3D[]): number | null {
     let best: number | null = null;
     castP.copy(origin).addScaledVector(dir, far);
     castBox.makeEmpty().expandByPoint(origin).expandByPoint(castP);
     for (const c of this.colliders) {
       if (!c.enabled || c.kind !== 'collider' || !c.bounds.intersectsBox(castBox)) continue;
-      if (target) {
+      if (ignoreRoots) {
         let source = c.source;
-        while (source && source !== target) source = source.parent;
+        while (source && !ignoreRoots.includes(source)) source = source.parent;
         if (source) continue;
       }
       tmpA.copy(origin).applyMatrix4(c.inverse);

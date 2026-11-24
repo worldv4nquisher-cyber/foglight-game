@@ -14,6 +14,7 @@ export interface S1Greybox {
   root: THREE.Group;
   colliders: THREE.Mesh[];
   walls: THREE.Mesh[];
+  stoneSlotRails: THREE.Mesh[];
   /** 纯外观（脚印暗斑、石槽轨、钟台柱等） */
   decor: THREE.Object3D[];
 }
@@ -277,9 +278,9 @@ export function buildS1Greybox(mats: GreyboxMaterials = defaultGreyboxMaterials(
   deep(addBox('s1-near-deep-e2', [N.min[0] - 0.2, ny[0], 7.2], [N.min[0], ny[1], N.max[1]], wallMat, 'wall'));
 
   // ---- 石槽（锚位）轨：外观 + 低矮碰撞
-  for (const x of [S1.stoneSlot.min[0] - 0.08, S1.stoneSlot.max[0] + 0.08]) {
-    addBox(`s1-stone-slot-rail${x < -1 ? 'e' : 'w'}`, [x - 0.06, sand, S1.stoneSlot.min[1]], [x + 0.06, sand + 0.18, S1.stoneSlot.max[1]], mats.stone, 'collider');
-  }
+  const stoneSlotRails = [S1.stoneSlot.min[0] - 0.08, S1.stoneSlot.max[0] + 0.08].map((x) =>
+    addBox(`s1-stone-slot-rail${x < -1 ? 'e' : 'w'}`, [x - 0.06, sand, S1.stoneSlot.min[1]], [x + 0.06, sand + 0.18, S1.stoneSlot.max[1]], mats.stone, 'collider'),
+  );
 
   // ---- 远侧台阶（谜题 2 终点）→ 崖顶平台（出口）
   const F = S1.farSteps;
@@ -319,7 +320,7 @@ export function buildS1Greybox(mats: GreyboxMaterials = defaultGreyboxMaterials(
   addBox('s1-bound-s', [B.minX - 0.3, -2, B.minZ - 0.3], [B.maxX + 0.3, 10, B.minZ], wallMat, 'wall');
 
   root.updateMatrixWorld(true);
-  return { root, colliders, walls, decor };
+  return { root, colliders, walls, stoneSlotRails, decor };
 }
 
 /** 竖直棱柱：轮廓 poly（局部 xz，任意绕向的凸 / 简单多边形），高 h，以 y = 0 为中心（和 BoxGeometry / CylinderGeometry 一致） */

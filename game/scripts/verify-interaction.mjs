@@ -1143,7 +1143,7 @@ for (const key of modelKeys) {
   models.set(key, gltf.scene);
 }
 
-function inventoryScene(level, art) {
+function inventoryScene(level, art, s1Collision = false) {
   const env = setup({ floor: false });
   const assets = {
     has: (key) => art && models.has(key),
@@ -1164,9 +1164,10 @@ function inventoryScene(level, art) {
   if (level === 's1') {
     const greybox = buildS1Greybox();
     env.scene.add(greybox.root);
+    const tideColliders = s1Collision ? greybox.colliders.map((mesh) => env.physics.addMesh(mesh)) : [];
     sceneArt = buildS1Art(assets);
     env.scene.add(sceneArt.root);
-    puzzles = buildS1Puzzles({ ...deps, root: env.scene, tideColliders: [], entities: { add() {} }, wood: new THREE.MeshStandardMaterial(), metal: new THREE.MeshStandardMaterial(), addLink() {} });
+    puzzles = buildS1Puzzles({ ...deps, root: env.scene, tideColliders, stoneSlotRails: greybox.stoneSlotRails, entities: { add() {} }, wood: new THREE.MeshStandardMaterial(), metal: new THREE.MeshStandardMaterial(), addLink() {} });
     const slots = mountArtSlots(assets, env.scene, S1_ART_SLOTS, { showGreybox: false });
     snapToArt(slots, 'prop-tide-bell', 'prop-tide-bell-interact', puzzles.bell.interactable.interactPoint);
     snapToArt(slots, 'prop-raft-s1', 'prop-raft-s1-interact', puzzles.raftPush.interactPoint);
@@ -1229,6 +1230,26 @@ function checkInventoryTarget(env, it, floor, otherFloors) {
     assert.equal(env.ix.markers().some((m) => m.id === it.id), eligible, `${it.id} marker: feet ${feet}`);
   }
 }
+
+test('S1 退潮：站在石槽旁可看到标记并调查石槽', () => {
+  const env = inventoryScene('s1', false, true);
+  try {
+    env.puzzles.tide.set('low', { instant: true });
+    const slot = env.ix.get('stone-slot-s1');
+    const focus = slot.focus();
+    env.body.teleport(new THREE.Vector3(focus.x + 0.7, S1.sandY, focus.z));
+    env.actor.facing = -Math.PI / 2;
+    env.camera.position.copy(env.body.position).add(new THREE.Vector3(3, 1.7, 0));
+    env.camera.lookAt(focus);
+    env.camera.updateMatrixWorld(true);
+    assert.ok(env.ix.canInteract(slot), '石槽自己的轨不应挡住调查');
+    assert.ok(env.ix.markers().some((m) => m.id === slot.id));
+    env.tap('KeyE');
+    assert.deepEqual(env.log.said, ['ch1.s1.stone_slot.inspect']);
+  } finally {
+    env.puzzles.dispose();
+  }
+});
 
 for (const art of [false, true]) {
   test(`F02 S1 实际清单（art=${art}）：码头 / 岸台 / 沙地与潮位；小船覆盖仅到甲板`, () => {

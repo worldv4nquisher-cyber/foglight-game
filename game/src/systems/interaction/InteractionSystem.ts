@@ -392,7 +392,7 @@ export class InteractionSystem {
     sightOrigin.copy(body.position).y += body.height - body.radius;
     sightDirection.subVectors(focus, sightOrigin);
     const distance = sightDirection.length();
-    return distance <= 0.02 || this.o.physics.raycast(sightOrigin, sightDirection.multiplyScalar(1 / distance), distance - 0.02, it.object) === null;
+    return distance <= 0.02 || this.o.physics.raycast(sightOrigin, sightDirection.multiplyScalar(1 / distance), distance - 0.02, it.sightRoots) === null;
   }
 
   /** 类型条件：pickup 要空手，place 要拿着它接受的东西且 socket 空着 */
