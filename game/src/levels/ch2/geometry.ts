@@ -79,7 +79,8 @@ export class Whitebox {
     wall.dispose();
   }
 
-  stairs(parent: THREE.Group, a: Point, b: Point, width: number, color: number): void {
+  stairs(parent: THREE.Group, a: Point, b: Point, width: number, color: number,
+    rightRail: { startInset?: number; endInset?: number } = {}): void {
     const delta = v(b).sub(v(a));
     const run = Math.hypot(delta.x, delta.z);
     const stair = this.group(parent);
@@ -101,7 +102,9 @@ export class Whitebox {
     ramp.dispose();
     material.dispose();
     const edge = width / 2 - 0.05;
-    this.rail(stair, [-edge, 0, 0], [-edge, delta.y, run], 0x4c4640);
+    const rightStart = rightRail.startInset ?? 0;
+    const rightEnd = run - (rightRail.endInset ?? 0);
+    this.rail(stair, [-edge, delta.y * rightStart / run, rightStart], [-edge, delta.y * rightEnd / run, rightEnd], 0x4c4640);
     this.rail(stair, [edge, 0, 0], [edge, delta.y, run], 0x4c4640);
   }
 

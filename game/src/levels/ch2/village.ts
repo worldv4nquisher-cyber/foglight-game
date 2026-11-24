@@ -197,11 +197,14 @@ function heights(w: Whitebox): void {
   const east = [[15, 5, -29], [15, 11, -42], [16, 15, -57], [15, 19, -66], [16, 19, -34], [16, 22, -49], [16, 27, -61], [17, 30, -77], [17, 34, -47], [18, 36, -65]] as const;
   west.forEach(([x, y, z], i) => house(w, x, y, z, -1, i));
   east.forEach(([x, y, z], i) => house(w, x, y, z, 1, i + 2));
+  const eastLanding: Point = [12.65, 15, -56];
+  const openingHalfWidth = 1.2;
   for (const [x, y, z] of east) {
     const p = x - 2.4;
     w.floor(g, [p, y, z], 2, 7.1, TIMBER);
     const railX = p - 0.9;
-    const entrance = y === 11 ? [-44.15, -41.85] : y === 15 ? [-57.2, -54.8] : null;
+    const entrance = y === 11 ? [-44.15, -41.85] : y === eastLanding[1]
+      ? [eastLanding[2] - openingHalfWidth, eastLanding[2] + openingHalfWidth] : null;
     if (entrance) {
       w.rail(g, [railX, y, z - 3.5], [railX, y, entrance[0]!], BEAM);
       w.rail(g, [railX, y, entrance[1]!], [railX, y, z + 3.5], BEAM);
@@ -209,8 +212,8 @@ function heights(w: Whitebox): void {
       w.rail(g, [railX, y, z - 3.5], [railX, y, z + 3.5], BEAM);
     }
   }
-  w.stairs(g, [11.7, 11, -43.5], [12.65, 15, -56], 1.85, WALK);
-  w.stairs(g, [12.65, 15, -56], [12.35, 19, -62.45], 1.85, WALK);
+  w.stairs(g, [11.7, 11, -43.5], eastLanding, 1.85, WALK, { endInset: openingHalfWidth });
+  w.stairs(g, eastLanding, [12.35, 19, -62.45], 1.85, WALK, { startInset: openingHalfWidth });
   for (const [a, b] of TERRACES) {
     w.stairs(g, a, b, 1.9, WALK);
     w.floor(g, [-11.6, a[1], a[2] + (a[2] === -43 ? 1.05 : -1.05)], 4.45, 2.2, TIMBER);
