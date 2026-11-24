@@ -871,6 +871,25 @@ test('裂湾村白盒：码头、鱼市、两侧崖壁、缆车站和灯室可�
   }
 });
 
+test('裂湾村白盒：从旋梯顶部可走上灯塔外廊', () => {
+  const physics = new PhysicsSystem();
+  const world = buildVillage(physics);
+  const body = new CharacterBody();
+  physics.addBody(body);
+  const env = { physics, body };
+  try {
+    place(env, new THREE.Vector3(-2, 32.1, 35));
+    assert.ok(body.onGround, '应站在旋梯顶部');
+    walk(env, new THREE.Vector3(1, 0, 0), 1.6, 0.6);
+    walk(env, new THREE.Vector3(0, 0, 1), 1.6, 0.45);
+    assert.ok(body.onGround && body.position.x > -1.2 && body.position.z > 35.6 && body.position.y >= 32.1,
+      `外廊没有承托角色：${body.position.toArray().map((n) => n.toFixed(2))}`);
+  } finally {
+    physics.clear();
+    world.traverse((o) => { o.geometry?.dispose(); o.material?.dispose(); });
+  }
+});
+
 for (const [name, err] of results) {
   if (err) {
     failed++;

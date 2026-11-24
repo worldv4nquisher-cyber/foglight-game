@@ -271,7 +271,7 @@ function lighthouse(w: Whitebox): void {
   w.shape(g, spiral, WALK, [0, 0, 0], [1, 1, 1], true);
   const gallery = new THREE.RingGeometry(2.54, 3.22, 12);
   gallery.rotateX(-Math.PI / 2);
-  w.shape(g, gallery, BEAM, [tx, 32.12, tz]);
+  w.shape(g, gallery, BEAM, [tx, 32.12, tz], [1, 1, 1], true);
   w.floor(g, [tx + 1.15, 32, tz + 0.68], 2.35, 1.72, BEAM);
   w.shape(g, new THREE.ConeGeometry(3.22, 1.7, 12), BEAM, [tx, 35.39, tz]);
   w.shape(g, new THREE.CylinderGeometry(0.59, 0.77, 1.55, 8), STEEL, [tx, 32.85, tz]);
