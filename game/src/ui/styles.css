@@ -212,6 +212,23 @@ body {
   animation: hud-location 6s ease forwards;
 }
 
+.opening-title {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  color: var(--ui-text);
+  font: 400 clamp(28px, 4vw, 58px) var(--ui-serif);
+  letter-spacing: 0.3em;
+  text-shadow: var(--ui-shadow-text);
+}
+
+.opening-title[hidden] {
+  display: none;
+}
+
 @keyframes hud-location {
   0% { opacity: 0; transform: translateY(6px); }
   20% { opacity: 1; transform: translateY(0); }

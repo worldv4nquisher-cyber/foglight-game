@@ -79,6 +79,7 @@ export class GameFlow {
   /** 启动场景开始加载 boot+menu 的时刻（ms；menuReadyMs − bootStartMs = 纯加载耗时，不含 JS 初始化 / 着色器编译） */
   bootStartMs: number | null = null;
   private entry: string | null = null;
+  private opening = false;
   private maxFrameMs = 0;
   private releaseMenu: (() => void) | null = null;
   private off: () => void;
@@ -124,7 +125,13 @@ export class GameFlow {
   newGame(): void {
     this.game.save.newGame('ch1', 's1');
     this.game.narrative.resetMemory();
-    this.startLoading('s1-ebb-shore');
+    this.startLoading('s1-ebb-shore', true);
+  }
+
+  takeOpening(): boolean {
+    const opening = this.opening;
+    this.opening = false;
+    return opening;
   }
 
   /** 主菜单「继续」：章节已完成 → 章节结束页；否则加载存档场景（场景开头）。没有可用存档返回 false */
@@ -296,8 +303,9 @@ export class GameFlow {
     });
   }
 
-  private startLoading(next: PlayScene): void {
+  private startLoading(next: PlayScene, opening = false): void {
     this.next = next;
+    this.opening = opening;
     this.holdMenu();
     void this.game.scenes.change('loading');
   }

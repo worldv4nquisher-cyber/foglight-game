@@ -85,7 +85,7 @@ export interface ObserveEye {
 type Mode =
   | { kind: 'explore' }
   | { kind: 'puzzle'; node: THREE.Object3D; freeLook: boolean; fov: number; offYaw: number; offPitch: number }
-  | { kind: 'cutscene'; track: CameraTrack; t: number; resolve: () => void; popInput: () => void };
+  | { kind: 'cutscene'; track: CameraTrack; t: number; resolve: () => void; popInput: () => void; onHandoff?: () => void };
 
 /**
  * 第三人称相机（v0.1-003，GDD §4）。由 CameraFollowSystem 扩展而来，一个类管四种状态：
@@ -215,16 +215,16 @@ export class CameraFollowSystem {
 
   /**
    * 播放镜头轨道。期间输入切到 cutscene 上下文（角色不能动、不能转视角），按住空格 1 s 可跳过（track.skippable）。
-   * 轨道结束后 0.8 s 平滑交还，朝向保持演出前；交还完成时 resolve。
+   * 轨道结束时先通知 onHandoff（主动中断不通知），再放开输入；0.8 s 相机过渡完成时 resolve。
    */
-  playCutscene(track: CameraTrack): Promise<void> {
+  playCutscene(track: CameraTrack, onHandoff?: () => void): Promise<void> {
     if (this.mode.kind === 'cutscene') this.finishCutscene(true);
     if (this.mode.kind === 'puzzle') this.mode = { kind: 'explore' };
     this.setObserving(false);
     this.dropEye();
     this.blend = null;
     return new Promise((resolve) => {
-      this.mode = { kind: 'cutscene', track, t: 0, resolve, popInput: this.input.pushContext('cutscene') };
+      this.mode = { kind: 'cutscene', track, t: 0, resolve, popInput: this.input.pushContext('cutscene'), onHandoff };
     });
   }
 
@@ -239,8 +239,8 @@ export class CameraFollowSystem {
   }
 
   /** 场景建立镜头（GDD §4：进入新场景 3 s，结束交还控制） */
-  playEstablishing(track: CameraTrack): Promise<void> {
-    return this.playCutscene(track);
+  playEstablishing(track: CameraTrack, onHandoff?: () => void): Promise<void> {
+    return this.playCutscene(track, onHandoff);
   }
 
   /** 镜头朝前方向（世界，单位向量） */
@@ -555,7 +555,8 @@ export class CameraFollowSystem {
     }
     const tr = mode.track;
     mode.track.sample(Math.min(mode.t, tr.duration), this.live);
-    if (mode.t < tr.duration - 1e-6) return;
+    const endTolerance = tr.clock ? 0 : 1e-6;
+    if (mode.t < tr.duration - endTolerance) return;
     // 停在最后一帧等外部条件（建立镜头等画质检测第一轮），超时也交还
     if (tr.holdUntil && !tr.holdUntil() && mode.t < tr.duration + tr.maxHold) return;
     this.finishCutscene(false);
@@ -564,6 +565,7 @@ export class CameraFollowSystem {
   private finishCutscene(immediate: boolean): void {
     const mode = this.mode;
     if (mode.kind !== 'cutscene') return;
+    if (!immediate) mode.onHandoff?.();
     mode.popInput();
     this.apply(this.live);
     this.mode = { kind: 'explore' };

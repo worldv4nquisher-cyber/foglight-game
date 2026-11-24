@@ -29,9 +29,51 @@ import { makeSpecularGate, SPECULAR_GATE_GLSL } from '@/render/specularGate';
 import { ShaderLib } from 'three';
 import { OUTRO_CUT_SEC, IGNITE_MONO_DELAY, IGNITE_MONO_SEC } from '@/levels/s3/puzzles';
 import { t as text } from '@/content/text';
+import { OPENING_T, openingBoatDistance } from '@/content/cutscenes/opening';
+import { CameraFollowSystem, CameraTrack } from '@/systems/CameraFollowSystem';
+import { InputManager } from '@/systems/input/InputManager';
 
 const out = [];
 const near = (a, b, tol, tag) => assert.ok(Math.abs(a - b) <= tol, `${tag}：${a} ≠ ${b}（±${tol}）`);
+
+{
+  const { reveal, glide, tie, establishing, end } = OPENING_T;
+  assert.equal(openingBoatDistance(0), openingBoatDistance(reveal));
+  for (let t = reveal; t < tie; t += 1 / 30) {
+    assert.ok(openingBoatDistance(t) > openingBoatDistance(t + 1 / 30), '船接近码头时不能倒退');
+  }
+  near(openingBoatDistance(glide - 0.001), openingBoatDistance(glide + 0.001), 0.003, '停桨时船位连续');
+  assert.equal(openingBoatDistance(tie), 0);
+  assert.equal(openingBoatDistance(end), 0);
+  assert.equal(end - establishing, 3);
+  out.push('开场：划船 → 滑行 → 停在系泊点，最后 3 s 建立镜头 ✓');
+}
+
+{
+  const input = new InputManager();
+  const camera = new CameraFollowSystem(new THREE.PerspectiveCamera(), input);
+  let t = OPENING_T.end - 0.5e-6;
+  const track = new CameraTrack({ duration: OPENING_T.end, node: new THREE.Object3D(), clock: () => t });
+  const events = [];
+  const finished = camera.playEstablishing(track, () => events.push(input.context));
+  void finished.then(() => events.push('blended'));
+  camera.update(0.1);
+  assert.deepEqual(events, []);
+  assert.equal(input.context, 'cutscene');
+  t = OPENING_T.end;
+  camera.update(0.1);
+  assert.deepEqual(events, ['cutscene']);
+  assert.equal(input.context, 'explore');
+  assert.equal(camera.blending, true);
+  camera.update(1);
+  await finished;
+  assert.deepEqual(events, ['cutscene', 'blended']);
+  const interrupted = camera.playEstablishing(track, () => events.push('interrupted'));
+  camera.dispose();
+  await interrupted;
+  assert.deepEqual(events, ['cutscene', 'blended']);
+  out.push('开场：相机过渡前、输入交还前完成存档；主动中断不存档 ✓');
+}
 
 /** 可控时钟源 */
 function fakeSource() {

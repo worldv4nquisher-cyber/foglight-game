@@ -15,11 +15,12 @@ import { S2 } from './layout';
  *   东灯台 (−13.2, ·, −5) 风灯出光 0.846 → +Z → 镜 A (−13.2, 0.85, 3) → 镜 B (−7.2, 0.85, 8.6)
  *   → 绕过屋角（院子北墙西段敞开）→ 北墙外光感锁 (−4.8, 0.85, 4)
  *   西灯台 (−8, ·, −5) → +Z 被晾衣架挡住（z ≈ −2.95）。
- * 两面镜子都是单轴 15° 档（Shift 精调也是 15°：每面镜子 24 档里只有一档正确，verify-s2 穷举 24 × 24 验证唯一解），
+ * 两面镜子都是单轴 15° 档（Shift 精调 7.5°，verify-s2 穷举精调网格验证唯一解），
  * 初始 0°，正解 A = +30°（右两档）、B = 315°（左三档）。镜子的基准朝向由几何反推（法线 ∝ 出射 − 入射）。
  */
 export const S2_BEAM = {
   stepDeg: 15,
+  fineStepDeg: gameplay.puzzle.fineStepDeg,
   solution: { a: 30, b: 315 },
   /** 光感锁接收器球心 = 美术 019 `env-keeper-house-ch1-light-lock-socket` (−4.8, 0.85, 4.0)（制作人 1029：z 用美术值 4.0，不再外推 0.2） */
   lockCenter: [S2.lightLock[0], S2.beamY, S2.lightLock[2]] as const,
@@ -134,7 +135,7 @@ export function buildS2Beam(physics: PhysicsSystem | null): S2Beam {
     back.castShadow = false;
     plane.userData.puzzleCritical = true;
     const mirror = new Mirror({ id, node: plane, halfWidth: 0.35, halfHeight: 0.35 });
-    const part = new RotatablePart({ id, node: yaw, axes: [{ axis: 'y', initial: 0 }], stepDeg: S2_BEAM.stepDeg, fineStepDeg: S2_BEAM.stepDeg });
+    const part = new RotatablePart({ id, node: yaw, axes: [{ axis: 'y', initial: 0 }], stepDeg: S2_BEAM.stepDeg, fineStepDeg: S2_BEAM.fineStepDeg });
     return { mirror, part, center: c.clone(), root: g };
   };
   const mirrorA = buildMirror('mirror-stand-s2-a', A, mirrorYawDeg(inA, outA), S2_BEAM.solution.a);
