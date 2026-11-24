@@ -19,9 +19,6 @@ const tmpBox = new THREE.Vector3();
 const left = new THREE.Vector3();
 const UP = new THREE.Vector3(0, 1, 0);
 const lifted = new THREE.Vector3();
-const frameDirection = new THREE.Vector3();
-const frameAxis = new THREE.Vector3();
-const frameTurn = new THREE.Quaternion();
 
 /** 固定时长的缓入缓出补间（目标变化时从当前值重新开始） */
 class Tween {
@@ -401,7 +398,12 @@ export class CameraFollowSystem {
       if (Math.abs(this.shoulder - want) < 1e-4) this.shoulder = want;
     }
     // 碰撞优先：实际偏移按该侧可用空间夹住
-    const side = this.shoulder >= 0 ? Math.min(this.shoulder, roomR) : -Math.min(-this.shoulder, getL());
+    let side = this.shoulder >= 0 ? Math.min(this.shoulder, roomR) : -Math.min(-this.shoulder, getL());
+    const framing = this.observing ? 0 : (this.targetFramingWeight?.(tp) ?? 0);
+    if (framing > 0) {
+      const centeredRoom = backAt(0);
+      side *= 1 - framing * (1 - THREE.MathUtils.smoothstep(centeredRoom, 0.35, cfg.lowSpaceDistance));
+    }
     this.side = side;
     pivot.copy(head).addScaledVector(right, side);
     // BUG-028：后拉空间不够 → 支点平滑抬高（决策用未抬高支点的扫掠，不形成反馈；抬高量再按向上扫掠夹住）
@@ -477,25 +479,16 @@ export class CameraFollowSystem {
     this.headDistance = this.live.position.distanceTo(head);
     this.pivotPoint.copy(pivot);
 
-    const framing = this.observing ? 0 : (this.targetFramingWeight?.(tp) ?? 0);
-    if (framing > 0) this.frameTarget(head, back, framing);
+    if (framing > 0) this.frameTarget(head.y, framing);
     if (this.observing) this.updateFocus();
   }
 
-  private frameTarget(head: THREE.Vector3, back: THREE.Vector3, weight: number): void {
-    frameDirection.copy(head).sub(this.live.position);
-    frameDirection.y -= 0.16;
-    frameDirection.normalize();
-    fwd.copy(back).negate();
-    const halfFov = this.live.fov * DEG / 2;
-    const margin = Math.min(halfFov, Math.atan(Math.tan(halfFov) * this.camera.aspect)) * 0.55;
-    const turn = fwd.angleTo(frameDirection) - margin;
-    if (turn <= 0) return;
-    frameAxis.crossVectors(fwd, frameDirection).normalize();
-    if (frameAxis.lengthSq() === 0) return;
-    this.live.quaternion.premultiply(frameTurn.setFromAxisAngle(frameAxis, turn * weight));
-    euler.setFromQuaternion(this.live.quaternion, 'YXZ').z = 0;
-    this.live.quaternion.setFromEuler(euler);
+  private frameTarget(headY: number, weight: number): void {
+    const depth = this.currentDistance * Math.cos(this.pitch);
+    const targetPitch = Math.atan2(headY - 0.16 - this.live.position.y, depth);
+    const margin = this.live.fov * DEG / 4;
+    const pitch = THREE.MathUtils.clamp(this.pitch, targetPitch - margin, targetPitch + margin);
+    this.live.quaternion.setFromEuler(euler.set(THREE.MathUtils.lerp(this.pitch, pitch, weight), this.yaw, 0, 'YXZ'));
   }
 
   private setObserving(active: boolean): void {
