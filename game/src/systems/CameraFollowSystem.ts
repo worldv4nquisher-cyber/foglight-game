@@ -555,7 +555,8 @@ export class CameraFollowSystem {
     }
     const tr = mode.track;
     mode.track.sample(Math.min(mode.t, tr.duration), this.live);
-    if (mode.t < tr.duration - 1e-6) return;
+    const endTolerance = tr.clock ? 0 : 1e-6;
+    if (mode.t < tr.duration - endTolerance) return;
     // 停在最后一帧等外部条件（建立镜头等画质检测第一轮），超时也交还
     if (tr.holdUntil && !tr.holdUntil() && mode.t < tr.duration + tr.maxHold) return;
     this.finishCutscene(false);

@@ -52,10 +52,15 @@ const near = (a, b, tol, tag) => assert.ok(Math.abs(a - b) <= tol, `${tag}：${a
 {
   const input = new InputManager();
   const camera = new CameraFollowSystem(new THREE.PerspectiveCamera(), input);
-  const track = new CameraTrack({ duration: 0.1, node: new THREE.Object3D() });
+  let t = OPENING_T.end - 0.5e-6;
+  const track = new CameraTrack({ duration: OPENING_T.end, node: new THREE.Object3D(), clock: () => t });
   const events = [];
   const finished = camera.playEstablishing(track, () => events.push(input.context));
   void finished.then(() => events.push('blended'));
+  camera.update(0.1);
+  assert.deepEqual(events, []);
+  assert.equal(input.context, 'cutscene');
+  t = OPENING_T.end;
   camera.update(0.1);
   assert.deepEqual(events, ['cutscene']);
   assert.equal(input.context, 'explore');
