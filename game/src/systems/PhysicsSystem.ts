@@ -179,6 +179,7 @@ const PROBE_OFFSETS: ReadonlyArray<readonly [number, number]> = [
 export class PhysicsSystem {
   readonly colliders: Collider[] = [];
   private bodies: CharacterBody[] = [];
+  private readonly fallenBodies = new Set<CharacterBody>();
   gravity: number = gameplay.player.gravity;
   maxFallSpeed: number = gameplay.player.maxFallSpeed;
   maxSlopeDeg: number = gameplay.player.maxSlopeDeg;
@@ -202,6 +203,7 @@ export class PhysicsSystem {
 
   removeBody(body: CharacterBody): void {
     this.bodies = this.bodies.filter((b) => b !== body);
+    this.fallenBodies.delete(body);
   }
 
   /** 注册一个网格为碰撞体。静态碰撞体按当前世界矩阵烘焙。 */
@@ -274,6 +276,7 @@ export class PhysicsSystem {
   clear(): void {
     this.colliders.length = 0;
     this.bodies = [];
+    this.fallenBodies.clear();
   }
 
   step(dt: number): void {
@@ -283,7 +286,11 @@ export class PhysicsSystem {
     for (const b of this.bodies) {
       if (!b.enabled) continue;
       this.stepBody(b, dt);
-      if (b.position.y < this.killY) this.onFallOut?.(b);
+      if (b.position.y >= this.killY) this.fallenBodies.delete(b);
+      else if (!this.fallenBodies.has(b)) {
+        this.fallenBodies.add(b);
+        this.onFallOut?.(b);
+      }
     }
     this.lastStepMs = performance.now() - t0;
   }

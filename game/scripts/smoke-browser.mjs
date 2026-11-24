@@ -4775,6 +4775,43 @@ CHECKS.push({
   },
 });
 
+CHECKS.push({
+  name: 'S1–S3 掉出世界：黑场结束后回到场景入口',
+  async run({ evaluate, cdp, sleep }) {
+    const until = async (expr, ms) => {
+      const end = Date.now() + ms;
+      while (Date.now() < end) {
+        if (await evaluate(expr)) return true;
+        await sleep(100);
+      }
+      return false;
+    };
+    const out = [];
+    for (const [id, name] of [['s1', 's1-ebb-shore'], ['s2', 's2-keeper-house'], ['s3', 's3-lighthouse']]) {
+      await cdp.goto('debug=1&scene=' + id, name);
+      if (!(await until(`__game.input.context === 'explore' && !__game.ui.fade.opacity`, ESTAB_MS))) throw new Error(id + ' 还未进入探索');
+      await evaluate(`(() => {
+        const s = __game.scenes.current;
+        const checkpoint = s.spawns.get(s.entryId).position;
+        const r = window.__fallRecovery = { checkpoint, recovered: 0 };
+        __game.events.on('player:teleport', () => r.recovered++);
+        s.rig.body.teleport(checkpoint.clone().setY(s.physics.killY - 1));
+        return true;
+      })()`);
+      const result = `(() => {
+        const s = __game.scenes.current;
+        const r = window.__fallRecovery;
+        return { recovered: r.recovered, distance: s.rig.body.position.distanceTo(r.checkpoint), busy: s.rig.controller.busy, opacity: __game.ui.fade.opacity };
+      })()`;
+      if (!(await until(`(() => { const r = ${result}; return r.recovered === 1 && r.distance < 0.1 && !r.busy && r.opacity === 0; })()`, ESTAB_MS))) {
+        throw new Error(id + ' 掉出世界后没回到入口 ' + JSON.stringify(await evaluate(result)));
+      }
+      out.push(id.toUpperCase() + ' 回入口、淡出完成 ✓');
+    }
+    return out.join('，');
+  },
+});
+
 const extra = process.env.SMOKE_ONLY ? CHECKS.filter((c) => process.env.SMOKE_ONLY.split('|').some((k) => c.name.includes(k))) : CHECKS;
 
 // ---------------------------------------------------------------- 起服务 + 浏览器
