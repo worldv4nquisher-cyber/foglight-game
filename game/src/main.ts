@@ -14,6 +14,7 @@ import { ChapterEndScene, MenuScene } from '@/scenes/MenuScene';
 import { TestbedScene } from '@/scenes/TestbedScene';
 import { installPerfSpot } from '@/debug/perfSpot';
 import { installQaHooks } from '@/debug/qaHooks';
+import { testParam } from '@/config/debug';
 
 /** 入口：检测 WebGL2 → 创建 Game → 注册场景 → Boot → 主菜单 →（新游戏 / 继续）Loading → S1 → S2 → S3（流程见 core/GameFlow） */
 function showFatal(message: string): void {
@@ -56,7 +57,19 @@ function bootstrap(): void {
     .register('sandbox', (g) => new SandboxScene(g))
     .register('testbed', (g) => new TestbedScene(g));
   game.start();
-  void game.scenes.change('boot');
+  if (import.meta.env.DEV || import.meta.env.MODE === 'smoke') {
+    const whitebox = testParam('ch2-whitebox');
+    if (whitebox === 's1' || whitebox === 's2' || whitebox === 's3') {
+      const view = testParam('view');
+      void import('@/levels/ch2/WhiteboxScene')
+        .then(({ openWhitebox }) => openWhitebox(game, whitebox, view))
+        .catch((err: unknown) => showFatal(err instanceof Error ? err.message : String(err)));
+    } else {
+      void game.scenes.change('boot');
+    }
+  } else {
+    void game.scenes.change('boot');
+  }
 
   // 开发服务器或测试构建（vite build --mode smoke）下暴露到 window，方便控制台调试：__game.quality.set('ultra')。
   // batch25：条件全是构建期常量，生产构建（mode production）整段连同 qaHooks / perfSpot 模块被摇树删掉，线上加 ?smoke=1 也没有这些钩子

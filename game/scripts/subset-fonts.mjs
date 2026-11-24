@@ -36,8 +36,11 @@ function walk(dir, out = []) {
   return out;
 }
 
-/** 不上屏的数据副本 / 校验数据：里面的中文（节点名 / note / 性能机位说明）不进字体子集 */
-const NOT_ON_SCREEN = ['src/config/atmosphere028.ts', 'src/config/perf-spots.ts', 'src/debug/perfSpot.ts'];
+/** 不在生产界面显示的文字（含开发专用白盒标牌）不进字体子集 */
+const NOT_IN_PLAYER_UI = [
+  'src/config/atmosphere028.ts', 'src/config/perf-spots.ts', 'src/debug/perfSpot.ts',
+  'src/levels/ch2/WhiteboxScene.ts', 'src/levels/ch2/layout.ts',
+];
 
 /** 当前用字（排序后的字符串） */
 export function collectCharset() {
@@ -50,7 +53,7 @@ export function collectCharset() {
   add('，。、：；！？「」『』（）《》〈〉【】—…·“”‘’～　％＋－×÷°');
   add(readFileSync(join(ROOT, 'src/content/text/zh-CN.ts'), 'utf8'));
   for (const f of walk(join(ROOT, 'src'))) {
-    if (NOT_ON_SCREEN.some((n) => f.endsWith(n))) continue;
+    if (NOT_IN_PLAYER_UI.some((n) => f.endsWith(n))) continue;
     // 只收非 ASCII（中文、标点）；ASCII 已全部包含
     const src = stripComments(readFileSync(f, 'utf8'));
     for (const ch of src) if (ch.codePointAt(0) > 0x7f) chars.add(ch);
