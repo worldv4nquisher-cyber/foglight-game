@@ -890,6 +890,29 @@ test('裂湾村白盒：从旋梯顶部可走上灯塔外廊', () => {
   }
 });
 
+for (const [name, start, edgeX] of [
+  ['码头', [9, 2.1, -12], 11.4],
+  ['崖顶', [-17.7, 39.1, -24], -14.8],
+]) {
+  test(`裂湾村白盒：${name}护栏阻止角色坠落`, () => {
+    const physics = new PhysicsSystem();
+    const world = buildVillage(physics);
+    const body = new CharacterBody();
+    physics.addBody(body);
+    const env = { physics, body };
+    try {
+      place(env, new THREE.Vector3(...start));
+      assert.ok(body.onGround, '应站在护栏内侧');
+      walk(env, new THREE.Vector3(1, 0, 0), 1.6, 3);
+      assert.ok(body.onGround && Math.abs(body.position.x - (edgeX - body.radius)) < 0.06,
+        `穿过护栏：${body.position.toArray().map((n) => n.toFixed(2))}`);
+    } finally {
+      physics.clear();
+      world.traverse((o) => { o.geometry?.dispose(); o.material?.dispose(); });
+    }
+  });
+}
+
 for (const [name, err] of results) {
   if (err) {
     failed++;

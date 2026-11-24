@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { PhysicsSystem } from '@/systems/PhysicsSystem';
+import type { ColliderKind, PhysicsSystem } from '@/systems/PhysicsSystem';
 import type { Point } from './layout';
 
 export const v = (p: Point): THREE.Vector3 => new THREE.Vector3(...p);
@@ -30,15 +30,17 @@ export class Whitebox {
     let transforms = colors.get(color);
     if (!transforms) colors.set(color, transforms = []);
     transforms.push(matrix);
-    if (solid) {
-      const material = new THREE.MeshBasicMaterial();
-      const mesh = new THREE.Mesh(geometry, material);
-      mesh.matrixAutoUpdate = false;
-      mesh.matrix.copy(matrix);
-      mesh.matrixWorldNeedsUpdate = true;
-      this.physics.addMesh(mesh);
-      material.dispose();
-    }
+    if (solid) this.addCollider(geometry, matrix, 'collider');
+  }
+
+  private addCollider(geometry: THREE.BufferGeometry, matrix: THREE.Matrix4, kind: ColliderKind): void {
+    const material = new THREE.MeshBasicMaterial();
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.matrixAutoUpdate = false;
+    mesh.matrix.copy(matrix);
+    mesh.matrixWorldNeedsUpdate = true;
+    this.physics.addMesh(mesh, { kind });
+    material.dispose();
   }
 
   box(parent: THREE.Group, p: Point, size: Point, color: number, solid = false): void {
@@ -67,6 +69,14 @@ export class Whitebox {
       this.box(parent, [p.x, p.y + 0.48, p.z], [0.11, 0.96, 0.11], color);
     }
     this.beam(parent, [a[0], a[1] + 0.92, a[2]], [b[0], b[1] + 0.92, b[2]], 0.12, color);
+    const wall = new THREE.BufferGeometry();
+    wall.setAttribute('position', new THREE.Float32BufferAttribute([
+      ...a, ...b, b[0], b[1] + 0.98, b[2], a[0], a[1] + 0.98, a[2],
+    ], 3));
+    wall.setIndex([0, 1, 2, 0, 2, 3]);
+    parent.updateWorldMatrix(true, false);
+    this.addCollider(wall, parent.matrixWorld, 'wall');
+    wall.dispose();
   }
 
   stairs(parent: THREE.Group, a: Point, b: Point, width: number, color: number): void {

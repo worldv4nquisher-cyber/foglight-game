@@ -156,7 +156,7 @@ function vessel(w: Whitebox): void {
   w.floor(w.root, [-7.4, 11, -43], 10.8, 2.1, WALK);
   w.rail(w.root, [-12.8, 11, -42], [-3.8, 11, -42], BEAM);
   w.floor(w.root, [9.1, 11, -43], 7.4, 2.1, WALK);
-  w.rail(w.root, [6.2, 11, -42], [12.4, 11, -42], BEAM);
+  w.rail(w.root, [7.65, 11, -42], [12.4, 11, -42], BEAM);
   for (const x of [-11, 10.8]) w.beam(w.root, [x, 10.7, -43], [x * 1.45, 6.7, -43], 0.27, BEAM);
 }
 
@@ -200,9 +200,16 @@ function heights(w: Whitebox): void {
   for (const [x, y, z] of east) {
     const p = x - 2.4;
     w.floor(g, [p, y, z], 2, 7.1, TIMBER);
-    w.rail(g, [p - 0.9, y, z - 3.5], [p - 0.9, y, z + 3.5], BEAM);
+    const railX = p - 0.9;
+    const entrance = y === 11 ? [-44.15, -41.85] : y === 15 ? [-57.2, -54.8] : null;
+    if (entrance) {
+      w.rail(g, [railX, y, z - 3.5], [railX, y, entrance[0]!], BEAM);
+      w.rail(g, [railX, y, entrance[1]!], [railX, y, z + 3.5], BEAM);
+    } else {
+      w.rail(g, [railX, y, z - 3.5], [railX, y, z + 3.5], BEAM);
+    }
   }
-  w.stairs(g, [11.7, 11, -43], [12.65, 15, -56], 1.85, WALK);
+  w.stairs(g, [11.7, 11, -43.5], [12.65, 15, -56], 1.85, WALK);
   w.stairs(g, [12.65, 15, -56], [12.35, 19, -62.45], 1.85, WALK);
   for (const [a, b] of TERRACES) {
     w.stairs(g, a, b, 1.9, WALK);
