@@ -1861,8 +1861,10 @@ function buildClifftop() {
     walls.push(colBox(mx, y + 1.0, mz, L + 0.3, 4.0, 0.2, Math.atan2(-tz, tx)));
   }
   const lod0 = mergeParts(parts);
+  // 029 崖顶图集单独占整张贴图，直接复用上面的俯视 UV2；若 xz 投影范围变更，需重烘图集。
+  const lightmap = { ticket: 'v0.1-029', texture: 'tex-s2-clifftop-lightmap.ktx2', encoding: 'RGBM8', uv: 'TEXCOORD_1', lightMapIntensity: 1, rect: [0, 0, 1, 1] };
   return finishAsset({ name: 'env-clifftop-s2', lod0, collider: colliderFrom(cols), walls, origin: [0, 0, 0], uv2Planar: [X0, Z0, Math.max(X1 - X0, Z1 - Z0)], uv2PlanarFitAll: true, helpers,
-    extras: { ticket: '019', platform: '平台约 30 × 25 m（x -17..13、z -14..12 大致平整）+ 西坡 x 6..25 到崖边（白石区 x 14–22）+ 北崖径 x 1.5–8.5 到 z 25', stonesArea: STONES, cliffBottomY: -16, placeholderLayout: true } });
+    extras: { ticket: '019', platform: '平台约 30 × 25 m（x -17..13、z -14..12 大致平整）+ 西坡 x 6..25 到崖边（白石区 x 14–22）+ 北崖径 x 1.5–8.5 到 z 25', stonesArea: STONES, cliffBottomY: -16, placeholderLayout: true, lightmap } });
 }
 
 // =====================================================================================
