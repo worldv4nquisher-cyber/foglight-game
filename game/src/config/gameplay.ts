@@ -87,10 +87,10 @@ export const gameplay = {
      * BUG-019 室外限高带（裁定 19）进入过渡：带外扩 heightCapLeadPad（m）一圈做过渡区，进过渡区就按 heightCapPullSpeed（m/s）
      * 限速往里收；真实带比当前近时按 heightCapHardPullSpeed 收（batch13 起不再一帧到位；过渡区天花板压低 heightCapLeadDrop 后，
      * verify-camera 真实路径 768 组里相机从没高过真实带 0.02 m 以上；sample-317 是静态几何，B 簇 = 0 不变）。8 m/s → 60 Hz 单帧 ≤ 0.134 m；
-     * 2.5 m 过渡区跑步（3.2 m/s）0.78 s 可收 6.25 m > 最大收距 5.65 m，所以走 / 跑进带时硬上限不起作用。
+     * 过渡区覆盖 S2 修理院碰撞解除的位置，避免相机先后拉、进入限高带后又收近。
      */
     heightCapPullSpeed: 8,
-    heightCapLeadPad: 2.5,
+    heightCapLeadPad: 4,
     /** BUG-019 batch13：过渡区天花板比真实带再低这么多（m），视线擦过斜天花板时过渡区先收 */
     heightCapLeadDrop: 0.8,
     /** BUG-019 batch13：真实带比当前相机近时的往里收速度（m/s；60 Hz 单帧 0.4 m，30 Hz 0.8 m）——不再一帧到位 */
