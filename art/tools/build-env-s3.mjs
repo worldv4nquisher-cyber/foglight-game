@@ -470,7 +470,7 @@ function texFile(tex, kind) {
   const dst = join(OUT_TEX, `${name}.webp`);
   if (!texDone.has(name)) {
     const src = join(SRC_TEX, `${name}.png`);
-    if (!existsSync(dst) || statSync(dst).mtimeMs < statSync(src).mtimeMs) {
+    if (!existsSync(dst) || (existsSync(src) && statSync(dst).mtimeMs < statSync(src).mtimeMs)) {
       const q = kind === 'albedo' ? 90 : 95;
       const lossless = kind === 'albedo' && tex === 'tex-net-a' ? ', lossless=True' : '';
       execFileSync('python3', ['-c', `from PIL import Image; Image.open(${JSON.stringify(src)}).save(${JSON.stringify(dst)}, 'WEBP', quality=${q}, method=6${lossless})`]);
@@ -1227,8 +1227,7 @@ function buildExterior() {
   const dome = [[3.2, tw.eaveTop + 0.02], [2.7, 24.6], [2.0, 24.77], [1.2, 24.91], [0.6, 24.98], [0.33, tw.domeTop]];
   parts.push(latheIron(dome, 96, 4));
   for (let i = 0; i < 12; i++) parts.push(ironTube(dome.map(([r, y]) => polar(r + 0.025, i * 30, y + 0.025)), 0.04, 16, 6));
-  parts.push(latheIron([[0.33, tw.domeTop], [0.35, 25.06], [0.31, 25.16], [0.22, 25.25], [0.1, 25.31], [0.001, tw.ventTop]], 32));
-  parts.push(ironCyl(0.025, tw.vaneTop - tw.ventTop, T(0, (tw.vaneTop + tw.ventTop) / 2, 0), 6));
+  parts.push(latheIron([[0.33, tw.domeTop], [0.35, 25.06], [0.31, 25.16], [0.22, 25.25], [0.13, tw.ventTop], [0.09, tw.vaneTop]], 32));
   parts.push(ironize(xform(fromGeo(new THREE.SphereGeometry(0.055, 8, 6), 'wood'), T(0, tw.vaneTop, 0)), 1));
   parts.push(ironBox(0.9, 0.035, 0.02, mul(T(0, 25.78, 0), RY(0.6))), ironBox(0.26, 0.2, 0.012, mul(T(0, 25.78, 0), RY(0.6), T(-0.36, 0, 0))));
   parts.push(ironize(xform(fromGeo(new THREE.ConeGeometry(0.06, 0.16, 4), 'wood'), mul(T(0, 25.78, 0), RY(0.6), T(0.48, 0, 0), RZ(-Math.PI / 2))), 1));

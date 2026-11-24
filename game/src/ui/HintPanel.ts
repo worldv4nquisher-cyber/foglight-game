@@ -18,7 +18,7 @@ const LANTERN_SVG = `
  * 提示弹窗 + 右下角小风灯图标（v0.1-007，GDD §10）。
  * - 图标：当前谜题解锁了一级后淡入（不弹文字、不打断）；有没看过的新层级时稍亮；谜题解开后淡出。
  * - H（explore / puzzle）开关弹窗。弹窗不冻结游戏、不抢输入上下文：玩家可以边看边走，二级高亮同时在场景里亮 3 s。
- * - 阅读界面 / 日志 / 暂停 / 黑场盖住时弹窗和图标先藏起来。
+ * - 阅读界面 / 日志 / 暂停 / 黑场盖住时弹窗和图标先藏起来；演出开始时关闭弹窗。
  */
 export class HintPanel {
   readonly el: HTMLDivElement;
@@ -96,6 +96,8 @@ export class HintPanel {
     const sys = this.system;
     const input = this.deps.input;
     const ctx = input.context;
+    const inCutscene = ctx === 'cutscene';
+    if (inCutscene) this.close();
     if (sys && !covered && (ctx === 'explore' || ctx === 'puzzle') && input.consumePressed('hint')) this.toggle();
     if (!sys) {
       this.icon.classList.remove('visible', 'fresh');
@@ -110,7 +112,7 @@ export class HintPanel {
         this.render(this.shown);
       }
     }
-    this.el.classList.toggle('covered', covered);
+    this.el.classList.toggle('covered', covered || inCutscene);
     this.icon.classList.toggle('visible', sys.iconVisible);
     this.icon.classList.toggle('fresh', sys.iconFresh);
   }

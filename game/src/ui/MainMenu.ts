@@ -58,8 +58,7 @@ export class MainMenu {
       p.hidden = false;
       this.el.querySelector<HTMLElement>('.main-buttons')!.hidden = true;
     }
-    // batch26 ⑤：软件渲染（浏览器关了硬件加速，SwiftShader / WARP / llvmpipe…）→ 主菜单打开期间常驻一句提示（文本表 ui.notice.software_render）。
-    // 不挡操作：放在左下角、和按钮列不重叠，pointer-events: none（点击穿透），不抢焦点；首页 / 设置 / 制作名单都在（设置面板盖在它上面）。
+    // batch26 ⑤：软件渲染（浏览器关了硬件加速，SwiftShader / WARP / llvmpipe…）→ 主菜单首页左下角提示，不挡操作。
     // 手机已整页换成「仅支持电脑」，不再叠这条。
     if (this.game.quality.softwareRender && !device.desktopOnlyBlocked) {
       const p = this.el.querySelector<HTMLParagraphElement>('.main-render-notice')!;

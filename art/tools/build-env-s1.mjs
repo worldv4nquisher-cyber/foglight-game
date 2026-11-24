@@ -1591,18 +1591,18 @@ function buildStorehouse(parts) {
 
 // 湾口两侧的海蚀柱：在送回区外的远海，框住上岸视线。
 function rockPillar(parts, cx, cz, r0, r1, h, seed, lean = [0, 0]) {
-  const p = grid(18, Math.max(8, Math.round(h / 0.6)), (u, v) => {
-    const a = u * Math.PI * 2, y = -1.2 + (h + 1.2) * v;
-    const rr = lerp(r0, r1, v) * (1 + (fbm(Math.cos(a) * 1.5 + seed, y * 0.35, Math.sin(a) * 1.5, 3) - 0.5) * 0.55 + 0.12 * Math.sin(y * 3.1 + seed));
-    return [cx + Math.cos(a) * rr + lean[0] * v * h, y, cz - Math.sin(a) * rr + lean[1] * v * h];
+  const wallRows = Math.max(8, Math.round(h / 0.6)), capRows = 8;
+  const p = grid(18, wallRows + capRows, (u, v) => {
+    const a = u * Math.PI * 2, row = v * (wallRows + capRows);
+    const wall = Math.min(1, row / wallRows), cap = Math.max(0, (row - wallRows) / capRows);
+    const y = -1.2 + (h + 1.2) * wall;
+    const cs = Math.cos(a), sn = Math.sin(a);
+    const rr = lerp(r0, r1, wall) * (1 + (fbm(cs * 1.5 + seed, y * 0.35, sn * 1.5, 3) - 0.5) * 0.55 + 0.12 * Math.sin(y * 3.1 + seed)) * (1 - cap);
+    const rise = cap * r1 * 0.35 + cap * (1 - cap) * (fbm(cs * 3, sn * 3, seed, 2) - 0.5) * 0.3;
+    return [cx + cs * rr + lean[0] * wall * h, y + rise, cz - sn * rr + lean[1] * wall * h];
   }, 'rock', true);
   weldNormals(p);
   parts.push(boxUV(p, MATS.rock.tile, [0.13, 0.41]));
-  const cap = orientUp(rockSurface(8, 8, (u, v) => {
-    const a = u * Math.PI * 2, rr = r1 * (1 - v) * 1.05;
-    return [cx + lean[0] * h + Math.cos(a) * rr, h + v * r1 * 0.35 + (fbm(u * 3, v * 3, seed, 2) - 0.5) * 0.3, cz + lean[1] * h - Math.sin(a) * rr];
-  }));
-  parts.push(boxUV(cap, MATS.rock.tile, [0.13, 0.41]));
 }
 function buildSeaStacks(parts) {
   // 避开开场镜头看主灯塔的视线（z −20…−35 段约 x −5…15）

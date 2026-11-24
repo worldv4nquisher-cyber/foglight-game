@@ -49,12 +49,14 @@ export class Reader {
     this.el.dataset.ui = '';
     this.el.innerHTML = `
       <div class="reader-paper" role="dialog">
-        <h3 class="reader-title"></h3>
-        <div class="reader-body"></div>
-        <div class="reader-nav">
-          <button type="button" class="reader-arrow" data-act="prev" aria-label="prev">‹</button>
-          <span class="reader-page"></span>
-          <button type="button" class="reader-arrow" data-act="next" aria-label="next">›</button>
+        <div class="reader-sheet">
+          <h3 class="reader-title"></h3>
+          <div class="reader-body"></div>
+          <div class="reader-nav">
+            <button type="button" class="reader-arrow" data-act="prev" aria-label="prev">‹</button>
+            <span class="reader-page"></span>
+            <button type="button" class="reader-arrow" data-act="next" aria-label="next">›</button>
+          </div>
         </div>
       </div>
       <div class="reader-bar"></div>
@@ -102,6 +104,7 @@ export class Reader {
     this.unfreeze = this.deps.freeze();
     this.render();
     this.el.hidden = false;
+    this.paper.scrollTop = 0;
     this.deps.events.emit('reader:open', { docId, pages: this.pages.length });
     return this.deps.narrative.markRead(docId);
   }

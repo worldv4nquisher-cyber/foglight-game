@@ -2755,6 +2755,9 @@ const CHECKS = [
       if (bad.length) throw new Error(`BUG-015：21 个视角里 ${bad.length} 个没选拉杆 ` + JSON.stringify(views));
       if (!/E\s*点灯/.test(await evaluate(prompt))) throw new Error('BUG-015 扫视角后提示不是「E 点灯」');
       out.push('BUG-015：可点灯时拉杆站位 21 个视角全选拉杆「E 点灯」，透镜让位 ✓');
+      await cdp.key('KeyH', 'h', 72);
+      const hintOpen = '__game.ui.hints.isOpen';
+      if (!(await untilG(hintOpen, 3))) throw new Error('点灯前按 H 没打开提示');
       // 按 E：锁输入（cutscene）→ 走到 -interact → xi-ignite-lever 第 34 帧（1.133 s）点燃；连按只一次
       // 「1.0 s 内不该点燃」：按 E 由真实游戏循环处理，从按下到下面 ff 之间真实循环还会推进走位 / 动作（高负载下一帧 5 步 = 0.083 s，
       // 几次 evaluate 往返就能吃掉 0.133 s 余量）→ 记下按 E 生效后谜题实际走过的游戏时间（__igT），冻结真实循环，再只用 ff 推到 1.0 s
@@ -2765,6 +2768,7 @@ const CHECKS = [
       const igT0 = await evaluate(`window.__igT`);
       st = await evaluate(`({ ctx: __s3.game.input.context, en: __s3.puzzles.leverIx.enabled, lit: __s3.puzzles.state.ignited })`);
       if (st.ctx !== 'cutscene' || st.en || st.lit) throw new Error('按 E 后应锁输入、禁用拉杆、还没点燃 ' + JSON.stringify(st));
+      if (await evaluate(hintOpen)) throw new Error('按 E 进入点灯演出后 H 提示未关闭');
       await evaluate(`__s3.game.events.emit('interact:used', { id: 'ignite-lever-s3', kind: 'use' }), 1`);
       if (igT0 > 0.9) throw new Error('按 E 到冻结之间真实循环已走 ' + igT0.toFixed(3) + ' s，测不了 1.0 s 内');
       await ff(1.0 - igT0);
@@ -2805,6 +2809,8 @@ const CHECKS = [
       if (!(await untilT(5.0))) throw new Error('演出时钟没走到 5 s');
       st = await evaluate(`({ cur: __s3.game.scenes.current === __s3, shot: __s3.endingCutscene.shot, cam: __s3.cameraFollow.cutsceneName })`);
       if (!st.cur || st.shot !== 'far-exterior' || st.cam !== 'ch1-ending') throw new Error('035：0:04 后应切塔外远景、仍在 S3（不再进结束页）' + JSON.stringify(st));
+      if (await evaluate(hintOpen + " || document.querySelector('.hint-panel').checkVisibility({ visibilityProperty: true })")) throw new Error('H 提示带入了结尾演出的塔外远景');
+      out.push('点灯关闭 H 提示、塔外远景不显示 ✓');
       // 推到演出尾：106 s 才进结束页
       await evaluate(`__s3.endingCutscene.seek(${ENDING_CUES.silence - 1.5}), 1`);
       await sleep(300);
@@ -4432,7 +4438,7 @@ CHECKS.push({
       if (!x.hitOk) throw new Error(`按钮「${x.act}」中心点被别的元素挡住`);
     }
     out.push(`GPU「${m.gpu.slice(0, 60)}」判为软件渲染 ✓；提示「${m.text}」✓ 位于 [${m.rect.join(', ')}]，与 ${m.btns.length} 个按钮不重叠、按钮中心可点 ✓、点击穿透 ✓`);
-    // 点在提示上的真实点击穿透到下面（不被提示吃掉），然后真实点击「设置」→ 设置打开、提示仍在（主菜单打开期间常驻）
+    // 提示不拦截点击；设置、制作名单打开时隐藏，返回首页恢复。
     const hitUnder = await evaluate(`(() => { const r = document.querySelector('.main-render-notice').getBoundingClientRect(); const e = document.elementFromPoint(r.left + 4, (r.top + r.bottom) / 2); return e ? e.className || e.tagName : null; })()`);
     if (/main-render-notice/.test(String(hitUnder))) throw new Error('提示区域命中了提示本身（没穿透）');
     await cdp.click(l + 4, (t + b) / 2);
@@ -4442,14 +4448,23 @@ CHECKS.push({
     m = await st();
     for (let i = 0; i < 20 && m.view !== 'settings'; i++) { await sleep(100); m = await st(); }
     if (m.view !== 'settings') throw new Error('真实点击「设置」没打开设置 ' + JSON.stringify({ view: m.view }));
-    if (!m.shown) throw new Error('设置打开时提示应仍在（主菜单打开期间常驻）');
+    if (m.shown) throw new Error('设置打开时软件渲染提示未隐藏');
     const back = await evaluate(`(() => { const b = document.querySelector('.main-menu .settings-panel [data-act="back"]').getBoundingClientRect(); const e = document.elementFromPoint(b.x + b.width / 2, b.y + b.height / 2); return { x: b.x + b.width / 2, y: b.y + b.height / 2, ok: !!e && !!e.closest('[data-act="back"]') }; })()`);
     if (!back.ok) throw new Error('设置里「返回」被挡住');
     await cdp.click(back.x, back.y);
     m = await st();
     for (let i = 0; i < 20 && m.view !== 'home'; i++) { await sleep(100); m = await st(); }
     if (m.view !== 'home' || !m.shown) throw new Error('返回首页后提示应仍在 ' + JSON.stringify({ view: m.view, shown: m.shown }));
-    out.push('提示上点击穿透 ✓、真实点击 设置 → 返回 ✓、设置页里提示仍在 ✓');
+    const credits = m.btns.find((x) => x.act === 'credits');
+    await cdp.click((credits.box[0] + credits.box[2]) / 2, (credits.box[1] + credits.box[3]) / 2);
+    m = await st();
+    for (let i = 0; i < 20 && m.view !== 'credits'; i++) { await sleep(100); m = await st(); }
+    if (m.view !== 'credits' || m.shown) throw new Error('制作名单打开时软件渲染提示未隐藏 ' + JSON.stringify(m));
+    await cdp.key('Escape', 'Escape', 27);
+    m = await st();
+    for (let i = 0; i < 20 && m.view !== 'home'; i++) { await sleep(100); m = await st(); }
+    if (m.view !== 'home' || !m.shown) throw new Error('制作名单返回首页后未恢复提示 ' + JSON.stringify(m));
+    out.push('提示上点击穿透 ✓、设置 / 制作名单不显示提示、返回首页恢复 ✓');
     try {
       await send('Emulation.setDeviceMetricsOverride', { width: 800, height: 451, deviceScaleFactor: 1, mobile: false }, sessionId);
       const compact = await st();

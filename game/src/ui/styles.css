@@ -194,6 +194,10 @@ body {
   pointer-events: none !important;
 }
 
+:root {
+  --hud-prompt-bottom: 22%;
+}
+
 .hud-location {
   position: absolute;
   top: 14%;
@@ -278,7 +282,7 @@ body {
 .hud-prompt {
   position: absolute;
   left: 50%;
-  bottom: 22%;
+  bottom: var(--hud-prompt-bottom);
   transform: translateX(-50%);
   padding: 6px 14px;
   font-size: 14px;
@@ -328,11 +332,11 @@ body {
 
 /* v0.1-013 补充：第二行提示（「R 放回浮台」）——交互提示在时排它下面一行，不在时顶到第一行 */
 .hud-prompt2 {
-  bottom: calc(22% - 36px);
+  bottom: calc(var(--hud-prompt-bottom) - 36px);
 }
 
 .hud-prompt[hidden] + .hud-prompt2 {
-  bottom: 22%;
+  bottom: var(--hud-prompt-bottom);
 }
 
 .hud-hold {
@@ -894,6 +898,24 @@ body {
   font-family: var(--ui-serif);
 }
 
+.reader-sheet {
+  display: contents;
+}
+
+.reader-paper[data-paper-key="ui-paper-sketch"] {
+  display: block;
+  padding: 0;
+  overflow-y: auto;
+  background: #ddd5c3;
+}
+
+.reader-paper[data-paper-key="ui-paper-sketch"] .reader-sheet {
+  display: block;
+  aspect-ratio: 544 / 672;
+  padding: 2.2em 2.4em 1.2em;
+  background: var(--paper, none) center top / 100% auto no-repeat;
+}
+
 .reader-title {
   margin: 0 0 1em;
   /* 标题行高钉死 21 px（y 35–56），正文第一行就落在 y 71.2，对上纸张第一条格线；没标题也占位，不让正文上移 */
@@ -1286,6 +1308,10 @@ body {
   pointer-events: none;
 }
 
+.main-menu-home[hidden] ~ .main-render-notice {
+  display: none;
+}
+
 .main-version {
   position: absolute;
   right: 18px;
@@ -1533,7 +1559,7 @@ body {
 .hint-panel {
   position: absolute;
   right: 18px;
-  bottom: 82px;
+  bottom: max(82px, calc(var(--hud-prompt-bottom) + 42px));
   width: min(80vw, 24em);
   padding: 1em 1.3em 0.8em;
   background: var(--ui-bg);

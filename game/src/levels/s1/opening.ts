@@ -3,7 +3,7 @@ import type { Game } from '@/core/Game';
 import type { PlayerRig } from '@/entities/createPlayer';
 import { findArtNode, oarHandleDir, oarlock, rowerSeat, rowingAngles, tieBoatStand, XI_BOAT_NODES, type XiRowingAlign } from '@/entities/xi/boatAlign';
 import { XI_CLIP_SPECS, xiClipDuration, xiEventSec } from '@/entities/xi/clips';
-import { OPENING_T as T, openingBoatDistance } from '@/content/cutscenes/opening';
+import { OPENING_T as T, openingBoatDistance, openingOarSplashTimes } from '@/content/cutscenes/opening';
 import { t } from '@/content/text';
 import type { CameraKey } from '@/systems/camera/CameraTrack';
 import { lookRotation, makePose, smoothstep01 } from '@/systems/camera/CameraTrack';
@@ -162,11 +162,16 @@ export class S1Opening {
       }),
     ];
     const horn = (): void => game.events.emit('sfx:play', { id: 'amb-foghorn-far', optional: true });
+    const splash = (): void => {
+      const water = game.assets.getAudio('sfx-splash-cold');
+      if (water) game.audio.playBuffer(water, 0.28, 1.45);
+    };
     this.player = new CutscenePlayer({
       id: 'ch1-opening', duration: T.end, clock: this.clock,
       cues: [
         { id: 'foghorn', at: 0, run: horn },
         { id: 'foghorn-close', at: T.close, run: horn },
+        ...openingOarSplashTimes().map((at, i) => ({ id: `oar-splash-${i}`, at, run: splash })),
         { id: 'benchmark', at: T.benchmark, run: () => { game.benchmark.start(); } },
       ],
       onUpdate: (time) => this.sample(time),
