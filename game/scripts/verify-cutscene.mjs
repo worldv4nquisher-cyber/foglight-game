@@ -29,7 +29,7 @@ import { makeSpecularGate, SPECULAR_GATE_GLSL } from '@/render/specularGate';
 import { ShaderLib } from 'three';
 import { OUTRO_CUT_SEC, IGNITE_MONO_DELAY, IGNITE_MONO_SEC } from '@/levels/s3/puzzles';
 import { t as text } from '@/content/text';
-import { OPENING_T, openingBoatDistance } from '@/content/cutscenes/opening';
+import { OPENING_T, openingBoatDistance, openingOarSplashTimes } from '@/content/cutscenes/opening';
 import { CameraFollowSystem, CameraTrack } from '@/systems/CameraFollowSystem';
 import { InputManager } from '@/systems/input/InputManager';
 
@@ -47,6 +47,15 @@ const near = (a, b, tol, tag) => assert.ok(Math.abs(a - b) <= tol, `${tag}：${a
   assert.equal(openingBoatDistance(end), 0);
   assert.equal(end - establishing, 3);
   out.push('开场：划船 → 滑行 → 停在系泊点，最后 3 s 建立镜头 ✓');
+}
+
+{
+  const [first, ...strokes] = openingOarSplashTimes();
+  assert.equal(first, OPENING_T.reveal);
+  assert.equal(strokes.length, 5);
+  strokes.forEach((at, i) => near(at, first + 86 / 30 + i * 3, 1e-9, '桨叶入水'));
+  assert.ok(strokes.at(-1) < OPENING_T.stow);
+  out.push('开场：桨叶入水发声，收桨后不再发声 ✓');
 }
 
 {

@@ -4432,7 +4432,7 @@ CHECKS.push({
       if (!x.hitOk) throw new Error(`按钮「${x.act}」中心点被别的元素挡住`);
     }
     out.push(`GPU「${m.gpu.slice(0, 60)}」判为软件渲染 ✓；提示「${m.text}」✓ 位于 [${m.rect.join(', ')}]，与 ${m.btns.length} 个按钮不重叠、按钮中心可点 ✓、点击穿透 ✓`);
-    // 点在提示上的真实点击穿透到下面（不被提示吃掉），然后真实点击「设置」→ 设置打开、提示仍在（主菜单打开期间常驻）
+    // 提示不拦截点击；设置、制作名单打开时隐藏，返回首页恢复。
     const hitUnder = await evaluate(`(() => { const r = document.querySelector('.main-render-notice').getBoundingClientRect(); const e = document.elementFromPoint(r.left + 4, (r.top + r.bottom) / 2); return e ? e.className || e.tagName : null; })()`);
     if (/main-render-notice/.test(String(hitUnder))) throw new Error('提示区域命中了提示本身（没穿透）');
     await cdp.click(l + 4, (t + b) / 2);
@@ -4442,14 +4442,23 @@ CHECKS.push({
     m = await st();
     for (let i = 0; i < 20 && m.view !== 'settings'; i++) { await sleep(100); m = await st(); }
     if (m.view !== 'settings') throw new Error('真实点击「设置」没打开设置 ' + JSON.stringify({ view: m.view }));
-    if (!m.shown) throw new Error('设置打开时提示应仍在（主菜单打开期间常驻）');
+    if (m.shown) throw new Error('设置打开时软件渲染提示未隐藏');
     const back = await evaluate(`(() => { const b = document.querySelector('.main-menu .settings-panel [data-act="back"]').getBoundingClientRect(); const e = document.elementFromPoint(b.x + b.width / 2, b.y + b.height / 2); return { x: b.x + b.width / 2, y: b.y + b.height / 2, ok: !!e && !!e.closest('[data-act="back"]') }; })()`);
     if (!back.ok) throw new Error('设置里「返回」被挡住');
     await cdp.click(back.x, back.y);
     m = await st();
     for (let i = 0; i < 20 && m.view !== 'home'; i++) { await sleep(100); m = await st(); }
     if (m.view !== 'home' || !m.shown) throw new Error('返回首页后提示应仍在 ' + JSON.stringify({ view: m.view, shown: m.shown }));
-    out.push('提示上点击穿透 ✓、真实点击 设置 → 返回 ✓、设置页里提示仍在 ✓');
+    const credits = m.btns.find((x) => x.act === 'credits');
+    await cdp.click((credits.box[0] + credits.box[2]) / 2, (credits.box[1] + credits.box[3]) / 2);
+    m = await st();
+    for (let i = 0; i < 20 && m.view !== 'credits'; i++) { await sleep(100); m = await st(); }
+    if (m.view !== 'credits' || m.shown) throw new Error('制作名单打开时软件渲染提示未隐藏 ' + JSON.stringify(m));
+    await cdp.key('Escape', 'Escape', 27);
+    m = await st();
+    for (let i = 0; i < 20 && m.view !== 'home'; i++) { await sleep(100); m = await st(); }
+    if (m.view !== 'home' || !m.shown) throw new Error('制作名单返回首页后未恢复提示 ' + JSON.stringify(m));
+    out.push('提示上点击穿透 ✓、设置 / 制作名单不显示提示、返回首页恢复 ✓');
     try {
       await send('Emulation.setDeviceMetricsOverride', { width: 800, height: 451, deviceScaleFactor: 1, mobile: false }, sessionId);
       const compact = await st();
