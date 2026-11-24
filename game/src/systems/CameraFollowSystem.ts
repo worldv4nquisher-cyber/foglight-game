@@ -139,6 +139,7 @@ export class CameraFollowSystem {
   focusDistance = 0;
   /** 观察时的固定眼位提供者（场景设置；返回 null = 普通第三人称观察） */
   observeEye: (() => ObserveEye | null) | null = null;
+  targetFramingWeight: ((position: THREE.Vector3) => number) | null = null;
   /** 正在用固定眼位（角色模型此时应隐藏） */
   eyeActive = false;
   private eyeSaved: { yaw: number; pitch: number } | null = null;
@@ -397,7 +398,13 @@ export class CameraFollowSystem {
       if (Math.abs(this.shoulder - want) < 1e-4) this.shoulder = want;
     }
     // 碰撞优先：实际偏移按该侧可用空间夹住
-    const side = this.shoulder >= 0 ? Math.min(this.shoulder, roomR) : -Math.min(-this.shoulder, getL());
+    let side = this.shoulder >= 0 ? Math.min(this.shoulder, roomR) : -Math.min(-this.shoulder, getL());
+    const lookUp = THREE.MathUtils.smoothstep(this.pitch, 0, 20 * DEG);
+    const framing = this.observing ? 0 : (this.targetFramingWeight?.(tp) ?? 0) * (1 - lookUp);
+    if (framing > 0) {
+      const centeredRoom = backAt(0);
+      side *= 1 - framing * (1 - THREE.MathUtils.smoothstep(centeredRoom, 0.35, cfg.lowSpaceDistance));
+    }
     this.side = side;
     pivot.copy(head).addScaledVector(right, side);
     // BUG-028：后拉空间不够 → 支点平滑抬高（决策用未抬高支点的扫掠，不形成反馈；抬高量再按向上扫掠夹住）
@@ -473,7 +480,16 @@ export class CameraFollowSystem {
     this.headDistance = this.live.position.distanceTo(head);
     this.pivotPoint.copy(pivot);
 
+    if (framing > 0) this.frameTarget(head.y, framing);
     if (this.observing) this.updateFocus();
+  }
+
+  private frameTarget(headY: number, weight: number): void {
+    const depth = this.currentDistance * Math.cos(this.pitch);
+    const targetPitch = Math.atan2(headY - 0.16 - this.live.position.y, depth);
+    const margin = this.live.fov * DEG / 4;
+    const pitch = THREE.MathUtils.clamp(this.pitch, targetPitch - margin, targetPitch + margin);
+    this.live.quaternion.setFromEuler(euler.set(THREE.MathUtils.lerp(this.pitch, pitch, weight), this.yaw, 0, 'YXZ'));
   }
 
   private setObserving(active: boolean): void {

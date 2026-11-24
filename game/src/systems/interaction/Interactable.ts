@@ -44,6 +44,8 @@ export interface InteractableOptions {
   interactPoint?: THREE.Object3D;
   /** 焦点（不给 = 包围盒中心） */
   focus?: THREE.Object3D | THREE.Vector3;
+  /** 属于此物体但不在 object 下的碰撞节点；只在检查此物体的视线时忽略。 */
+  sightSupports?: readonly THREE.Object3D[];
   /** 物体「半径」（m）：判定距离 = 到焦点的水平距离 − reach（大物体如灯塔） */
   reach?: number;
   /** 焦点相对脚底的高度范围覆盖值（m），未设置时沿用交互系统。 */
@@ -112,6 +114,7 @@ export class Interactable extends Component {
   readonly id: string;
   readonly kind: InteractKind;
   readonly object: THREE.Object3D;
+  readonly sightRoots: readonly THREE.Object3D[];
   prompt: TextId;
   textId: TextId | null;
   override enabled: boolean;
@@ -149,6 +152,7 @@ export class Interactable extends Component {
     this.id = opts.id;
     this.kind = opts.kind;
     this.object = opts.object;
+    this.sightRoots = [opts.object, ...(opts.sightSupports ?? [])];
     this.prompt = opts.prompt ?? DEFAULT_PROMPT[opts.kind];
     this.textId = opts.textId ?? null;
     this.enabled = opts.enabled ?? true;

@@ -170,7 +170,7 @@ test('F02 高度带：包含 −0.5 / 2.0 边界，拒绝楼上 / 楼下；提�
 });
 
 test('F02 高度带：系统配置及物体覆盖同时作用于交互与图标', () => {
-  const env = setup({ minRise: -0.1, maxRise: 1 });
+  const env = setup({ floor: false, minRise: -0.1, maxRise: 1 });
   const focus = new THREE.Vector3(0, 1.5, -1);
   const make = (id, band = {}) => env.ix.add(new Interactable({ id, kind: 'inspect', object: new THREE.Object3D(), focus, textId: 'ch1.s1.nets.inspect', ...band }));
   const plain = make('plain-band');
@@ -346,6 +346,29 @@ test('图标：3.5 m 内且在屏幕内才显示；可交互的那个 active', (
   assert.deepEqual(m.map((x) => x.id).sort(), ['mid', 'near']);
   assert.ok(m.find((x) => x.id === 'near').active && !m.find((x) => x.id === 'mid').active);
   assert.ok(m.every((x) => x.x >= 0 && x.x <= 1600 && x.y >= 0 && x.y <= 900));
+});
+
+test('关闭的门挡住门内交互和图标；门自身仍可操作，打开后可读', () => {
+  const env = setup();
+  const door = env.box('door', [0, 1, -0.8], [1, 2, 0.1]);
+  const doorCollider = env.physics.addMesh(door);
+  const handle = env.ix.add(new Interactable({ id: 'door', kind: 'use', object: door, approach: false }));
+  const book = env.ix.add(new Interactable({
+    id: 'book', kind: 'read', object: env.box('book', [0, 1, -1.4]), textId: 'ch1.s3.logbook.doc',
+  }));
+  env.events.on('interact:used', ({ id }) => { if (id === handle.id) doorCollider.enabled = false; });
+
+  assert.equal(env.ix.canInteract(book), false);
+  assert.equal(env.ix.markers().some((m) => m.id === book.id), false);
+  assert.equal(env.ix.canInteract(handle), true);
+  env.tap('KeyE');
+  assert.equal(used(env, handle.id), 1);
+  assert.deepEqual(env.log.read, []);
+
+  handle.enabled = false;
+  assert.equal(env.ix.canInteract(book), true);
+  env.tap('KeyE');
+  assert.deepEqual(env.log.read, ['ch1.s3.logbook.doc']);
 });
 
 test('多个候选：取最靠近屏幕中心的那个', () => {
@@ -1120,7 +1143,7 @@ for (const key of modelKeys) {
   models.set(key, gltf.scene);
 }
 
-function inventoryScene(level, art) {
+function inventoryScene(level, art, s1Collision = false) {
   const env = setup({ floor: false });
   const assets = {
     has: (key) => art && models.has(key),
@@ -1141,9 +1164,10 @@ function inventoryScene(level, art) {
   if (level === 's1') {
     const greybox = buildS1Greybox();
     env.scene.add(greybox.root);
+    const tideColliders = s1Collision ? greybox.colliders.map((mesh) => env.physics.addMesh(mesh)) : [];
     sceneArt = buildS1Art(assets);
     env.scene.add(sceneArt.root);
-    puzzles = buildS1Puzzles({ ...deps, root: env.scene, tideColliders: [], entities: { add() {} }, wood: new THREE.MeshStandardMaterial(), metal: new THREE.MeshStandardMaterial(), addLink() {} });
+    puzzles = buildS1Puzzles({ ...deps, root: env.scene, tideColliders, stoneSlotRails: greybox.stoneSlotRails, entities: { add() {} }, wood: new THREE.MeshStandardMaterial(), metal: new THREE.MeshStandardMaterial(), addLink() {} });
     const slots = mountArtSlots(assets, env.scene, S1_ART_SLOTS, { showGreybox: false });
     snapToArt(slots, 'prop-tide-bell', 'prop-tide-bell-interact', puzzles.bell.interactable.interactPoint);
     snapToArt(slots, 'prop-raft-s1', 'prop-raft-s1-interact', puzzles.raftPush.interactPoint);
@@ -1206,6 +1230,26 @@ function checkInventoryTarget(env, it, floor, otherFloors) {
     assert.equal(env.ix.markers().some((m) => m.id === it.id), eligible, `${it.id} marker: feet ${feet}`);
   }
 }
+
+test('S1 退潮：站在石槽旁可看到标记并调查石槽', () => {
+  const env = inventoryScene('s1', false, true);
+  try {
+    env.puzzles.tide.set('low', { instant: true });
+    const slot = env.ix.get('stone-slot-s1');
+    const focus = slot.focus();
+    env.body.teleport(new THREE.Vector3(focus.x + 0.7, S1.sandY, focus.z));
+    env.actor.facing = -Math.PI / 2;
+    env.camera.position.copy(env.body.position).add(new THREE.Vector3(3, 1.7, 0));
+    env.camera.lookAt(focus);
+    env.camera.updateMatrixWorld(true);
+    assert.ok(env.ix.canInteract(slot), '石槽自己的轨不应挡住调查');
+    assert.ok(env.ix.markers().some((m) => m.id === slot.id));
+    env.tap('KeyE');
+    assert.deepEqual(env.log.said, ['ch1.s1.stone_slot.inspect']);
+  } finally {
+    env.puzzles.dispose();
+  }
+});
 
 for (const art of [false, true]) {
   test(`F02 S1 实际清单（art=${art}）：码头 / 岸台 / 沙地与潮位；小船覆盖仅到甲板`, () => {

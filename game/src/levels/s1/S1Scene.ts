@@ -125,6 +125,7 @@ export class S1Scene extends LevelScene {
       hints: this.hints,
       entities: this.entities,
       tideColliders: this.tideColliders,
+      stoneSlotRails: this.greybox.stoneSlotRails,
       wood: this.mats.wood,
       metal: new THREE.MeshStandardMaterial({ name: 'gb-bell-copper', color: 0x5f746b, metalness: 0.85, roughness: 0.26, side: THREE.DoubleSide }),
       addLink: (l) => this.rig.controller.links.push(l),

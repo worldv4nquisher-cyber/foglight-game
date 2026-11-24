@@ -61,6 +61,27 @@ function walk(env, dir, speed, seconds, onStep) {
 const RUN = gameplay.player.runSpeed;
 const WALK = gameplay.player.walkSpeed;
 
+test('掉出世界：每个角色只通知一次，回到边界内后可再次触发', () => {
+  const physics = new PhysicsSystem();
+  const a = new CharacterBody();
+  const b = new CharacterBody();
+  physics.addBody(a);
+  physics.addBody(b);
+  const falls = [];
+  physics.onFallOut = (body) => falls.push(body);
+  const below = new THREE.Vector3(0, physics.killY - 1, 0);
+  a.teleport(below);
+  for (let i = 0; i < 30; i++) physics.step(DT);
+  assert.deepEqual(falls, [a]);
+
+  a.teleport(new THREE.Vector3());
+  b.teleport(below);
+  physics.step(DT);
+  a.teleport(below);
+  for (let i = 0; i < 30; i++) physics.step(DT);
+  assert.deepEqual(falls, [a, b, a]);
+});
+
 test('站在地面上：落地、onGround、不下沉', () => {
   const env = setup();
   place(env, new THREE.Vector3(0, 0.5, 4));

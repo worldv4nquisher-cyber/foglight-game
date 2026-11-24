@@ -229,7 +229,7 @@ export function buildS3Greybox(mats: S3GreyboxMaterials = defaultS3GreyboxMateri
       glass.push(sectorBox(S3.tower.rIn, S3.tower.rIn + 0.1, th, th + 5, L.floorY + L.parapetH, L.floorY + L.glassTop));
     }
     merged('s3-lamp-parapet', para, mats.stone);
-    merged('s3-lamp-glass', glass, mats.stone, 'wall');
+    merged('s3-lamp-glass', glass, mats.stone, 'wall').userData.blocksCamera = true;
     const dome = addDecor('s3-lamp-dome', new THREE.Mesh(new THREE.ConeGeometry(S3.tower.rIn + 0.4, S3.tower.height - L.floorY - L.glassTop, 24, 1, true), mats.metal));
     dome.position.y = L.floorY + L.glassTop + (S3.tower.height - L.floorY - L.glassTop) / 2;
     (dome.material as THREE.MeshStandardMaterial).side = THREE.DoubleSide;

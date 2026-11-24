@@ -16,7 +16,7 @@ import { collectIndoorVolumes } from '@/systems/CameraFollowSystem';
 import type { CameraKey } from '@/systems/camera/CameraTrack';
 import type { TextId } from '@/content/text';
 import type { Collider } from '@/systems/PhysicsSystem';
-import { S3, S3_FRAME, alongDoor, cameraYawFacing, toLocal, toWorld } from './layout';
+import { S3, S3_FRAME, alongDoor, cameraYawFacing, lampRoomFramingWeight, toLocal, toWorld } from './layout';
 import { buildS3Greybox, defaultS3GreyboxMaterials, setS3FixtureFallbacks, type S3Greybox } from './greybox';
 import { buildS3Art, S3_DOOR_PROP_KEY, type S3Art } from './art';
 import { buildS3Puzzles, type S3Puzzles } from './puzzles';
@@ -89,8 +89,9 @@ export class S3Scene extends LevelScene {
     this.frame.add(this.greybox.root);
     this.frame.updateMatrixWorld(true);
     for (const m of this.greybox.colliders) this.colliderOf.set(m, this.physics.addMesh(m));
-    for (const m of this.greybox.walls) this.physics.addMesh(m, { kind: 'wall' });
+    for (const m of this.greybox.walls) this.physics.addMesh(m, { kind: 'wall', blocksCamera: m.userData.blocksCamera === true });
     this.cameraFollow.indoorVolumes = collectIndoorVolumes(this.greybox.root);
+    this.cameraFollow.targetFramingWeight = lampRoomFramingWeight;
 
     this.art = buildS3Art(this.game.assets);
     this.frame.add(this.art.root);

@@ -104,6 +104,8 @@ const tmpA = new THREE.Vector3();
 const tmpB = new THREE.Vector3();
 const tmpC = new THREE.Vector3();
 const tmpD = new THREE.Vector3();
+const sightOrigin = new THREE.Vector3();
+const sightDirection = new THREE.Vector3();
 const ndc = new THREE.Vector3();
 
 function angleDiff(a: number, b: number): number {
@@ -202,9 +204,8 @@ export class InteractionSystem {
       const s = it.standPoint(tmpD).position;
       if (Math.hypot(s.x - body.position.x, s.z - body.position.z) > it.standRadius) return false;
     }
-    if (Math.hypot(dx, dz) < 1e-3) return true;
-    const dirYaw = Math.atan2(dx, dz);
-    return Math.abs(angleDiff(this.o.actor.facing, dirYaw)) <= THREE.MathUtils.degToRad(cfg.angleDeg) + 1e-6;
+    if (Math.hypot(dx, dz) >= 1e-3 && Math.abs(angleDiff(this.o.actor.facing, Math.atan2(dx, dz))) > THREE.MathUtils.degToRad(cfg.angleDeg) + 1e-6) return false;
+    return this.hasLineOfSight(it, tmpA);
   }
 
   /** 每个物理步（entities.fixedUpdate 之前） */
@@ -250,6 +251,7 @@ export class InteractionSystem {
       if (d > cfg.iconDistance) continue;
       ndc.copy(tmpA).project(this.o.camera);
       if (ndc.z > 1 || Math.abs(ndc.x) > 1.05 || Math.abs(ndc.y) > 1.05) continue;
+      if (!this.hasLineOfSight(it, tmpA)) continue;
       out.push({ id: it.id, x: ((ndc.x + 1) / 2) * vp.width, y: ((1 - ndc.y) / 2) * vp.height, active: it === this.current });
     }
     return out;
@@ -383,6 +385,14 @@ export class InteractionSystem {
   private withinHeightBand(it: Interactable, focusY: number): boolean {
     const rise = focusY - this.o.actor.body.position.y;
     return rise >= (it.minRise ?? this.o.minRise ?? -0.5) && rise <= (it.maxRise ?? this.o.maxRise ?? 2.0);
+  }
+
+  private hasLineOfSight(it: Interactable, focus: THREE.Vector3): boolean {
+    const body = this.o.actor.body;
+    sightOrigin.copy(body.position).y += body.height - body.radius;
+    sightDirection.subVectors(focus, sightOrigin);
+    const distance = sightDirection.length();
+    return distance <= 0.02 || this.o.physics.raycast(sightOrigin, sightDirection.multiplyScalar(1 / distance), distance - 0.02, it.sightRoots) === null;
   }
 
   /** 类型条件：pickup 要空手，place 要拿着它接受的东西且 socket 空着 */
