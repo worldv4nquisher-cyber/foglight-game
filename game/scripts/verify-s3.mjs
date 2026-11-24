@@ -3,9 +3,10 @@
 import assert from 'node:assert/strict';
 import { readFileSync, existsSync } from 'node:fs';
 import * as THREE from 'three';
-import { S3, S3_FRAME, toWorld, toLocal, treadSpan, treadTop, cameraYawFacing, alongDoor } from '@/levels/s3/layout';
+import { S3, S3_FRAME, toWorld, toLocal, treadSpan, treadTop, cameraYawFacing, alongDoor, polar } from '@/levels/s3/layout';
 import { bearingFrom } from '@/levels/s1/layout';
-import { buildS3Greybox, defaultS3GreyboxMaterials } from '@/levels/s3/greybox';
+import { buildS3Greybox, defaultS3GreyboxMaterials, setS3FixtureFallbacks } from '@/levels/s3/greybox';
+import { buildS3Facility } from '@/levels/s3/facility';
 import { collectIndoorVolumes } from '@/systems/CameraFollowSystem';
 import { xiWetTarget } from '@/entities/xi/XiLook';
 import { buildS3Beam, S3_BEAM, rayPointDist } from '@/levels/s3/beam';
@@ -172,6 +173,42 @@ const cols = new Map();
 for (const m of gb.colliders) cols.set(m, ph.addMesh(m));
 for (const m of gb.walls) ph.addMesh(m, { kind: 'wall' });
 const beam = buildS3Beam(ph, frameRoot);
+{
+  const art = new THREE.Group();
+  for (const name of ['env-stone-bridge-s3', 'env-rock-islet-a', 'env-lighthouse-ch1-interior', 'env-lamp-room-ch1']) {
+    const meshRoot = new THREE.Group();
+    meshRoot.name = name;
+    art.add(meshRoot);
+  }
+  setS3FixtureFallbacks(gb, art, false);
+  assert.ok(gb.fixtureFallbacks.every(({ mesh }) => !mesh.visible), '美术齐全时不显示白盒家具');
+  setS3FixtureFallbacks(gb, art, true);
+  assert.ok(gb.fixtureFallbacks.every(({ mesh }) => mesh.visible), '白盒叠加应显示家具碰撞轮廓');
+  assert.ok(gb.walls.filter((mesh) => !gb.fixtureFallbacks.some((piece) => piece.mesh === mesh)).every((mesh) => !mesh.visible), '白盒叠加不应显示空气墙');
+  const interior = art.getObjectByName('env-lighthouse-ch1-interior');
+  art.remove(interior);
+  setS3FixtureFallbacks(gb, art, false);
+  for (const { mesh, artKey } of gb.fixtureFallbacks) {
+    assert.equal(mesh.visible, artKey === interior.name, `${mesh.name} 缺各自美术时才显示白盒`);
+  }
+  art.add(interior);
+  setS3FixtureFallbacks(gb, new THREE.Group(), false);
+  assert.ok(gb.fixtureFallbacks.every(({ mesh }) => mesh.visible), '无美术时不应有隐形家具障碍');
+  buildS3Facility(art);
+  art.updateMatrixWorld(true);
+  const solved = S3.lightPath.map((p) => new THREE.Vector3(...p));
+  for (let i = 1; i < solved.length; i++) {
+    const from = solved[i - 1], delta = solved[i].clone().sub(from);
+    const ray = new THREE.Raycaster(from, delta.clone().normalize(), 0, delta.length());
+    assert.equal(ray.intersectObject(art).length, 0, `新设施不能穿过第 ${i} 段光路`);
+  }
+  const reef = art.getObjectByName('s3-bridge-bedrock');
+  for (const s of S3.bridge.piers) {
+    const ray = new THREE.Raycaster(new THREE.Vector3(...alongDoor(s, 0, 1.6)), new THREE.Vector3(0, -1, 0), 0, 2);
+    assert.ok(ray.intersectObject(reef).some((h) => h.point.y > 0.2), `桥墩 s${s} 不应悬空`);
+  }
+  out.push('设施：桥墩落在礁盘，油管与镜架避开四段光路 ✓');
+}
 {
   const tr = beam.tracer;
   const main = () => tr.paths.find((p) => p.emitter.id === 'sky-s3');
@@ -426,7 +463,7 @@ const shut = walk([...toDoor, P.doorLanding]);
 assert.ok(!shut.ok, `塔门关着时不应进得去（停在 ${shut.at.toArray().map((v) => v.toFixed(2))}）`);
 must('桥尾 → 石桥 → 台阶 → 门外平台', walk(toDoor), S3.doorPlatform.top);
 const back = walk([P.spawnFromS2, alongDoor(36, 0, 3)]);
-assert.ok(!back.ok && Math.hypot(back.at.x, back.at.z) < 33.5, `桥尾空气墙（s 33.4）应挡住，停在 s ${Math.hypot(back.at.x, back.at.z).toFixed(2)}`);
+assert.ok(!back.ok && Math.hypot(back.at.x, back.at.z) < S3.bridge.s[1], `桥尾空气墙应留在铺石上，停在 s ${Math.hypot(back.at.x, back.at.z).toFixed(2)}`);
 doorCol.enabled = false;
 must('门外平台 → 塔门 → 门内平台', walk([alongDoor(4.5, 0, 2.4), alongDoor(2.4, 0, 2.4), P.doorLanding]), 2.4);
 // 门内平台 → 往下走到底层（踏步 10 … 1 反方向）→ 油阀前
@@ -441,6 +478,15 @@ const spiral = (k0, k1) => {
 };
 must('门内平台 → 下楼 → 底层 → 油阀前', walk([P.doorLanding, ...spiral(10, 1), P.stairBottom, [0.855, 0.2, 2.349]], 2.4), S3.groundFloorY);
 must('底层 → 窗口镜前', walk([P.stairBottom, [1.6, 0.2, -0.3]], 0.2), S3.groundFloorY);
+for (const [name, p] of [
+  ['油箱', polar(2.3, 40, S3.groundFloorY)],
+  ['木箱', polar(2.45, 300, S3.groundFloorY)],
+  ['镜座', [S3.mirrors.window.socket[0], S3.groundFloorY, 0]],
+]) {
+  const result = walk([[0, S3.groundFloorY, 0], p]);
+  assert.ok(!result.ok, `不能走入${name}`);
+  near(result.at.y, S3.groundFloorY, 0.02, `在${name}前应踩在铺石上`);
+}
 must('门内平台 → 上楼 → 5 m 平台 → A → B → 灯室', walk([P.doorLanding, ...spiral(12, 108), P.lampRoomArrive, S3.igniteLever.interact], 2.4), S3.lampRoom.floorY);
 must('门内平台 → 上楼 → y 5 窗台平台 → 窗前观景点', walk([P.doorLanding, ...spiral(12, 24), P.view5m], 2.4), 5);
 must('灯室 → 眺望站位 / 书桌', walk([S3.igniteLever.interact, P.standGaze, [0.9, 22, -1.2]], 22), S3.lampRoom.floorY);

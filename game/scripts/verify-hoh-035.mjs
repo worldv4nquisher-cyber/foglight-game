@@ -224,16 +224,8 @@ console.log(
   `  父亲回忆段 ${rows.length} 个半帧，父亲离内壁最近 ${cm(worst.father.d)}（${fr(worst)}，离地 ${worst.father.y.toFixed(2)} m，${worst.father.mesh} ↔ ${worst.father.mat}）；汐离内壁最近 ${cm(xi.d)}`,
 );
 assert.ok(maxOn < 0.12, `035 里掌心离汐发顶 ${cm(maxOn)}`);
-// r4 复查（10-31）：后退 0.2 m 后父亲背后的大衣下摆（coat_back_01，离地 0.75–0.78 m）整段压进矮墙木压顶 3.4–3.9 cm，
-// 放手时（帧 ~160）右上臂（离地 1.34 m）压进窗框横档 5.9 cm；都在父亲身后、被他自己挡住，035 机位从屋里拍正面看不到。
-// 要完全不碰需要 GAZE_BACKOFF ≈ 0.28 m（制作人定，会动 03/04 构图）；这里先卡住不再变坏
-const TOL = 0.065;
-if (worst.father.d < 0)
-  console.log(
-    `  ! 父亲压进灯室内壁 ${cm(-worst.father.d)}（容忍 ${cm(TOL)}，在父亲身后；要完全不碰 GAZE_BACKOFF ≈ ${(GAZE_BACKOFF - worst.father.d + 0.02).toFixed(2)} m）`,
-  );
 assert.ok(
-  worst.father.d > -TOL,
-  `父亲穿进灯室内壁 ${cm(-worst.father.d)}（${fr(worst)}，> ${cm(TOL)}）`,
+  worst.father.d > 0.01,
+  `父亲与灯室内壁余量 ${cm(worst.father.d)}（${fr(worst)}，需 > 1 cm）`,
 );
 assert.ok(xi.d > 0, "汐穿进灯室内壁");

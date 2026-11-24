@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { S3, S3_FRAME, alongDoor, doorAxisYaw, polar, treadSpan, treadTop } from './layout';
+import { tideCourtParapets } from './facility';
 
 /**
  * S3 白盒几何（v0.1-015）：纯 three.js（不碰 DOM），场景、白盒导出（npm run export:blockout-s3）、verify-s3 共用。
@@ -14,6 +15,7 @@ export interface S3Greybox {
   root: THREE.Group;
   colliders: THREE.Mesh[];
   walls: THREE.Mesh[];
+  fixtureFallbacks: { mesh: THREE.Mesh; artKey: string }[];
   decor: THREE.Object3D[];
   indoor: THREE.Mesh[];
   /** 塔门（合页节点 = door-s3-hinge-socket；门扇碰撞是子网格） */
@@ -67,6 +69,7 @@ export function buildS3Greybox(mats: S3GreyboxMaterials = defaultS3GreyboxMateri
   root.name = 'blockout-s3-lighthouse';
   const colliders: THREE.Mesh[] = [];
   const walls: THREE.Mesh[] = [];
+  const fixtureFallbacks: S3Greybox['fixtureFallbacks'] = [];
   const decor: THREE.Object3D[] = [];
   const indoor: THREE.Mesh[] = [];
   const wallMat = new THREE.MeshBasicMaterial({ name: 'gb-wall', color: 0x6aa0c0, transparent: true, opacity: 0.12, depthWrite: false });
@@ -131,6 +134,23 @@ export function buildS3Greybox(mats: S3GreyboxMaterials = defaultS3GreyboxMateri
   // ======================================================== 底层地面（0.2）+ 门口门槛
   const groundFloor = addMesh('s3-ground-floor', new THREE.CylinderGeometry(S3.tower.rIn + 0.05, S3.tower.rIn + 0.05, 0.5, 40), mats.stone);
   groundFloor.position.y = S3.groundFloorY - 0.25;
+  // Solid furniture blocks movement, not the puzzle ray. Reuse the proxies when their art is missing.
+  const fixture = (artKey: string, name: string, position: readonly [number, number, number], geometry: THREE.BufferGeometry, mat = mats.metal, yaw = 0) => {
+    const m = addMesh(`s3-${name}`, geometry, mat, 'wall');
+    m.material = mat;
+    m.position.set(...position);
+    m.rotation.y = yaw;
+    fixtureFallbacks.push({ mesh: m, artKey });
+  };
+  const interiorArt = 'env-lighthouse-ch1-interior';
+  const lampArt = 'env-lamp-room-ch1';
+  fixture(interiorArt, 'oil-tank', polar(2.3, 40, 0.77), new THREE.CylinderGeometry(0.467, 0.467, 1.14, 24));
+  fixture(interiorArt, 'oil-tank-lid', polar(2.3, 40, 1.395), new THREE.CylinderGeometry(0.39, 0.44, 0.11, 24));
+  fixture(interiorArt, 'oil-crate-a', polar(2.45, 300, 0.45), new THREE.BoxGeometry(0.62, 0.5, 0.55), mats.wood, 0.4);
+  fixture(interiorArt, 'oil-crate-b', polar(2.3, 318, 0.41), new THREE.BoxGeometry(0.5, 0.42, 0.45), mats.wood, 1.3);
+  const [mx, , mz] = S3.mirrors.window.socket;
+  fixture(interiorArt, 'window-mirror-seat', [mx, 0.56, mz], new THREE.BoxGeometry(0.62, 0.72, 0.72), mats.stone);
+  fixture(interiorArt, 'window-mirror-cap', [mx, 0.96, mz], new THREE.BoxGeometry(0.7, 0.08, 0.8), mats.stone);
   {
     const [x, , z] = polar(3.5, S3.door.th, 0);
     const sill = addMesh('s3-door-sill', new THREE.BoxGeometry(1.2, S3.door.y0, 1.05), mats.stone);
@@ -168,11 +188,12 @@ export function buildS3Greybox(mats: S3GreyboxMaterials = defaultS3GreyboxMateri
     const hr = mergeGeometries(handrail.map((x) => x.toNonIndexed()), false);
     if (hr) addDecor('s3-stair-handrail', new THREE.Mesh(hr, mats.wood));
   }
-  // 5 m 窗台平台的旧凳子（外观）
+  // 5 m 窗台平台的旧凳子
   {
-    const stool = addDecor('s3-stool-5m', new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.42, 0.3), mats.wood));
     const p = S3.points.stool5m;
-    stool.position.set(p[0], p[1] + 0.21, p[2]);
+    const yaw = -331 * DEG + 0.35;
+    // Inset the vertical proxy inside the rounded seat edge to retain capsule clearance along the rail.
+    fixture(interiorArt, 'window-stool', [p[0], p[1] + 0.22375, p[2]], new THREE.BoxGeometry(0.29, 0.4475, 0.26), mats.wood, yaw);
   }
 
   // ======================================================== 灯室：地板（22，楼梯口 θ110–182 + 中心点火口挖空）、矮墙、玻璃空气墙、穹顶
@@ -215,15 +236,19 @@ export function buildS3Greybox(mats: S3GreyboxMaterials = defaultS3GreyboxMateri
     // 透镜底座（碰撞：挡住中心点火口，光从下面进点火口不受影响）
     const ped = addMesh('s3-lens-pedestal', new THREE.CylinderGeometry(0.5, 0.55, 0.6, 20), mats.metal);
     ped.position.y = L.floorY + 0.3;
+    fixture(lampArt, 'lens-foot', [0, L.floorY + 0.03, 0], new THREE.CylinderGeometry(0.62, 0.62, 0.06, 32));
     // 灯室书桌 + 椅子（碰撞）
     const f = S3.points;
     // 高度跟美术（035：座 0.40 / 桌 0.68，layout.lampRoom.seatTop / deskTop）
     const desk = addMesh('s3-lamp-desk', new THREE.BoxGeometry(0.9, L.deskTop, 0.5), mats.wood);
     desk.position.set(f.deskCenter[0], L.floorY + L.deskTop / 2, f.deskCenter[2]);
-    desk.rotation.y = Math.atan2(0.707, -0.707);
+    desk.rotation.y = -Math.PI / 4;
     const chair = addMesh('s3-lamp-chair', new THREE.BoxGeometry(0.42, L.seatTop, 0.4), mats.wood);
     chair.position.set(f.sitWrite[0], L.floorY + L.seatTop / 2, f.sitWrite[2]);
     chair.rotation.y = desk.rotation.y;
+    const [cx, , cz] = f.sitWrite;
+    const chairBack = new THREE.Vector3(0, L.floorY + L.seatTop + 0.18, 0.17).applyAxisAngle(new THREE.Vector3(0, 1, 0), chair.rotation.y);
+    fixture(lampArt, 'lamp-chair-back', [cx + chairBack.x, chairBack.y, cz + chairBack.z], new THREE.BoxGeometry(0.4, 0.36, 0.042), mats.wood, chair.rotation.y);
   }
 
   // ======================================================== 门外平台（2.4）、3 级台阶、石桥（3.0）、空气墙
@@ -234,7 +259,7 @@ export function buildS3Greybox(mats: S3GreyboxMaterials = defaultS3GreyboxMateri
     const run = (st.s[1] - st.s[0]) / st.count;
     for (let i = 0; i < st.count; i++) doorBox(`s3-step-${i + 1}`, st.s[0] + run * i, st.s[0] + run * (i + 1), -S3.bridge.w / 2, S3.bridge.w / 2, 0, P.top + st.rise * (i + 1), mats.stone);
     const B = S3.bridge;
-    const sEnd = B.s[1] + 0.4;
+    const sEnd = B.s[1];
     const hw = B.w / 2;
     doorBox('s3-bridge-deck', B.s[0], sEnd, -hw - B.parapetW, hw + B.parapetW, B.deck - 0.6, B.deck, mats.stone);
     for (const side of [-1, 1]) {
@@ -247,6 +272,11 @@ export function buildS3Greybox(mats: S3GreyboxMaterials = defaultS3GreyboxMateri
       doorBox(`s3-platform-air-back-${side}`, P.s[0], P.s[0] + 0.05, side > 0 ? 1.2 : P.t[0], side > 0 ? P.t[1] : -1.2, P.top, P.top + B.airWallH, mats.stone, 'wall');
     }
     doorBox('s3-bridge-air-end', sEnd - 0.05, sEnd, -hw - 0.1, hw + 0.1, B.deck, B.deck + B.airWallH, mats.stone, 'wall');
+    for (const { name, at, size, yaw } of tideCourtParapets) {
+      const parapet = addMesh(name, new THREE.BoxGeometry(...size), mats.stone);
+      parapet.position.set(...at);
+      parapet.rotation.y = yaw;
+    }
     for (const s of B.piers) {
       const pier = addDecor(`s3-bridge-pier-${s}`, new THREE.Mesh(new THREE.BoxGeometry(2.2, B.deck - 0.6 + 2, 1.2), mats.stone));
       const [x, , z] = alongDoor(s, 0, 0);
@@ -291,6 +321,11 @@ export function buildS3Greybox(mats: S3GreyboxMaterials = defaultS3GreyboxMateri
   }
 
   root.updateMatrixWorld(true);
-  return { root, colliders, walls, decor, indoor, door, doorLeaf, groundFloor, skyBlocker };
+  return { root, colliders, walls, fixtureFallbacks, decor, indoor, door, doorLeaf, groundFloor, skyBlocker };
 }
 
+export function setS3FixtureFallbacks(greybox: S3Greybox, artRoot: THREE.Group, showGreybox: boolean): void {
+  for (const { mesh, artKey } of greybox.fixtureFallbacks) {
+    mesh.visible = showGreybox || !artRoot.getObjectByName(artKey);
+  }
+}
