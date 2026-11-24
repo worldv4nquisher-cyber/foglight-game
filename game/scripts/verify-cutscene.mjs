@@ -29,9 +29,23 @@ import { makeSpecularGate, SPECULAR_GATE_GLSL } from '@/render/specularGate';
 import { ShaderLib } from 'three';
 import { OUTRO_CUT_SEC, IGNITE_MONO_DELAY, IGNITE_MONO_SEC } from '@/levels/s3/puzzles';
 import { t as text } from '@/content/text';
+import { OPENING_T, openingBoatDistance } from '@/content/cutscenes/opening';
 
 const out = [];
 const near = (a, b, tol, tag) => assert.ok(Math.abs(a - b) <= tol, `${tag}：${a} ≠ ${b}（±${tol}）`);
+
+{
+  const { reveal, glide, tie, establishing, end } = OPENING_T;
+  assert.equal(openingBoatDistance(0), openingBoatDistance(reveal));
+  for (let t = reveal; t < tie; t += 1 / 30) {
+    assert.ok(openingBoatDistance(t) > openingBoatDistance(t + 1 / 30), '船接近码头时不能倒退');
+  }
+  near(openingBoatDistance(glide - 0.001), openingBoatDistance(glide + 0.001), 0.003, '停桨时船位连续');
+  assert.equal(openingBoatDistance(tie), 0);
+  assert.equal(openingBoatDistance(end), 0);
+  assert.equal(end - establishing, 3);
+  out.push('开场：划船 → 滑行 → 停在系泊点，最后 3 s 建立镜头 ✓');
+}
 
 /** 可控时钟源 */
 function fakeSource() {

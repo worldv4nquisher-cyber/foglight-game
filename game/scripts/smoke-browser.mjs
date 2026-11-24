@@ -9,6 +9,7 @@ import { tmpdir } from 'node:os';
 import { inflateSync } from 'node:zlib';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { setTimeout as delay } from 'node:timers/promises';
 import { startGameServer } from './lib/test-server.mjs';
 import { S1, s1StepLinks } from '@/levels/s1/layout';
 import { ENDING_CUES } from '@/systems/audio/endingMusic';
@@ -1084,7 +1085,8 @@ const CHECKS = [
       // ---- 3. 新游戏（无存档直接开始）→ 加载 → 主场景；记下开头位置
       await clickSel('.main-menu [data-act="new"]');
       if (!(await until(`__game.scenes.current?.name === 's1-ebb-shore'`, 60000))) throw new Error('新游戏没进主场景');
-      await sleep(1500);
+      await cdp.key('Space', ' ', 32, 1500);
+      if (!(await until(`__game.input.context === 'explore' && !!localStorage.getItem('foglight.save.v1')`, ESTAB_MS))) throw new Error('开场跳过后没交还控制或存档');
       const pos = `(() => { const p = __game.scenes.current.rig.body.position; return { x: p.x, y: p.y, z: p.z }; })()`;
       const p0 = await evaluate(pos);
       if (!(await evaluate(`!!localStorage.getItem('foglight.save.v1') && !__game.flow.holdingMenu`))) throw new Error('进场后应有存档、流程不再压菜单上下文');
@@ -1210,6 +1212,9 @@ const CHECKS = [
       if (!(await until(`__game.scenes.current?.name === 's1-ebb-shore'`, 60000))) throw new Error('新游戏没进 S1');
       let s = await st();
       if (s.groups.slice().sort().join() !== 'boot,common,menu,s1') throw new Error('进 S1 时应已加载 boot/menu/common/s1：' + s.groups.join());
+      await cdp.key('Space', ' ', 32, 1500);
+      if (!(await until(`__game.input.context === 'explore' && !!localStorage.getItem('foglight.save.v1')`, ESTAB_MS))) throw new Error('开场跳过后没交还控制或存档');
+      s = await st();
       if (s.save?.sceneId !== 's1') throw new Error('进 S1 没存档 ' + JSON.stringify(s.save));
       // BUG-005：地名标题、左下角操作提示来自文本表
       const hudTxt = await evaluate(`({ loc: document.querySelector('.hud-location')?.textContent, hint: document.querySelector('.hud-hint')?.textContent, kbd: document.querySelectorAll('.hud-hint kbd').length })`);
@@ -3859,6 +3864,7 @@ CHECKS.push({
     await evaluate(glClear);
     await clickSel('.main-menu [data-act="new"]');
     if (!(await untilW(`__game.scenes.current?.name === 's1-ebb-shore'`, LOAD_MS))) throw new Error('新游戏没进 S1');
+    await cdp.key('Space', ' ', 32, 1500);
     if (!(await untilG(ready('__s1'), 30, ESTAB_MS))) throw new Error('S1 开场后没回到可操作');
     await glCheck('主菜单新游戏进 S1');
     let sv = await save();
@@ -4071,6 +4077,7 @@ CHECKS.push({
     if (!(await untilW(`__game.ui.mainMenu.view === 'confirm'`, 5000))) throw new Error('有存档新游戏没弹覆盖确认');
     await clickSel('.main-menu .confirm-dialog [data-act="ok"], .main-menu .confirm-dialog [data-act="confirm"]');
     if (!(await untilW(`__game.scenes.current?.name === 's1-ebb-shore'`, LOAD_MS))) throw new Error('覆盖确认后没进 S1');
+    await cdp.key('Space', ' ', 32, 1500);
     if (!(await untilG(ready('__s1'), 30, ESTAB_MS))) throw new Error('新游戏 S1 没回到可操作');
     await glCheck('结束页 → 主菜单 → 新游戏覆盖确认进 S1');
     sv = await save();
@@ -5066,9 +5073,10 @@ const cdp = {
   async removeInitScript(identifier) {
     if (identifier != null) await send('Page.removeScriptToEvaluateOnNewDocument', { identifier }, sessionId);
   },
-  async key(code, key = code, keyCode = 0) {
+  async key(code, key = code, keyCode = 0, holdMs = 0) {
     const base = { code, key, windowsVirtualKeyCode: keyCode, nativeVirtualKeyCode: keyCode };
     await send('Input.dispatchKeyEvent', { type: 'rawKeyDown', ...base }, sessionId);
+    if (holdMs > 0) await delay(holdMs);
     await send('Input.dispatchKeyEvent', { type: 'keyUp', ...base }, sessionId);
   },
 };

@@ -133,7 +133,7 @@ export abstract class LevelScene extends BaseScene {
 
   /** 建立镜头结束后是否后台预加载下一个场景（沙盒关掉） */
   protected preloadNext = true;
-  private disposed = false;
+  protected disposed = false;
   /** 033 改：懒加载场景曲的调试记录（冒烟读）——首帧时刻、发起请求时刻（performance.now() ms）、结果 */
   musicFirstFrameAt: number | null = null;
   musicRequestedAt: number | null = null;
@@ -271,7 +271,7 @@ export abstract class LevelScene extends BaseScene {
       });
     };
     void est.then(preload);
-    const timer = window.setTimeout(preload, PRELOAD_FALLBACK_MS);
+    const timer = window.setTimeout(preload, this.preloadFallbackMs());
     this.cleanups.push(() => window.clearTimeout(timer));
   }
 
@@ -318,17 +318,24 @@ export abstract class LevelScene extends BaseScene {
     return null;
   }
 
-  /** 建立镜头（GDD §4：进入场景 3 s 低速推轨，结束交还控制；按住空格可跳过） */
-  private playEstablishing(spawn: SpawnPoint): Promise<void> {
+  protected preloadFallbackMs(): number {
+    return PRELOAD_FALLBACK_MS;
+  }
+
+  protected establishingTrack(spawn: SpawnPoint): CameraTrack {
     const hold = this.establishingHold();
-    const track = new CameraTrack({
+    return new CameraTrack({
       name: 'establishing',
       duration: gameplay.camera.establishingTime,
       ...(hold ? { holdUntil: hold } : {}),
       keys: this.establishingKeys(spawn),
       onSkip: () => this.establishingAfterSkip(spawn, hold),
     });
-    const p = this.cameraFollow.playEstablishing(track);
+  }
+
+  /** 建立镜头（GDD §4：进入场景 3 s 低速推轨，结束交还控制；按住空格可跳过） */
+  protected playEstablishing(spawn: SpawnPoint): Promise<void> {
+    const p = this.cameraFollow.playEstablishing(this.establishingTrack(spawn));
     // 035：建立镜头的跳过仍由 CameraFollowSystem（skipHold）处理，右下角提示 / 圆环借 SkipController 显示
     const { input, ui } = this.game;
     const off = ui.skip.register(

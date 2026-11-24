@@ -72,16 +72,25 @@ const beam = buildS2Beam(ph);
   near(beam.lockLens.position.y, '光感锁透镜');
   const tr = beam.tracer;
   const east = () => tr.paths.find((p) => p.emitter.id === 'lamp-east-s2');
+  for (const { part } of [beam.mirrorA, beam.mirrorB]) {
+    part.step(0, 1);
+    assert.equal(part.angles[0], 15);
+    part.step(0, 1, true);
+    assert.equal(part.angles[0], 22.5);
+    part.step(0, -1, true);
+    assert.equal(part.angles[0], 15);
+  }
   const hits = [];
-  for (let i = 0; i < 24; i++) {
-    for (let j = 0; j < 24; j++) {
-      beam.mirrorA.part.setAngle(0, i * S2_BEAM.stepDeg);
-      beam.mirrorB.part.setAngle(0, j * S2_BEAM.stepDeg);
+  const fineStep = S2_BEAM.fineStepDeg;
+  for (let a = 0; a < 360; a += fineStep) {
+    for (let b = 0; b < 360; b += fineStep) {
+      beam.mirrorA.part.setAngle(0, a);
+      beam.mirrorB.part.setAngle(0, b);
       tr.trace();
-      if (east().receiver?.id === 'light-lock-s2') hits.push([i * 15, j * 15]);
+      if (east().receiver?.id === 'light-lock-s2') hits.push([a, b]);
     }
   }
-  assert.deepEqual(hits, [[S2_BEAM.solution.a, S2_BEAM.solution.b]], `24 × 24 档里应只有正解命中光感锁，实际 ${JSON.stringify(hits)}`);
+  assert.deepEqual(hits, [[S2_BEAM.solution.a, S2_BEAM.solution.b]], `7.5° 网格里应只有正解命中光感锁，实际 ${JSON.stringify(hits)}`);
   beam.solve();
   tr.trace();
   const p = east();
@@ -104,7 +113,7 @@ const beam = buildS2Beam(ph);
   }
   beam.mirrorA.part.reset();
   beam.mirrorB.part.reset();
-  out.push(`光路：灯 ${S2.lampEmitY} / 镜 ${beam.mirrorA.center.y} / 锁 ${lens.y}，24×24 档唯一解 A ${S2_BEAM.solution.a}° B ${S2_BEAM.solution.b}°（落点离锁心 ${miss.toFixed(2)} m），西灯台被晾衣架挡 ✓`);
+  out.push(`光路：灯 ${S2.lampEmitY} / 镜 ${beam.mirrorA.center.y} / 锁 ${lens.y}，7.5° 网格唯一解 A ${S2_BEAM.solution.a}° B ${S2_BEAM.solution.b}°（落点离锁心 ${miss.toFixed(2)} m），西灯台被晾衣架挡 ✓`);
 }
 
 const vp = S2.viewpoint.eye;

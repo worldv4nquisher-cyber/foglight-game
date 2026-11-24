@@ -22,7 +22,7 @@ export interface TideVariantSwitch {
   low: THREE.Object3D[];
   /** 当前显示的一版 */
   state: 'high' | 'low' | null;
-  update(tideLevel: number): void;
+  update(tideLevel: number, moored?: boolean): void;
 }
 
 /** 按名字找节点：精确名优先；没有就找 `<名>_lodN` / `<名>.001` 这类变体（同名只取第一个） */
@@ -49,12 +49,13 @@ export function makeTideVariantSwitch(root: THREE.Object3D, cfg: { high: readonl
   const high = find(cfg.high);
   const low = find(cfg.low);
   if (!high.length || !low.length) return null;
+  for (const o of [...high, ...low]) o.visible = false;
   const sw: TideVariantSwitch = {
     high,
     low,
     state: null,
-    update(level) {
-      const s = level >= cfg.switchLevel ? 'high' : 'low';
+    update(level, moored = true) {
+      const s = !moored ? null : level >= cfg.switchLevel ? 'high' : 'low';
       if (s === sw.state) return;
       sw.state = s;
       for (const o of high) o.visible = s === 'high';
@@ -78,7 +79,7 @@ export interface S1Art {
   sky: SkyLayerHandle | null;
   /** 船绳涨 / 退潮两版切换（美术节点未交付 = null） */
   rope: TideVariantSwitch | null;
-  update(camera: THREE.Camera, tideLevel: number): void;
+  update(camera: THREE.Camera, tideLevel: number, moored?: boolean): void;
   applyQuality(q: QualityPreset): void;
 }
 
@@ -267,9 +268,9 @@ export function buildS1Art(assets: AssetLoader): S1Art {
     farFog,
     sky,
     rope,
-    update(camera, tideLevel) {
+    update(camera, tideLevel, moored) {
       for (const r of rocks) r.update(camera);
-      rope?.update(tideLevel);
+      rope?.update(tideLevel, moored);
       if (boat) boat.position.y = Math.max(S1.boat.groundY, tideLevel - S1.boat.belowWater);
     },
     applyQuality(q) {

@@ -22,6 +22,8 @@ import { bakeSeabed, type SeabedMap } from '@/world/seabed';
 import { buildS1Dressing, type S1Dressing } from './dressing';
 import { interactNode } from '../dressing';
 import type { AtmospherePreset } from '@/config/atmosphere';
+import { OPENING_T } from '@/content/cutscenes/opening';
+import { carryS1Lantern, makeS1Lantern, S1Opening } from './opening';
 
 /** 跳过开场后接的 S1 建立镜头（画质检测第 1 轮没测完时；不可跳过） */
 export const S1_HOLD_SHOT = 's1-establishing-hold';
@@ -48,9 +50,14 @@ export class S1Scene extends LevelScene {
   dressing: S1Dressing | null = null;
   private tideColliders: Collider[] = [];
   private readonly mats = defaultGreyboxMaterials();
+  private readonly openingRequested: boolean;
+  opening: S1Opening | null = null;
+  private lantern: THREE.Object3D | null = null;
 
   constructor(game: Game) {
     super(game, LEVELS.s1);
+    this.openingRequested = game.flow.takeOpening();
+    if (this.openingRequested) this.savePoint = null;
   }
 
   protected buildLevel(): void {
@@ -162,8 +169,51 @@ export class S1Scene extends LevelScene {
     window.addEventListener('keydown', onKey);
     this.cleanups.push(() => window.removeEventListener('keydown', onKey));
     if (import.meta.env.DEV || import.meta.env.MODE === 'smoke') Object.assign(window, { __s1: this });
-    // 首次启动后第一次进入 S1：画质自动检测（009）
-    this.game.benchmark.start();
+  }
+
+  protected override preloadFallbackMs(): number {
+    return super.preloadFallbackMs() + (this.opening ? OPENING_T.end * 1000 : 0);
+  }
+
+  protected override establishingTrack(spawn: SpawnPoint): CameraTrack {
+    this.lantern = makeS1Lantern(this.game);
+    if (this.openingRequested) {
+      this.opening = S1Opening.create({
+        game: this.game, scene: this.scene, rig: this.rig, boat: this.art.boat,
+        pier: this.art.root.getObjectByName('env-pier-wood-ch1'), lantern: this.lantern,
+        spawn: spawn.position, facing: spawn.yaw + Math.PI, establishing: this.establishingKeys(spawn),
+      });
+    }
+    const opening = this.opening;
+    if (!opening) {
+      carryS1Lantern(this.rig, this.lantern);
+      this.game.benchmark.start();
+      return super.establishingTrack(spawn);
+    }
+    this.cleanups.push(() => this.opening?.dispose());
+    const hold = this.establishingHold();
+    return new CameraTrack({
+      name: 'ch1-opening', duration: OPENING_T.end, node: opening.camera, clock: () => opening.clock.t,
+      ...(hold ? { holdUntil: hold } : {}),
+      onSkip: () => {
+        opening.player.skip();
+        this.game.benchmark.start();
+        return this.establishingAfterSkip(spawn, hold);
+      },
+    });
+  }
+
+  protected override async playEstablishing(spawn: SpawnPoint): Promise<void> {
+    await super.playEstablishing(spawn);
+    if (this.disposed || !this.openingRequested) return;
+    if (this.opening) {
+      this.opening.dispose();
+      this.opening = null;
+      this.game.ui.hud.show();
+      this.game.ui.hud.setLocation(t(this.locationId));
+    }
+    this.savePoint = { chapterId: 'ch1', sceneId: this.level.id };
+    this.game.save.save(this.savePoint);
   }
 
   protected override establishingHold(): (() => boolean) | undefined {
@@ -238,8 +288,14 @@ export class S1Scene extends LevelScene {
   }
 
   override update(dt: number, alpha: number): void {
+    this.opening?.update(this.puzzles.tide.level);
     super.update(dt, alpha);
-    if (this.rig) this.art.update(this.camera, this.puzzles.tide.level);
+    this.opening?.updateRope();
+    if (this.rig) this.art.update(this.camera, this.puzzles.tide.level, this.opening?.moored);
+    if (!this.opening && this.lantern) {
+      // Two-handed interactions and auto-crossings use the unladen Xi clips.
+      this.lantern.visible = !this.rig.controller.locked && !this.rig.controller.busy;
+    }
     if (this.rig) this.fog028?.update(dt, this.camera, this.puzzles.tide.level);
     if (this.rig && this.puzzles) this.refreshResetPrompt();
     this.artSlots?.update();

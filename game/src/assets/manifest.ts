@@ -178,7 +178,7 @@ export const manifest: AssetEntry[] = [
   { key: 'env-cellar-s2', type: 'gltf', url: 'assets/art/models/env/env-cellar-s2.glb', group: 's2', optional: true, art: true },
   { key: 'env-repair-yard-s2', type: 'gltf', url: 'assets/art/models/env/env-repair-yard-s2.glb', group: 's2', optional: true, art: true },
   // 021 黄铜风灯（S2 进场就在汐手上；以后 S3 灯室书桌 / S1 开场要用时在该组另登记一个 key，同 s2far 的做法）
-  { key: 'prop-lantern-brass', type: 'gltf', url: 'assets/art/models/props/prop-lantern-brass.glb', group: 's2', optional: true, art: true },
+  { key: 'prop-lantern-brass', type: 'gltf', url: 'assets/art/models/props/prop-lantern-brass.glb', group: 'common', optional: true, art: true },
   // 021 院子灯台（东 / 西两份同一 GLB，摆在院墙 lamp-east/west-socket）
   { key: 'prop-lantern-stand-s2', type: 'gltf', url: 'assets/art/models/props/prop-lantern-stand-s2.glb', group: 's2', optional: true, art: true },
   // 021 解谜道具（未交付，pending；挂点 / 节点见 src/levels/s2/artSlots.ts）
