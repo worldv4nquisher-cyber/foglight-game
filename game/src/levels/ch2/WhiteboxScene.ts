@@ -8,16 +8,11 @@ import { BaseScene } from '@/scenes/BaseScene';
 import { CameraFollowSystem } from '@/systems/CameraFollowSystem';
 import { PhysicsSystem } from '@/systems/PhysicsSystem';
 import { v } from './geometry';
+import { HarbourScene } from './HarbourScene';
 import { CABLE_FROM, CABLE_TO, STAGES, VIEWS, type Point, type Stage } from './layout';
 import { buildVillage } from './village';
 
-const LABELS: Record<Stage, ReadonlyArray<readonly [string, Point, number]>> = {
-  s1: [
-    ['北鲱号', [-8, 13, -21], 5],
-    ['鱼闸 · 占位', [2.6, 2.4, -10], 3.7],
-    ['吊鱼箱 · 占位', [8, 4, -23.9], 3.7],
-    ['船舱鱼市', [4.8, 8.1, -34.5], 3.2],
-  ],
+const LABELS: Record<Exclude<Stage, 's1'>, ReadonlyArray<readonly [string, Point, number]>> = {
   s2: [
     ['甲板广场', [1, 13.3, -51], 4],
     ['镜巷传光 · 占位', [-13.2, 17.3, -55], 4.7],
@@ -66,7 +61,7 @@ class WhiteboxScene extends BaseScene {
   private readonly shot;
   private leaving = false;
 
-  constructor(game: Game, private stage: Stage, view: string | null) {
+  constructor(game: Game, private stage: Exclude<Stage, 's1'>, view: string | null) {
     super(game);
     this.name = nameFor(stage);
     this.shot = view ? VIEWS[stage][view] : undefined;
@@ -152,7 +147,9 @@ class WhiteboxScene extends BaseScene {
 
 export async function openWhitebox(game: Game, stage: Stage, view: string | null): Promise<void> {
   for (const id of ['s1', 's2', 's3'] as const) {
-    game.scenes.register(nameFor(id), (g) => new WhiteboxScene(g, id, id === stage ? view : null));
+    game.scenes.register(nameFor(id), (g) => id === 's1'
+      ? new HarbourScene(g, id === stage ? view : null)
+      : new WhiteboxScene(g, id, id === stage ? view : null));
   }
   await game.scenes.change(nameFor(stage));
 }

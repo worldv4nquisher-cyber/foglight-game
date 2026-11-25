@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import type { PhysicsSystem } from '@/systems/PhysicsSystem';
 import { Whitebox } from './geometry';
 import { CABLE_FROM, CABLE_TO, TERRACES, type Point } from './layout';
+import { dressVessel, SHIP_STATIONS, shipOpening } from './harbourVessel';
 
 const TIMBER = 0x776758, BEAM = 0x514841, WALK = 0xa99a84, STEEL = 0x6a5150;
 const STONE = 0x68757c, ROCK = 0x56636d, WATER = 0x456d78, WHITE = 0xd9e0de, MARK = 0xe5c083;
@@ -15,10 +16,12 @@ function surface(vertices: number[]): THREE.BufferGeometry {
 
 const quad = (a: Point, b: Point, c: Point, d: Point): number[] => [...a, ...b, ...c, ...a, ...c, ...d];
 
-function coast(w: Whitebox): void {
-  const water = new THREE.PlaneGeometry(650, 650);
-  water.rotateX(-Math.PI / 2);
-  w.shape(w.root, water, WATER, [0, 0, -20]);
+function coast(w: Whitebox, playable: boolean): void {
+  if (!playable) {
+    const water = new THREE.PlaneGeometry(650, 650);
+    water.rotateX(-Math.PI / 2);
+    w.shape(w.root, water, WATER, [0, 0, -20]);
+  }
   const c1 = new THREE.Color(ROCK), c2 = new THREE.Color(0x919a9c);
   for (const side of [-1, 1]) {
     const vertices = Array.from({ length: 13 }, (_, i) => {
@@ -38,15 +41,18 @@ function coast(w: Whitebox): void {
         const a = vertices[j]![band]!, b = vertices[j]![band + 1]!;
         const c = vertices[j + 1]![band + 1]!, d = vertices[j + 1]![band]!;
         const color = c1.clone().lerp(c2, (band * 0.12 + (Math.sin(j * 12.2 + side) + 1) * 0.15)).getHex();
-        w.shape(w.root, surface(side < 0 ? quad(d, c, b, a) : quad(a, b, c, d)), color, [0, 0, 0], [1, 1, 1], true);
+        const face = surface(side < 0 ? quad(d, c, b, a) : quad(a, b, c, d));
+        w.shape(w.root, face, color, [0, 0, 0], [1, 1, 1], true, undefined, !playable);
       }
     }
-    const end = vertices[0]!;
-    w.shape(w.root, surface(quad(end[0]!, [side * 32, -2, 7], end[4]!, end[3]!)
-      .concat(quad(end[3]!, end[4]!, [side * 32, -2, 7], end[0]!))), ROCK, [0, 0, 0]);
+    if (!playable) {
+      const end = vertices[0]!;
+      w.shape(w.root, surface(quad(end[0]!, [side * 32, -2, 7], end[4]!, end[3]!)
+        .concat(quad(end[3]!, end[4]!, [side * 32, -2, 7], end[0]!))), ROCK, [0, 0, 0]);
+    }
   }
-  w.box(w.root, [0, 16, -116], [35, 36, 10], STONE, true);
-  w.box(w.root, [-8, 35, -113], [18, 11, 12], ROCK);
+  w.shape(w.root, new THREE.BoxGeometry(), STONE, [0, 16, -116], [35, 36, 10], true, undefined, !playable);
+  if (!playable) w.box(w.root, [-8, 35, -113], [18, 11, 12], ROCK);
   for (let i = 0; i < 5; i++) {
     w.box(w.root, [-3 + 0.4 * Math.sin(i), 4 + i * 8, -110.8 + i * 0.25], [1.4 - i * 0.13, 8.4, 0.75], 0x9dbfc4);
   }
@@ -54,46 +60,56 @@ function coast(w: Whitebox): void {
   for (const [x, y, z, sx, sy, sz] of [
     [-17, 0, 5, 6, 5, 7], [-21, 2, 8, 7, 8, 10], [20, 0, 9, 8, 7, 12],
     [17, 0, 14, 4, 4, 4], [-13, 2, -20, 6, 5, 5], [13, 2, -70, 6, 6, 8],
-  ] as const) w.shape(w.root, rock, ROCK, [x, y, z], [sx, sy, sz]);
+  ] as const) if (!playable) w.shape(w.root, rock, ROCK, [x, y, z], [sx, sy, sz]);
 }
 
-function landing(w: Whitebox): void {
+function landing(w: Whitebox, playable: boolean): void {
   const g = w.root;
-  w.floor(g, [9, 2, -17], 5, 26, WALK);
+  const spans = playable ? [[-12.9, -4], [-31, -21.6]] as const : [[-30, -4]] as const;
+  for (const [from, to] of spans) {
+    w.floor(g, [9, 2, (from + to) / 2], 5, to - from, WALK);
+    if (playable) w.rail(g, [11.4, 2, from + 0.2], [11.4, 2, to - 0.2], BEAM);
+    if (playable) for (let z = from + 0.12; z < to; z += 0.37) {
+      w.box(g, [9, 2.012, z], [5.02, 0.046, 0.355], [0x786f60, 0x887967, 0x958371, 0x6b6157][Math.round(z * -17) % 4]!);
+    }
+  }
   w.floor(g, [9, 2, -29], 6, 6, TIMBER);
-  w.rail(g, [11.4, 2, -5], [11.4, 2, -31], BEAM);
-  w.rail(g, [6.6, 2, -9], [6.6, 2, -20], BEAM);
+  if (!playable) w.rail(g, [11.4, 2, -5], [11.4, 2, -31], BEAM);
+  w.rail(g, [6.6, 2, -9], [6.6, 2, playable ? -12.4 : -20], BEAM);
   for (let i = 0; i < 13; i++) {
-    w.box(g, [11.1, 0.5, -5 - i * 2], [0.23, 3.1, 0.23], BEAM);
-    w.box(g, [6.8, 0.5, -5 - i * 2], [0.23, 3.1, 0.23], BEAM);
-    w.box(g, [9, 2.015, -5 - i * 2], [4.85, 0.035, 0.035], BEAM);
+    const z = -5 - i * 2;
+    if (playable && z < -12.9 && z > -21.6) continue;
+    w.box(g, [11.1, 0.5, z], [0.23, 3.1, 0.23], BEAM);
+    w.box(g, [6.8, 0.5, z], [0.23, 3.1, 0.23], BEAM);
+    if (!playable) w.box(g, [9, 2.015, z], [4.85, 0.035, 0.035], BEAM);
   }
-  const boat = w.group();
-  boat.position.set(4.6, 0.15, -6);
-  boat.rotation.y = -0.2;
-  w.box(boat, [0, 0.15, 0], [1.45, 0.38, 4.1], TIMBER);
-  for (const side of [-1, 1]) {
-    w.box(boat, [side * 0.72, 0.38, 0], [0.14, 0.45, 3.8], BEAM);
-    w.beam(boat, [side * 0.72, 0.44, -1.8], [0, 0.64, -2.75], 0.16, BEAM);
-    w.beam(boat, [side * 0.72, 0.44, 1.8], [0, 0.53, 2.23], 0.16, BEAM);
+  if (!playable) {
+    const boat = w.group();
+    boat.position.set(4.6, 0.15, -6);
+    boat.rotation.y = -0.2;
+    w.box(boat, [0, 0.15, 0], [1.45, 0.38, 4.1], TIMBER);
+    for (const side of [-1, 1]) {
+      w.box(boat, [side * 0.72, 0.38, 0], [0.14, 0.45, 3.8], BEAM);
+      w.beam(boat, [side * 0.72, 0.44, -1.8], [0, 0.64, -2.75], 0.16, BEAM);
+      w.beam(boat, [side * 0.72, 0.44, 1.8], [0, 0.53, 2.23], 0.16, BEAM);
+    }
+    for (const z of [-1.2, 0.75]) w.box(boat, [0, 0.49, z], [1.35, 0.1, 0.32], WALK);
+    for (const x of [-0.5, 5]) w.box(g, [x, 0.85, -10], [0.39, 3, 0.42], BEAM);
+    for (let i = 0; i < 13; i++) w.box(g, [-0.3 + i * 0.43, 0.22, -10], [0.22, 2.1, 0.16], TIMBER);
+    w.box(g, [2.25, 1.32, -10], [5.7, 0.18, 0.21], BEAM);
+    for (let i = 0; i < 6; i++) w.box(g, [5.1, 0.15 + i * 0.32, -9.77], [0.3 - (i % 2) * 0.13, 0.055, 0.035], WHITE);
   }
-  for (const z of [-1.2, 0.75]) w.box(boat, [0, 0.49, z], [1.35, 0.1, 0.32], WALK);
-
-  for (const x of [-0.5, 5]) w.box(g, [x, 0.85, -10], [0.39, 3, 0.42], BEAM);
-  for (let i = 0; i < 13; i++) w.box(g, [-0.3 + i * 0.43, 0.22, -10], [0.22, 2.1, 0.16], TIMBER);
-  w.box(g, [2.25, 1.32, -10], [5.7, 0.18, 0.21], BEAM);
-  for (let i = 0; i < 6; i++) w.box(g, [5.1, 0.15 + i * 0.32, -9.77], [0.3 - (i % 2) * 0.13, 0.055, 0.035], WHITE);
   w.stairs(g, [9, 2, -25], [5.2, 6.2, -33], 2.1, WALK);
   w.floor(g, [4.2, 6.2, -34], 4, 3, WALK);
-  w.stairs(g, [5.5, 6.2, -34], [6.6, 11, -41.95], 1.8, WALK);
+  w.stairs(g, [5.5, 6.2, -34], playable ? [6.6, 10.45, -41.12] : [6.6, 11, -41.95], 1.8, WALK);
   w.floor(g, [5.8, 11, -43.08], 3.2, 2.28, WALK);
 }
 
-function vessel(w: Whitebox): void {
+function vessel(w: Whitebox, playable: boolean): void {
   const ship = w.group();
   ship.position.set(-0.5, 10.95, -45);
   ship.rotation.set(0.018, -0.33, 0.036, 'YXZ');
-  const stations = [[-29, 3.1, -0.1], [-23, 6.2, 0], [-15, 7.0, 0], [0, 7.2, 0], [14, 6.55, 0.15], [24, 3.8, 0.9], [31, 0.35, 2.5]] as const;
+  const stations = SHIP_STATIONS;
   const shell = (side: number, edge: number, [z, width, sheer]: readonly [number, number, number]): Point => [
     side * width * [1, 0.98, 0.81, 0.44][edge]!, [sheer + 0.65, sheer - 1.25, -7.7, -10.0][edge]!, z,
   ];
@@ -101,14 +117,13 @@ function vessel(w: Whitebox): void {
   for (const side of [1, -1]) {
     for (let i = 0; i < stations.length - 1; i++) {
       for (let band = 0; band < 3; band++) {
-        // 附近开上船与进市场的孔，不用穿钢板进船。
-        if ((i === 3 && (band === 0 || (side === 1 && band === 1))) || (i === 2 && side === 1 && band === 0)) continue;
+        if (shipOpening(side, i, band)) continue;
         const a = shell(side, band, stations[i]!), b = shell(side, band + 1, stations[i]!);
         const c = shell(side, band + 1, stations[i + 1]!), d = shell(side, band, stations[i + 1]!);
         const panel = surface(side > 0 ? quad(d, c, b, a) : quad(a, b, c, d));
         panel.userData.twoSided = true;
-        w.shape(ship, panel, plate[band]!, [0, 0, 0], [1, 1, 1], true);
-        if (band === 1) w.beam(ship, a, d, 0.13, 0x967374);
+        w.shape(ship, panel, plate[band]!, [0, 0, 0], [1, 1, 1], true, undefined, !playable);
+        if (!playable && band === 1) w.beam(ship, a, d, 0.13, 0x967374);
       }
     }
   }
@@ -142,17 +157,23 @@ function vessel(w: Whitebox): void {
   const mast: Point = [0, 16.5, -0.5], boom: Point = [11.8, 10.2, 7.5];
   w.box(ship, [0, 0.35, -0.5], [2.8, 0.7, 2.8], STEEL, true);
   w.beam(ship, [0, 0.6, -0.5], mast, 0.54, BEAM);
-  w.beam(ship, [0, 8.2, -0.5], boom, 0.42, STEEL);
-  w.beam(ship, mast, boom, 0.075, BEAM);
-  w.beam(ship, boom, [11.8, -0.8, 7.5], 0.065, BEAM);
-  w.box(ship, [11.8, -1.6, 7.5], [2.0, 1.3, 1.45], TIMBER);
-  w.box(ship, [-1.8, 1.5, -21], [4.2, 3, 5], 0x594f48, true);
-  w.box(ship, [-1.8, 3.13, -21], [4.7, 0.3, 5.45], 0x826f65);
-  w.box(ship, [-2.9, 4, -22.1], [0.68, 2.2, 0.68], STEEL);
-  w.box(ship, [-2.9, 5.1, -22.1], [0.93, 0.2, 0.93], BEAM);
-  w.box(ship, [0, 2.8, 24], [4.1, 0.3, 3], STEEL);
-  w.beam(ship, [0, 1, 26], [0, 5.3, 26], 0.26, BEAM);
-  w.beam(ship, [-1.7, 4.7, 26], [1.7, 4.7, 26], 0.16, BEAM);
+  if (!playable) {
+    w.beam(ship, [0, 8.2, -0.5], boom, 0.42, STEEL);
+    w.beam(ship, mast, boom, 0.075, BEAM);
+    w.beam(ship, boom, [11.8, -0.8, 7.5], 0.065, BEAM);
+    w.box(ship, [11.8, -1.6, 7.5], [2.0, 1.3, 1.45], TIMBER);
+  } else {
+    dressVessel(w, ship);
+  }
+  w.shape(ship, new THREE.BoxGeometry(), 0x594f48, [-1.8, 1.5, -21], [4.2, 3, 5], true, undefined, !playable);
+  if (!playable) {
+    w.box(ship, [-1.8, 3.13, -21], [4.7, 0.3, 5.45], 0x826f65);
+    w.box(ship, [-2.9, 4, -22.1], [0.68, 2.2, 0.68], STEEL);
+    w.box(ship, [-2.9, 5.1, -22.1], [0.93, 0.2, 0.93], BEAM);
+    w.box(ship, [0, 2.8, 24], [4.1, 0.3, 3], STEEL);
+    w.beam(ship, [0, 1, 26], [0, 5.3, 26], 0.26, BEAM);
+    w.beam(ship, [-1.7, 4.7, 26], [1.7, 4.7, 26], 0.16, BEAM);
+  }
   w.floor(w.root, [-7.4, 11, -43], 10.8, 2.1, WALK);
   w.rail(w.root, [-12.8, 11, -42], [-3.8, 11, -42], BEAM);
   w.floor(w.root, [9.1, 11, -43], 7.4, 2.1, WALK);
@@ -160,7 +181,7 @@ function vessel(w: Whitebox): void {
   for (const x of [-11, 10.8]) w.beam(w.root, [x, 10.7, -43], [x * 1.45, 6.7, -43], 0.27, BEAM);
 }
 
-function house(w: Whitebox, x: number, y: number, z: number, side: number, variant: number, stilts = true): void {
+function house(w: Whitebox, x: number, y: number, z: number, side: number, variant: number, stilts = true, playable = false): void {
   const h = w.group();
   h.position.set(x, y, z);
   h.rotation.y = side > 0 ? Math.PI : 0;
@@ -183,6 +204,41 @@ function house(w: Whitebox, x: number, y: number, z: number, side: number, varia
   w.box(h, [face + 0.021, 1.69, 0.61], [0.055, 0.75, 0.83], 0x444e54);
   w.box(h, [face + 0.135, 2.62, 0.68], [0.20, 0.55, 1.12], BEAM);
   if (variant % 4 !== 1) w.box(h, [face + 0.25, 2.63, 0.68], [0.1, 0.37, 0.86], 0xbccfd3);
+  if (playable) {
+    const planks = [0x78665a, 0x8d7865, 0x8a7770, 0x696e65];
+    for (let j = 0; j < Math.ceil(height / 0.19); j++) {
+      const cy = j * 0.19 + 0.08;
+      const color = planks[(j + variant * 3) % planks.length]!;
+      for (const dir of [-1, 1]) {
+        w.box(h, [0, cy, dir * (width / 2 + 0.02)], [depth + 0.05, 0.171, 0.079], color);
+        if (cy > 2.18) w.box(h, [face + 0.006, cy, dir * 0.42 * width], [0.066, 0.173, width * 0.16], color);
+        else {
+          const start = dir === -1 ? -width / 2 : 1.05, end = dir === -1 ? -1.06 : width / 2;
+          w.box(h, [face + 0.024, cy, (start + end) / 2], [0.072, 0.173, end - start], color);
+        }
+      }
+    }
+    for (const dir of [-1, 1]) {
+      w.box(h, [face + 0.05, height / 2, dir * width / 2], [0.14, height, 0.15], BEAM);
+      const rot = dir < 0 ? r1 : r2;
+      for (let i = 0; i <= 8; i++) w.orientedBox(h,
+        [(i - 4) * depth / 8, height + 0.59, dir * half / 2], [0.066, 0.058, roofDepth], BEAM, rot);
+      w.beam(h, [face + 0.28, height - 0.015, dir * half], [face + 0.28, ridge + 0.04, 0], 0.16, BEAM);
+    }
+    w.beam(h, [-face - 0.28, ridge + 0.09, 0], [face + 0.3, ridge + 0.09, 0], 0.13, BEAM);
+    w.box(h, [face + 0.07, 1.28, 0.61], [0.2, 0.085, 1.02], TIMBER);
+    w.box(h, [face + 0.055, 1.7, 0.61], [0.11, 0.74, 0.073], TIMBER);
+    if (variant % 4 !== 1) {
+      const angle = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), -0.39);
+      w.orientedBox(h, [face + 0.3, 2.66, 0.68], [0.085, 0.46, 0.94], 0x758e97, angle);
+      w.orientedBox(h, [face + 0.352, 2.7, 0.68], [0.025, 0.227, 0.78], 0xd0e3e6, angle);
+      w.beam(h, [face + 0.19, 2.38, 1.22], [face + 0.43, 2.7, 1.22], 0.084, BEAM);
+    }
+    if (stilts) {
+      w.beam(h, [face + 0.33, -0.28, -width * 0.44], [face + 0.33, -3.65, width * 0.44], 0.19, TIMBER);
+      w.beam(h, [face + 0.33, -0.28, width * 0.44], [face + 0.33, -3.65, -width * 0.44], 0.19, BEAM);
+    }
+  }
   if (!stilts) return;
   for (const a of [-1, 1]) {
     const zEdge = width * a * 0.44;
@@ -191,12 +247,12 @@ function house(w: Whitebox, x: number, y: number, z: number, side: number, varia
   }
 }
 
-function heights(w: Whitebox): void {
+function heights(w: Whitebox, playable: boolean): void {
   const g = w.root;
   const west = [[-16, 7, -27], [-16, 11, -47], [-16, 14, -67], [-17, 18, -57], [-16, 21, -81], [-17, 25, -47], [-18, 28, -68], [-17, 32, -57], [-17, 34, -32], [-19, 37, -78]] as const;
   const east = [[15, 5, -29], [15, 11, -42], [16, 15, -57], [15, 19, -66], [16, 19, -34], [16, 22, -49], [16, 27, -61], [17, 30, -77], [17, 34, -47], [18, 36, -65]] as const;
-  west.forEach(([x, y, z], i) => house(w, x, y, z, -1, i));
-  east.forEach(([x, y, z], i) => house(w, x, y, z, 1, i + 2));
+  west.forEach(([x, y, z], i) => house(w, x, y, z, -1, i, true, playable));
+  east.forEach(([x, y, z], i) => house(w, x, y, z, 1, i + 2, true, playable));
   const eastLanding: Point = [12.65, 15, -56];
   const openingHalfWidth = 1.2;
   for (const [x, y, z] of east) {
@@ -230,7 +286,7 @@ function heights(w: Whitebox): void {
   w.floor(g, [-17.7, 39, -24.5], 6, 33.4, STONE);
   w.floor(g, [-20, 39, -9], 11.8, 13.0, STONE);
   w.rail(g, [-14.8, 39, -37], [-14.8, 39, -13], BEAM);
-  house(w, -22, 39, -16, -1, 0, false);
+  house(w, -22, 39, -16, -1, 0, false, playable);
   w.box(g, [-18.35, 40.5, -17.15], [0.18, 1.7, 2.1], BEAM);
   w.box(g, [-18.22, 40.5, -17.15], [0.15, 1.48, 1.89], 0xbccfd3);
   const tank = new THREE.CylinderGeometry(1.45, 1.35, 2.0, 12);
@@ -250,11 +306,13 @@ function heights(w: Whitebox): void {
   }
 }
 
-function lighthouse(w: Whitebox): void {
+function lighthouse(w: Whitebox, playable: boolean): void {
   const g = w.root, tx = -4, tz = 35, baseY = 14;
   const stack = new THREE.CylinderGeometry(4.8, 7.8, 15.7, 8);
-  w.shape(g, stack, ROCK, [tx, 6.1, tz], [1.1, 1, 1]);
-  w.shape(g, new THREE.CylinderGeometry(4.25, 5.2, 4.6, 7), STONE, [tx, 11.5, tz]);
+  if (!playable) {
+    w.shape(g, stack, ROCK, [tx, 6.1, tz], [1.1, 1, 1]);
+    w.shape(g, new THREE.CylinderGeometry(4.25, 5.2, 4.6, 7), STONE, [tx, 11.5, tz]);
+  }
   w.floor(g, [tx, baseY, 34.4], 7.1, 11.2, STONE);
   const point = (r: number, theta: number, y: number): Point => [tx + r * Math.cos(theta), y, tz + r * Math.sin(theta)];
   for (let i = 0; i < 12; i++) {
@@ -263,12 +321,37 @@ function lighthouse(w: Whitebox): void {
     const a1 = point(2.6, a, 32), b1 = point(2.6, b, 32);
     if (i === 8 || i === 9) {
       const a2 = point(2.98, a, 16.6), b2 = point(2.98, b, 16.6);
-      w.shape(g, surface(quad(a2, a1, b1, b2)), WHITE, [0, 0, 0], [1, 1, 1], true);
+      w.shape(g, surface(quad(a2, a1, b1, b2)), WHITE, [0, 0, 0], [1, 1, 1], true, undefined, !playable);
     } else {
-      w.shape(g, surface(quad(a0, a1, b1, b0)), i % 3 === 0 ? 0xb7c5c4 : WHITE, [0, 0, 0], [1, 1, 1], true);
+      w.shape(g, surface(quad(a0, a1, b1, b0)), i % 3 === 0 ? 0xb7c5c4 : WHITE, [0, 0, 0], [1, 1, 1], true, undefined, !playable);
     }
     w.beam(g, point(2.54, a, 32.1), point(2.54, a, 34.85), 0.16, BEAM);
     w.shape(g, surface(quad(point(2.53, a, 32.4), point(2.53, a, 34.6), point(2.53, b, 34.6), point(2.53, b, 32.4))), 0x303d44, [0, 0, 0]);
+  }
+  if (playable) {
+    const stone = [0x92958a, 0x828b86, 0x9ca29b, 0x767d75, 0x9b9181];
+    const chunks = stone.map((): number[] => []);
+    const n = 28;
+    for (let row = 0; row < 36; row++) for (let i = 0; i < n; i++) {
+      const theta = ((i + (row % 2) * 0.5) / n) * 2 * Math.PI;
+      const a = theta + 0.011, b = theta + 2 * Math.PI / n - 0.011;
+      if (row < 5 && theta > Math.PI * 1.34 && theta < Math.PI * 1.66) continue;
+      const y = 14 + row * 0.5;
+      const r = 3.07 - row * 0.0125 + 0.036 * Math.sin(row * 7.4 + i * 9.59);
+      chunks[(row * 11 + i * 7) % stone.length]!.push(...quad(point(r, a, y), point(r - 0.012, a, y + 0.47),
+        point(r - 0.012, b, y + 0.47), point(r, b, y)));
+    }
+    w.shape(g, new THREE.CylinderGeometry(2.58, 3.01, 18, 36), 0x535f61, [tx, 23, tz]);
+    chunks.forEach((vertices, i) => w.shape(g, surface(vertices), stone[i]!, [0, 0, 0]));
+    for (const [y, r] of [[14.13, 3.3], [16.13, 3.16], [31.73, 2.84], [32.1, 3.27], [34.93, 2.84]] as const) {
+      w.shape(g, new THREE.CylinderGeometry(r, r + 0.06, 0.24, 24), y > 32 ? BEAM : stone[2]!, [tx, y, tz]);
+    }
+    for (let i = 0; i < 24; i++) {
+      const a = i * Math.PI / 12, b = a + Math.PI / 12;
+      w.beam(g, point(3.19, a, 32.14), point(3.19, a, 33.05), 0.057, BEAM);
+      for (const y of [32.57, 33.05]) w.beam(g, point(3.19, a, y), point(3.19, b, y), 0.069, BEAM);
+    }
+    w.beam(g, point(0, 0, 35.4), point(0, 0, 37), 0.078, BEAM);
   }
   const fullSteps = 96, rise = 18 / fullSteps;
   const inner = 1.27, outer = 2.52, segments: number[] = [];
@@ -304,14 +387,14 @@ function lighthouse(w: Whitebox): void {
   w.beam(g, [CABLE_FROM[0], CABLE_FROM[1] + 2.08, CABLE_FROM[2]], [-17, 43.35, -5], 0.12, BEAM);
 }
 
-export function buildVillage(physics: PhysicsSystem): THREE.Group {
+export function buildVillage(physics: PhysicsSystem, playable = false): THREE.Group {
   const w = new Whitebox(physics);
-  coast(w);
-  landing(w);
-  vessel(w);
-  heights(w);
-  lighthouse(w);
-  for (const [x, y, z] of [[5, 1.1, -10], [9, 2.5, -24], [-14, 15.2, -55], [-21, 40.5, -9], [-4, 33.8, 35]] as const) {
+  coast(w, playable);
+  landing(w, playable);
+  vessel(w, playable);
+  heights(w, playable);
+  lighthouse(w, playable);
+  for (const [x, y, z] of playable ? [] : [[5, 1.1, -10], [9, 2.5, -24], [-14, 15.2, -55], [-21, 40.5, -9], [-4, 33.8, 35]] as const) {
     w.shape(w.root, new THREE.OctahedronGeometry(0.25), MARK, [x, y, z]);
   }
   w.finish();

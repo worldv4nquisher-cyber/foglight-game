@@ -16,6 +16,7 @@ import { buildS2Greybox } from '@/levels/s2/greybox';
 import { S2 } from '@/levels/s2/layout';
 import { buildVillage } from '@/levels/ch2/village';
 import { CABLE_FROM, CABLE_TO, STAGES, TERRACES } from '@/levels/ch2/layout';
+import { addHarbourColliders, HarbourPuzzles, QUAY_START, QUAY_END, HIGH_WATER, LOW_WATER, WATER_SEAM } from '@/levels/ch2/harbour';
 
 const DT = 1 / 60;
 const results = [];
@@ -869,6 +870,99 @@ test('裂湾村白盒：码头、鱼市、两侧崖壁、缆车站和灯室可�
           `${name}: (${x}, ${y}, ${z}) ← ${body.position.toArray().map((n) => n.toFixed(2))}`);
       }
     }
+  } finally {
+    physics.clear();
+    world.traverse((o) => { o.geometry?.dispose(); o.material?.dispose(); });
+  }
+});
+
+test('裂湾村鱼闸：错过退潮可重试，封闸只留内湾，深水送回', () => {
+  const p = new HarbourPuzzles();
+  assert.equal(p.closeGate(), false);
+  assert.equal(p.board(), false);
+  assert.ok(p.waitForTide());
+  p.fixedUpdate(7);
+  assert.equal(p.closeGate(), false);
+  p.fixedUpdate(13);
+  assert.equal(p.inner.level, LOW_WATER);
+  assert.ok(p.waitForTide());
+  p.fixedUpdate(12);
+  assert.ok(p.waitForTide());
+  assert.ok(p.closeGate());
+  assert.equal(p.board(), false);
+  p.fixedUpdate(12);
+  assert.equal(p.outer.level, LOW_WATER);
+  assert.equal(p.inner.level, HIGH_WATER);
+  let recalled;
+  p.tides.onRecall = (zone) => { recalled = zone; };
+  assert.equal(p.tides.checkRecall({ position: new THREE.Vector3(9, -1.75, WATER_SEAM - 1), onGround: true, busy: false }), p.inner);
+  assert.equal(recalled, p.inner);
+  assert.ok(p.board());
+  p.fixedUpdate(4);
+  assert.ok(p.crossed);
+  p.reset();
+  assert.equal(p.crossed, false);
+  assert.equal(p.gateClosed, false);
+  assert.equal(p.outer.level, HIGH_WATER);
+});
+
+test('裂湾村吊鱼箱：不能绕过鱼闸或断梯，重置后仍可吊箱并登甲板', () => {
+  const physics = new PhysicsSystem();
+  const crate = addHarbourColliders(physics);
+  const world = buildVillage(physics, true);
+  const body = new CharacterBody();
+  physics.addBody(body);
+  const env = { physics, body };
+  const p = new HarbourPuzzles();
+  function walkTo([x, y, z]) {
+    for (let i = 0; i < 720 && body.position.y > -1; i++) {
+      const dx = x - body.position.x, dz = z - body.position.z;
+      const d = Math.hypot(dx, dz);
+      if (d < 0.1) break;
+      body.velocity.x = 1.6 * dx / d;
+      body.velocity.z = 1.6 * dz / d;
+      physics.step(DT);
+    }
+    return Math.hypot(x - body.position.x, z - body.position.z) < 0.15 && Math.abs(y - body.position.y) < 0.35 && body.onGround;
+  }
+  const mustWalk = (target) => assert.ok(walkTo(target), `${target} ← ${body.position.toArray().map((n) => n.toFixed(2))}`);
+  try {
+    place(env, new THREE.Vector3(...QUAY_START));
+    for (const z of [-9.5, -11.15, -12.25]) mustWalk([9, 2, z]);
+    assert.equal(walkTo(QUAY_END), false);
+    assert.equal(p.setCounterweight(), false);
+    assert.ok(p.waitForTide());
+    assert.ok(p.closeGate());
+    p.fixedUpdate(12);
+    assert.ok(p.board());
+    p.fixedUpdate(4);
+    place(env, new THREE.Vector3(...QUAY_END));
+    mustWalk([10.3, 2, -22.9]);
+    assert.ok(p.setCounterweight());
+    mustWalk([8.2, 2, -25.2]);
+    assert.ok(p.operateCrane());
+    assert.equal(p.operateCrane(), false);
+    p.resetCrane();
+    p.fixedUpdate(4);
+    assert.equal(p.crane, 'unweighted');
+    assert.equal(p.crossed, true);
+    assert.equal(p.operateCrane(), false);
+    assert.ok(p.setCounterweight());
+    for (const state of ['lifted', 'swung', 'landed']) {
+      assert.ok(p.operateCrane());
+      p.fixedUpdate(4);
+      assert.equal(p.crane, state);
+    }
+    mustWalk([9, 2, -25]);
+    mustWalk([5.5, 6.2, -32.5]);
+    mustWalk([5.5, 6.2, -34]);
+    const top = [6.56, 10.35, -40.95];
+    mustWalk(top);
+    assert.equal(walkTo([6.6, 11, -42.4]), false);
+    crate.enabled = true;
+    place(env, new THREE.Vector3(...top));
+    mustWalk([6.6, 11, -42.4]);
+    mustWalk(STAGES.s1.exit);
   } finally {
     physics.clear();
     world.traverse((o) => { o.geometry?.dispose(); o.material?.dispose(); });

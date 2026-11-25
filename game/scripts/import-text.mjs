@@ -131,6 +131,8 @@ export const DEV_ONLY = {
   'src/scenes/TestbedScene.ts': '测试场地（?scene=testbed，只在 dev / 测试构建）',
   'src/levels/ch2/WhiteboxScene.ts': '裂湾村白盒标牌（?ch2-whitebox，只在 dev / 测试构建）',
   'src/levels/ch2/layout.ts': '裂湾村白盒场景名（?ch2-whitebox，只在 dev / 测试构建）',
+  'src/levels/ch2/HarbourScene.ts': '裂湾村鱼港试玩界面（?ch2-whitebox，只在 dev / 测试构建）',
+  'src/levels/ch2/harbourArt.ts': '裂湾村鱼港现场标牌（?ch2-whitebox，只在 dev / 测试构建）',
   'src/ui/DebugPanel.ts': 'F4 调试面板（仅 dev / 测试构建 + ?debug=1）',
   'src/config/atmosphere.ts': '氛围预设内部名，只在代码里区分预设',
   'src/config/atmosphere028.ts': '美术 atmosphere-028.json 原样副本（gen-atmo028 生成），中文只在节点名 / note 里，不上屏',

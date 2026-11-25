@@ -3,6 +3,7 @@ import { copyFileSync, createReadStream, existsSync, mkdirSync, readFileSync, st
 import { dirname, join, normalize, posix, relative, resolve, sep } from 'node:path';
 import { defineConfig, type Plugin } from 'vite';
 import { inlinePolyfillIntoHtml } from './scripts/lib/inline-polyfill.mjs';
+import { harbourAssetPaths } from './src/levels/ch2/harbourAssetPaths';
 
 /**
  * three 的 DRACOLoader 用 `new URL('../libs/draco/…', import.meta.url)` 静态引用了三套解码器，
@@ -83,10 +84,12 @@ function pendingArtUrls(): { all: string[]; present: string[] } {
 
 function artAssets(): Plugin {
   let outDir = 'dist';
+  let smoke = false;
   return {
     name: 'foglight-art-assets',
     configResolved(c) {
       outDir = resolve(c.root, c.build.outDir);
+      smoke = c.mode === 'smoke';
     },
     configureServer(server) {
       server.middlewares.use((req, res, next) => {
@@ -109,7 +112,9 @@ function artAssets(): Plugin {
         this.warn('../art 不存在：美术资源没有打进 dist，运行时用白盒');
         return;
       }
-      const todo = manifestArtUrls().map((u) => u.slice(ART_PREFIX.length));
+      const urls = manifestArtUrls();
+      if (smoke) urls.push(...Object.values(harbourAssetPaths));
+      const todo = urls.map((u) => u.slice(ART_PREFIX.length));
       const pending = new Set(pendingArtUrls().all);
       const done = new Set<string>();
       while (todo.length) {
