@@ -10,20 +10,14 @@ import { PhysicsSystem } from '@/systems/PhysicsSystem';
 import { v } from './geometry';
 import { HarbourScene } from './HarbourScene';
 import { CABLE_FROM, CABLE_TO, STAGES, VIEWS, type Point, type Stage } from './layout';
+import { MirrorAlleyScene } from './MirrorAlleyScene';
 import { buildVillage } from './village';
 
-const LABELS: Record<Exclude<Stage, 's1'>, ReadonlyArray<readonly [string, Point, number]>> = {
-  s2: [
-    ['甲板广场', [1, 13.3, -51], 4],
-    ['镜巷传光 · 占位', [-13.2, 17.3, -55], 4.7],
-    ['熏鱼房', [4.1, 14.9, -66], 3.4],
-  ],
-  s3: [
-    ['苇婶家', [-20, 42.1, -15], 3.7],
-    ['缆车配重 · 占位', [-21, 42.1, -9], 4.4],
-    ['半盏灯 · 棱镜占位', [-4, 34.7, 35], 2.8],
-  ],
-};
+const LABELS: ReadonlyArray<readonly [string, Point, number]> = [
+  ['苇婶家', [-20, 42.1, -15], 3.7],
+  ['缆车配重 · 占位', [-21, 42.1, -9], 4.4],
+  ['半盏灯 · 棱镜占位', [-4, 34.7, 35], 2.8],
+];
 
 function sign(text: string, position: Point, width: number): THREE.Sprite {
   const canvas = document.createElement('canvas');
@@ -53,26 +47,24 @@ function nameFor(stage: Stage): string {
 }
 
 class WhiteboxScene extends BaseScene {
-  readonly name: string;
+  readonly name = nameFor('s3');
   private readonly physics = new PhysicsSystem();
   private readonly entities = new EntityManager(this.scene);
   private readonly follow: CameraFollowSystem;
   private readonly rig: PlayerRig;
   private readonly shot;
-  private leaving = false;
 
-  constructor(game: Game, private stage: Exclude<Stage, 's1'>, view: string | null) {
+  constructor(game: Game, view: string | null) {
     super(game);
-    this.name = nameFor(stage);
-    this.shot = view ? VIEWS[stage][view] : undefined;
-    const spawn = v(STAGES[stage].spawn);
+    this.shot = view ? VIEWS.s3[view] : undefined;
+    const spawn = v(STAGES.s3.spawn);
     this.follow = new CameraFollowSystem(this.camera, game.input, {
       physics: this.physics,
       events: game.events,
     });
     this.rig = createPlayer(game, this.physics, spawn.clone().add(new THREE.Vector3(0, 0.1, 0)), () => this.follow.yaw);
     this.follow.target = this.rig.entity.object3D;
-    const heading = v(STAGES[stage].look).sub(spawn);
+    const heading = v(STAGES.s3.look).sub(spawn);
     this.follow.yaw = Math.atan2(-heading.x, -heading.z);
     this.follow.pitch = Math.atan2(heading.y - 1.35, Math.hypot(heading.x, heading.z));
     this.cleanups.push(() => this.follow.dispose());
@@ -88,33 +80,23 @@ class WhiteboxScene extends BaseScene {
     this.scene.add(buildVillage(this.physics));
     this.entities.add(this.rig.entity);
     if (this.shot) this.rig.visual.visible = false;
-    for (const [text, p, width] of LABELS[this.stage]) this.scene.add(sign(text, p, width));
+    for (const [text, p, width] of LABELS) this.scene.add(sign(text, p, width));
     this.physics.killY = -1.4;
-    this.physics.onFallOut = () => void this.rig.controller.teleportTo(v(STAGES[this.stage].spawn));
-    if (this.stage === 's3') {
-      for (const [start, end] of [[CABLE_FROM, CABLE_TO], [CABLE_TO, CABLE_FROM]] as const) {
-        this.rig.controller.links.push(new TraversalLink({
-          start: v(start), end: v(end), radius: 1.5, walkInto: false, prompt: 'E　缆车跨越（白盒）',
-        }));
-      }
+    this.physics.onFallOut = () => void this.rig.controller.teleportTo(v(STAGES.s3.spawn));
+    for (const [start, end] of [[CABLE_FROM, CABLE_TO], [CABLE_TO, CABLE_FROM]] as const) {
+      this.rig.controller.links.push(new TraversalLink({
+        start: v(start), end: v(end), radius: 1.5, walkInto: false, prompt: 'E　缆车跨越（白盒）',
+      }));
     }
     this.game.ui.hud.show();
-    this.game.ui.hud.setLocation(`裂湾村白盒 · ${STAGES[this.stage].title}`);
+    this.game.ui.hud.setLocation(`裂湾村白盒 · ${STAGES.s3.title}`);
     this.follow.snap();
     this.positionCamera(0);
   }
 
   override fixedUpdate(dt: number): void {
-    if (this.shot || this.leaving) return;
-    const stage = STAGES[this.stage];
-    const atExit = 'exit' in stage && this.rig.body.position.distanceTo(v(stage.exit)) < 1.8;
-    this.game.ui.hud.setPrompt(atExit && 'next' in stage
-      ? `E\u3000前往${STAGES[stage.next].title}` : this.rig.controller.nearLink?.prompt ?? null);
-    if (atExit && 'next' in stage && this.game.input.consumePressed('interact')) {
-      this.leaving = true;
-      void this.game.scenes.change(nameFor(stage.next));
-      return;
-    }
+    if (this.shot) return;
+    this.game.ui.hud.setPrompt(this.rig.controller.nearLink?.prompt ?? null);
     this.entities.fixedUpdate(dt);
     this.physics.step(dt);
     this.rig.body.afterPhysics();
@@ -146,10 +128,9 @@ class WhiteboxScene extends BaseScene {
 }
 
 export async function openWhitebox(game: Game, stage: Stage, view: string | null): Promise<void> {
-  for (const id of ['s1', 's2', 's3'] as const) {
-    game.scenes.register(nameFor(id), (g) => id === 's1'
-      ? new HarbourScene(g, id === stage ? view : null)
-      : new WhiteboxScene(g, id, id === stage ? view : null));
-  }
+  game.scenes
+    .register(nameFor('s1'), (g) => new HarbourScene(g, stage === 's1' ? view : null))
+    .register(nameFor('s2'), (g) => new MirrorAlleyScene(g, stage === 's2' ? view : null))
+    .register(nameFor('s3'), (g) => new WhiteboxScene(g, stage === 's3' ? view : null));
   await game.scenes.change(nameFor(stage));
 }

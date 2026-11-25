@@ -16,8 +16,8 @@ function surface(vertices: number[]): THREE.BufferGeometry {
 
 const quad = (a: Point, b: Point, c: Point, d: Point): number[] => [...a, ...b, ...c, ...a, ...c, ...d];
 
-function coast(w: Whitebox, playable: boolean): void {
-  if (!playable) {
+function coast(w: Whitebox, playable: boolean, mirrorAlley: boolean): void {
+  if (!playable && !mirrorAlley) {
     const water = new THREE.PlaneGeometry(650, 650);
     water.rotateX(-Math.PI / 2);
     w.shape(w.root, water, WATER, [0, 0, -20]);
@@ -105,7 +105,7 @@ function landing(w: Whitebox, playable: boolean): void {
   w.floor(g, [5.8, 11, -43.08], 3.2, 2.28, WALK);
 }
 
-function vessel(w: Whitebox, playable: boolean): void {
+function vessel(w: Whitebox, playable: boolean, mirrorAlley: boolean): void {
   const ship = w.group();
   ship.position.set(-0.5, 10.95, -45);
   ship.rotation.set(0.018, -0.33, 0.036, 'YXZ');
@@ -122,8 +122,8 @@ function vessel(w: Whitebox, playable: boolean): void {
         const c = shell(side, band + 1, stations[i + 1]!), d = shell(side, band, stations[i + 1]!);
         const panel = surface(side > 0 ? quad(d, c, b, a) : quad(a, b, c, d));
         panel.userData.twoSided = true;
-        w.shape(ship, panel, plate[band]!, [0, 0, 0], [1, 1, 1], true, undefined, !playable);
-        if (!playable && band === 1) w.beam(ship, a, d, 0.13, 0x967374);
+        w.shape(ship, panel, plate[band]!, [0, 0, 0], [1, 1, 1], true, undefined, !playable && !mirrorAlley);
+        if (!playable && !mirrorAlley && band === 1) w.beam(ship, a, d, 0.13, 0x967374);
       }
     }
   }
@@ -162,11 +162,10 @@ function vessel(w: Whitebox, playable: boolean): void {
     w.beam(ship, mast, boom, 0.075, BEAM);
     w.beam(ship, boom, [11.8, -0.8, 7.5], 0.065, BEAM);
     w.box(ship, [11.8, -1.6, 7.5], [2.0, 1.3, 1.45], TIMBER);
-  } else {
-    dressVessel(w, ship);
   }
-  w.shape(ship, new THREE.BoxGeometry(), 0x594f48, [-1.8, 1.5, -21], [4.2, 3, 5], true, undefined, !playable);
-  if (!playable) {
+  if (playable || mirrorAlley) dressVessel(w, ship);
+  w.shape(ship, new THREE.BoxGeometry(), 0x594f48, [-1.8, 1.5, -21], [4.2, 3, 5], true, undefined, !playable && !mirrorAlley);
+  if (!playable && !mirrorAlley) {
     w.box(ship, [-1.8, 3.13, -21], [4.7, 0.3, 5.45], 0x826f65);
     w.box(ship, [-2.9, 4, -22.1], [0.68, 2.2, 0.68], STEEL);
     w.box(ship, [-2.9, 5.1, -22.1], [0.93, 0.2, 0.93], BEAM);
@@ -387,14 +386,14 @@ function lighthouse(w: Whitebox, playable: boolean): void {
   w.beam(g, [CABLE_FROM[0], CABLE_FROM[1] + 2.08, CABLE_FROM[2]], [-17, 43.35, -5], 0.12, BEAM);
 }
 
-export function buildVillage(physics: PhysicsSystem, playable = false): THREE.Group {
+export function buildVillage(physics: PhysicsSystem, playable = false, mirrorAlley = false): THREE.Group {
   const w = new Whitebox(physics);
-  coast(w, playable);
+  coast(w, playable, mirrorAlley);
   landing(w, playable);
-  vessel(w, playable);
-  heights(w, playable);
+  vessel(w, playable, mirrorAlley);
+  heights(w, playable || mirrorAlley);
   lighthouse(w, playable);
-  for (const [x, y, z] of playable ? [] : [[5, 1.1, -10], [9, 2.5, -24], [-14, 15.2, -55], [-21, 40.5, -9], [-4, 33.8, 35]] as const) {
+  for (const [x, y, z] of playable || mirrorAlley ? [] : [[5, 1.1, -10], [9, 2.5, -24], [-14, 15.2, -55], [-21, 40.5, -9], [-4, 33.8, 35]] as const) {
     w.shape(w.root, new THREE.OctahedronGeometry(0.25), MARK, [x, y, z]);
   }
   w.finish();
