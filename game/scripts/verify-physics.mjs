@@ -3,6 +3,7 @@
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { gameplay } from '@/config/gameplay';
+import { Time } from '@/core/Time';
 import { CharacterBody, PhysicsSystem } from '@/systems/PhysicsSystem';
 import { StairGait, stepLocomotion } from '@/systems/locomotion';
 import { buildTestCourse } from '@/world/testCourse';
@@ -1182,6 +1183,54 @@ test('礁柱灯塔：崖顶能步行到站，缆车落点可走进塔门直达�
       const distance = body.position.clone().sub(new THREE.Vector3(-4, body.position.y, 35)).length();
       assert.ok(body.onGround && body.position.y >= y - 0.1 && distance >= 1.4,
         `内侧护栏缺口 ${i}：${body.position.toArray().map((n) => n.toFixed(2))}`);
+    }
+    for (const frameMs of [1000 / 60, 200]) {
+      const clock = new Time(DT);
+      let now = 0;
+      clock.beginFrame(now, false);
+      const start = new THREE.Vector3(-4, 14, 33.05);
+      const loco = { vx: 0, vz: 0, facing: 0 };
+      const gait = new StairGait();
+      const frame = (cameraYaw, moveY = 1) => {
+        const steps = clock.beginFrame(now += frameMs, false);
+        const dt = clock.fixedDelta;
+        for (let i = 0; i < steps; i++) {
+          const delta = body.position.clone().sub(body.prevPosition);
+          const fixedSpeed = gait.update(dt, delta.y, Math.hypot(delta.x, delta.z), body.onGround);
+          stepLocomotion(loco, { moveX: 0, moveY, cameraYaw, sprint: false, fixedSpeed }, dt);
+          body.velocity.x = loco.vx;
+          body.velocity.z = loco.vz;
+          physics.step(dt);
+        }
+      };
+      const settle = (p) => {
+        body.teleport(p);
+        gait.reset();
+        loco.vx = loco.vz = 0;
+        for (let i = 0; i < Math.ceil(600 / frameMs); i++) frame(0, 0);
+      };
+
+      settle(start);
+      for (let i = 0; i < Math.ceil(4000 / frameMs); i++) frame(-Math.PI / 2);
+      assert.ok(body.position.x > -2.5 && body.onGround, `${frameMs}ms：未接近入口右侧墙面`);
+      const jamb = new THREE.Vector3(-2.194, 14, 32.917);
+      settle(jamb);
+      for (let i = 0; i < Math.ceil(1500 / frameMs); i++) frame(Math.PI / 2);
+      assert.ok(body.onGround && body.position.x < jamb.x - 0.45,
+        `${frameMs}ms：入口右侧墙面夹住角色（${body.position.toArray()}）`);
+
+      settle(start);
+      let angle = -Math.PI / 2;
+      const end = 6 * Math.PI;
+      for (let i = 0; i < Math.ceil(90000 / frameMs) && body.position.y < 31.9; i++) {
+        const p = body.position;
+        const a = Math.atan2(p.z - 35, p.x + 4) - angle;
+        angle += Math.atan2(Math.sin(a), Math.cos(a));
+        const ahead = Math.min(end + 0.1, Math.max(-Math.PI / 2, angle) + 0.28);
+        frame(Math.atan2(p.x + 4 - 1.94 * Math.cos(ahead), p.z - 35 - 1.94 * Math.sin(ahead)));
+      }
+      assert.ok(body.onGround && body.position.y >= 31.9,
+        `${frameMs}ms：未走到螺旋坡道顶部（${body.position.toArray()}）`);
     }
   } finally {
     delete globalThis.document;

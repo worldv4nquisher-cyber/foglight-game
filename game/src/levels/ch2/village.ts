@@ -244,11 +244,11 @@ function house(w: Whitebox, x: number, y: number, z: number, side: number, varia
   for (const a of [-1, 1]) {
     const zEdge = width * a * 0.44;
     w.box(h, [face + 0.35, -2.05, zEdge], [0.26, 4.1, 0.26], BEAM);
-    w.beam(h, [face + 0.35, -0.2, zEdge], [cliffFootings ? -5.9 : -1.35, -3.15, zEdge], 0.21, TIMBER);
+    w.beam(h, [face + 0.35, -0.2, zEdge], [-1.35, -3.15, zEdge], 0.21, TIMBER);
     if (cliffFootings) {
-      w.beam(h, [face + 0.35, -4, zEdge], [-5.9, -6.35, zEdge], 0.24, BEAM);
-      w.box(h, [0.25, -4.67, zEdge], [1.6, 0.68, 0.8], STONE);
-      w.box(h, [0.10, -1.05, zEdge], [1.6, 0.58, 0.8], STONE);
+      const edge = face + 0.67;
+      w.box(h, [(edge - 3) / 2, -4.39, zEdge], [edge + 3, 0.62, 0.88], 0x78858a);
+      w.beam(h, [face + 0.36, -4.64, zEdge], [-3, -6.65, zEdge], 0.73, STONE);
     }
   }
 }
@@ -321,15 +321,18 @@ function lighthouse(w: Whitebox, playable: boolean, station: boolean): void {
   }
   w.floor(g, [tx, baseY, 34.4], 7.1, 11.2, STONE);
   const point = (r: number, theta: number, y: number): Point => [tx + r * Math.cos(theta), y, tz + r * Math.sin(theta)];
+  const shellBase = station ? 3.35 : 3.05;
+  const shellCollider = station ? 'wall' : true;
   for (let i = 0; i < 12; i++) {
     const a = i * Math.PI / 6, b = (i + 1) * Math.PI / 6;
-    const a0 = point(3.05, a, 14), b0 = point(3.05, b, 14);
+    const a0 = point(shellBase, a, 14), b0 = point(shellBase, b, 14);
     const a1 = point(2.6, a, 32), b1 = point(2.6, b, 32);
     if (i === 8 || i === 9) {
-      const a2 = point(2.98, a, 16.6), b2 = point(2.98, b, 16.6);
-      w.shape(g, surface(quad(a2, a1, b1, b2)), WHITE, [0, 0, 0], [1, 1, 1], true, undefined, !playable);
+      const radius = station ? THREE.MathUtils.lerp(shellBase, 2.6, 2.6 / 18) : 2.98;
+      const a2 = point(radius, a, 16.6), b2 = point(radius, b, 16.6);
+      w.shape(g, surface(quad(a2, a1, b1, b2)), WHITE, [0, 0, 0], [1, 1, 1], shellCollider, undefined, !playable);
     } else {
-      w.shape(g, surface(quad(a0, a1, b1, b0)), i % 3 === 0 ? 0xb7c5c4 : WHITE, [0, 0, 0], [1, 1, 1], true, undefined, !playable);
+      w.shape(g, surface(quad(a0, a1, b1, b0)), i % 3 === 0 ? 0xb7c5c4 : WHITE, [0, 0, 0], [1, 1, 1], shellCollider, undefined, !playable);
     }
     w.beam(g, point(2.54, a, 32.1), point(2.54, a, 34.85), 0.16, BEAM);
     if (!station) w.shape(g, surface(quad(point(2.53, a, 32.4), point(2.53, a, 34.6), point(2.53, b, 34.6), point(2.53, b, 32.4))), 0x303d44, [0, 0, 0]);
