@@ -305,7 +305,7 @@ function heights(w: Whitebox, playable: boolean): void {
   }
 }
 
-function lighthouse(w: Whitebox, playable: boolean): void {
+function lighthouse(w: Whitebox, playable: boolean, station: boolean): void {
   const g = w.root, tx = -4, tz = 35, baseY = 14;
   const stack = new THREE.CylinderGeometry(4.8, 7.8, 15.7, 8);
   if (!playable) {
@@ -325,7 +325,7 @@ function lighthouse(w: Whitebox, playable: boolean): void {
       w.shape(g, surface(quad(a0, a1, b1, b0)), i % 3 === 0 ? 0xb7c5c4 : WHITE, [0, 0, 0], [1, 1, 1], true, undefined, !playable);
     }
     w.beam(g, point(2.54, a, 32.1), point(2.54, a, 34.85), 0.16, BEAM);
-    w.shape(g, surface(quad(point(2.53, a, 32.4), point(2.53, a, 34.6), point(2.53, b, 34.6), point(2.53, b, 32.4))), 0x303d44, [0, 0, 0]);
+    if (!station) w.shape(g, surface(quad(point(2.53, a, 32.4), point(2.53, a, 34.6), point(2.53, b, 34.6), point(2.53, b, 32.4))), 0x303d44, [0, 0, 0]);
   }
   if (playable) {
     const stone = [0x92958a, 0x828b86, 0x9ca29b, 0x767d75, 0x9b9181];
@@ -365,9 +365,11 @@ function lighthouse(w: Whitebox, playable: boolean): void {
   gallery.rotateX(-Math.PI / 2);
   w.shape(g, gallery, BEAM, [tx, 32.12, tz], [1, 1, 1], true);
   w.floor(g, [tx + 1.15, 32, tz + 0.68], 2.35, 1.72, BEAM);
-  w.shape(g, new THREE.ConeGeometry(3.22, 1.7, 12), BEAM, [tx, 35.39, tz]);
-  w.shape(g, new THREE.CylinderGeometry(0.59, 0.77, 1.55, 8), STEEL, [tx, 32.85, tz]);
-  w.shape(g, new THREE.OctahedronGeometry(0.7), 0xa5bfc9, [tx, 33.8, tz], [1, 0.64, 1]);
+  w.shape(g, new THREE.ConeGeometry(3.22, 1.7, 12), station ? 0x365f5d : BEAM, [tx, 35.39, tz]);
+  if (!station) {
+    w.shape(g, new THREE.CylinderGeometry(0.59, 0.77, 1.55, 8), STEEL, [tx, 32.85, tz]);
+    w.shape(g, new THREE.OctahedronGeometry(0.7), 0xa5bfc9, [tx, 33.8, tz], [1, 0.64, 1]);
+  }
 
   for (const end of [CABLE_FROM, CABLE_TO]) {
     for (const offset of [-1.4, 1.4]) w.box(g, [end[0] + offset, end[1] + 2.25, end[2]], [0.36, 4.5, 0.36], BEAM);
@@ -377,6 +379,7 @@ function lighthouse(w: Whitebox, playable: boolean): void {
     w.beam(g, [CABLE_FROM[0] + offset, CABLE_FROM[1] + 4.5, CABLE_FROM[2]],
       [CABLE_TO[0] + offset, CABLE_TO[1] + 4.5, CABLE_TO[2]], 0.085, BEAM);
   }
+  if (station) return;
   for (const dx of [-0.82, 0.82]) for (const dz of [-0.78, 0.78]) {
     w.beam(g, [CABLE_FROM[0] + dx, CABLE_FROM[1], CABLE_FROM[2] + dz],
       [CABLE_FROM[0] + dx, CABLE_FROM[1] + 2, CABLE_FROM[2] + dz], 0.12, STEEL);
@@ -386,14 +389,14 @@ function lighthouse(w: Whitebox, playable: boolean): void {
   w.beam(g, [CABLE_FROM[0], CABLE_FROM[1] + 2.08, CABLE_FROM[2]], [-17, 43.35, -5], 0.12, BEAM);
 }
 
-export function buildVillage(physics: PhysicsSystem, playable = false, mirrorAlley = false): THREE.Group {
+export function buildVillage(physics: PhysicsSystem, playable = false, mirrorAlley = false, lighthouseStation = false): THREE.Group {
   const w = new Whitebox(physics);
-  coast(w, playable, mirrorAlley);
+  coast(w, playable, mirrorAlley || lighthouseStation);
   landing(w, playable);
-  vessel(w, playable, mirrorAlley);
-  heights(w, playable || mirrorAlley);
-  lighthouse(w, playable);
-  for (const [x, y, z] of playable || mirrorAlley ? [] : [[5, 1.1, -10], [9, 2.5, -24], [-14, 15.2, -55], [-21, 40.5, -9], [-4, 33.8, 35]] as const) {
+  vessel(w, playable, mirrorAlley || lighthouseStation);
+  heights(w, playable || mirrorAlley || lighthouseStation);
+  lighthouse(w, playable, lighthouseStation);
+  for (const [x, y, z] of playable || mirrorAlley || lighthouseStation ? [] : [[5, 1.1, -10], [9, 2.5, -24], [-14, 15.2, -55], [-21, 40.5, -9], [-4, 33.8, 35]] as const) {
     w.shape(w.root, new THREE.OctahedronGeometry(0.25), MARK, [x, y, z]);
   }
   w.finish();

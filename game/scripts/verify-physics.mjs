@@ -19,6 +19,8 @@ import { CABLE_FROM, CABLE_TO, STAGES, TERRACES } from '@/levels/ch2/layout';
 import { addHarbourColliders, HarbourPuzzles, QUAY_START, QUAY_END, HIGH_WATER, LOW_WATER, WATER_SEAM } from '@/levels/ch2/harbour';
 import { LANTERN, MirrorRelay, RECEIVER, RELAY } from '@/levels/ch2/mirrorRelay';
 import { MirrorAlleyArt } from '@/levels/ch2/mirrorAlleyArt';
+import { LighthouseArt } from '@/levels/ch2/lighthouseArt';
+import { CableCar, PRISM_CONTROL, PRISM_DETENTS, PrismSplitter, WINCH } from '@/levels/ch2/lighthousePuzzles';
 
 const DT = 1 / 60;
 const results = [];
@@ -1058,6 +1060,100 @@ test('裂湾村吊鱼箱：不能绕过鱼闸或断梯，重置后仍可吊箱�
     mustWalk([6.6, 11, -42.4]);
     mustWalk(STAGES.s1.exit);
   } finally {
+    physics.clear();
+    world.traverse((o) => { o.geometry?.dispose(); o.material?.dispose(); });
+  }
+});
+
+test('礁柱缆车：配平前试闸失败，只有停靠一侧可登车', () => {
+  const cable = new CableCar(), sample = new THREE.Vector3();
+  assert.deepEqual(cable.sample(sample).toArray(), CABLE_FROM);
+  assert.equal(cable.release(), false);
+  assert.equal(cable.board('cliff'), false);
+  for (let i = 0; i < 3; i++) cable.adjust(1);
+  assert.equal(cable.release(), false);
+  cable.reset();
+  assert.equal(cable.load, 1);
+  cable.adjust(1);
+  cable.adjust(1);
+  assert.equal(cable.release(), true);
+  assert.equal(cable.board('stack'), false);
+  assert.equal(cable.board('cliff'), true);
+  cable.step(3.5);
+  assert.equal(cable.moving, true);
+  assert.deepEqual(cable.sample(sample).toArray(), [-10.5, 26.5, 12.5]);
+  assert.equal(cable.board('stack'), false);
+  cable.step(3.5);
+  assert.equal(cable.moving, false);
+  assert.deepEqual(cable.sample(sample).toArray(), CABLE_TO);
+  assert.equal(cable.board('stack'), true);
+  cable.step(7);
+  assert.deepEqual(cable.sample(sample).toArray(), CABLE_FROM);
+});
+
+test('半盏灯：棱镜须同时对准冷暖灯杯，断光时需重新蓄光', () => {
+  const prism = new PrismSplitter();
+  assert.ok(prism.trace().every(({ aligned }) => !aligned));
+  const solutions = [];
+  for (let yaw = 0; yaw < PRISM_DETENTS; yaw++) for (let roll = 0; roll < PRISM_DETENTS; roll++) {
+    prism.yaw = yaw;
+    prism.roll = roll;
+    if (prism.trace().every(({ aligned }) => aligned)) solutions.push([yaw, roll]);
+  }
+  assert.deepEqual(solutions, [[4, 2]]);
+  prism.reset();
+  for (let i = 0; i < 3; i++) prism.adjust('yaw', 1);
+  prism.step(1);
+  assert.equal(prism.lit, false);
+  prism.adjust('roll', -1);
+  prism.adjust('roll', -1);
+  prism.step(0.4);
+  assert.equal(prism.lit, false);
+  prism.adjust('yaw', 1);
+  prism.step(DT);
+  prism.adjust('yaw', -1);
+  prism.step(0.4);
+  assert.equal(prism.lit, false);
+  prism.step(0.2);
+  assert.equal(prism.lit, true);
+});
+
+test('礁柱灯塔：崖顶能步行到站，缆车落点可走进塔门直达灯室', () => {
+  const physics = new PhysicsSystem();
+  const world = buildVillage(physics, false, false, true);
+  globalThis.document = { createElement: () => ({ getContext: () => ({
+    fillRect() {}, strokeRect() {}, fillText() {},
+  }) }) };
+  const body = new CharacterBody();
+  physics.addBody(body);
+  const env = { physics, body };
+  function mustWalk([x, y, z]) {
+    let distance = Infinity;
+    for (let i = 0; i < 600; i++) {
+      const dx = x - body.position.x, dz = z - body.position.z;
+      distance = Math.hypot(dx, dz);
+      if (distance < 0.075) break;
+      body.velocity.x = 1.45 * dx / distance;
+      body.velocity.z = 1.45 * dz / distance;
+      physics.step(DT);
+    }
+    assert.ok(distance < 0.15 && Math.abs(y - body.position.y) < 0.4 && body.onGround,
+      `(${x}, ${y}, ${z}) ← ${body.position.toArray().map((n) => n.toFixed(2))}`);
+  }
+  try {
+    world.add(new LighthouseArt(physics).root);
+    place(env, new THREE.Vector3(...STAGES.s3.spawn));
+    mustWalk(WINCH);
+    mustWalk(CABLE_FROM);
+    place(env, new THREE.Vector3(...CABLE_TO));
+    mustWalk([-4, 14, 33.1]);
+    for (let i = 1; i <= 96; i++) {
+      const theta = -Math.PI / 2 + i * Math.PI * 6.5 / 96;
+      mustWalk([-4 + 1.93 * Math.cos(theta), 14 + 18 * i / 96, 35 + 1.93 * Math.sin(theta)]);
+    }
+    mustWalk(PRISM_CONTROL);
+  } finally {
+    delete globalThis.document;
     physics.clear();
     world.traverse((o) => { o.geometry?.dispose(); o.material?.dispose(); });
   }

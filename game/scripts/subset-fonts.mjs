@@ -39,7 +39,7 @@ function walk(dir, out = []) {
 /** 不在生产界面显示的文字（含开发专用白盒标牌）不进字体子集 */
 const NOT_IN_PLAYER_UI = [
   'src/config/atmosphere028.ts', 'src/config/perf-spots.ts', 'src/debug/perfSpot.ts',
-  'src/levels/ch2/WhiteboxScene.ts', 'src/levels/ch2/layout.ts',
+  'src/levels/ch2/LighthouseScene.ts', 'src/levels/ch2/lighthouseArt.ts', 'src/levels/ch2/layout.ts',
   'src/levels/ch2/HarbourScene.ts', 'src/levels/ch2/harbourArt.ts',
   'src/levels/ch2/MirrorAlleyScene.ts', 'src/levels/ch2/mirrorAlleyArt.ts',
 ];
