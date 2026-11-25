@@ -8,29 +8,30 @@ import { BaseScene } from '@/scenes/BaseScene';
 import { CameraFollowSystem } from '@/systems/CameraFollowSystem';
 import { PhysicsSystem } from '@/systems/PhysicsSystem';
 import { v } from './geometry';
-import { STAGES, VIEWS, type Point } from './layout';
+import { STAGES, VIEWS, type Point, type Travel } from './layout';
 import { MirrorAlleyArt, RELAY_BOARD } from './mirrorAlleyArt';
-import { MirrorRelay, RELAY } from './mirrorRelay';
+import { type MirrorRelay, RELAY } from './mirrorRelay';
 import { buildVillage } from './village';
+import './mirrorAlley.css';
 
 const stage = STAGES.s2;
+const RETURN_TO_HARBOUR: Point = [5.8, 11, -42.35];
 const ambient = [['amb-waves-near', 0.22], ['amb-wind-soft', 0.25]] as const;
 const click = 'sfx-mirror-click', bell = 'sfx-tide-bell-ring';
 const assets = manifest.filter(({ key }) => key.startsWith('char-xi') || key.startsWith('tex-xi')
   || key === click || key === bell || ambient.some(([id]) => id === key));
 const names = ['东岸 · 晾鱼檐镜', '西岸 · 栈桥檐镜', '东岸 · 熏房定镜', '西岸 · 折梯檐镜'];
 const cameras: readonly (readonly [Point, Point])[] = [
-  [[12.2, 18.2, -56.25], [-1, 15.9, -46.55]],
-  [[-13.4, 14.4, -41.65], [1.5, 18.3, -55]],
+  [[5, 24, -69], [3.9, 20.35, -58]],
+  [[-8, 20, -31], [-5.9, 17.6, -42.6]],
   [[0, 0, 0], [0, 0, 0]],
-  [[-11.95, 21.8, -58.7], [2, 24, -72]],
+  [[-7, 27, -48], [-3.9, 24.15, -59.5]],
 ];
 
 export class MirrorAlleyScene extends BaseScene {
   readonly name = 'ch2-whitebox-s2';
   private readonly physics = new PhysicsSystem();
   private readonly entities = new EntityManager(this.scene);
-  private readonly relay = new MirrorRelay();
   private readonly follow: CameraFollowSystem;
   private rig!: PlayerRig;
   private readonly art: MirrorAlleyArt;
@@ -38,12 +39,14 @@ export class MirrorAlleyScene extends BaseScene {
   private readonly puzzleCamera = new THREE.PerspectiveCamera();
   private adjusting: number | null = null;
   private popContext: (() => void) | null = null;
-  private recall: Point = stage.spawn;
+  private recall: Point;
   private leaving = false;
   private ready = false;
 
-  constructor(game: Game, view: string | null) {
+  constructor(game: Game, view: string | null, private readonly spawn: Point,
+    private readonly relay: MirrorRelay, private readonly travel: Travel) {
     super(game);
+    this.recall = spawn;
     this.shot = view ? VIEWS.s2[view] : undefined;
     this.follow = new CameraFollowSystem(this.camera, game.input, { physics: this.physics, events: game.events });
     this.follow.yaw = -Math.PI / 2;
@@ -54,7 +57,7 @@ export class MirrorAlleyScene extends BaseScene {
 
   override async enter(): Promise<void> {
     if (!this.shot) await this.game.assets.loadEntries(assets);
-    this.rig = createPlayer(this.game, this.physics, v(stage.spawn), () => this.follow.yaw);
+    this.rig = createPlayer(this.game, this.physics, v(this.spawn), () => this.follow.yaw);
     this.follow.target = this.rig.entity.object3D;
     this.scene.background = new THREE.Color(0x9aafb3);
     this.scene.fog = new THREE.FogExp2(0x9aafb3, 0.0094);
@@ -71,6 +74,7 @@ export class MirrorAlleyScene extends BaseScene {
     this.physics.killY = -1.4;
     this.physics.onFallOut = () => { void this.rig.controller.teleportTo(v(this.recall)); };
     this.game.ui.hud.show();
+    this.game.ui.hud.el.classList.add('ch2-mirror-hud');
     this.game.ui.hud.setLocation('裂湾村 · 镜巷');
     if (!this.shot) for (const [id, volume] of ambient) {
       const buffer = this.game.assets.getAudio(id);
@@ -151,7 +155,13 @@ export class MirrorAlleyScene extends BaseScene {
       if (input.consumePressed('interact')) this.begin(index, mirror.control);
       return;
     }
-    if (near(RELAY_BOARD, 1.15)) {
+    if (near(RETURN_TO_HARBOUR, 1.05)) {
+      ui.hud.setPrompt('E　返回峡口与船骸');
+      if (input.consumePressed('interact')) {
+        this.leaving = true;
+        this.travel('s1', STAGES.s1.exit);
+      }
+    } else if (near(RELAY_BOARD, 1.15)) {
       ui.hud.setPrompt('E　看甲板上的传光告示');
       if (input.consumePressed('interact')) {
         ui.hud.toast('雾里看不见路。灯塔照晾鱼檐，栈桥照熏房，折梯上的铜镜把光送到峡尾。');
@@ -161,7 +171,7 @@ export class MirrorAlleyScene extends BaseScene {
       ui.hud.setPrompt(lit ? 'E　前往崖顶与礁柱灯塔' : '雾号未亮 · 先接通镜巷的光');
       if (lit && input.consumePressed('interact')) {
         this.leaving = true;
-        void this.game.scenes.change('ch2-whitebox-s3');
+        this.travel('s3');
       }
     } else ui.hud.setPrompt(null);
   }
@@ -193,6 +203,7 @@ export class MirrorAlleyScene extends BaseScene {
     this.end();
     if (!this.shot) for (const [id] of ambient) this.game.audio.stopLoop(id);
     this.game.ui.hud.setPrompt(null);
+    this.game.ui.hud.el.classList.remove('ch2-mirror-hud');
     this.game.ui.hud.hide();
     this.game.ui.fade.set(0);
     for (const root of this.entities.clear()) disposeObject3D(root, { keep: this.game.assets.sharedResources() });

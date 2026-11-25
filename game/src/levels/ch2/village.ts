@@ -181,7 +181,8 @@ function vessel(w: Whitebox, playable: boolean, mirrorAlley: boolean): void {
   for (const x of [-11, 10.8]) w.beam(w.root, [x, 10.7, -43], [x * 1.45, 6.7, -43], 0.27, BEAM);
 }
 
-function house(w: Whitebox, x: number, y: number, z: number, side: number, variant: number, stilts = true, playable = false): void {
+function house(w: Whitebox, x: number, y: number, z: number, side: number, variant: number, stilts = true, playable = false,
+  cliffFootings = false): void {
   const h = w.group();
   h.position.set(x, y, z);
   h.rotation.y = side > 0 ? Math.PI : 0;
@@ -243,16 +244,21 @@ function house(w: Whitebox, x: number, y: number, z: number, side: number, varia
   for (const a of [-1, 1]) {
     const zEdge = width * a * 0.44;
     w.box(h, [face + 0.35, -2.05, zEdge], [0.26, 4.1, 0.26], BEAM);
-    w.beam(h, [face + 0.35, -0.2, zEdge], [-1.35, -3.15, zEdge], 0.21, TIMBER);
+    w.beam(h, [face + 0.35, -0.2, zEdge], [cliffFootings ? -5.9 : -1.35, -3.15, zEdge], 0.21, TIMBER);
+    if (cliffFootings) {
+      w.beam(h, [face + 0.35, -4, zEdge], [-5.9, -6.35, zEdge], 0.24, BEAM);
+      w.box(h, [0.25, -4.67, zEdge], [1.6, 0.68, 0.8], STONE);
+      w.box(h, [0.10, -1.05, zEdge], [1.6, 0.58, 0.8], STONE);
+    }
   }
 }
 
-function heights(w: Whitebox, playable: boolean): void {
+function heights(w: Whitebox, playable: boolean, mirrorAlley: boolean): void {
   const g = w.root;
   const west = [[-16, 7, -27], [-16, 11, -47], [-16, 14, -67], [-17, 18, -57], [-16, 21, -81], [-17, 25, -47], [-18, 28, -68], [-17, 32, -57], [-17, 34, -32], [-19, 37, -78]] as const;
   const east = [[15, 5, -29], [15, 11, -42], [16, 15, -57], [15, 19, -66], [16, 19, -34], [16, 22, -49], [16, 27, -61], [17, 30, -77], [17, 34, -47], [18, 36, -65]] as const;
   west.forEach(([x, y, z], i) => house(w, x, y, z, -1, i, true, playable));
-  east.forEach(([x, y, z], i) => house(w, x, y, z, 1, i + 2, true, playable));
+  east.forEach(([x, y, z], i) => house(w, x, y, z, 1, i + 2, true, playable, mirrorAlley && z === -34));
   const eastLanding: Point = [12.65, 15, -56];
   const openingHalfWidth = 1.2;
   for (const [x, y, z] of east) {
@@ -354,24 +360,30 @@ function lighthouse(w: Whitebox, playable: boolean, station: boolean): void {
     w.beam(g, point(0, 0, 35.4), point(0, 0, 37), 0.078, BEAM);
   }
   const fullSteps = 96, rise = 18 / fullSteps;
-  const inner = 1.27, outer = 2.52, segments: number[] = [], guard: number[] = [];
+  const inner = 1.27, outer = 2.52, segments: number[] = [], guard: number[] = [], skirt: number[] = [];
   for (let i = 0; i < fullSteps; i++) {
     const turn = 6.5 * Math.PI / fullSteps;
     const a = -Math.PI / 2 + i * turn, b = a + turn, y = baseY + i * rise;
     segments.push(...quad(point(inner, a, y), point(inner, b, y + rise), point(outer, b, y + rise), point(outer, a, y)));
-    if (station && i > 2 && i < fullSteps - 3) {
+    if (station) {
       const bottomA = point(inner, a, y), bottomB = point(inner, b, y + rise);
       const topA = point(inner, a, y + 0.88), topB = point(inner, b, y + rise + 0.88);
       w.beam(g, topA, topB, 0.076, BEAM);
-      if (i % 6 === 3) w.beam(g, bottomA, topA, 0.095, BEAM);
+      if (i % 6 === 0) w.beam(g, bottomA, topA, 0.095, BEAM);
+      if (i === 0) skirt.push(...bottomA, ...bottomB, ...point(inner, b, baseY));
+      else if (i < 10) skirt.push(...quad(point(inner, a, baseY), bottomA, bottomB, point(inner, b, baseY)));
       guard.push(...quad(bottomA, topA, topB, bottomB));
+      if (i === fullSteps - 1) w.beam(g, bottomB, topB, 0.095, BEAM);
     }
   }
   const spiral = surface(segments);
   w.shape(g, spiral, WALK, [0, 0, 0], [1, 1, 1], true);
   if (station) {
+    const plinth = surface(skirt);
+    plinth.userData.twoSided = true;
+    w.shape(g, plinth, WALK, [0, 0, 0], [1, 1, 1], 'wall');
     const lip = surface(guard);
-    w.shape(g, lip, BEAM, [0, 0, 0], [1, 1, 1], true, undefined, false);
+    w.shape(g, lip, BEAM, [0, 0, 0], [1, 1, 1], 'wall', undefined, false);
     lip.dispose();
   }
   const gallery = new THREE.RingGeometry(2.54, 3.22, 12);
@@ -407,7 +419,7 @@ export function buildVillage(physics: PhysicsSystem, playable = false, mirrorAll
   coast(w, playable, mirrorAlley || lighthouseStation);
   landing(w, playable);
   vessel(w, playable, mirrorAlley || lighthouseStation);
-  heights(w, playable || mirrorAlley || lighthouseStation);
+  heights(w, playable || mirrorAlley || lighthouseStation, mirrorAlley);
   if (lighthouseStation) {
     const tower = new Whitebox(physics, false);
     lighthouse(tower, playable, true);

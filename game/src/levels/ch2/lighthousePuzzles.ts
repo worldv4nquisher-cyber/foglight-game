@@ -12,6 +12,9 @@ export const BALANCED_LOAD = 3;
 export const PRISM_DETENTS = 7;
 
 const FROM = v(CABLE_FROM), TO = v(CABLE_TO);
+const LANDING_OFFSET = TO.clone().sub(FROM).setY(0).setLength(1.31);
+const CLIFF_LANDING: Point = FROM.clone().sub(LANDING_OFFSET).toArray();
+const STACK_LANDING: Point = TO.clone().add(LANDING_OFFSET).toArray();
 const ORIGIN = v(PRISM);
 const PORT_POSITIONS = PORTS.map(v);
 const DIRECTIONS = PORT_POSITIONS.map((port) => port.clone().sub(ORIGIN).normalize());
@@ -29,6 +32,7 @@ export class CableCar {
 
   get moving(): boolean { return this.from !== this.to; }
   get side(): 'cliff' | 'stack' { return this.to === 0 ? 'cliff' : 'stack'; }
+  get landing(): Point { return this.side === 'cliff' ? CLIFF_LANDING : STACK_LANDING; }
 
   adjust(change: -1 | 1): void {
     if (this.released) return;

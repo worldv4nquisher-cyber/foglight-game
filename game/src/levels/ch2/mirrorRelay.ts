@@ -24,7 +24,11 @@ export interface LightPath {
 }
 
 export class MirrorRelay {
-  private readonly settings: number[] = RELAY.map((mirror) => mirror.initial);
+  private readonly settings: number[];
+
+  constructor(solved = false) {
+    this.settings = RELAY.map((mirror) => solved ? mirror.notch : mirror.initial);
+  }
 
   detent(index: number): number {
     return this.settings[index]!;

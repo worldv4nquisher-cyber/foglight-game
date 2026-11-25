@@ -940,6 +940,10 @@ test('镜巷：沿东岸檐镜平台走到栏杆尽头不会踩空', () => {
 
 test('镜巷传光：只有完整镜链能点亮峡尾，固定镜不可转，重置回到初始状态', () => {
   const relay = new MirrorRelay();
+  const returned = new MirrorRelay(true);
+  assert.equal(returned.trace().received, true);
+  returned.reset();
+  assert.equal(returned.trace().received, false);
   const initial = relay.trace();
   assert.equal(initial.lit, 1);
   assert.equal(initial.received, false);
@@ -1141,11 +1145,24 @@ test('礁柱灯塔：崖顶能步行到站，缆车落点可走进塔门直达�
       `(${x}, ${y}, ${z}) ← ${body.position.toArray().map((n) => n.toFixed(2))}`);
   }
   try {
-    world.add(new LighthouseArt(physics).root);
+    const art = new LighthouseArt(physics);
+    const cable = new CableCar();
+    world.add(art.root);
     place(env, new THREE.Vector3(...STAGES.s3.spawn));
     mustWalk(WINCH);
+    mustWalk(cable.landing);
     mustWalk(CABLE_FROM);
-    place(env, new THREE.Vector3(...CABLE_TO));
+    cable.adjust(1);
+    cable.adjust(1);
+    assert.ok(cable.release() && cable.board('cliff'));
+    cable.step(7);
+    art.setCarPosition(cable.sample(new THREE.Vector3()));
+    const landing = new THREE.Vector3(...cable.landing);
+    place(env, landing);
+    const towardCar = new THREE.Vector3(...CABLE_TO).sub(landing).normalize();
+    walk(env, towardCar, WALK, 1);
+    const panelDistance = body.position.clone().sub(new THREE.Vector3(...CABLE_TO)).dot(towardCar.negate());
+    assert.ok(body.onGround && panelDistance >= 0.94 + body.radius, '停靠的红色围板应挡住角色');
     mustWalk([-4, 14, 33.1]);
     for (let i = 1; i <= 96; i++) {
       const theta = -Math.PI / 2 + i * Math.PI * 6.5 / 96;
@@ -1156,6 +1173,16 @@ test('礁柱灯塔：崖顶能步行到站，缆车落点可走进塔门直达�
     walk(env, new THREE.Vector3(1, 0, 0), 1.6, 1.4);
     assert.ok(body.onGround && body.position.x < -5.45 && body.position.y > 17.8,
       `螺旋坡道内侧护栏没有拦住角色：${body.position.toArray().map((n) => n.toFixed(2))}`);
+    for (const i of [2, 94]) {
+      const theta = -Math.PI / 2 + i * Math.PI * 6.5 / 96;
+      const y = 14 + 18 * i / 96;
+      const radial = new THREE.Vector3(Math.cos(theta), 0, Math.sin(theta));
+      place(env, new THREE.Vector3(-4, y + 0.1, 35).addScaledVector(radial, 1.8));
+      walk(env, radial.clone().negate(), WALK, 1);
+      const distance = body.position.clone().sub(new THREE.Vector3(-4, body.position.y, 35)).length();
+      assert.ok(body.onGround && body.position.y >= y - 0.1 && distance >= 1.4,
+        `内侧护栏缺口 ${i}：${body.position.toArray().map((n) => n.toFixed(2))}`);
+    }
   } finally {
     delete globalThis.document;
     physics.clear();

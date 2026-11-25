@@ -11,11 +11,11 @@ import { Rain, RAIN_SPLASH_KEY, RAIN_STREAK_KEY } from '@/world/Rain';
 import { SkyDome, SKY_CLOUDS_KEY } from '@/world/SkyDome';
 import { v } from './geometry';
 import {
-  addHarbourColliders, BOAT_FROM, BOAT_TO, BOARDING, COUNTERWEIGHT, CRANE_CONTROL, GATE_CONTROL, HarbourPuzzles,
+  addHarbourColliders, BOAT_FROM, BOAT_TO, BOARDING, COUNTERWEIGHT, CRANE_CONTROL, GATE_CONTROL, type HarbourPuzzles,
   MARKET_DOOR, QUAY_END, QUAY_START, WATCH_POST,
 } from './harbour';
 import { HARBOUR_ASSETS, HarbourArt, MARKET_LINES, NOTICE_LINES } from './harbourArt';
-import { STAGES, VIEWS, type Point } from './layout';
+import { STAGES, VIEWS, type Point, type Travel } from './layout';
 import { buildVillage } from './village';
 
 type Mechanism = 'tide' | 'gate' | 'crane';
@@ -37,7 +37,6 @@ export class HarbourScene extends BaseScene {
   };
   private readonly physics = new PhysicsSystem();
   private readonly entities = new EntityManager(this.scene);
-  private readonly puzzles = new HarbourPuzzles();
   private readonly follow: CameraFollowSystem;
   private rig!: PlayerRig;
   private readonly shot;
@@ -54,7 +53,8 @@ export class HarbourScene extends BaseScene {
   private journal: HTMLDialogElement | null = null;
   private ready = false;
 
-  constructor(game: Game, view: string | null) {
+  constructor(game: Game, view: string | null, private readonly spawn: Point,
+    private readonly puzzles: HarbourPuzzles, private readonly travel: Travel) {
     super(game);
     this.shot = view ? VIEWS.s1[view] : undefined;
     this.follow = new CameraFollowSystem(this.camera, game.input, { physics: this.physics, events: game.events });
@@ -65,7 +65,7 @@ export class HarbourScene extends BaseScene {
 
   override async enter(): Promise<void> {
     await this.game.assets.loadEntries(HARBOUR_ASSETS);
-    this.rig = createPlayer(this.game, this.physics, v(QUAY_START), () => this.follow.yaw);
+    this.rig = createPlayer(this.game, this.physics, v(this.spawn), () => this.follow.yaw);
     this.follow.target = this.rig.entity.object3D;
     const a = this.atmosphere;
     this.scene.background = new THREE.Color(a.fogColor);
@@ -250,7 +250,7 @@ export class HarbourScene extends BaseScene {
     });
     else if (p.crane === 'landed' && near(STAGES.s1.exit, 1.32)) use('前往镜巷', () => {
       this.leaving = true;
-      void this.game.scenes.change('ch2-whitebox-s2');
+      this.travel('s2');
     });
     else ui.hud.setPrompt(null);
   }

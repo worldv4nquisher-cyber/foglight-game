@@ -1,5 +1,6 @@
 export type Point = readonly [x: number, y: number, z: number];
 export type Stage = 's1' | 's2' | 's3';
+export type Travel = (stage: Stage, spawn?: Point) => void;
 
 export const STAGES = {
   s1: { title: '峡口与船骸', spawn: [9, 2, -7], look: [-5, 10, -25], exit: [4.8, 11.2, -43], next: 's2' },

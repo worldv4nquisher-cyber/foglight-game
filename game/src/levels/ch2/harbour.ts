@@ -67,6 +67,14 @@ export class HarbourPuzzles {
     return this.motion !== null;
   }
 
+  finish(): void {
+    this.outer.set('low', { instant: true });
+    this.gateClosed = this.crossed = true;
+    this.boatProgress = 1;
+    this.crane = 'landed';
+    this.crate.copy(v(CRATE_LANDING));
+  }
+
   waitForTide(): boolean {
     if (this.gateClosed || this.outer.transitioning || this.inner.transitioning) return false;
     const rising = this.outer.state === 'low';
