@@ -17,6 +17,7 @@ import { S2 } from '@/levels/s2/layout';
 import { buildVillage } from '@/levels/ch2/village';
 import { CABLE_FROM, CABLE_TO, STAGES, TERRACES } from '@/levels/ch2/layout';
 import { addHarbourColliders, HarbourPuzzles, QUAY_START, QUAY_END, HIGH_WATER, LOW_WATER, WATER_SEAM } from '@/levels/ch2/harbour';
+import { LANTERN, MirrorRelay, RECEIVER, RELAY } from '@/levels/ch2/mirrorRelay';
 
 const DT = 1 / 60;
 const results = [];
@@ -874,6 +875,76 @@ test('裂湾村白盒：码头、鱼市、两侧崖壁、缆车站和灯室可�
     physics.clear();
     world.traverse((o) => { o.geometry?.dispose(); o.material?.dispose(); });
   }
+});
+
+test('镜巷：三个可调檐镜和崖顶出口从甲板连续可达', () => {
+  const physics = new PhysicsSystem();
+  const world = buildVillage(physics, false, true);
+  const body = new CharacterBody();
+  physics.addBody(body);
+  const west = TERRACES.flatMap(([a, b], i) => {
+    const turnZ = b[2] + (i % 2 ? 0.7 : -0.7);
+    return [a, b, [b[0], b[1], turnZ], [TERRACES[i + 1]?.[0][0] ?? b[0], b[1], turnZ]];
+  });
+  const route = [
+    [11.7, 11, -43.5], [12.65, 15, -56], [13.55, 15, -56], [13.55, 15, -54.2], RELAY[0].control,
+    [13.55, 15, -54.2], [13.55, 15, -56], [12.65, 15, -56], [11.7, 11, -43.5],
+    [4.5, 11.1, -42.8], [-12.8, 11, -42.8], RELAY[1].control, ...west.slice(0, 3),
+    RELAY[3].control, ...west.slice(3), [-17.7, 39, -41.1], STAGES.s2.exit,
+  ];
+  try {
+    place({ physics, body }, new THREE.Vector3(...STAGES.s2.spawn));
+    for (const [x, y, z] of route) {
+      let distance = Infinity;
+      for (let i = 0; i < 1500 && body.position.y > 0; i++) {
+        const dx = x - body.position.x, dz = z - body.position.z;
+        distance = Math.hypot(dx, dz);
+        if (distance < 0.11) break;
+        body.velocity.x = 1.6 * dx / distance;
+        body.velocity.z = 1.6 * dz / distance;
+        physics.step(DT);
+      }
+      assert.ok(distance < 0.2 && Math.abs(body.position.y - y) < 0.38 && body.onGround,
+        `(${x}, ${y}, ${z}) ← ${body.position.toArray().map((n) => n.toFixed(2))}`);
+    }
+  } finally {
+    physics.clear();
+    world.traverse((o) => { o.geometry?.dispose(); o.material?.dispose(); });
+  }
+});
+
+test('镜巷传光：只有完整镜链能点亮峡尾，固定镜不可转，重置回到初始状态', () => {
+  const relay = new MirrorRelay();
+  const initial = relay.trace();
+  assert.equal(initial.lit, 1);
+  assert.equal(initial.received, false);
+  assert.deepEqual(initial.points[0].toArray(), LANTERN);
+  relay.turn(2, 1);
+  assert.equal(relay.detent(2), 0);
+  let solved = 0;
+  for (let a = 0; a < 5; a++) {
+    for (let b = 0; b < 5; b++) {
+      for (let d = 0; d < 5; d++) {
+        const path = relay.trace();
+        if (path.received) {
+          solved++;
+          assert.deepEqual(path.points.map((p) => p.toArray()), [LANTERN, ...RELAY.map((m) => m.center), RECEIVER]);
+          relay.turn(1, 1);
+          assert.equal(relay.trace().lit, 2);
+          relay.turn(1, -1);
+        }
+        relay.turn(3, 1);
+      }
+      relay.turn(1, 1);
+    }
+    relay.turn(0, 1);
+  }
+  assert.equal(solved, 1);
+  relay.turn(0, 1);
+  relay.turn(3, -1);
+  relay.reset();
+  assert.deepEqual(RELAY.map((_mirror, i) => relay.detent(i)), RELAY.map((m) => m.initial));
+  assert.deepEqual(relay.trace(), initial);
 });
 
 test('裂湾村鱼闸：错过退潮可重试，封闸只留内湾，深水送回', () => {

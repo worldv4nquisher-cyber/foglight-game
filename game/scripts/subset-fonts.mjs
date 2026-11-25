@@ -41,6 +41,7 @@ const NOT_IN_PLAYER_UI = [
   'src/config/atmosphere028.ts', 'src/config/perf-spots.ts', 'src/debug/perfSpot.ts',
   'src/levels/ch2/WhiteboxScene.ts', 'src/levels/ch2/layout.ts',
   'src/levels/ch2/HarbourScene.ts', 'src/levels/ch2/harbourArt.ts',
+  'src/levels/ch2/MirrorAlleyScene.ts', 'src/levels/ch2/mirrorAlleyArt.ts',
 ];
 
 /** 当前用字（排序后的字符串） */
