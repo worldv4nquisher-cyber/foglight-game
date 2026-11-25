@@ -148,7 +148,7 @@ function glass(dark: number, glow: number): THREE.MeshStandardMaterial {
   return new THREE.MeshStandardMaterial({ color: dark, roughness: 0.18, metalness: 0.18, emissive: glow, emissiveIntensity: 0.11 });
 }
 
-function harbourWater(): THREE.Mesh {
+export function harbourWater(): THREE.Mesh {
   const material = new THREE.ShaderMaterial({
     vertexShader: `
       varying vec3 world;

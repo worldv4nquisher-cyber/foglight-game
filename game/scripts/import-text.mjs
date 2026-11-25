@@ -129,7 +129,8 @@ export function hardcodedStory(dir = join(root, 'src')) {
  */
 export const DEV_ONLY = {
   'src/scenes/TestbedScene.ts': '测试场地（?scene=testbed，只在 dev / 测试构建）',
-  'src/levels/ch2/WhiteboxScene.ts': '裂湾村白盒标牌（?ch2-whitebox，只在 dev / 测试构建）',
+  'src/levels/ch2/LighthouseScene.ts': '裂湾村灯塔试玩界面（?ch2-whitebox，只在 dev / 测试构建）',
+  'src/levels/ch2/lighthouseArt.ts': '裂湾村灯塔现场标牌（?ch2-whitebox，只在 dev / 测试构建）',
   'src/levels/ch2/layout.ts': '裂湾村白盒场景名（?ch2-whitebox，只在 dev / 测试构建）',
   'src/levels/ch2/HarbourScene.ts': '裂湾村鱼港试玩界面（?ch2-whitebox，只在 dev / 测试构建）',
   'src/levels/ch2/harbourArt.ts': '裂湾村鱼港现场标牌（?ch2-whitebox，只在 dev / 测试构建）',
