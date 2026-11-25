@@ -70,12 +70,12 @@ export class HarbourScene extends BaseScene {
     const a = this.atmosphere;
     this.scene.background = new THREE.Color(a.fogColor);
     this.scene.fog = new THREE.FogExp2(a.fogColor, a.fogDensity * 0.84);
-    this.scene.add(new THREE.HemisphereLight(a.hemiSky, a.hemiGround, a.hemiIntensity));
+    this.scene.add(new THREE.HemisphereLight(0xc0d2dc, 0x8a938c, a.hemiIntensity * 1.25));
     const sun = new THREE.DirectionalLight(a.sunColor, a.sunIntensity);
     sun.position.set(...a.sunDirection);
     this.scene.add(sun);
-    const reflected = new THREE.DirectionalLight(0xd7e2d5, 0.63);
-    reflected.position.set(3, 7, 16);
+    const reflected = new THREE.DirectionalLight(0xd7e5e5, 1.05);
+    reflected.position.set(10, 9, 16);
     this.scene.add(reflected);
     const village = buildVillage(this.physics, true);
     this.art = new HarbourArt(this.game.assets, village);
@@ -287,6 +287,7 @@ export class HarbourScene extends BaseScene {
       this.camera.fov = 59;
       this.camera.updateProjectionMatrix();
     } else this.follow.update(dt);
+    this.art.updateRockLod(this.camera);
     this.rain.update(dt, this.camera);
     this.sky.update(dt);
     this.sky.follow(this.camera);

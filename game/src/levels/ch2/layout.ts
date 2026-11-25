@@ -9,8 +9,8 @@ export const STAGES = {
 
 export const VIEWS: Record<Stage, Record<string, readonly [eye: Point, target: Point]>> = {
   s1: {
-    overview: [[14, 57, 64], [-3, 16, -24]],
-    dock: [[11, 3.8, -8], [-4, 13, -28]],
+    overview: [[11, 59, 71], [-2, 15, -22]],
+    dock: [[8.6, 3.35, -5.5], [-3, 10.9, -29]],
     market: [[1, 7.6, -33], [-2, 7.6, -54]],
   },
   s2: {

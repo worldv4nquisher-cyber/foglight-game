@@ -22,14 +22,16 @@ export class Whitebox {
   }
 
   shape(parent: THREE.Group, geometry: THREE.BufferGeometry, color: number, position: Point,
-    size: Point = [1, 1, 1], solid = false, rotation = new THREE.Quaternion()): void {
+    size: Point = [1, 1, 1], solid = false, rotation = new THREE.Quaternion(), visible = true): void {
     parent.updateWorldMatrix(true, false);
     const matrix = new THREE.Matrix4().compose(v(position), rotation, v(size)).premultiply(parent.matrixWorld);
-    let colors = this.batches.get(geometry);
-    if (!colors) this.batches.set(geometry, colors = new Map<number, THREE.Matrix4[]>());
-    let transforms = colors.get(color);
-    if (!transforms) colors.set(color, transforms = []);
-    transforms.push(matrix);
+    if (visible) {
+      let colors = this.batches.get(geometry);
+      if (!colors) this.batches.set(geometry, colors = new Map<number, THREE.Matrix4[]>());
+      let transforms = colors.get(color);
+      if (!transforms) colors.set(color, transforms = []);
+      transforms.push(matrix);
+    }
     if (solid) this.addCollider(geometry, matrix, 'collider');
   }
 

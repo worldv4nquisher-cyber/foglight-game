@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { AssetLoader } from '@/assets/AssetLoader';
 import { manifest, type AssetEntry } from '@/assets/manifest';
 import { withTideLevel, WET_LINE_GLSL } from '@/render/tideUniforms';
@@ -10,6 +11,8 @@ import {
 } from './harbour';
 import { v } from './geometry';
 import type { Point } from './layout';
+import { addHarbourRock, SHORE_ROCKS } from './harbourRock';
+import { hullPoint } from './harbourVessel';
 
 const KIT = 'prop-harbour-kit-ch2-s1';
 const WOOD = 'ch2-s1-quay-wood';
@@ -17,7 +20,7 @@ const ROCK = 'ch2-s1-cliff-rock';
 const PROPS = ['prop-boat-rowboat', 'prop-crate-a', 'prop-barrel-a', 'prop-rope-coil-a', 'prop-net-pile-a', 'prop-buoy-a'];
 const CUES = ['sfx-gate-open', 'sfx-valve-turn', 'sfx-raft-float', 'sfx-raft-lock', 'amb-waves-near', 'amb-rain-light', 'amb-wind-soft'];
 export const HARBOUR_ASSETS: AssetEntry[] = [
-  ...manifest.filter((e) => PROPS.includes(e.key) || CUES.includes(e.key)
+  ...manifest.filter((e) => PROPS.includes(e.key) || CUES.includes(e.key) || SHORE_ROCKS.some((key) => key === e.key)
     || e.key.startsWith('char-xi') || e.key.startsWith('tex-xi')
     || [WATER_NORMAL_KEY, RAIN_RIPPLE_KEY, SKY_CLOUDS_KEY, 'lut-overcast-after-rain', 'tex-rain-streak-albedo', 'tex-rain-splash-albedo'].includes(e.key)),
   { key: KIT, type: 'gltf', url: 'assets/art/models/props/prop-harbour-kit-ch2-s1.glb', group: 'dev' },
@@ -107,6 +110,32 @@ function at(parent: THREE.Object3D, obj: THREE.Object3D, p: Point, yaw = 0): voi
   parent.add(obj);
 }
 
+function cord(points: readonly Point[], width: number): THREE.TubeGeometry {
+  return new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points.map(v)), (points.length - 1) * 3, width, 4);
+}
+
+function rigging(parent: THREE.Group): void {
+  const lines: THREE.BufferGeometry[] = [];
+  for (const [a, b] of [
+    [[6.99, 2.81, -5.22], [5.12, 1.86, -5.77]], [[7.1, 2.8, -12.09], [6.1, 1.78, -10.39]],
+    [[10.96, 2.78, -21.98], [10.82, 2.77, -28.59]], [[6.99, 2.75, -5.25], [6.69, 2.9, -9.15]],
+  ] as const) {
+    const middle = v(a).lerp(v(b), 0.5);
+    middle.y -= 0.32;
+    lines.push(cord([a, middle.toArray(), b], 0.033));
+  }
+  for (const [x, z, length] of [[6.65, -9.1, 2.1], [11.43, -6.35, 2.22], [11.46, -26.7, 2.55]] as const) {
+    const across = (u: number, t: number): Point => [
+      x + 0.24 * Math.sin(t * Math.PI) + 0.19 * t, 2.89 - t * (0.98 + u * 0.26) + Math.sin(u * Math.PI * 2) * 0.06, z + u * length,
+    ];
+    for (let i = 0; i <= 16; i++) lines.push(cord([across(i / 16, 0), across(i / 16, 0.53), across(i / 16, 1)], 0.011));
+    for (let i = 0; i <= 7; i++) lines.push(cord([across(0, i / 7), across(0.5, i / 7), across(1, i / 7)], i ? 0.01 : 0.027));
+  }
+  const combined = mergeGeometries(lines);
+  if (combined) parent.add(new THREE.Mesh(combined, new THREE.MeshStandardMaterial({ color: 0x8c7a57, roughness: 0.96 })));
+  for (const line of lines) line.dispose();
+}
+
 export class HarbourArt {
   readonly root = new THREE.Group();
   readonly boat = new THREE.Group();
@@ -120,6 +149,7 @@ export class HarbourArt {
   private readonly water: Array<{ mesh: Water; inner: boolean }> = [];
   private readonly innerY = { value: HIGH_WATER };
   private readonly outerY = { value: HIGH_WATER };
+  private readonly rocks: ReturnType<typeof addHarbourRock>;
   private gateTravel = 0;
   private weightTravel = 0;
 
@@ -133,15 +163,13 @@ export class HarbourArt {
       return texture;
     };
     const wood = tiled(WOOD), rock = tiled(ROCK);
+    this.rocks = addHarbourRock(this.root, assets, rock, this.innerY, this.outerY);
     for (const object of village.children) {
       if (!(object instanceof THREE.InstancedMesh) || !(object.material instanceof THREE.MeshStandardMaterial)
         || !(object.geometry instanceof THREE.BufferGeometry)) continue;
       if (wood && object.geometry instanceof THREE.BoxGeometry && [0x786f60, 0x887967, 0x958371, 0x6b6157, 0xa99a84, 0x776758].includes(object.material.color.getHex())) {
         object.material.map = wood;
         object.material.color.lerp(new THREE.Color(0xe0d1bb), 0.72);
-      } else if (rock && object.geometry.userData.harbourRock === true) {
-        object.material.map = rock;
-        object.material.color.lerp(new THREE.Color(0xd1d7d1), 0.74);
       }
     }
     const kit = assets.has(KIT) ? assets.getModel(KIT) : new THREE.Group();
@@ -170,6 +198,17 @@ export class HarbourArt {
     prop('prop-barrel-a', this.root, [10.75, 2.025, -29.65], 0.6);
     prop('prop-crate-a', this.root, [11.1, 2.03, -28.5], -0.3);
     prop('prop-buoy-a', this.root, [7, 2.065, -9.15], 0.3);
+    prop('prop-boat-rowboat', this.root, [4.98, 1.39, -7.6], -0.17, 0.88);
+    prop('prop-buoy-a', this.root, [6.08, 1.46, -10.42], -0.5);
+    prop('prop-barrel-a', this.root, [10.76, 2.03, -5.32], -0.48);
+    prop('prop-barrel-a', this.root, [1.4, 6.24, -34.91], 0.3);
+    prop('prop-crate-a', this.root, [10.84, 2.03, -4.61], 0.19);
+    prop('prop-crate-a', this.root, [10.76, 2.65, -4.59], -0.1, 0.8);
+    prop('prop-crate-a', this.root, [11.18, 2.62, -28.47], 0.05, 0.82);
+    prop('prop-crate-a', this.root, [2.34, 6.24, -36.55], 0.36);
+    prop('prop-net-pile-a', this.root, [1.7, 11.12, -44.55], -0.1);
+    prop('prop-rope-coil-a', this.root, [11.04, 2.043, -8.95], -0.1);
+    rigging(this.root);
     prop('prop-rope-coil-a', this.root, [2.95, 6.22, -34.95], 0.9, 1.22);
     beam(this.root, [2.95, 6.3, -34.95], [3.04, 7.13, -35.23], 0.041, rope);
 
@@ -182,7 +221,8 @@ export class HarbourArt {
     hull.position.set(-0.5, 10.95, -45);
     hull.rotation.set(0.018, -0.33, 0.036, 'YXZ');
     this.root.add(hull);
-    at(hull, lettering(['北 鲱 号'], 3.3, 0.72), [5.25, -0.39, 19.1], 1.29);
+    const [hx, hy, hz] = hullPoint(1, 19.7, 0.128);
+    at(hull, lettering(['北 鲱 号'], 3.45, 0.76, '#c8c7aa'), [hx + 0.11, hy, hz], 1.32);
     at(this.root, lettering(['内港鱼闸', '初退封闸　留水入港'], 1.35, 0.78, '#e0d6b3', '#384740'), [7.18, 3.1, -10.64], 0.37);
     at(this.root, lettering(['北鲱鱼市 →'], 1.28, 0.43, '#dfd4b5', '#6e5142'), [10.3, 2.88, -24], 0.28);
 
@@ -271,6 +311,10 @@ export class HarbourArt {
     batchBoxes(this.gate);
     batchBoxes(this.crate);
     batchBoxes(this.boom);
+  }
+
+  updateRockLod(camera: THREE.Camera): void {
+    for (const set of this.rocks) set.update(camera);
   }
 
   sync(state: HarbourPuzzles, dt: number): void {
