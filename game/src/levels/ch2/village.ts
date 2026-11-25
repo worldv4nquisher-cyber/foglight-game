@@ -369,14 +369,18 @@ function lighthouse(w: Whitebox, playable: boolean, station: boolean): void {
     const a = -Math.PI / 2 + i * turn, b = a + turn, y = baseY + i * rise;
     segments.push(...quad(point(inner, a, y), point(inner, b, y + rise), point(outer, b, y + rise), point(outer, a, y)));
     if (station) {
-      const bottomA = point(inner, a, y), bottomB = point(inner, b, y + rise);
-      const topA = point(inner, a, y + 0.88), topB = point(inner, b, y + rise + 0.88);
-      w.beam(g, topA, topB, 0.076, BEAM);
-      if (i % 6 === 0) w.beam(g, bottomA, topA, 0.095, BEAM);
-      if (i === 0) skirt.push(...bottomA, ...bottomB, ...point(inner, b, baseY));
-      else if (i < 10) skirt.push(...quad(point(inner, a, baseY), bottomA, bottomB, point(inner, b, baseY)));
-      guard.push(...quad(bottomA, topA, topB, bottomB));
-      if (i === fullSteps - 1) w.beam(g, bottomB, topB, 0.095, BEAM);
+      for (const radius of i === 0 ? [inner] : [inner, outer]) {
+        const edgeA = point(radius, a, y), edgeB = point(radius, b, y + rise);
+        const railA = point(radius, a, y + 0.88), railB = point(radius, b, y + rise + 0.88);
+        if (radius === inner) {
+          if (i === 0) skirt.push(...edgeA, ...edgeB, ...point(inner, b, baseY));
+          else if (i < 10) skirt.push(...quad(point(inner, a, baseY), edgeA, edgeB, point(inner, b, baseY)));
+        }
+        w.beam(g, railA, railB, 0.076, BEAM);
+        if ((radius === outer && i === 1) || i % 6 === 0) w.beam(g, edgeA, railA, 0.095, BEAM);
+        if (i === fullSteps - 1) w.beam(g, edgeB, railB, 0.095, BEAM);
+        guard.push(...quad(edgeA, railA, railB, edgeB));
+      }
     }
   }
   const spiral = surface(segments);

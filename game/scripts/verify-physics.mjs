@@ -1219,18 +1219,24 @@ test('礁柱灯塔：崖顶能步行到站，缆车落点可走进塔门直达�
       assert.ok(body.onGround && body.position.x < jamb.x - 0.45,
         `${frameMs}ms：入口右侧墙面夹住角色（${body.position.toArray()}）`);
 
-      settle(start);
-      let angle = -Math.PI / 2;
-      const end = 6 * Math.PI;
-      for (let i = 0; i < Math.ceil(90000 / frameMs) && body.position.y < 31.9; i++) {
-        const p = body.position;
-        const a = Math.atan2(p.z - 35, p.x + 4) - angle;
-        angle += Math.atan2(Math.sin(a), Math.cos(a));
-        const ahead = Math.min(end + 0.1, Math.max(-Math.PI / 2, angle) + 0.28);
-        frame(Math.atan2(p.x + 4 - 1.94 * Math.cos(ahead), p.z - 35 - 1.94 * Math.sin(ahead)));
+      for (const radius of [1.94, 2.82]) {
+        settle(start);
+        let angle = -Math.PI / 2;
+        let maxHeight = start.y;
+        const end = 6 * Math.PI;
+        for (let i = 0; i < Math.ceil(90000 / frameMs) && body.position.y < 31.9; i++) {
+          const p = body.position;
+          const a = Math.atan2(p.z - 35, p.x + 4) - angle;
+          angle += Math.atan2(Math.sin(a), Math.cos(a));
+          const ahead = Math.min(end + 0.1, Math.max(-Math.PI / 2, angle) + 0.28);
+          frame(Math.atan2(p.x + 4 - radius * Math.cos(ahead), p.z - 35 - radius * Math.sin(ahead)));
+          maxHeight = Math.max(maxHeight, p.y);
+          assert.ok(p.y >= maxHeight - 0.4,
+            `${frameMs}ms，半径 ${radius}：从 ${maxHeight.toFixed(2)} 掉下螺旋坡道（${p.toArray()}）`);
+        }
+        assert.ok(body.onGround && body.position.y >= 31.9,
+          `${frameMs}ms，半径 ${radius}：未走到螺旋坡道顶部（${body.position.toArray()}）`);
       }
-      assert.ok(body.onGround && body.position.y >= 31.9,
-        `${frameMs}ms：未走到螺旋坡道顶部（${body.position.toArray()}）`);
     }
   } finally {
     delete globalThis.document;
