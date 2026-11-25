@@ -6,6 +6,7 @@ import { dressVessel, SHIP_STATIONS, shipOpening } from './harbourVessel';
 
 const TIMBER = 0x776758, BEAM = 0x514841, WALK = 0xa99a84, STEEL = 0x6a5150;
 const STONE = 0x68757c, ROCK = 0x56636d, WATER = 0x456d78, WHITE = 0xd9e0de, MARK = 0xe5c083;
+export const TOWER_SHELL = 'ch2-tower-shell';
 
 function surface(vertices: number[]): THREE.BufferGeometry {
   const geom = new THREE.BufferGeometry();
@@ -353,14 +354,26 @@ function lighthouse(w: Whitebox, playable: boolean, station: boolean): void {
     w.beam(g, point(0, 0, 35.4), point(0, 0, 37), 0.078, BEAM);
   }
   const fullSteps = 96, rise = 18 / fullSteps;
-  const inner = 1.27, outer = 2.52, segments: number[] = [];
+  const inner = 1.27, outer = 2.52, segments: number[] = [], guard: number[] = [];
   for (let i = 0; i < fullSteps; i++) {
     const turn = 6.5 * Math.PI / fullSteps;
     const a = -Math.PI / 2 + i * turn, b = a + turn, y = baseY + i * rise;
     segments.push(...quad(point(inner, a, y), point(inner, b, y + rise), point(outer, b, y + rise), point(outer, a, y)));
+    if (station && i > 2 && i < fullSteps - 3) {
+      const bottomA = point(inner, a, y), bottomB = point(inner, b, y + rise);
+      const topA = point(inner, a, y + 0.88), topB = point(inner, b, y + rise + 0.88);
+      w.beam(g, topA, topB, 0.076, BEAM);
+      if (i % 6 === 3) w.beam(g, bottomA, topA, 0.095, BEAM);
+      guard.push(...quad(bottomA, topA, topB, bottomB));
+    }
   }
   const spiral = surface(segments);
   w.shape(g, spiral, WALK, [0, 0, 0], [1, 1, 1], true);
+  if (station) {
+    const lip = surface(guard);
+    w.shape(g, lip, BEAM, [0, 0, 0], [1, 1, 1], true, undefined, false);
+    lip.dispose();
+  }
   const gallery = new THREE.RingGeometry(2.54, 3.22, 12);
   gallery.rotateX(-Math.PI / 2);
   w.shape(g, gallery, BEAM, [tx, 32.12, tz], [1, 1, 1], true);
@@ -395,7 +408,13 @@ export function buildVillage(physics: PhysicsSystem, playable = false, mirrorAll
   landing(w, playable);
   vessel(w, playable, mirrorAlley || lighthouseStation);
   heights(w, playable || mirrorAlley || lighthouseStation);
-  lighthouse(w, playable, lighthouseStation);
+  if (lighthouseStation) {
+    const tower = new Whitebox(physics, false);
+    lighthouse(tower, playable, true);
+    tower.finish();
+    tower.root.name = TOWER_SHELL;
+    w.root.add(tower.root);
+  } else lighthouse(w, playable, false);
   for (const [x, y, z] of playable || mirrorAlley || lighthouseStation ? [] : [[5, 1.1, -10], [9, 2.5, -24], [-14, 15.2, -55], [-21, 40.5, -9], [-4, 33.8, 35]] as const) {
     w.shape(w.root, new THREE.OctahedronGeometry(0.25), MARK, [x, y, z]);
   }

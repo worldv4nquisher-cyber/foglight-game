@@ -146,8 +146,49 @@ function lamp(color: number, radius: number): THREE.Mesh<THREE.SphereGeometry, T
     new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.13 }));
 }
 
+class TowerCutaway {
+  private readonly focus = new THREE.Vector3();
+  private readonly window = new THREE.Vector2();
+
+  attach(root: THREE.Object3D, doubleSided = false): void {
+    const materials = new Set<THREE.MeshStandardMaterial>();
+    root.traverse((object) => {
+      if (object instanceof THREE.Mesh && object.material instanceof THREE.MeshStandardMaterial) materials.add(object.material);
+    });
+    for (const material of materials) {
+      if (doubleSided) material.side = THREE.DoubleSide;
+      material.onBeforeCompile = (shader) => {
+        shader.uniforms.towerFocus = { value: this.focus };
+        shader.uniforms.towerWindow = { value: this.window };
+        shader.fragmentShader = 'uniform vec3 towerFocus;\nuniform vec2 towerWindow;\n' + shader.fragmentShader.replace('#include <clipping_planes_fragment>', `
+          #include <clipping_planes_fragment>
+          if (towerFocus.z > 0.15 && vViewPosition.z < towerFocus.z + 0.04) {
+            float t = max(vViewPosition.z / towerFocus.z, 0.01);
+            vec2 offset = (-vViewPosition.xy / t - towerFocus.xy) / towerWindow;
+            float rim = smoothstep(0.8, 1.08, length(offset));
+            float grain = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
+            if (rim < grain) discard;
+          }
+        `);
+      };
+    }
+  }
+
+  update(camera: THREE.Camera, player: THREE.Vector3, exploring: boolean): void {
+    if (!exploring || !LighthouseArt.inTower(player)) {
+      this.focus.z = 0;
+      return;
+    }
+    if (player.y < 31.7) this.window.set(1.2, 1.25);
+    else this.window.set(0.53, 1.02);
+    this.focus.copy(player).y += 0.84;
+    this.focus.applyMatrix4(camera.matrixWorldInverse).z *= -1;
+  }
+}
+
 export class LighthouseArt {
   readonly root = new THREE.Group();
+  readonly cutaway = new TowerCutaway();
   private readonly car: THREE.Group;
   private readonly weights: THREE.Group[] = [];
   private readonly needle = new THREE.Group();
@@ -159,11 +200,19 @@ export class LighthouseArt {
   private readonly lensLight = new THREE.PointLight(WARM, 0, 10);
   private readonly outbound = new THREE.Group();
 
+  static inTower(point: THREE.Vector3): boolean {
+    return point.y >= 13.85 && point.y <= 33 && Math.hypot(point.x + 4, point.z - 35) < 3.4;
+  }
+
   constructor(physics: PhysicsSystem) {
     const w = new Whitebox(physics);
     station(w);
     coast(w);
-    tower(w);
+    const towerDetails = new Whitebox(physics);
+    tower(towerDetails);
+    towerDetails.finish();
+    this.cutaway.attach(towerDetails.root);
+    this.root.add(towerDetails.root);
     const cabin = new Whitebox(physics);
     const car = this.car = cabin.root;
     for (const side of [-1, 1]) {
@@ -220,6 +269,7 @@ export class LighthouseArt {
       this.outbound.add(ray);
     }
     this.root.add(this.prism, ...this.cups, ...this.beams, feed, this.lens, this.lensLight, this.outbound);
+    for (const optic of [this.prism, ...this.cups, this.lens]) this.cutaway.attach(optic);
   }
 
   sync(cable: CableCar, splitter: PrismSplitter, position: THREE.Vector3): void {

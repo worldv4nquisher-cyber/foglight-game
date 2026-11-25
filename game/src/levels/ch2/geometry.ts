@@ -10,9 +10,11 @@ export class Whitebox {
   private readonly cube = new THREE.BoxGeometry(1, 1, 1);
   private readonly batches = new Map<THREE.BufferGeometry, Map<number, THREE.Matrix4[]>>();
   private readonly physics: PhysicsSystem;
+  private readonly blocksCamera: false | undefined;
 
-  constructor(physics: PhysicsSystem) {
+  constructor(physics: PhysicsSystem, blocksCamera?: false) {
     this.physics = physics;
+    this.blocksCamera = blocksCamera;
   }
 
   group(parent = this.root): THREE.Group {
@@ -41,7 +43,7 @@ export class Whitebox {
     mesh.matrixAutoUpdate = false;
     mesh.matrix.copy(matrix);
     mesh.matrixWorldNeedsUpdate = true;
-    this.physics.addMesh(mesh, { kind });
+    this.physics.addMesh(mesh, this.blocksCamera === false ? { kind, blocksCamera: false } : { kind });
     material.dispose();
   }
 

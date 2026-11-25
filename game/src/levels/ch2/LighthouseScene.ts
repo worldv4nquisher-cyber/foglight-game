@@ -11,7 +11,7 @@ import { v } from './geometry';
 import { CABLE_FROM, CABLE_TO, STAGES, VIEWS, type Point } from './layout';
 import { LighthouseArt } from './lighthouseArt';
 import { BALANCED_LOAD, CableCar, PRISM_CONTROL, PRISM_DETENTS, PrismSplitter, WEIGHT_LIMIT, WINCH, type PrismAxis } from './lighthousePuzzles';
-import { buildVillage } from './village';
+import { buildVillage, TOWER_SHELL } from './village';
 
 const stage = STAGES.s3;
 const ambient = [['amb-wind-soft', 0.31], ['amb-waves-near', 0.2]] as const;
@@ -19,7 +19,7 @@ const click = 'sfx-mirror-click', lever = 'sfx-ignite-lever', ignite = 'sfx-igni
 const assets = manifest.filter(({ key }) => key.startsWith('char-xi') || key.startsWith('tex-xi')
   || key === click || key === lever || key === ignite || ambient.some(([id]) => id === key));
 const CAMERAS = {
-  cable: [[-18.2, 41.24, -3.2], [-21.04, 40.42, -5.52]],
+  cable: [[-21.06, 41.2, -1.62], [-21.13, 40.03, -5.67]],
   prism: [[-4, 34.1, 32.74], [-4, 33.38, 35.52]],
 } as const satisfies Record<string, readonly [Point, Point]>;
 
@@ -49,6 +49,7 @@ export class LighthouseScene extends BaseScene {
     this.follow = new CameraFollowSystem(this.camera, game.input, { physics: this.physics, events: game.events });
     this.follow.yaw = Math.PI;
     this.follow.pitch = 0.08;
+    this.follow.targetFramingWeight = (point) => LighthouseArt.inTower(point) ? 1 : 0;
     this.cleanups.push(() => this.follow.dispose());
     this.art = new LighthouseArt(this.physics);
   }
@@ -62,7 +63,10 @@ export class LighthouseScene extends BaseScene {
     this.scene.add(new THREE.HemisphereLight(0xc6ddf2, 0x807567, 1.83));
     const evening = new THREE.DirectionalLight(0xffdcaa, 2.25);
     evening.position.set(-16, 28, 26);
-    this.scene.add(evening, buildVillage(this.physics, false, false, true), this.art.root);
+    const village = buildVillage(this.physics, false, false, true);
+    const shell = village.getObjectByName(TOWER_SHELL);
+    if (shell) this.art.cutaway.attach(shell, true);
+    this.scene.add(evening, village, this.art.root);
     this.entities.add(this.rig.entity);
     this.rig.visual.visible = !this.shot;
     this.physics.killY = -1.4;
@@ -215,7 +219,10 @@ export class LighthouseScene extends BaseScene {
       this.camera.lookAt(v(this.shot[1]));
       this.camera.fov = 59;
       this.camera.updateProjectionMatrix();
-    } else this.follow.update(dt);
+    } else {
+      this.follow.update(dt);
+      this.art.cutaway.update(this.camera, this.rig.entity.object3D.position, this.follow.modeName === 'explore');
+    }
   }
 
   override exit(): void {

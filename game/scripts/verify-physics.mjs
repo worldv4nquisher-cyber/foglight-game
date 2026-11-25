@@ -1152,6 +1152,10 @@ test('礁柱灯塔：崖顶能步行到站，缆车落点可走进塔门直达�
       mustWalk([-4 + 1.93 * Math.cos(theta), 14 + 18 * i / 96, 35 + 1.93 * Math.sin(theta)]);
     }
     mustWalk(PRISM_CONTROL);
+    place(env, new THREE.Vector3(-5.93, 18.27, 35));
+    walk(env, new THREE.Vector3(1, 0, 0), 1.6, 1.4);
+    assert.ok(body.onGround && body.position.x < -5.45 && body.position.y > 17.8,
+      `螺旋坡道内侧护栏没有拦住角色：${body.position.toArray().map((n) => n.toFixed(2))}`);
   } finally {
     delete globalThis.document;
     physics.clear();
