@@ -124,6 +124,7 @@ export class HarbourScene extends BaseScene {
     this.cam.position.copy(v(eye));
     this.cam.lookAt(v(target));
     this.follow.enterPuzzleView(this.cam, { fov: 55, freeLook: false });
+    this.rig.controller.locked = true;
     this.rig.controller.halt();
     this.popContext = this.game.input.pushContext('puzzle');
   }
@@ -131,6 +132,7 @@ export class HarbourScene extends BaseScene {
   private exitMechanism(): void {
     if (!this.mechanism) return;
     this.mechanism = null;
+    this.rig.controller.locked = false;
     this.popContext?.();
     this.popContext = null;
     this.game.ui.hud.setPuzzleBar(null);
