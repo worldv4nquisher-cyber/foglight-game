@@ -14,6 +14,8 @@ import { polygonRegion } from '@/systems/tide/TideController';
 import { readFileSync } from 'node:fs';
 import { buildS2Greybox } from '@/levels/s2/greybox';
 import { S2 } from '@/levels/s2/layout';
+import { buildVillage } from '@/levels/ch2/village';
+import { CABLE_FROM, CABLE_TO, STAGES, TERRACES } from '@/levels/ch2/layout';
 
 const DT = 1 / 60;
 const results = [];
@@ -824,6 +826,96 @@ test('台面正好高出 stepHeight（S1 搁浅浮台 0.1 → 0.4）：两侧走
   }
   ph.removeBody(b);
 });
+
+test('裂湾村白盒：码头、鱼市、两侧崖壁、缆车站和灯室可步行抵达', () => {
+  const physics = new PhysicsSystem();
+  const world = buildVillage(physics);
+  const body = new CharacterBody();
+  physics.addBody(body);
+  const west = TERRACES.flatMap(([a, b], i) => {
+    const turnZ = b[2] + (i % 2 ? 0.7 : -0.7);
+    return [a, b, [b[0], b[1], turnZ], [TERRACES[i + 1]?.[0][0] ?? b[0], b[1], turnZ]];
+  });
+  const tower = Array.from({ length: 97 }, (_, i) => {
+    const a = -Math.PI / 2 + i * 6.5 * Math.PI / 96;
+    return [-4 + 2 * Math.cos(a), 14 + 18 * i / 96, 35 + 2 * Math.sin(a)];
+  });
+  const routes = {
+    dock: [STAGES.s1.spawn, [9, 2, -25], [5.5, 6.2, -32.5], [5.5, 6.2, -34], [6.7, 10.9, -43.8], STAGES.s1.exit],
+    market: [[4.2, 6.2, -34], [2, 6.2, -34], [-0.2, 6.3, -34], [-2, 6.3, -42]],
+    west: [STAGES.s2.spawn, [4.5, 11.1, -42.8], [-12.8, 11, -42.8], ...west, [-17.7, 39, -41.1], STAGES.s2.exit],
+    east: [
+      [4.8, 11.2, -43], [11.7, 11, -43], [12.65, 15, -56],
+      [13.6, 15, -56], [13.6, 15, -54.2], [13.6, 15, -56], [12.65, 15, -56],
+      [12.35, 19, -62.6], [12.2, 19, -66],
+    ],
+    cable: [STAGES.s3.spawn, CABLE_FROM],
+    tower: [CABLE_TO, [-4, 14, 33], ...tower, [-2, 32, 35]],
+  };
+  try {
+    for (const [name, [start, ...targets]] of Object.entries(routes)) {
+      place({ physics, body }, new THREE.Vector3(...start).add(new THREE.Vector3(0, 0.1, 0)));
+      for (const [x, y, z] of targets) {
+        let distance = Infinity;
+        for (let i = 0; i < 1500 && body.position.y >= 0; i++) {
+          const dx = x - body.position.x, dz = z - body.position.z;
+          distance = Math.hypot(dx, dz);
+          if (distance < 0.11) break;
+          body.velocity.x = 1.6 * dx / distance;
+          body.velocity.z = 1.6 * dz / distance;
+          physics.step(DT);
+        }
+        assert.ok(distance < 0.2 && Math.abs(y - body.position.y) < 0.38 && body.onGround,
+          `${name}: (${x}, ${y}, ${z}) ← ${body.position.toArray().map((n) => n.toFixed(2))}`);
+      }
+    }
+  } finally {
+    physics.clear();
+    world.traverse((o) => { o.geometry?.dispose(); o.material?.dispose(); });
+  }
+});
+
+test('裂湾村白盒：从旋梯顶部可走上灯塔外廊', () => {
+  const physics = new PhysicsSystem();
+  const world = buildVillage(physics);
+  const body = new CharacterBody();
+  physics.addBody(body);
+  const env = { physics, body };
+  try {
+    place(env, new THREE.Vector3(-2, 32.1, 35));
+    assert.ok(body.onGround, '应站在旋梯顶部');
+    walk(env, new THREE.Vector3(1, 0, 0), 1.6, 0.6);
+    walk(env, new THREE.Vector3(0, 0, 1), 1.6, 0.45);
+    assert.ok(body.onGround && body.position.x > -1.2 && body.position.z > 35.6 && body.position.y >= 32.1,
+      `外廊没有承托角色：${body.position.toArray().map((n) => n.toFixed(2))}`);
+  } finally {
+    physics.clear();
+    world.traverse((o) => { o.geometry?.dispose(); o.material?.dispose(); });
+  }
+});
+
+for (const [name, start, edgeX] of [
+  ['码头', [9, 2.1, -12], 11.4],
+  ['崖顶', [-17.7, 39.1, -24], -14.8],
+]) {
+  test(`裂湾村白盒：${name}护栏阻止角色坠落`, () => {
+    const physics = new PhysicsSystem();
+    const world = buildVillage(physics);
+    const body = new CharacterBody();
+    physics.addBody(body);
+    const env = { physics, body };
+    try {
+      place(env, new THREE.Vector3(...start));
+      assert.ok(body.onGround, '应站在护栏内侧');
+      walk(env, new THREE.Vector3(1, 0, 0), 1.6, 3);
+      assert.ok(body.onGround && Math.abs(body.position.x - (edgeX - body.radius)) < 0.06,
+        `穿过护栏：${body.position.toArray().map((n) => n.toFixed(2))}`);
+    } finally {
+      physics.clear();
+      world.traverse((o) => { o.geometry?.dispose(); o.material?.dispose(); });
+    }
+  });
+}
 
 for (const [name, err] of results) {
   if (err) {

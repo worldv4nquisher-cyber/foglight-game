@@ -14,7 +14,7 @@ if (!existsSync(join(DIST, 'index.html'))) {
   process.exit(1);
 }
 /** 只在钩子代码里出现的字符串（游戏代码自己的属性名如 puzzles 不算） */
-export const FORBIDDEN = ['__qa', '__game', '__perfSpot', '__testbed', '__s1', '__s2', '__s3', '__lods', 'installQaHooks', 'unparsable'];
+export const FORBIDDEN = ['__qa', '__game', '__perfSpot', '__testbed', '__s1', '__s2', '__s3', '__lods', 'installQaHooks', 'unparsable', 'ch2-whitebox', '裂湾村白盒'];
 /**
  * batch26：?debug=1 和 ?scene= 直进场景也只在 dev / 测试构建里（src/config/debug.ts 的 TEST_BUILD 是构建期常量）。
  * 生产构建里不能还有读这两个 URL 参数的代码，也不能还有直进 testbed / sandbox 的分支（压缩后引号可能是 ` ' "）。
