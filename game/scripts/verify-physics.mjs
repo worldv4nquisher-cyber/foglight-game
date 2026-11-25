@@ -1175,6 +1175,7 @@ test('礁柱灯塔：崖顶能步行到站，缆车落点可走进塔门直达�
     walk(env, towardCar, WALK, 1);
     const panelDistance = body.position.clone().sub(new THREE.Vector3(...CABLE_TO)).dot(towardCar.negate());
     assert.ok(body.onGround && panelDistance >= 0.94 + body.radius, '停靠的红色围板应挡住角色');
+    const approach = body.position.clone();
     mustWalk([-4, 14, 33.1]);
     for (let i = 1; i <= 96; i++) {
       const theta = -Math.PI / 2 + i * Math.PI * 6.5 / 96;
@@ -1202,13 +1203,13 @@ test('礁柱灯塔：崖顶能步行到站，缆车落点可走进塔门直达�
       const start = new THREE.Vector3(-4, 14, 33.05);
       const loco = { vx: 0, vz: 0, facing: 0 };
       const gait = new StairGait();
-      const frame = (cameraYaw, moveY = 1) => {
+      const frame = (cameraYaw, moveY = 1, moveX = 0) => {
         const steps = clock.beginFrame(now += frameMs, false);
         const dt = clock.fixedDelta;
         for (let i = 0; i < steps; i++) {
           const delta = body.position.clone().sub(body.prevPosition);
           const fixedSpeed = gait.update(dt, delta.y, Math.hypot(delta.x, delta.z), body.onGround);
-          stepLocomotion(loco, { moveX: 0, moveY, cameraYaw, sprint: false, fixedSpeed }, dt);
+          stepLocomotion(loco, { moveX, moveY, cameraYaw, sprint: false, fixedSpeed }, dt);
           body.velocity.x = loco.vx;
           body.velocity.z = loco.vz;
           physics.step(dt);
@@ -1221,6 +1222,13 @@ test('礁柱灯塔：崖顶能步行到站，缆车落点可走进塔门直达�
         for (let i = 0; i < Math.ceil(600 / frameMs); i++) frame(0, 0);
       };
 
+      settle(approach);
+      for (let i = 0; i < Math.ceil(10000 / frameMs) && body.position.distanceTo(start) > 0.12; i++) {
+        frame(Math.atan2(body.position.x - start.x, body.position.z - start.z));
+      }
+      assert.ok(body.onGround && body.position.distanceTo(start) <= 0.12,
+        `${frameMs}ms：未从缆车走到坡道入口（${body.position.toArray()}）`);
+
       settle(start);
       for (let i = 0; i < Math.ceil(4000 / frameMs); i++) frame(-Math.PI / 2);
       assert.ok(body.position.x > -2.5 && body.onGround, `${frameMs}ms：未接近入口右侧墙面`);
@@ -1229,6 +1237,33 @@ test('礁柱灯塔：崖顶能步行到站，缆车落点可走进塔门直达�
       for (let i = 0; i < Math.ceil(1500 / frameMs); i++) frame(Math.PI / 2);
       assert.ok(body.onGround && body.position.x < jamb.x - 0.45,
         `${frameMs}ms：入口右侧墙面夹住角色（${body.position.toArray()}）`);
+
+      for (const segment of [0.5, 2.5]) {
+        const theta = -Math.PI / 2 + segment * Math.PI * 6.5 / 96;
+        const outward = new THREE.Vector3(Math.cos(theta), 0, Math.sin(theta));
+        const rampY = 14 + 18 * segment / 96;
+        settle(new THREE.Vector3(-4, rampY + 0.1, 35).addScaledVector(outward, 1.94));
+        assert.ok(body.onGround && Math.abs(body.position.y - rampY) < 0.08,
+          `${frameMs}ms：未站上坡道 ${segment}（${body.position.toArray()}）`);
+        const settledY = body.position.y;
+        for (let i = 0; i < Math.ceil(1500 / frameMs); i++) {
+          frame(Math.atan2(-outward.x, -outward.z));
+          assert.ok(body.position.y >= settledY - 0.4,
+            `${frameMs}ms：从坡道 ${segment} 外侧掉下（${body.position.toArray()}）`);
+        }
+      }
+
+      const outwardStart = new THREE.Vector3(-2.2485, 15.7112, 35.5482);
+      settle(outwardStart);
+      assert.ok(body.onGround && Math.abs(body.position.y - outwardStart.y) < 0.08,
+        `${frameMs}ms：未站上第一圈坡道（${body.position.toArray()}）`);
+      const outwardYaw = Math.atan2(35 - outwardStart.z, outwardStart.x + 4);
+      const outwardY = body.position.y;
+      for (let i = 0; i < Math.ceil(2200 / frameMs); i++) {
+        frame(outwardYaw, 0, 1);
+        assert.ok(body.position.y >= outwardY - 0.04,
+          `${frameMs}ms：向外按 D 后从第一圈滑落（${body.position.toArray()}）`);
+      }
 
       for (const radius of [1.94, 2.82]) {
         settle(start);

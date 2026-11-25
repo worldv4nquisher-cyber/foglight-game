@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { PhysicsSystem } from '@/systems/PhysicsSystem';
-import { Whitebox } from './geometry';
+import { v, Whitebox } from './geometry';
 import { CABLE_FROM, CABLE_TO, TERRACES, type Point } from './layout';
 import { dressVessel, SHIP_STATIONS, shipOpening } from './harbourVessel';
 
@@ -363,21 +363,27 @@ function lighthouse(w: Whitebox, playable: boolean, station: boolean): void {
     w.beam(g, point(0, 0, 35.4), point(0, 0, 37), 0.078, BEAM);
   }
   const fullSteps = 96, rise = 18 / fullSteps;
+  const outerGuardStart = baseY + 0.3;
   const inner = 1.27, outer = 2.52, segments: number[] = [], guard: number[] = [], skirt: number[] = [];
   for (let i = 0; i < fullSteps; i++) {
     const turn = 6.5 * Math.PI / fullSteps;
     const a = -Math.PI / 2 + i * turn, b = a + turn, y = baseY + i * rise;
     segments.push(...quad(point(inner, a, y), point(inner, b, y + rise), point(outer, b, y + rise), point(outer, a, y)));
     if (station) {
-      for (const radius of i === 0 ? [inner] : [inner, outer]) {
-        const edgeA = point(radius, a, y), edgeB = point(radius, b, y + rise);
-        const railA = point(radius, a, y + 0.88), railB = point(radius, b, y + rise + 0.88);
+      for (const radius of [inner, outer]) {
+        if (radius === outer && y + rise <= outerGuardStart) continue;
+        let edgeA = point(radius, a, y);
+        const edgeB = point(radius, b, y + rise);
+        const startsOuterGuard = radius === outer && y < outerGuardStart;
+        if (startsOuterGuard) edgeA = v(edgeA).lerp(v(edgeB), (outerGuardStart - y) / rise).toArray();
+        const railA: Point = [edgeA[0], edgeA[1] + 0.88, edgeA[2]];
+        const railB = point(radius, b, y + rise + 0.88);
         if (radius === inner) {
           if (i === 0) skirt.push(...edgeA, ...edgeB, ...point(inner, b, baseY));
           else if (i < 10) skirt.push(...quad(point(inner, a, baseY), edgeA, edgeB, point(inner, b, baseY)));
         }
         w.beam(g, railA, railB, 0.076, BEAM);
-        if ((radius === outer && i === 1) || i % 6 === 0) w.beam(g, edgeA, railA, 0.095, BEAM);
+        if (startsOuterGuard || i % 6 === 0) w.beam(g, edgeA, railA, 0.095, BEAM);
         if (i === fullSteps - 1) w.beam(g, edgeB, railB, 0.095, BEAM);
         guard.push(...quad(edgeA, railA, railB, edgeB));
       }
