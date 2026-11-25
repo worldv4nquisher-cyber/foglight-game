@@ -13,6 +13,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { startGameServer } from './lib/test-server.mjs';
 import { S1, s1StepLinks } from '@/levels/s1/layout';
 import { ENDING_CUES } from '@/systems/audio/endingMusic';
+import { harbourAssetPaths } from '@/levels/ch2/harbourAssetPaths';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 /** 文本表原文（005 检查对照显示的文字） */
@@ -36,6 +37,10 @@ if (!DEV) {
     process.exit(1);
   }
   console.log(`  ✓ 构建产物解码器各一套：${[...draco, ...basis].join(', ')}`);
+  for (const url of Object.values(harbourAssetPaths)) {
+    if (!existsSync(join(game.dir, url))) throw new Error(`测试构建缺少裂湾村资源：${url}`);
+  }
+  console.log('  ✓ 测试构建包含裂湾村资源');
 }
 /**
  * 建立镜头（进场演出）结束、交还 explore 的等待上限（ms，墙钟）。镜头按游戏时间走（单帧截断 0.25 s），

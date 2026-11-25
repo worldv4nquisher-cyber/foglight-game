@@ -13,6 +13,7 @@ import { v } from './geometry';
 import type { Point } from './layout';
 import { addHarbourRock, SHORE_ROCKS } from './harbourRock';
 import { hullPoint } from './harbourVessel';
+import { harbourAssetPaths } from './harbourAssetPaths';
 
 const KIT = 'prop-harbour-kit-ch2-s1';
 const WOOD = 'ch2-s1-quay-wood';
@@ -23,9 +24,9 @@ export const HARBOUR_ASSETS: AssetEntry[] = [
   ...manifest.filter((e) => PROPS.includes(e.key) || CUES.includes(e.key) || SHORE_ROCKS.some((key) => key === e.key)
     || e.key.startsWith('char-xi') || e.key.startsWith('tex-xi')
     || [WATER_NORMAL_KEY, RAIN_RIPPLE_KEY, SKY_CLOUDS_KEY, 'lut-overcast-after-rain', 'tex-rain-streak-albedo', 'tex-rain-splash-albedo'].includes(e.key)),
-  { key: KIT, type: 'gltf', url: 'assets/art/models/props/prop-harbour-kit-ch2-s1.glb', group: 'dev' },
-  { key: WOOD, type: 'ktx2', url: 'assets/art/textures/tex-wood-ch1-albedo.ktx2', group: 'dev' },
-  { key: ROCK, type: 'ktx2', url: 'assets/art/textures/tex-rock-shore-albedo.ktx2', group: 'dev' },
+  { key: KIT, type: 'gltf', url: harbourAssetPaths.kit, group: 'dev' },
+  { key: WOOD, type: 'ktx2', url: harbourAssetPaths.wood, group: 'dev' },
+  { key: ROCK, type: 'ktx2', url: harbourAssetPaths.rock, group: 'dev' },
 ];
 
 const CHALK = '#dce0cb';
