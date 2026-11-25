@@ -1007,6 +1007,17 @@ test('裂湾村鱼闸：错过退潮可重试，封闸只留内湾，深水送�
   assert.equal(p.outer.level, HIGH_WATER);
 });
 
+test('裂湾村手记：鱼市线索不会预先解锁，重置机关不清除已读线索', () => {
+  const harbour = new HarbourPuzzles();
+  assert.equal(harbour.boardRead, false);
+  harbour.finish();
+  assert.equal(harbour.boardRead, false);
+  harbour.boardRead = true;
+  harbour.reset();
+  assert.equal(harbour.boardRead, true);
+  assert.equal(new HarbourPuzzles().boardRead, false);
+});
+
 test('裂湾村吊鱼箱：不能绕过鱼闸或断梯，重置后仍可吊箱并登甲板', () => {
   const physics = new PhysicsSystem();
   const crate = addHarbourColliders(physics);

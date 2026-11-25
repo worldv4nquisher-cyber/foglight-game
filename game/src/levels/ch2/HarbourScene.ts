@@ -49,7 +49,6 @@ export class HarbourScene extends BaseScene {
   private popContext: (() => void) | null = null;
   private wasSailing = false;
   private leaving = false;
-  private readBoard = false;
   private journal: HTMLDialogElement | null = null;
   private ready = false;
 
@@ -200,7 +199,7 @@ export class HarbourScene extends BaseScene {
     const lines = [this.puzzles.crane === 'landed' ? '上北鲱号的甲板，找通往崖壁的路。'
       : this.puzzles.crossed ? '渡到船边了。鱼箱也许能补上断梯那一级。'
       : '到北鲱号的鱼市去看看。外水退得快，内湾有一道闸。'];
-    if (this.readBoard) lines.push(...NOTICE_LINES, ...MARKET_LINES.slice(1), '绳头还扎着爸爸惯打的回头结。');
+    if (this.puzzles.boardRead) lines.push(...NOTICE_LINES, ...MARKET_LINES.slice(1), '绳头还扎着爸爸惯打的回头结。');
     for (const text of lines) {
       const line = document.createElement('p');
       line.textContent = text;
@@ -245,7 +244,7 @@ export class HarbourScene extends BaseScene {
     });
     else if (p.crossed && near(CRANE_CONTROL, 1.23)) use('操纵吊臂', () => this.enterMechanism('crane'));
     else if (near(MARKET_DOOR, 1.37)) use('看鱼市门口的通告和黑板', () => {
-      this.readBoard = true;
+      p.boardRead = true;
       this.showJournal();
     });
     else if (p.crane === 'landed' && near(STAGES.s1.exit, 1.32)) use('前往镜巷', () => {

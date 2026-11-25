@@ -41,6 +41,7 @@ export class HarbourPuzzles {
   crossed = false;
   sailing = false;
   boatProgress = 0;
+  boardRead = false;
   private motion: { next: keyof typeof MOVES; from: THREE.Vector3; time: number } | null = null;
 
   constructor(events?: EventBus) {
