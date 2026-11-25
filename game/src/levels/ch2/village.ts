@@ -181,6 +181,28 @@ function vessel(w: Whitebox, playable: boolean, mirrorAlley: boolean): void {
   for (const x of [-11, 10.8]) w.beam(w.root, [x, 10.7, -43], [x * 1.45, 6.7, -43], 0.27, BEAM);
 }
 
+function cliffHouseSupports(w: Whitebox, h: THREE.Group, face: number, width: number): void {
+  const footings = [{ side: -1, top: -2.85, bottom: -4.75 }, { side: 1, top: -5.5, bottom: -7.65 }];
+  const front = (z: number, top: number, y: number): Point => [
+    THREE.MathUtils.lerp(face + 0.35, -0.02, y / top), y, z,
+  ];
+  const rear = (z: number, top: number, y: number): Point => [
+    THREE.MathUtils.lerp(0.6, -0.24, y / top), y, z,
+  ];
+  const frontJoints: Array<{ upper: Point; lower: Point }> = [];
+  for (const { side, top, bottom } of footings) {
+    const z = width * side * 0.44;
+    w.box(h, [-0.225, (top + bottom) / 2, z], [0.65, top - bottom, 0.82], 0x78858a);
+    w.beam(h, front(z, top, 0), front(z, top, top), 0.26, BEAM);
+    w.beam(h, rear(z, top, 0), rear(z, top, top), 0.26, BEAM);
+    w.beam(h, rear(z, top, -0.34), front(z, top, -2.3), 0.21, TIMBER);
+    frontJoints.push({ upper: front(z, top, -0.28), lower: front(z, top, -2.55) });
+  }
+  const [left, right] = frontJoints;
+  w.beam(h, left!.upper, right!.lower, 0.19, TIMBER);
+  w.beam(h, right!.upper, left!.lower, 0.19, TIMBER);
+}
+
 function house(w: Whitebox, x: number, y: number, z: number, side: number, variant: number, stilts = true, playable = false,
   cliffFootings = false): void {
   const h = w.group();
@@ -235,21 +257,20 @@ function house(w: Whitebox, x: number, y: number, z: number, side: number, varia
       w.orientedBox(h, [face + 0.352, 2.7, 0.68], [0.025, 0.227, 0.78], 0xd0e3e6, angle);
       w.beam(h, [face + 0.19, 2.38, 1.22], [face + 0.43, 2.7, 1.22], 0.084, BEAM);
     }
-    if (stilts) {
+    if (stilts && !cliffFootings) {
       w.beam(h, [face + 0.33, -0.28, -width * 0.44], [face + 0.33, -3.65, width * 0.44], 0.19, TIMBER);
       w.beam(h, [face + 0.33, -0.28, width * 0.44], [face + 0.33, -3.65, -width * 0.44], 0.19, BEAM);
     }
   }
   if (!stilts) return;
+  if (cliffFootings) {
+    cliffHouseSupports(w, h, face, width);
+    return;
+  }
   for (const a of [-1, 1]) {
     const zEdge = width * a * 0.44;
     w.box(h, [face + 0.35, -2.05, zEdge], [0.26, 4.1, 0.26], BEAM);
-    w.beam(h, [face + 0.35, -0.2, zEdge], [-1.35, cliffFootings ? -4.12 : -3.15, zEdge], 0.21, TIMBER);
-    if (cliffFootings) {
-      const edge = face + 0.67;
-      w.box(h, [(edge - 3) / 2, -4.39, zEdge], [edge + 3, 0.62, 0.88], 0x78858a);
-      w.beam(h, [face + 0.36, -4.64, zEdge], [-3, -6.65, zEdge], 0.73, STONE);
-    }
+    w.beam(h, [face + 0.35, -0.2, zEdge], [-1.35, -3.15, zEdge], 0.21, TIMBER);
   }
 }
 
