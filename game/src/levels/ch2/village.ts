@@ -244,7 +244,7 @@ function house(w: Whitebox, x: number, y: number, z: number, side: number, varia
   for (const a of [-1, 1]) {
     const zEdge = width * a * 0.44;
     w.box(h, [face + 0.35, -2.05, zEdge], [0.26, 4.1, 0.26], BEAM);
-    w.beam(h, [face + 0.35, -0.2, zEdge], [-1.35, -3.15, zEdge], 0.21, TIMBER);
+    w.beam(h, [face + 0.35, -0.2, zEdge], [-1.35, cliffFootings ? -4.12 : -3.15, zEdge], 0.21, TIMBER);
     if (cliffFootings) {
       const edge = face + 0.67;
       w.box(h, [(edge - 3) / 2, -4.39, zEdge], [edge + 3, 0.62, 0.88], 0x78858a);
