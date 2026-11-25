@@ -35,11 +35,11 @@ function settlement(w: Whitebox): void {
   const pail = new THREE.CylinderGeometry(0.33, 0.26, 0.58, 9);
   const ring = new THREE.TorusGeometry(0.33, 0.023, 5, 10);
   ring.rotateX(Math.PI / 2);
-  for (const [side, x, y, from, to] of [[1, 14.2, 15, -59, -48], [1, 14.1, 19, -72, -63],
+  for (const [side, x, y, from, to, walkable = false] of [[1, 14.2, 15, -59, -48, true], [1, 14.1, 19, -72, -63],
     [1, 14.4, 27, -67, -55], [-1, -14.5, 18, -64, -55], [-1, -15.1, 25, -52, -45],
     [-1, -15.4, 32, -64, -55], [1, 14.4, 30, -84, -75]] as const) {
     const edge = x - side * 0.75;
-    w.box(g, [x, y - 0.19, (from + to) / 2], [1.55, 0.35, to - from], WOOD[0]);
+    w.box(g, [x, y - 0.19, (from + to) / 2], [1.55, 0.35, to - from], WOOD[0], walkable);
     w.beam(g, [edge, y + 0.91, from], [edge, y + 0.91, to], 0.09, IRON);
     for (let z = from; z <= to; z += 2) {
       w.box(g, [edge, y + 0.45, z], [0.075, 0.94, 0.075], IRON);

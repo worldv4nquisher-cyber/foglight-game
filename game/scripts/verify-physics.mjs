@@ -18,6 +18,7 @@ import { buildVillage } from '@/levels/ch2/village';
 import { CABLE_FROM, CABLE_TO, STAGES, TERRACES } from '@/levels/ch2/layout';
 import { addHarbourColliders, HarbourPuzzles, QUAY_START, QUAY_END, HIGH_WATER, LOW_WATER, WATER_SEAM } from '@/levels/ch2/harbour';
 import { LANTERN, MirrorRelay, RECEIVER, RELAY } from '@/levels/ch2/mirrorRelay';
+import { MirrorAlleyArt } from '@/levels/ch2/mirrorAlleyArt';
 
 const DT = 1 / 60;
 const results = [];
@@ -908,6 +909,28 @@ test('镜巷：三个可调檐镜和崖顶出口从甲板连续可达', () => {
         `(${x}, ${y}, ${z}) ← ${body.position.toArray().map((n) => n.toFixed(2))}`);
     }
   } finally {
+    physics.clear();
+    world.traverse((o) => { o.geometry?.dispose(); o.material?.dispose(); });
+  }
+});
+
+test('镜巷：沿东岸檐镜平台走到栏杆尽头不会踩空', () => {
+  const physics = new PhysicsSystem();
+  const world = buildVillage(physics, false, true);
+  const body = new CharacterBody();
+  physics.addBody(body);
+  globalThis.document = { createElement: () => ({ getContext: () => ({
+    fillRect() {}, strokeRect() {}, fillText() {},
+  }) }) };
+  try {
+    world.add(new MirrorAlleyArt(physics).root);
+    const [x, y, z] = RELAY[0].control;
+    place({ physics, body }, new THREE.Vector3(x, y + 0.05, z));
+    walk({ physics, body }, new THREE.Vector3(0, 0, 1), 1.6, 3.5);
+    assert.ok(body.position.z > -49 && body.position.y > 14.9 && body.onGround,
+      `东岸檐镜平台尽头: ${body.position.toArray().map((n) => n.toFixed(2))}`);
+  } finally {
+    delete globalThis.document;
     physics.clear();
     world.traverse((o) => { o.geometry?.dispose(); o.material?.dispose(); });
   }
