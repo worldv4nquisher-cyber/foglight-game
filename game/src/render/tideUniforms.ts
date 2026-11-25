@@ -14,12 +14,12 @@ export const tideUniforms = {
  * fragment 是插在 `#include <color_fragment>` 之后的 GLSL，可以改 diffuseColor（白盒湿痕线 / 测试材质用）。
  * 025 的正式湿痕线材质也走这里。
  */
-export function withTideLevel<T extends THREE.Material>(material: T, fragment: string): T {
+export function withTideLevel<T extends THREE.Material>(material: T, fragment: string, level = tideUniforms.uTideLevel): T {
   const prev = material.onBeforeCompile.bind(material);
   const prevKey = material.customProgramCacheKey.bind(material);
   material.onBeforeCompile = (shader, renderer) => {
     prev(shader, renderer);
-    shader.uniforms.uTideLevel = tideUniforms.uTideLevel;
+    shader.uniforms.uTideLevel = level;
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\nvarying float vTideWorldY;')
       .replace('#include <project_vertex>', '#include <project_vertex>\n#ifdef USE_INSTANCING\nvTideWorldY = (modelMatrix * instanceMatrix * vec4(transformed, 1.0)).y;\n#else\nvTideWorldY = (modelMatrix * vec4(transformed, 1.0)).y;\n#endif');
