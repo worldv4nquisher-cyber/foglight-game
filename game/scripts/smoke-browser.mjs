@@ -14,6 +14,7 @@ import { startGameServer } from './lib/test-server.mjs';
 import { S1, s1StepLinks } from '@/levels/s1/layout';
 import { ENDING_CUES } from '@/systems/audio/endingMusic';
 import { harbourAssetPaths } from '@/levels/ch2/harbourAssetPaths';
+import { MARKET_DOOR } from '@/levels/ch2/harbour';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 /** 文本表原文（005 检查对照显示的文字） */
@@ -4836,6 +4837,39 @@ CHECKS.push({
       out.push(id.toUpperCase() + ' 回入口、淡出完成 ✓');
     }
     return out.join('，');
+  },
+});
+
+CHECKS.push({
+  name: '裂湾村手记使用浅色正文',
+  async run({ evaluate, cdp, sleep }) {
+    const until = async (expr, ms) => {
+      const end = Date.now() + ms;
+      while (Date.now() < end) {
+        if (await evaluate(expr)) return true;
+        await sleep(100);
+      }
+      return false;
+    };
+    await cdp.goto('ch2-whitebox=s1&quality=low', 'ch2-whitebox-s1');
+    if (!(await until(`__game.scenes.current.ready && __game.input.context === 'explore'`, ESTAB_MS))) throw new Error('裂湾村没有就绪');
+    await evaluate(`(() => {
+      const scene = __game.scenes.current;
+      scene.puzzles.crossed = true;
+      scene.rig.body.teleport(scene.rig.body.position.clone().set(${MARKET_DOOR.join(', ')}));
+    })()`);
+    if (!(await until(`document.querySelector('.hud-prompt')?.textContent.includes('鱼市门口')`, 10000))) throw new Error('鱼市通告无法互动');
+    await cdp.key('KeyE', 'e', 69, 200);
+    if (!(await until(`!!document.querySelector('dialog.journal-panel[open]')`, 10000))) throw new Error('没有打开手记');
+    return evaluate(`(() => {
+      const dialog = document.querySelector('dialog.journal-panel[open]');
+      if (!dialog?.textContent.includes('借苇婶的备用棱镜，去外礁。')) throw new Error('手记未显示父亲的线索');
+      const ink = getComputedStyle(document.body).color;
+      for (const entry of dialog.querySelectorAll('h2, p')) {
+        if (getComputedStyle(entry).color !== ink) throw new Error('手记没有使用正文颜色：' + entry.textContent);
+      }
+      return ink;
+    })()`);
   },
 });
 

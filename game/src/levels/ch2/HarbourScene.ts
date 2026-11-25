@@ -190,9 +190,11 @@ export class HarbourScene extends BaseScene {
   private showJournal(): void {
     const dialog = document.createElement('dialog');
     dialog.className = 'journal-panel';
+    dialog.style.color = 'var(--ui-text)';
     dialog.dataset.ui = '';
     dialog.setAttribute('aria-label', '汐的手记');
     const title = document.createElement('h2');
+    title.className = 'journal-title';
     title.textContent = '汐的手记 · 裂湾村';
     dialog.append(title);
     const lines = [this.puzzles.crane === 'landed' ? '上北鲱号的甲板，找通往崖壁的路。'
@@ -205,6 +207,7 @@ export class HarbourScene extends BaseScene {
       dialog.append(line);
     }
     const close = document.createElement('button');
+    close.className = 'menu-btn';
     close.textContent = '合上手记';
     close.onclick = () => dialog.close();
     dialog.append(close);
