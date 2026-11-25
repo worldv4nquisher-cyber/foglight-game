@@ -210,7 +210,13 @@ export class HarbourScene extends BaseScene {
     dialog.append(close);
     this.game.container.append(dialog);
     const pop = this.game.input.pushContext('reading');
-    dialog.addEventListener('close', () => { pop(); dialog.remove(); this.journal = null; }, { once: true });
+    const offPause = this.game.events.on('game:pause', () => dialog.close());
+    dialog.addEventListener('close', () => {
+      offPause();
+      pop();
+      dialog.remove();
+      this.journal = null;
+    }, { once: true });
     this.journal = dialog;
     this.rig.controller.halt();
     dialog.showModal();
