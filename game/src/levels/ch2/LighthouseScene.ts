@@ -8,9 +8,9 @@ import { BaseScene } from '@/scenes/BaseScene';
 import { CameraFollowSystem } from '@/systems/CameraFollowSystem';
 import { PhysicsSystem } from '@/systems/PhysicsSystem';
 import { v } from './geometry';
-import { CABLE_FROM, CABLE_TO, STAGES, VIEWS, type Point } from './layout';
+import { CABLE_FROM, CABLE_TO, STAGES, VIEWS, type Point, type Travel } from './layout';
 import { LighthouseArt } from './lighthouseArt';
-import { BALANCED_LOAD, CableCar, PRISM_CONTROL, PRISM_DETENTS, PrismSplitter, WEIGHT_LIMIT, WINCH, type PrismAxis } from './lighthousePuzzles';
+import { BALANCED_LOAD, type CableCar, PRISM_CONTROL, PRISM_DETENTS, type PrismSplitter, WEIGHT_LIMIT, WINCH, type PrismAxis } from './lighthousePuzzles';
 import { buildVillage, TOWER_SHELL } from './village';
 
 const stage = STAGES.s3;
@@ -29,21 +29,22 @@ export class LighthouseScene extends BaseScene {
   readonly name = 'ch2-whitebox-s3';
   private readonly physics = new PhysicsSystem();
   private readonly entities = new EntityManager(this.scene);
-  private readonly cable = new CableCar();
-  private readonly prism = new PrismSplitter();
   private readonly follow: CameraFollowSystem;
   private readonly shot;
   private readonly art: LighthouseArt;
   private readonly puzzleCamera = new THREE.PerspectiveCamera();
   private readonly carPosition = v(CABLE_FROM);
+  private readonly carPhysicsPosition = v(CABLE_FROM);
   private rig!: PlayerRig;
   private mode: Station | null = null;
   private axis: PrismAxis = 'yaw';
   private popContext: (() => void) | null = null;
   private recall: Point = stage.spawn;
   private ready = false;
+  private leaving = false;
 
-  constructor(game: Game, view: string | null) {
+  constructor(game: Game, view: string | null, private readonly cable: CableCar,
+    private readonly prism: PrismSplitter, private readonly travel: Travel) {
     super(game);
     this.shot = view ? VIEWS.s3[view] : undefined;
     this.follow = new CameraFollowSystem(this.camera, game.input, { physics: this.physics, events: game.events });
@@ -159,7 +160,13 @@ export class LighthouseScene extends BaseScene {
     const near = (p: Point, radius: number, height = 0.52) => Math.abs(pos.y - p[1]) < height
       && Math.hypot(pos.x - p[0], pos.z - p[2]) < radius;
     const dock = this.cable.side === 'cliff' ? CABLE_FROM : CABLE_TO;
-    if (!this.cable.released && near(WINCH, 1.22)) {
+    if (near(stage.spawn, 1.15)) {
+      ui.hud.setPrompt('E　返回镜巷');
+      if (input.consumePressed('interact')) {
+        this.leaving = true;
+        this.travel('s2', STAGES.s2.exit);
+      }
+    } else if (!this.cable.released && near(WINCH, 1.22)) {
       ui.hud.setPrompt('E\u3000操作绞盘配重');
       if (input.consumePressed('interact')) this.begin('cable');
     } else if (near(dock, 1.38)) {
@@ -184,14 +191,15 @@ export class LighthouseScene extends BaseScene {
       this.game.ui.hud.setPrompt('沿缆索横渡海峡…');
       return;
     }
-    this.recall = this.cable.side === 'stack' ? CABLE_TO : CABLE_FROM;
+    this.recall = this.cable.landing;
+    this.rig.controller.pin(v(this.recall));
     this.rig.controller.unpin();
     this.rig.controller.locked = false;
     this.game.ui.hud.toast(this.cable.side === 'stack' ? '已到礁柱 · 进塔门，沿坡道上灯室' : '已返回崖顶');
   }
 
   override fixedUpdate(dt: number): void {
-    if (!this.ready || this.shot) return;
+    if (!this.ready || this.shot || this.leaving) return;
     if (this.cable.moving) this.ride(dt);
     else if (!this.rig.controller.busy) {
       if (this.mode) this.adjust(this.mode);
@@ -204,6 +212,7 @@ export class LighthouseScene extends BaseScene {
       this.sound(ignite, 0.9);
     }
     this.entities.fixedUpdate(dt);
+    this.art.setCarPosition(this.cable.sample(this.carPhysicsPosition));
     this.physics.step(dt);
     this.rig.body.afterPhysics();
   }

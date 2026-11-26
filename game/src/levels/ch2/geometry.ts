@@ -24,7 +24,7 @@ export class Whitebox {
   }
 
   shape(parent: THREE.Group, geometry: THREE.BufferGeometry, color: number, position: Point,
-    size: Point = [1, 1, 1], solid = false, rotation = new THREE.Quaternion(), visible = true): void {
+    size: Point = [1, 1, 1], solid: boolean | ColliderKind = false, rotation = new THREE.Quaternion(), visible = true): void {
     parent.updateWorldMatrix(true, false);
     const matrix = new THREE.Matrix4().compose(v(position), rotation, v(size)).premultiply(parent.matrixWorld);
     if (visible) {
@@ -34,7 +34,7 @@ export class Whitebox {
       if (!transforms) colors.set(color, transforms = []);
       transforms.push(matrix);
     }
-    if (solid) this.addCollider(geometry, matrix, 'collider');
+    if (solid) this.addCollider(geometry, matrix, solid === true ? 'collider' : solid);
   }
 
   private addCollider(geometry: THREE.BufferGeometry, matrix: THREE.Matrix4, kind: ColliderKind): void {

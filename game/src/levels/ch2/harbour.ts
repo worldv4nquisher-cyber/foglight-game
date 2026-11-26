@@ -41,6 +41,7 @@ export class HarbourPuzzles {
   crossed = false;
   sailing = false;
   boatProgress = 0;
+  boardRead = false;
   private motion: { next: keyof typeof MOVES; from: THREE.Vector3; time: number } | null = null;
 
   constructor(events?: EventBus) {
@@ -65,6 +66,14 @@ export class HarbourPuzzles {
 
   get craneMoving(): boolean {
     return this.motion !== null;
+  }
+
+  finish(): void {
+    this.outer.set('low', { instant: true });
+    this.gateClosed = this.crossed = true;
+    this.boatProgress = 1;
+    this.crane = 'landed';
+    this.crate.copy(v(CRATE_LANDING));
   }
 
   waitForTide(): boolean {

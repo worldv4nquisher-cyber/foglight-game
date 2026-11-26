@@ -215,17 +215,28 @@ export class LighthouseArt {
     this.root.add(towerDetails.root);
     const cabin = new Whitebox(physics);
     const car = this.car = cabin.root;
+    const panels: THREE.Mesh[] = [];
+    const panel = (position: Point, size: Point) => {
+      cabin.box(car, position, size, RED);
+      const bounds = new THREE.Mesh(new THREE.BoxGeometry(...size));
+      bounds.visible = false;
+      bounds.position.copy(v(position));
+      car.add(bounds);
+      panels.push(bounds);
+    };
     for (const side of [-1, 1]) {
-      cabin.box(car, [side * 0.87, 0.36, 0], [0.11, 0.72, 1.92], RED);
+      panel([side * 0.87, 0.36, 0], [0.11, 0.72, 1.92]);
       for (const z of [-0.9, 0.9]) cabin.box(car, [side * 0.86, 1.12, z], [0.11, 2.24, 0.11], IRON);
       cabin.beam(car, [side * 0.86, 2.2, 0], [0, 4.36, 0], 0.14, IRON);
       cabin.box(car, [side * 0.42, 4.45, 0], [0.16, 0.23, 0.63], BRASS);
     }
     cabin.box(car, [0, -0.09, 0], [1.84, 0.18, 1.98], WOOD);
     cabin.box(car, [0, 2.24, 0], [2.03, 0.19, 2.06], RED);
-    cabin.box(car, [0, 0.37, 0.94], [1.65, 0.74, 0.11], RED);
+    panel([0, 0.37, 0.94], [1.65, 0.74, 0.11]);
     cabin.finish();
+    car.position.copy(v(CABLE_FROM));
     car.rotation.y = Math.atan2(CABLE_TO[0] - CABLE_FROM[0], CABLE_TO[2] - CABLE_FROM[2]);
+    for (const panel of panels) physics.addMesh(panel, { dynamic: true, blocksCamera: false, name: 'cable-car-panel' });
 
     const x = WINCH[0] - 1.1, z = WINCH[2];
     w.box(w.root, [x, 39.48, z], [1.12, 0.96, 2], IRON, true);
@@ -272,8 +283,12 @@ export class LighthouseArt {
     for (const optic of [this.prism, ...this.cups, this.lens]) this.cutaway.attach(optic);
   }
 
-  sync(cable: CableCar, splitter: PrismSplitter, position: THREE.Vector3): void {
+  setCarPosition(position: THREE.Vector3): void {
     this.car.position.copy(position);
+  }
+
+  sync(cable: CableCar, splitter: PrismSplitter, position: THREE.Vector3): void {
+    this.setCarPosition(position);
     this.needle.rotation.z = (BALANCED_LOAD - cable.load) * 0.33;
     const x = WINCH[0] - 1.1, z = WINCH[2];
     this.weights.forEach((weight, index) => {

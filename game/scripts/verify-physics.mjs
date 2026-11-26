@@ -3,6 +3,7 @@
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { gameplay } from '@/config/gameplay';
+import { Time } from '@/core/Time';
 import { CharacterBody, PhysicsSystem } from '@/systems/PhysicsSystem';
 import { StairGait, stepLocomotion } from '@/systems/locomotion';
 import { buildTestCourse } from '@/world/testCourse';
@@ -940,6 +941,10 @@ test('镜巷：沿东岸檐镜平台走到栏杆尽头不会踩空', () => {
 
 test('镜巷传光：只有完整镜链能点亮峡尾，固定镜不可转，重置回到初始状态', () => {
   const relay = new MirrorRelay();
+  const returned = new MirrorRelay(true);
+  assert.equal(returned.trace().received, true);
+  returned.reset();
+  assert.equal(returned.trace().received, false);
   const initial = relay.trace();
   assert.equal(initial.lit, 1);
   assert.equal(initial.received, false);
@@ -1000,6 +1005,17 @@ test('裂湾村鱼闸：错过退潮可重试，封闸只留内湾，深水送�
   assert.equal(p.crossed, false);
   assert.equal(p.gateClosed, false);
   assert.equal(p.outer.level, HIGH_WATER);
+});
+
+test('裂湾村手记：鱼市线索不会预先解锁，重置机关不清除已读线索', () => {
+  const harbour = new HarbourPuzzles();
+  assert.equal(harbour.boardRead, false);
+  harbour.finish();
+  assert.equal(harbour.boardRead, false);
+  harbour.boardRead = true;
+  harbour.reset();
+  assert.equal(harbour.boardRead, true);
+  assert.equal(new HarbourPuzzles().boardRead, false);
 });
 
 test('裂湾村吊鱼箱：不能绕过鱼闸或断梯，重置后仍可吊箱并登甲板', () => {
@@ -1141,11 +1157,25 @@ test('礁柱灯塔：崖顶能步行到站，缆车落点可走进塔门直达�
       `(${x}, ${y}, ${z}) ← ${body.position.toArray().map((n) => n.toFixed(2))}`);
   }
   try {
-    world.add(new LighthouseArt(physics).root);
+    const art = new LighthouseArt(physics);
+    const cable = new CableCar();
+    world.add(art.root);
     place(env, new THREE.Vector3(...STAGES.s3.spawn));
     mustWalk(WINCH);
+    mustWalk(cable.landing);
     mustWalk(CABLE_FROM);
-    place(env, new THREE.Vector3(...CABLE_TO));
+    cable.adjust(1);
+    cable.adjust(1);
+    assert.ok(cable.release() && cable.board('cliff'));
+    cable.step(7);
+    art.setCarPosition(cable.sample(new THREE.Vector3()));
+    const landing = new THREE.Vector3(...cable.landing);
+    place(env, landing);
+    const towardCar = new THREE.Vector3(...CABLE_TO).sub(landing).normalize();
+    walk(env, towardCar, WALK, 1);
+    const panelDistance = body.position.clone().sub(new THREE.Vector3(...CABLE_TO)).dot(towardCar.negate());
+    assert.ok(body.onGround && panelDistance >= 0.94 + body.radius, '停靠的红色围板应挡住角色');
+    const approach = body.position.clone();
     mustWalk([-4, 14, 33.1]);
     for (let i = 1; i <= 96; i++) {
       const theta = -Math.PI / 2 + i * Math.PI * 6.5 / 96;
@@ -1156,6 +1186,104 @@ test('礁柱灯塔：崖顶能步行到站，缆车落点可走进塔门直达�
     walk(env, new THREE.Vector3(1, 0, 0), 1.6, 1.4);
     assert.ok(body.onGround && body.position.x < -5.45 && body.position.y > 17.8,
       `螺旋坡道内侧护栏没有拦住角色：${body.position.toArray().map((n) => n.toFixed(2))}`);
+    for (const i of [2, 94]) {
+      const theta = -Math.PI / 2 + i * Math.PI * 6.5 / 96;
+      const y = 14 + 18 * i / 96;
+      const radial = new THREE.Vector3(Math.cos(theta), 0, Math.sin(theta));
+      place(env, new THREE.Vector3(-4, y + 0.1, 35).addScaledVector(radial, 1.8));
+      walk(env, radial.clone().negate(), WALK, 1);
+      const distance = body.position.clone().sub(new THREE.Vector3(-4, body.position.y, 35)).length();
+      assert.ok(body.onGround && body.position.y >= y - 0.1 && distance >= 1.4,
+        `内侧护栏缺口 ${i}：${body.position.toArray().map((n) => n.toFixed(2))}`);
+    }
+    for (const frameMs of [1000 / 60, 200]) {
+      const clock = new Time(DT);
+      let now = 0;
+      clock.beginFrame(now, false);
+      const start = new THREE.Vector3(-4, 14, 33.05);
+      const loco = { vx: 0, vz: 0, facing: 0 };
+      const gait = new StairGait();
+      const frame = (cameraYaw, moveY = 1, moveX = 0) => {
+        const steps = clock.beginFrame(now += frameMs, false);
+        const dt = clock.fixedDelta;
+        for (let i = 0; i < steps; i++) {
+          const delta = body.position.clone().sub(body.prevPosition);
+          const fixedSpeed = gait.update(dt, delta.y, Math.hypot(delta.x, delta.z), body.onGround);
+          stepLocomotion(loco, { moveX, moveY, cameraYaw, sprint: false, fixedSpeed }, dt);
+          body.velocity.x = loco.vx;
+          body.velocity.z = loco.vz;
+          physics.step(dt);
+        }
+      };
+      const settle = (p) => {
+        body.teleport(p);
+        gait.reset();
+        loco.vx = loco.vz = 0;
+        for (let i = 0; i < Math.ceil(600 / frameMs); i++) frame(0, 0);
+      };
+
+      settle(approach);
+      for (let i = 0; i < Math.ceil(10000 / frameMs) && body.position.distanceTo(start) > 0.12; i++) {
+        frame(Math.atan2(body.position.x - start.x, body.position.z - start.z));
+      }
+      assert.ok(body.onGround && body.position.distanceTo(start) <= 0.12,
+        `${frameMs}ms：未从缆车走到坡道入口（${body.position.toArray()}）`);
+
+      settle(start);
+      for (let i = 0; i < Math.ceil(4000 / frameMs); i++) frame(-Math.PI / 2);
+      assert.ok(body.position.x > -2.5 && body.onGround, `${frameMs}ms：未接近入口右侧墙面`);
+      const jamb = new THREE.Vector3(-2.194, 14, 32.917);
+      settle(jamb);
+      for (let i = 0; i < Math.ceil(1500 / frameMs); i++) frame(Math.PI / 2);
+      assert.ok(body.onGround && body.position.x < jamb.x - 0.45,
+        `${frameMs}ms：入口右侧墙面夹住角色（${body.position.toArray()}）`);
+
+      for (const segment of [0.5, 2.5]) {
+        const theta = -Math.PI / 2 + segment * Math.PI * 6.5 / 96;
+        const outward = new THREE.Vector3(Math.cos(theta), 0, Math.sin(theta));
+        const rampY = 14 + 18 * segment / 96;
+        settle(new THREE.Vector3(-4, rampY + 0.1, 35).addScaledVector(outward, 1.94));
+        assert.ok(body.onGround && Math.abs(body.position.y - rampY) < 0.08,
+          `${frameMs}ms：未站上坡道 ${segment}（${body.position.toArray()}）`);
+        const settledY = body.position.y;
+        for (let i = 0; i < Math.ceil(1500 / frameMs); i++) {
+          frame(Math.atan2(-outward.x, -outward.z));
+          assert.ok(body.position.y >= settledY - 0.4,
+            `${frameMs}ms：从坡道 ${segment} 外侧掉下（${body.position.toArray()}）`);
+        }
+      }
+
+      const outwardStart = new THREE.Vector3(-2.2485, 15.7112, 35.5482);
+      settle(outwardStart);
+      assert.ok(body.onGround && Math.abs(body.position.y - outwardStart.y) < 0.08,
+        `${frameMs}ms：未站上第一圈坡道（${body.position.toArray()}）`);
+      const outwardYaw = Math.atan2(35 - outwardStart.z, outwardStart.x + 4);
+      const outwardY = body.position.y;
+      for (let i = 0; i < Math.ceil(2200 / frameMs); i++) {
+        frame(outwardYaw, 0, 1);
+        assert.ok(body.position.y >= outwardY - 0.04,
+          `${frameMs}ms：向外按 D 后从第一圈滑落（${body.position.toArray()}）`);
+      }
+
+      for (const radius of [1.94, 2.82]) {
+        settle(start);
+        let angle = -Math.PI / 2;
+        let maxHeight = start.y;
+        const end = 6 * Math.PI;
+        for (let i = 0; i < Math.ceil(90000 / frameMs) && body.position.y < 31.9; i++) {
+          const p = body.position;
+          const a = Math.atan2(p.z - 35, p.x + 4) - angle;
+          angle += Math.atan2(Math.sin(a), Math.cos(a));
+          const ahead = Math.min(end + 0.1, Math.max(-Math.PI / 2, angle) + 0.28);
+          frame(Math.atan2(p.x + 4 - radius * Math.cos(ahead), p.z - 35 - radius * Math.sin(ahead)));
+          maxHeight = Math.max(maxHeight, p.y);
+          assert.ok(p.y >= maxHeight - 0.4,
+            `${frameMs}ms，半径 ${radius}：从 ${maxHeight.toFixed(2)} 掉下螺旋坡道（${p.toArray()}）`);
+        }
+        assert.ok(body.onGround && body.position.y >= 31.9,
+          `${frameMs}ms，半径 ${radius}：未走到螺旋坡道顶部（${body.position.toArray()}）`);
+      }
+    }
   } finally {
     delete globalThis.document;
     physics.clear();
