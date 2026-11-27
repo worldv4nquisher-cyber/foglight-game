@@ -18,8 +18,8 @@ export async function openWhitebox(game: Game, stage: Stage, view: string | null
     void game.scenes.change(`ch2-whitebox-${next}`);
   };
   game.scenes
-    .register('ch2-whitebox-s1', (g) => new HarbourScene(g, stage === 's1' ? view : null, arrival ?? QUAY_START, harbour, travel))
-    .register('ch2-whitebox-s2', (g) => new MirrorAlleyScene(g, stage === 's2' ? view : null, arrival ?? STAGES.s2.spawn, relay, travel))
-    .register('ch2-whitebox-s3', (g) => new LighthouseScene(g, stage === 's3' ? view : null, cable, prism, travel));
+    .register('ch2-whitebox-s1', (g) => new HarbourScene(g, stage === 's1' ? view : null, arrival ?? QUAY_START, harbour, travel, 'ch2-whitebox-s1', null))
+    .register('ch2-whitebox-s2', (g) => new MirrorAlleyScene(g, stage === 's2' ? view : null, arrival ?? STAGES.s2.spawn, relay, travel, 'ch2-whitebox-s2', null))
+    .register('ch2-whitebox-s3', (g) => new LighthouseScene(g, stage === 's3' ? view : null, cable, prism, travel, 'ch2-whitebox-s3', null));
   await game.scenes.change(`ch2-whitebox-${stage}`);
 }

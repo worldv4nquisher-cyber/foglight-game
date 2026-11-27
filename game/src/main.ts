@@ -10,7 +10,12 @@ import { SandboxScene } from '@/scenes/S1EbbShoreScene';
 import { S1Scene } from '@/levels/s1/S1Scene';
 import { S2Scene } from '@/levels/s2/S2Scene';
 import { S3Scene } from '@/levels/s3/S3Scene';
-import { ChapterEndScene, MenuScene } from '@/scenes/MenuScene';
+import { HarbourScene } from '@/levels/ch2/HarbourScene';
+import { MirrorAlleyScene } from '@/levels/ch2/MirrorAlleyScene';
+import { LighthouseScene } from '@/levels/ch2/LighthouseScene';
+import { QUAY_START } from '@/levels/ch2/harbour';
+import { STAGES } from '@/levels/ch2/layout';
+import { Ch2EndScene, ChapterEndScene, MenuScene } from '@/scenes/MenuScene';
 import { TestbedScene } from '@/scenes/TestbedScene';
 import { installPerfSpot } from '@/debug/perfSpot';
 import { installQaHooks } from '@/debug/qaHooks';
@@ -49,10 +54,15 @@ function bootstrap(): void {
     .register('loading', (g) => new LoadingScene(g))
     .register('menu', (g) => new MenuScene(g))
     .register('chapter-end', (g) => new ChapterEndScene(g))
+    .register('ch2-end', (g) => new Ch2EndScene(g))
     // 第一章三个场景（v0.1-010）：S1 → S2 → S3，出口触发黑场切换（GameFlow.goToLevel）
     .register('s1-ebb-shore', (g) => new S1Scene(g))
     .register('s2-keeper-house', (g) => new S2Scene(g))
     .register('s3-lighthouse', (g) => new S3Scene(g))
+    // 第二章三个场景（裂湾村）：鱼港 → 镜巷 → 礁柱灯塔 → 结尾演出 → 第二章结束页
+    .register('ch2-harbour', (g) => new HarbourScene(g, null, g.flow.takeCh2Arrival() ?? QUAY_START, g.flow.ch2State.harbour, (next, spawn) => g.flow.travelCh2(next, spawn)))
+    .register('ch2-mirror-alley', (g) => new MirrorAlleyScene(g, null, g.flow.takeCh2Arrival() ?? STAGES.s2.spawn, g.flow.ch2State.relay, (next, spawn) => g.flow.travelCh2(next, spawn)))
+    .register('ch2-lighthouse', (g) => new LighthouseScene(g, null, g.flow.ch2State.cable, g.flow.ch2State.prism, (next, spawn) => g.flow.travelCh2(next, spawn)))
     // 沙盒（v0.1 demo 岛：?scene=sandbox，开发服务器，或测试构建加 ?debug=1；batch26 起生产构建进不去）
     .register('sandbox', (g) => new SandboxScene(g))
     .register('testbed', (g) => new TestbedScene(g));

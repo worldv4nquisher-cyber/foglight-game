@@ -2,7 +2,9 @@ import * as THREE from 'three';
 import type { Game } from './Game';
 import { LEVEL_GROUPS, type AssetGroup } from '@/assets/manifest';
 import { autostartQuery, debugEnabled, sceneParam } from '@/config/debug';
-import { LEVELS, LEVEL_LIST, levelByScene, levelForSave, type LevelDef, type LevelId, type LevelSceneName } from '@/scenes/levels';
+import { LEVELS, LEVEL_LIST, isLevelId, levelByScene, levelForSave, type LevelDef, type LevelId, type LevelSceneName } from '@/scenes/levels';
+import { Ch2State, type Ch2Stage } from '@/levels/ch2/ch2State';
+import type { Point } from '@/levels/ch2/layout';
 
 /** 可玩场景：第一章三个场景 + 测试场地 + 沙盒（dev 用的 demo 岛） */
 export type PlayScene = LevelSceneName | 'testbed' | 'sandbox';
@@ -78,6 +80,9 @@ export class GameFlow {
   menuReadyMs: number | null = null;
   /** 启动场景开始加载 boot+menu 的时刻（ms；menuReadyMs − bootStartMs = 纯加载耗时，不含 JS 初始化 / 着色器编译） */
   bootStartMs: number | null = null;
+  /** 第二章三场景共享的谜题状态 */
+  readonly ch2State = new Ch2State();
+  private ch2Arrival: Point | null = null;
   private entry: string | null = null;
   private opening = false;
   private maxFrameMs = 0;
@@ -105,9 +110,14 @@ export class GameFlow {
     } else if (scene === 'sandbox' && debugEnabled) {
       // 沙盒：v0.1 demo 岛（开发服务器或 ?debug=1）；不存档
       this.startLoading('sandbox');
-    } else if ((scene === 's1' || scene === 's2' || scene === 's3') && debugEnabled) {
+    } else if (scene && isLevelId(scene) && debugEnabled) {
       // 直接进某个场景（开发服务器或 ?debug=1）：进场即在该场景入口存档
-      if (!this.game.save.continueGame()) this.game.save.newGame('ch1', scene);
+      const chapter = scene.startsWith('ch2-') ? 'ch2' : 'ch1';
+      if (scene === 'ch2-s1' || scene === 'ch2-s2' || scene === 'ch2-s3') {
+        this.ch2State.resetFor(scene.slice(4) as Ch2Stage);
+        this.ch2Arrival = null;
+      }
+      if (!this.game.save.continueGame()) this.game.save.newGame(chapter, scene);
       this.startLoading(LEVELS[scene].scene);
     } else if (autostartQuery) {
       const data = this.game.save.continueGame();
@@ -125,6 +135,8 @@ export class GameFlow {
   newGame(): void {
     this.game.save.newGame('ch1', 's1');
     this.game.narrative.resetMemory();
+    this.ch2State.resetFor('s1');
+    this.ch2Arrival = null;
     this.startLoading('s1-ebb-shore', true);
   }
 
@@ -134,18 +146,41 @@ export class GameFlow {
     return opening;
   }
 
-  /** 主菜单「继续」：章节已完成 → 章节结束页；否则加载存档场景（场景开头）。没有可用存档返回 false */
+  /** 主菜单「继续」：章节已完成 → 对应章节结束页；否则加载存档场景（场景开头）。没有可用存档返回 false */
   continueGame(): boolean {
     const data = this.game.save.continueGame();
     if (!data) return false;
     this.game.narrative.resetMemory();
     if (data.chapterComplete) {
       this.holdMenu();
-      void this.game.scenes.change('chapter-end');
+      void this.game.scenes.change(data.chapterId === 'ch2' ? 'ch2-end' : 'chapter-end');
     } else {
+      if (data.sceneId === 'ch2-s1' || data.sceneId === 'ch2-s2' || data.sceneId === 'ch2-s3') {
+        this.ch2State.resetFor(data.sceneId.slice(4) as Ch2Stage);
+        this.ch2Arrival = null;
+      }
       this.startLoading(sceneForSave(data.sceneId));
     }
     return true;
+  }
+
+  /** 第一章结束页「前往第二章：裂湾村」：重置第二章状态并加载 ch2-s1 */
+  startChapter2(): void {
+    this.ch2State.resetFor('s1');
+    this.ch2Arrival = null;
+    this.startLoading('ch2-harbour');
+  }
+
+  /** 第二章场景间移动（鱼港 ↔ 镜巷 ↔ 礁柱灯塔），走统一黑场切换 + 入口存档 */
+  travelCh2(next: Ch2Stage, spawn?: Point): void {
+    this.ch2Arrival = spawn ?? null;
+    void this.goToLevel(`ch2-${next}`);
+  }
+
+  takeCh2Arrival(): Point | null {
+    const p = this.ch2Arrival;
+    this.ch2Arrival = null;
+    return p;
   }
 
   /** 暂停菜单「回到主菜单」/ 章节结束页「回到主菜单」。不额外存档：进度停在最近一次场景入口 */
@@ -156,13 +191,23 @@ export class GameFlow {
     this.releaseLevelGroups([]);
   }
 
-  /** 点亮灯塔、结尾演出放完（S3 占位点灯调用；035 接管） */
+  /** 第一章点亮灯塔、结尾演出放完 → 第一章结束页（可继续进入第二章） */
   async completeChapter(): Promise<void> {
     this.holdMenu();
     this.game.resume();
     await this.game.scenes.change('chapter-end');
     this.releaseLevelGroups([]);
     // 035：结尾演出淡到黑（或跳过的 0.75 s 黑场）后进来 → 结束页从黑场淡入
+    const f = this.game.ui.fade.opacity;
+    if (f > 0) await this.animateFade(f, 0, TRANSITION.fadeIn);
+  }
+
+  /** 第二章礁柱灯塔点亮、结尾演出放完 → 第二章结束页（可看制作人员或回主菜单） */
+  async completeChapter2(): Promise<void> {
+    this.holdMenu();
+    this.game.resume();
+    await this.game.scenes.change('ch2-end');
+    this.releaseLevelGroups([]);
     const f = this.game.ui.fade.opacity;
     if (f > 0) await this.animateFade(f, 0, TRANSITION.fadeIn);
   }

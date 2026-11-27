@@ -21,10 +21,10 @@ export type AssetType = 'gltf' | 'texture' | 'ktx2' | 'audio' | 'font' | 'image'
 
 /** 加载分组（顺序 = 一般加载顺序） */
 /** dev：只给 ?scene=sandbox 用的测试资源（037：不进任何正式场景包，npm run size 单列，不计首场景包） */
-export const ASSET_GROUPS = ['boot', 'menu', 'common', 's1', 's2', 's3', 'dev'] as const;
+export const ASSET_GROUPS = ['boot', 'menu', 'common', 's1', 's2', 's3', 'ch2-s1', 'ch2-s2', 'ch2-s3', 'dev'] as const;
 export type AssetGroup = (typeof ASSET_GROUPS)[number];
 /** 场景组：离开场景后可以释放 */
-export const LEVEL_GROUPS: readonly AssetGroup[] = ['s1', 's2', 's3'];
+export const LEVEL_GROUPS: readonly AssetGroup[] = ['s1', 's2', 's3', 'ch2-s1', 'ch2-s2', 'ch2-s3'];
 
 export interface AssetEntry {
   /** 代码里引用的唯一 key */
@@ -348,6 +348,8 @@ export const manifest: AssetEntry[] = [
   { key: 'sfx-lens-rotate-loop', type: 'audio', url: 'assets/art/audio/sfx/sfx-lens-rotate-loop.ogg', group: 's3', optional: true, art: true },
   { key: 'sfx-oil-flow', type: 'audio', url: 'assets/art/audio/sfx/sfx-oil-flow.ogg', group: 's3', optional: true, art: true },
   { key: 'sfx-valve-turn', type: 'audio', url: 'assets/art/audio/sfx/sfx-valve-turn.ogg', group: 's3', optional: true, art: true, gainDb: 0.9 },
+  // ---- ch2-s1：第二章裂湾村鱼港组合道具（裂湾村正式场景组）
+  { key: 'prop-harbour-kit-ch2-s1', type: 'gltf', url: 'assets/art/models/props/prop-harbour-kit-ch2-s1.glb', group: 'ch2-s1', optional: true, art: true },
   // ---- 更多示例（取消注释即可登记）----
   // { key: 'ground-diffuse', type: 'ktx2', url: 'assets/textures/ground-diffuse.ktx2', group: 's1', optional: true },
 ];

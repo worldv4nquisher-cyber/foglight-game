@@ -1139,6 +1139,10 @@ body {
   z-index: 25;
 }
 
+.credits {
+  z-index: 26;
+}
+
 .main-menu {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -1435,6 +1439,13 @@ body {
   font-family: var(--ui-serif);
   letter-spacing: 0.4em;
   color: var(--ui-dim);
+}
+
+.chapter-end-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 14px;
 }
 
 /* ---- 030 R2 图标：24×24 单色线 SVG 当遮罩，颜色跟 currentColor（常态 --ui-text，可交互 --ui-primary，场景提示 --ui-interact）。

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { AssetLoader } from '@/assets/AssetLoader';
+import { t } from '@/content/text';
 import { manifest, type AssetEntry } from '@/assets/manifest';
 import { withTideLevel, WET_LINE_GLSL } from '@/render/tideUniforms';
 import { SKY_CLOUDS_KEY } from '@/world/SkyDome';
@@ -24,19 +25,19 @@ export const HARBOUR_ASSETS: AssetEntry[] = [
   ...manifest.filter((e) => PROPS.includes(e.key) || CUES.includes(e.key) || SHORE_ROCKS.some((key) => key === e.key)
     || e.key.startsWith('char-xi') || e.key.startsWith('tex-xi')
     || [WATER_NORMAL_KEY, RAIN_RIPPLE_KEY, SKY_CLOUDS_KEY, 'lut-overcast-after-rain', 'tex-rain-streak-albedo', 'tex-rain-splash-albedo'].includes(e.key)),
-  { key: KIT, type: 'gltf', url: harbourAssetPaths.kit, group: 'dev' },
-  { key: WOOD, type: 'ktx2', url: harbourAssetPaths.wood, group: 'dev' },
-  { key: ROCK, type: 'ktx2', url: harbourAssetPaths.rock, group: 'dev' },
+  { key: KIT, type: 'gltf', url: harbourAssetPaths.kit, group: 'ch2-s1', optional: true, art: true },
+  { key: WOOD, type: 'ktx2', url: harbourAssetPaths.wood, group: 'ch2-s1', optional: true, art: true },
+  { key: ROCK, type: 'ktx2', url: harbourAssetPaths.rock, group: 'ch2-s1', optional: true, art: true },
 ];
 
 const CHALK = '#dce0cb';
 export const MARKET_LINES = [
-  '裂湾村 · 北鲱号鱼市',
-  '撤离去向　　齐家：南岛',
-  '周家：投青屿姨母　苇婶：南岛',
-  '借苇婶的备用棱镜，去外礁。',
+  t('ch2.s1.market.0'),
+  t('ch2.s1.market.1'),
+  t('ch2.s1.market.2'),
+  t('ch2.s1.market.3'),
 ] as const;
-export const NOTICE_LINES = ['航运所 · 冬季通告', '灯标停用，即日起停止入港。', '顺序登船，带走随身行李。'] as const;
+export const NOTICE_LINES = [t('ch2.s1.notice.0'), t('ch2.s1.notice.1'), t('ch2.s1.notice.2')] as const;
 
 function lettering(lines: readonly string[], width: number, height: number, ink = CHALK, paper?: string): THREE.Mesh {
   const canvas = document.createElement('canvas');
@@ -223,9 +224,9 @@ export class HarbourArt {
     hull.rotation.set(0.018, -0.33, 0.036, 'YXZ');
     this.root.add(hull);
     const [hx, hy, hz] = hullPoint(1, 19.7, 0.128);
-    at(hull, lettering(['北 鲱 号'], 3.45, 0.76, '#c8c7aa'), [hx + 0.11, hy, hz], 1.32);
-    at(this.root, lettering(['内港鱼闸', '初退封闸　留水入港'], 1.35, 0.78, '#e0d6b3', '#384740'), [7.18, 3.1, -10.64], 0.37);
-    at(this.root, lettering(['北鲱鱼市 →'], 1.28, 0.43, '#dfd4b5', '#6e5142'), [10.3, 2.88, -24], 0.28);
+    at(hull, lettering([t('ch2.s1.sign.ship')], 3.45, 0.76, '#c8c7aa'), [hx + 0.11, hy, hz], 1.32);
+    at(this.root, lettering([t('ch2.s1.sign.gate_title'), t('ch2.s1.sign.gate_sub')], 1.35, 0.78, '#e0d6b3', '#384740'), [7.18, 3.1, -10.64], 0.37);
+    at(this.root, lettering([t('ch2.s1.sign.market_arrow')], 1.28, 0.43, '#dfd4b5', '#6e5142'), [10.3, 2.88, -24], 0.28);
 
     const wetSlats = [0x7a6655, 0x95816b].map((color) => withTideLevel(
       new THREE.MeshStandardMaterial({ color, roughness: 0.9 }), WET_LINE_GLSL, this.outerY));

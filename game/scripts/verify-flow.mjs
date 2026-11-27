@@ -32,38 +32,57 @@ await test('资源清单：分组只用 boot / menu / common / s1–s3，key 唯
   }
   assert.ok(entriesForGroup('menu').some((e) => e.type === 'font'));
   for (const k of ['char-xi', 'char-xi-anims', 'tex-xi-ramp', 'tex-xi-sdf-face']) assert.equal(manifest.find((e) => e.key === k)?.group, 'common', `主角 ${k} 常驻 common`);
-  assert.deepEqual([...LEVEL_GROUPS], ['s1', 's2', 's3']);
+  assert.deepEqual([...LEVEL_GROUPS], ['s1', 's2', 's3', 'ch2-s1', 'ch2-s2', 'ch2-s3']);
 });
 
-await test('场景链：S1 → S2 → S3，线性、场景名 / 资源组一一对应', () => {
-  assert.deepEqual(LEVEL_LIST.map((l) => l.scene), ['s1-ebb-shore', 's2-keeper-house', 's3-lighthouse']);
+await test('场景链：第一章 S1 → S2 → S3 与第二章 ch2-s1 → ch2-s2 → ch2-s3，场景名 / 资源组一一对应', () => {
+  assert.deepEqual(LEVEL_LIST.map((l) => l.scene), [
+    's1-ebb-shore',
+    's2-keeper-house',
+    's3-lighthouse',
+    'ch2-harbour',
+    'ch2-mirror-alley',
+    'ch2-lighthouse',
+  ]);
   assert.equal(LEVELS.s1.next, 's2');
   assert.equal(LEVELS.s2.next, 's3');
   assert.equal(LEVELS.s3.next, null);
+  assert.equal(LEVELS['ch2-s1'].next, 'ch2-s2');
+  assert.equal(LEVELS['ch2-s2'].next, 'ch2-s3');
+  assert.equal(LEVELS['ch2-s3'].next, null);
   for (const l of LEVEL_LIST) {
     assert.equal(l.group, l.id);
     assert.equal(levelByScene(l.scene), l);
   }
 });
 
-await test('存档 → 场景：s1 / s2 / s3；旧存档 main 和认不出的 ID 回到 S1', () => {
+await test('存档 → 场景：s1–s3 与 ch2-s1–ch2-s3；旧存档 main 和认不出的 ID 回到 S1', () => {
   assert.equal(sceneForSave('s1'), 's1-ebb-shore');
   assert.equal(sceneForSave('s2'), 's2-keeper-house');
   assert.equal(sceneForSave('s3'), 's3-lighthouse');
+  assert.equal(sceneForSave('ch2-s1'), 'ch2-harbour');
+  assert.equal(sceneForSave('ch2-s2'), 'ch2-mirror-alley');
+  assert.equal(sceneForSave('ch2-s3'), 'ch2-lighthouse');
   assert.equal(sceneForSave('main'), 's1-ebb-shore', '010 之前的存档');
   assert.equal(sceneForSave('???'), 's1-ebb-shore');
   assert.equal(levelForSave('s2').group, 's2');
+  assert.equal(levelForSave('ch2-s2').group, 'ch2-s2');
 });
 
-await test('加载分组：新游戏 common + s1；继续 S2 = common + s2；换场景保留当前 + 下一个', () => {
+await test('加载分组：新游戏 common + s1；继续 S2 / ch2-s1；换场景保留当前 + 下一个', () => {
   assert.deepEqual(groupsForScene('s1-ebb-shore'), ['common', 's1']);
   assert.deepEqual(groupsForScene('s2-keeper-house'), ['common', 's2']);
+  assert.deepEqual(groupsForScene('ch2-harbour'), ['common', 'ch2-s1']);
+  assert.deepEqual(groupsForScene('ch2-mirror-alley'), ['common', 'ch2-s2']);
+  assert.deepEqual(groupsForScene('ch2-lighthouse'), ['common', 'ch2-s3']);
   assert.deepEqual(groupsForScene('testbed'), ['common']);
   // 037：沙盒 LOD 测试模型在 dev 组，正式 S1 不下载
   assert.deepEqual(groupsForScene('sandbox'), ['common', 's1', 'dev']);
   assert.ok(!entriesForGroup('s1').some((e) => e.url.includes('/test-')), 's1 组不该有测试模型');
   assert.deepEqual(groupsToKeep(LEVELS.s2), ['common', 's2', 's3']);
   assert.deepEqual(groupsToKeep(LEVELS.s3), ['common', 's3']);
+  assert.deepEqual(groupsToKeep(LEVELS['ch2-s1']), ['common', 'ch2-s1', 'ch2-s2']);
+  assert.deepEqual(groupsToKeep(LEVELS['ch2-s3']), ['common', 'ch2-s3']);
 });
 
 await test('黑场时间分配：淡出 + 最短全黑 + 淡入 ≤ 1.0 s', () => {

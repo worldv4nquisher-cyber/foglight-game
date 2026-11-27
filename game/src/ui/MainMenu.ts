@@ -177,7 +177,7 @@ export class MainMenu {
   private openCredits(): void {
     this.home.hidden = true;
     this.credits.onBack = () => this.backToHome();
-    this.credits.show();
+    this.credits.show(this.game.save.lastSave?.chapterId === 'ch2' ? 'ch2' : 'ch1');
   }
 
   private async onNewGame(): Promise<void> {

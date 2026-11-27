@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { t } from '@/content/text';
 import type { PhysicsSystem } from '@/systems/PhysicsSystem';
 import { v, Whitebox } from './geometry';
 import { CABLE_FROM, CABLE_TO, type Point } from './layout';
@@ -261,8 +262,8 @@ export class LighthouseArt {
       this.root.add(mass);
     }
     w.finish();
-    this.root.add(w.root, car, harbourWater(), this.needle, plaque('苇婶家', [-20.55, 41.65, -13.85], 1.7),
-      plaque('礁柱缆车 · 绞盘站', [-21.15, 42.03, -8.3], 3.05), plaque('礁柱灯塔', [-4, 17.27, 31.94], 2.1));
+    this.root.add(w.root, car, harbourWater(), this.needle, plaque(t('ch2.s3.plaque.aunt'), [-20.55, 41.65, -13.85], 1.7),
+      plaque(t('ch2.s3.plaque.winch'), [-21.15, 42.03, -8.3], 3.05), plaque(t('ch2.s3.plaque.tower'), [-4, 17.27, 31.94], 2.1));
 
     const glass = new THREE.MeshStandardMaterial({ color: 0xc1faff, emissive: 0x5b9db5, emissiveIntensity: 0.34, metalness: 0.38, roughness: 0.14 });
     const crystal = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.34, 0.78, 3).rotateZ(Math.PI / 2), glass);

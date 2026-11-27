@@ -257,6 +257,11 @@ export class SaveSystem {
   save(at: { chapterId: string; sceneId: string; chapterComplete?: boolean }): boolean {
     if (!this.progress) this.newGame(at.chapterId, at.sceneId);
     const p = this.progress!;
+    if (p.chapterId !== at.chapterId) {
+      p.playTimeSec = 0;
+      this.pendingTime = 0;
+      p.hintsUsed = 0;
+    }
     p.chapterId = at.chapterId;
     p.sceneId = at.sceneId;
     if (at.chapterComplete && !p.chapterComplete) {
@@ -264,6 +269,8 @@ export class SaveSystem {
       p.playTimeSec += this.pendingTime;
       this.pendingTime = 0;
       p.chapterComplete = true;
+    } else if (at.chapterComplete === false) {
+      p.chapterComplete = false;
     }
     const data: SaveData = {
       version: SAVE_VERSION,

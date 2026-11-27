@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { t } from '@/content/text';
 import type { PhysicsSystem } from '@/systems/PhysicsSystem';
 import { v, Whitebox } from './geometry';
 import type { Point } from './layout';
@@ -195,7 +196,7 @@ export class MirrorAlleyArt {
     fixtures(w);
     w.finish();
     this.root.add(w.root, harbourWater());
-    this.root.add(plaque('镜巷\n雾号不响 · 莫登崖', [4.6, 11.82, -44.4], 1.65));
+    this.root.add(plaque(t('ch2.s2.plaque'), [4.6, 11.82, -44.4], 1.65));
     const frame = new THREE.MeshStandardMaterial({ color: BRASS, roughness: 0.53, metalness: 0.4 });
     const back = new THREE.MeshStandardMaterial({ color: TEAL, roughness: 0.71 });
     const rim = new THREE.TorusGeometry(0.74, 0.085, 8, 20);

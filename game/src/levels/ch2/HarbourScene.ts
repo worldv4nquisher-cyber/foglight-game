@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { Game } from '@/core/Game';
+import { t } from '@/content/text';
 import { ATMOSPHERE_PRESETS } from '@/config/atmosphere';
 import { disposeObject3D } from '@/core/dispose';
 import { createPlayer, type PlayerRig } from '@/entities/createPlayer';
@@ -7,6 +8,7 @@ import { EntityManager } from '@/entities/EntityManager';
 import { BaseScene } from '@/scenes/BaseScene';
 import { CameraFollowSystem } from '@/systems/CameraFollowSystem';
 import { PhysicsSystem } from '@/systems/PhysicsSystem';
+import { switchMusic } from '@/systems/audio/music';
 import { Rain, RAIN_SPLASH_KEY, RAIN_STREAK_KEY } from '@/world/Rain';
 import { SkyDome, SKY_CLOUDS_KEY } from '@/world/SkyDome';
 import { v } from './geometry';
@@ -29,7 +31,8 @@ const ambient = [
 ] as const;
 
 export class HarbourScene extends BaseScene {
-  readonly name = 'ch2-whitebox-s1';
+  readonly name: string;
+  override savePoint: { chapterId: string; sceneId: string; chapterComplete?: boolean } | null;
   override usePostFX = true;
   override atmosphere = {
     ...ATMOSPHERE_PRESETS['overcast-after-rain'],
@@ -51,10 +54,20 @@ export class HarbourScene extends BaseScene {
   private leaving = false;
   private journal: HTMLDialogElement | null = null;
   private ready = false;
+  private readonly seenHints = new Set<string>();
 
-  constructor(game: Game, view: string | null, private readonly spawn: Point,
-    private readonly puzzles: HarbourPuzzles, private readonly travel: Travel) {
+  constructor(
+    game: Game,
+    view: string | null,
+    private readonly spawn: Point,
+    private readonly puzzles: HarbourPuzzles,
+    private readonly travel: Travel,
+    sceneName = 'ch2-harbour',
+    savePoint: { chapterId: string; sceneId: string; chapterComplete?: boolean } | null = { chapterId: 'ch2', sceneId: 'ch2-s1', chapterComplete: false },
+  ) {
     super(game);
+    this.name = sceneName;
+    this.savePoint = view ? null : savePoint;
     this.shot = view ? VIEWS.s1[view] : undefined;
     this.follow = new CameraFollowSystem(this.camera, game.input, { physics: this.physics, events: game.events });
     this.follow.yaw = 0;
@@ -97,12 +110,13 @@ export class HarbourScene extends BaseScene {
     this.physics.killY = -4;
     this.physics.onFallOut = () => { void this.recall(); };
     this.puzzles.tides.onRecall = () => this.recall();
+    if (!this.shot) switchMusic(this.game.audio, (k) => this.game.assets.getAudio(k), null);
     for (const [key, volume] of ambient) {
       const buffer = this.game.assets.getAudio(key);
       if (buffer) this.game.audio.startLoop(key, { buffer, volume });
     }
     this.game.ui.hud.show();
-    this.game.ui.hud.setLocation('裂湾村 · 峡口与船骸');
+    this.game.ui.hud.setLocation(t('ch2.loc.s1'));
     this.follow.snap();
     this.ready = true;
     this.update(0, 0);
@@ -148,30 +162,41 @@ export class HarbourScene extends BaseScene {
     }
   }
 
-  private hint(): void {
+  private hint(count = true): void {
     const p = this.puzzles;
-    const line = !p.gateClosed ? '潮刚开始退时拉下鱼闸，趁内湾的水还没流走。'
-      : !p.crossed ? '等外水落稳。浮渡船仍能靠到北鲱号的卸货栈桥。'
-      : p.crane === 'unweighted' ? '先扣上码头边的配重。空着配重钩，吊臂会翻。'
-      : p.crane !== 'landed' ? '先把鱼箱升过船舷，再回转吊臂，最后落在鱼市上方的断梯口。'
-      : '从鱼市门边上楼，踏着鱼箱走上甲板。';
-    this.game.ui.hud.toast(line);
+    const key = !p.gateClosed ? 'ch2.s1.hint.gate'
+      : !p.crossed ? 'ch2.s1.hint.cross'
+      : p.crane === 'unweighted' ? 'ch2.s1.hint.weight'
+      : p.crane !== 'landed' ? 'ch2.s1.hint.crane'
+      : 'ch2.s1.hint.deck';
+    if (count && this.savePoint && !this.seenHints.has(key)) {
+      this.seenHints.add(key);
+      this.game.save.addHintUsed();
+      this.game.save.flush();
+    }
+    this.game.ui.hud.toast(t(key));
   }
 
   private useMechanism(): void {
     const p = this.puzzles, { input, ui } = this.game;
     let prompt: string;
     if (this.mechanism === 'tide') {
-      prompt = p.gateClosed ? '闸已封住内湾' : p.canClose ? '潮正初退 · 去闸杆封闸'
-        : p.outer.transitioning || p.inner.transitioning ? '水位在变' : p.outer.state === 'high' ? '等到退潮' : '等下一轮涨潮';
+      prompt = p.gateClosed ? t('ch2.s1.mech.sealed') : p.canClose ? t('ch2.s1.mech.ebbing')
+        : p.outer.transitioning || p.inner.transitioning ? t('ch2.s1.mech.changing') : p.outer.state === 'high' ? t('ch2.s1.mech.wait_ebb') : t('ch2.s1.mech.wait_flood');
     } else if (this.mechanism === 'gate') {
-      prompt = p.canClose ? '拉下闸杆' : p.gateClosed ? '闸已封住内湾' : '退潮初起时才能封闸';
+      prompt = p.canClose ? t('ch2.s1.mech.pull_gate') : p.gateClosed ? t('ch2.s1.mech.sealed') : t('ch2.s1.mech.gate_when_ebbing');
     } else {
-      prompt = p.craneMoving ? '吊臂正在运转'
-        : { unweighted: '尚未扣上配重', ready: '起吊鱼箱', lifted: '回转吊臂', swung: '下放鱼箱', landed: '鱼箱已落稳' }[p.crane];
+      prompt = p.craneMoving ? t('ch2.s1.mech.crane_moving')
+        : {
+            unweighted: t('ch2.s1.mech.crane_unweighted'),
+            ready: t('ch2.s1.mech.crane_ready'),
+            lifted: t('ch2.s1.mech.crane_lifted'),
+            swung: t('ch2.s1.mech.crane_swung'),
+            landed: t('ch2.s1.mech.crane_landed'),
+          }[p.crane];
     }
     ui.hud.setPrompt(`E\u3000${prompt}`);
-    ui.hud.setPuzzleBar('Tab 返回 · R 重置 · H 线索');
+    ui.hud.setPuzzleBar(t('ch2.s1.mech.bar'));
     if (input.consumePressed('exitPuzzle')) this.exitMechanism();
     else if (input.consumePressed('resetPuzzle')) this.reset();
     else if (input.consumePressed('hint')) this.hint();
@@ -191,15 +216,15 @@ export class HarbourScene extends BaseScene {
     dialog.className = 'journal-panel';
     dialog.style.color = 'var(--ui-text)';
     dialog.dataset.ui = '';
-    dialog.setAttribute('aria-label', '汐的手记');
+    dialog.setAttribute('aria-label', t('ch2.s1.journal.aria'));
     const title = document.createElement('h2');
     title.className = 'journal-title';
-    title.textContent = '汐的手记 · 裂湾村';
+    title.textContent = t('ch2.s1.journal.title');
     dialog.append(title);
-    const lines = [this.puzzles.crane === 'landed' ? '上北鲱号的甲板，找通往崖壁的路。'
-      : this.puzzles.crossed ? '渡到船边了。鱼箱也许能补上断梯那一级。'
-      : '到北鲱号的鱼市去看看。外水退得快，内湾有一道闸。'];
-    if (this.puzzles.boardRead) lines.push(...NOTICE_LINES, ...MARKET_LINES.slice(1), '绳头还扎着爸爸惯打的回头结。');
+    const lines = [this.puzzles.crane === 'landed' ? t('ch2.s1.journal.goal_landed')
+      : this.puzzles.crossed ? t('ch2.s1.journal.goal_crossed')
+      : t('ch2.s1.journal.goal_start')];
+    if (this.puzzles.boardRead) lines.push(...NOTICE_LINES, ...MARKET_LINES.slice(1), t('ch2.s1.journal.knot'));
     for (const text of lines) {
       const line = document.createElement('p');
       line.textContent = text;
@@ -207,7 +232,7 @@ export class HarbourScene extends BaseScene {
     }
     const close = document.createElement('button');
     close.className = 'menu-btn';
-    close.textContent = '合上手记';
+    close.textContent = t('ch2.s1.journal.close');
     close.onclick = () => dialog.close();
     dialog.append(close);
     this.game.container.append(dialog);
@@ -233,21 +258,21 @@ export class HarbourScene extends BaseScene {
       if (input.consumePressed('interact')) act();
     };
     if (input.consumePressed('hint')) this.hint();
-    if (!p.crossed && near(WATCH_POST)) use('看潮', () => this.enterMechanism('tide'));
-    else if (!p.crossed && near(GATE_CONTROL, 0.92)) use(p.canClose ? '鱼闸 · 潮正初退' : '查看鱼闸', () => this.enterMechanism('gate'));
-    else if (!p.crossed && near(BOARDING, 0.83)) use(p.canBoard ? '登浮渡船' : '查看浮渡船', () => {
+    if (!p.crossed && near(WATCH_POST)) use(t('ch2.s1.prompt.watch'), () => this.enterMechanism('tide'));
+    else if (!p.crossed && near(GATE_CONTROL, 0.92)) use(p.canClose ? t('ch2.s1.prompt.gate_ready') : t('ch2.s1.prompt.gate'), () => this.enterMechanism('gate'));
+    else if (!p.crossed && near(BOARDING, 0.83)) use(p.canBoard ? t('ch2.s1.prompt.board') : t('ch2.s1.prompt.boat'), () => {
       if (p.board()) this.cue('sfx-raft-float');
-      else this.hint();
+      else this.hint(false);
     });
-    else if (p.crossed && p.crane === 'unweighted' && near(COUNTERWEIGHT, 1.25)) use('扣上配重', () => {
+    else if (p.crossed && p.crane === 'unweighted' && near(COUNTERWEIGHT, 1.25)) use(t('ch2.s1.prompt.weight'), () => {
       if (p.setCounterweight()) this.cue('sfx-raft-lock');
     });
-    else if (p.crossed && near(CRANE_CONTROL, 1.23)) use('操纵吊臂', () => this.enterMechanism('crane'));
-    else if (near(MARKET_DOOR, 1.37)) use('看鱼市门口的通告和黑板', () => {
+    else if (p.crossed && near(CRANE_CONTROL, 1.23)) use(t('ch2.s1.prompt.crane'), () => this.enterMechanism('crane'));
+    else if (near(MARKET_DOOR, 1.37)) use(t('ch2.s1.prompt.market'), () => {
       p.boardRead = true;
       this.showJournal();
     });
-    else if (p.crane === 'landed' && near(STAGES.s1.exit, 1.32)) use('前往镜巷', () => {
+    else if (p.crane === 'landed' && near(STAGES.s1.exit, 1.32)) use(t('ch2.s1.prompt.to_s2'), () => {
       this.leaving = true;
       this.travel('s2');
     });
@@ -310,8 +335,14 @@ export class HarbourScene extends BaseScene {
     for (const [key] of ambient) this.game.audio.stopLoop(key);
     this.game.ui.hud.setPrompt(null);
     this.game.ui.hud.hide();
-    this.game.ui.fade.set(0);
+    if (!this.leaving) this.game.ui.fade.set(0);
     for (const root of this.entities.clear()) disposeObject3D(root, { keep: this.game.assets.sharedResources() });
     this.physics.clear();
+    const loaded = new Set(this.game.assets.loadedGroups);
+    for (const e of HARBOUR_ASSETS) {
+      if (e.group !== 'common' && (!loaded.has(e.group) || e.key === 'ch2-s1-quay-wood' || e.key === 'ch2-s1-cliff-rock')) {
+        this.game.assets.unload(e.key);
+      }
+    }
   }
 }
