@@ -97,7 +97,13 @@ export class LighthouseScene extends BaseScene {
       scene: this.scene,
       cameraFollow: this.follow,
       alive: () => this.alive,
-      onComplete: () => this.game.flow.completeChapter2(),
+      onComplete: () => {
+        if (this.savePoint) return this.game.flow.completeChapter2();
+        this.game.ui.fade.set(0);
+        this.rig.controller.locked = false;
+        this.game.ui.hud.show();
+        return Promise.resolve();
+      },
     });
     this.alive = true;
     this.ready = true;
