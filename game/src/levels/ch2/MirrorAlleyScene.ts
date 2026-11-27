@@ -8,6 +8,7 @@ import { EntityManager } from '@/entities/EntityManager';
 import { BaseScene } from '@/scenes/BaseScene';
 import { CameraFollowSystem } from '@/systems/CameraFollowSystem';
 import { PhysicsSystem } from '@/systems/PhysicsSystem';
+import { switchMusic } from '@/systems/audio/music';
 import { v } from './geometry';
 import { STAGES, VIEWS, type Point, type Travel } from './layout';
 import { MirrorAlleyArt, RELAY_BOARD } from './mirrorAlleyArt';
@@ -87,9 +88,12 @@ export class MirrorAlleyScene extends BaseScene {
     this.game.ui.hud.show();
     this.game.ui.hud.el.classList.add('ch2-mirror-hud');
     this.game.ui.hud.setLocation(t('ch2.loc.s2'));
-    if (!this.shot) for (const [id, volume] of ambient) {
-      const buffer = this.game.assets.getAudio(id);
-      if (buffer) this.game.audio.startLoop(id, { buffer, volume });
+    if (!this.shot) {
+      switchMusic(this.game.audio, (k) => this.game.assets.getAudio(k), null);
+      for (const [id, volume] of ambient) {
+        const buffer = this.game.assets.getAudio(id);
+        if (buffer) this.game.audio.startLoop(id, { buffer, volume });
+      }
     }
     this.ready = true;
     this.follow.snap();

@@ -8,6 +8,7 @@ import { EntityManager } from '@/entities/EntityManager';
 import { BaseScene } from '@/scenes/BaseScene';
 import { CameraFollowSystem } from '@/systems/CameraFollowSystem';
 import { PhysicsSystem } from '@/systems/PhysicsSystem';
+import { switchMusic } from '@/systems/audio/music';
 import { v } from './geometry';
 import { CABLE_FROM, CABLE_TO, STAGES, VIEWS, type Point, type Travel } from './layout';
 import { LighthouseArt } from './lighthouseArt';
@@ -88,9 +89,12 @@ export class LighthouseScene extends BaseScene {
     this.physics.onFallOut = () => { void this.rig.controller.teleportTo(v(this.recall)); };
     this.game.ui.hud.show();
     this.game.ui.hud.setLocation(t(stage.titleKey));
-    if (!this.shot) for (const [id, volume] of ambient) {
-      const buffer = this.game.assets.getAudio(id);
-      if (buffer) this.game.audio.startLoop(id, { buffer, volume });
+    if (!this.shot) {
+      switchMusic(this.game.audio, (k) => this.game.assets.getAudio(k), null);
+      for (const [id, volume] of ambient) {
+        const buffer = this.game.assets.getAudio(id);
+        if (buffer) this.game.audio.startLoop(id, { buffer, volume });
+      }
     }
     this.ending = new Ch2Ending({
       game: this.game,

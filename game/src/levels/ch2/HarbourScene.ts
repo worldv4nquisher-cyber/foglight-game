@@ -8,6 +8,7 @@ import { EntityManager } from '@/entities/EntityManager';
 import { BaseScene } from '@/scenes/BaseScene';
 import { CameraFollowSystem } from '@/systems/CameraFollowSystem';
 import { PhysicsSystem } from '@/systems/PhysicsSystem';
+import { switchMusic } from '@/systems/audio/music';
 import { Rain, RAIN_SPLASH_KEY, RAIN_STREAK_KEY } from '@/world/Rain';
 import { SkyDome, SKY_CLOUDS_KEY } from '@/world/SkyDome';
 import { v } from './geometry';
@@ -108,6 +109,7 @@ export class HarbourScene extends BaseScene {
     this.physics.killY = -4;
     this.physics.onFallOut = () => { void this.recall(); };
     this.puzzles.tides.onRecall = () => this.recall();
+    if (!this.shot) switchMusic(this.game.audio, (k) => this.game.assets.getAudio(k), null);
     for (const [key, volume] of ambient) {
       const buffer = this.game.assets.getAudio(key);
       if (buffer) this.game.audio.startLoop(key, { buffer, volume });
