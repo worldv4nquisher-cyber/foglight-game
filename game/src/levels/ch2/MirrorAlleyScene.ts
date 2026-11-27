@@ -45,6 +45,7 @@ export class MirrorAlleyScene extends BaseScene {
   private recall: Point;
   private leaving = false;
   private ready = false;
+  private readonly seenHints = new Set<string>();
 
   constructor(
     game: Game,
@@ -102,11 +103,16 @@ export class MirrorAlleyScene extends BaseScene {
 
   private hint(): void {
     const path = this.relay.trace();
-    const clue = path.received ? t('ch2.s2.hint.done')
-      : path.lit === 1 ? t('ch2.s2.hint.m1')
-        : path.lit === 2 ? t('ch2.s2.hint.m2')
-          : t('ch2.s2.hint.m4');
-    this.game.ui.hud.toast(clue);
+    const key = path.received ? 'ch2.s2.hint.done'
+      : path.lit === 1 ? 'ch2.s2.hint.m1'
+        : path.lit === 2 ? 'ch2.s2.hint.m2'
+          : 'ch2.s2.hint.m4';
+    if (this.savePoint && !this.seenHints.has(key)) {
+      this.seenHints.add(key);
+      this.game.save.addHintUsed();
+      this.game.save.flush();
+    }
+    this.game.ui.hud.toast(t(key));
   }
 
   private begin(index: number, position: Point): void {

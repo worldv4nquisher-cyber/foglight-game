@@ -54,6 +54,7 @@ export class HarbourScene extends BaseScene {
   private leaving = false;
   private journal: HTMLDialogElement | null = null;
   private ready = false;
+  private readonly seenHints = new Set<string>();
 
   constructor(
     game: Game,
@@ -161,14 +162,19 @@ export class HarbourScene extends BaseScene {
     }
   }
 
-  private hint(): void {
+  private hint(count = true): void {
     const p = this.puzzles;
-    const line = !p.gateClosed ? t('ch2.s1.hint.gate')
-      : !p.crossed ? t('ch2.s1.hint.cross')
-      : p.crane === 'unweighted' ? t('ch2.s1.hint.weight')
-      : p.crane !== 'landed' ? t('ch2.s1.hint.crane')
-      : t('ch2.s1.hint.deck');
-    this.game.ui.hud.toast(line);
+    const key = !p.gateClosed ? 'ch2.s1.hint.gate'
+      : !p.crossed ? 'ch2.s1.hint.cross'
+      : p.crane === 'unweighted' ? 'ch2.s1.hint.weight'
+      : p.crane !== 'landed' ? 'ch2.s1.hint.crane'
+      : 'ch2.s1.hint.deck';
+    if (count && this.savePoint && !this.seenHints.has(key)) {
+      this.seenHints.add(key);
+      this.game.save.addHintUsed();
+      this.game.save.flush();
+    }
+    this.game.ui.hud.toast(t(key));
   }
 
   private useMechanism(): void {
@@ -256,7 +262,7 @@ export class HarbourScene extends BaseScene {
     else if (!p.crossed && near(GATE_CONTROL, 0.92)) use(p.canClose ? t('ch2.s1.prompt.gate_ready') : t('ch2.s1.prompt.gate'), () => this.enterMechanism('gate'));
     else if (!p.crossed && near(BOARDING, 0.83)) use(p.canBoard ? t('ch2.s1.prompt.board') : t('ch2.s1.prompt.boat'), () => {
       if (p.board()) this.cue('sfx-raft-float');
-      else this.hint();
+      else this.hint(false);
     });
     else if (p.crossed && p.crane === 'unweighted' && near(COUNTERWEIGHT, 1.25)) use(t('ch2.s1.prompt.weight'), () => {
       if (p.setCounterweight()) this.cue('sfx-raft-lock');

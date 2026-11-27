@@ -48,6 +48,7 @@ export class LighthouseScene extends BaseScene {
   private ready = false;
   private leaving = false;
   private alive = true;
+  private readonly seenHints = new Set<string>();
 
   constructor(
     game: Game,
@@ -121,10 +122,16 @@ export class LighthouseScene extends BaseScene {
   }
 
   private hint(): void {
-    this.game.ui.hud.toast(this.prism.lit ? t('ch2.s3.hint.lit')
-      : this.cable.side === 'stack' ? t('ch2.s3.hint.prism')
-        : this.cable.released ? t('ch2.s3.hint.board')
-          : t('ch2.s3.hint.winch'));
+    const key = this.prism.lit ? 'ch2.s3.hint.lit'
+      : this.cable.side === 'stack' ? 'ch2.s3.hint.prism'
+        : this.cable.released ? 'ch2.s3.hint.board'
+          : 'ch2.s3.hint.winch';
+    if (this.savePoint && !this.seenHints.has(key)) {
+      this.seenHints.add(key);
+      this.game.save.addHintUsed();
+      this.game.save.flush();
+    }
+    this.game.ui.hud.toast(t(key));
   }
 
   private begin(station: Station): void {
