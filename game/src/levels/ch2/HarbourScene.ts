@@ -332,5 +332,11 @@ export class HarbourScene extends BaseScene {
     if (!this.leaving) this.game.ui.fade.set(0);
     for (const root of this.entities.clear()) disposeObject3D(root, { keep: this.game.assets.sharedResources() });
     this.physics.clear();
+    const loaded = new Set(this.game.assets.loadedGroups);
+    for (const e of HARBOUR_ASSETS) {
+      if (e.group !== 'common' && (!loaded.has(e.group) || e.key === 'ch2-s1-quay-wood' || e.key === 'ch2-s1-cliff-rock')) {
+        this.game.assets.unload(e.key);
+      }
+    }
   }
 }

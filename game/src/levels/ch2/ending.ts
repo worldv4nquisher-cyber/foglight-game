@@ -146,6 +146,9 @@ export class Ch2Ending {
     this.cam.removeFromParent();
     this.propsRoot.removeFromParent();
     disposeObject3D(this.propsRoot);
+    if (!this.h.game.assets.loadedGroups.includes('s3')) {
+      this.h.game.assets.unload(ENDING_MUSIC);
+    }
   }
 
   private startMusic(): void {
