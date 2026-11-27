@@ -179,14 +179,14 @@ export class MenuScene extends BaseScene {
  * 存档点：进入时写 chapterComplete（GDD §11：点灯进入章节结束页时存档），之后「继续」回到这一页。
  */
 export class ChapterEndScene extends MenuScene {
-  override readonly name = 'chapter-end';
+  override readonly name: string = 'chapter-end';
   protected override lit = true;
   override savePoint = { chapterId: 'ch1', sceneId: 'end', chapterComplete: true };
 
   protected override showUi(): void {
     this.game.ui.hud.hide();
     const s = this.game.save.lastSave;
-    this.game.ui.chapterEnd.show({ playTimeSec: s?.playTimeSec ?? this.game.save.playTimeSec, hintsUsed: s?.hintsUsed ?? 0 });
+    this.game.ui.chapterEnd.show({ playTimeSec: s?.playTimeSec ?? this.game.save.playTimeSec, hintsUsed: s?.hintsUsed ?? 0, chapter: 'ch1' });
   }
 
   protected override onBack(): void {}
@@ -225,5 +225,24 @@ export class ChapterEndScene extends MenuScene {
     this.offSkip?.();
     this.offSkip = null;
     this.game.ui.chapterEnd.hide();
+  }
+}
+
+/**
+ * 第二章结束页场景：复用灯已点亮的雨中灯塔背景，存档写 chapterId = 'ch2'、chapterComplete = true；
+ * 提供「制作人员」与「返回主菜单」。
+ */
+export class Ch2EndScene extends ChapterEndScene {
+  override readonly name = 'ch2-end';
+  override savePoint = { chapterId: 'ch2', sceneId: 'end', chapterComplete: true };
+
+  protected override showUi(): void {
+    this.game.ui.hud.hide();
+    const s = this.game.save.lastSave;
+    this.game.ui.chapterEnd.show({ playTimeSec: s?.playTimeSec ?? this.game.save.playTimeSec, hintsUsed: s?.hintsUsed ?? 0, chapter: 'ch2' });
+  }
+
+  protected override onBack(): void {
+    this.game.ui.chapterEnd.closeCredits();
   }
 }

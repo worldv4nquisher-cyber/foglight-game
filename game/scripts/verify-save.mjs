@@ -161,6 +161,28 @@ test('写入失败（隐私模式 setItem 抛错）：不崩溃，提示「进�
   assert.equal(new SaveSystem(null).writable, false);
 });
 
+test('跨章存档边界：ch1 完成 → 进入 ch2-s1 清除 chapterComplete → ch2 结束再置 true', () => {
+  const st = new MemStorage();
+  const s = new SaveSystem(st);
+  s.newGame('ch1', 's3');
+  s.tick(12);
+  s.save({ chapterId: 'ch1', sceneId: 'end', chapterComplete: true });
+  assert.equal(s.lastSave.chapterId, 'ch1');
+  assert.equal(s.lastSave.chapterComplete, true);
+  s.save({ chapterId: 'ch2', sceneId: 'ch2-s1', chapterComplete: false });
+  assert.equal(s.lastSave.chapterId, 'ch2');
+  assert.equal(s.lastSave.sceneId, 'ch2-s1');
+  assert.equal(s.lastSave.chapterComplete, false);
+  const reloaded = new SaveSystem(st);
+  const loaded = reloaded.continueGame();
+  assert.equal(loaded.chapterId, 'ch2');
+  assert.equal(loaded.sceneId, 'ch2-s1');
+  assert.equal(loaded.chapterComplete, false);
+  reloaded.save({ chapterId: 'ch2', sceneId: 'end', chapterComplete: true });
+  assert.equal(reloaded.lastSave.chapterId, 'ch2');
+  assert.equal(reloaded.lastSave.chapterComplete, true);
+});
+
 test('游玩时间：每满 10 秒加 10 秒，存档时写入，继续后接着累计', () => {
   const st = new MemStorage();
   const s = new SaveSystem(st);

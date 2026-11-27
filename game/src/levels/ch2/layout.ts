@@ -3,10 +3,10 @@ export type Stage = 's1' | 's2' | 's3';
 export type Travel = (stage: Stage, spawn?: Point) => void;
 
 export const STAGES = {
-  s1: { title: '峡口与船骸', spawn: [9, 2, -7], look: [-5, 10, -25], exit: [4.8, 11.2, -43], next: 's2' },
-  s2: { title: '镜巷', spawn: [4.5, 11.2, -43], look: [-7, 14, -49], exit: [-18, 39, -12], next: 's3' },
-  s3: { title: '崖顶与礁柱灯塔', spawn: [-19, 39, -11], look: [-5, 26, 28] },
-} as const satisfies Record<Stage, { title: string; spawn: Point; look: Point; exit?: Point; next?: Stage }>;
+  s1: { titleKey: 'ch2.loc.s1', spawn: [9, 2, -7], look: [-5, 10, -25], exit: [4.8, 11.2, -43], next: 's2' },
+  s2: { titleKey: 'ch2.loc.s2', spawn: [4.5, 11.2, -43], look: [-7, 14, -49], exit: [-18, 39, -12], next: 's3' },
+  s3: { titleKey: 'ch2.loc.s3', spawn: [-19, 39, -11], look: [-5, 26, 28] },
+} as const satisfies Record<Stage, { titleKey: 'ch2.loc.s1' | 'ch2.loc.s2' | 'ch2.loc.s3'; spawn: Point; look: Point; exit?: Point; next?: Stage }>;
 
 export const VIEWS: Record<Stage, Record<string, readonly [eye: Point, target: Point]>> = {
   s1: {

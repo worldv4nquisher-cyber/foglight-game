@@ -89,8 +89,6 @@ export class UIManager {
     this.confirm = new ConfirmDialog(root);
     this.credits = new Credits(root);
     this.mainMenu = new MainMenu(root, game, this.settings, this.credits, this.confirm);
-    this.credits.el.remove();
-    this.mainMenu.el.appendChild(this.credits.el);
     this.chapterEnd = new ChapterEnd(root, game);
     this.pause = new PauseMenu(root, game, this.settings, this.confirm);
 

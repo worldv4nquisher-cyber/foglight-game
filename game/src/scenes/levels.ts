@@ -1,11 +1,16 @@
 import type { AssetGroup } from '@/assets/manifest';
 
 /**
- * 第一章三个场景（v0.1-010，GDD §6）：场景名、存档 ID、资源组、下一个场景。
- * 线性推进 S1 → S2 → S3，不能往回走（GDD §6 动线），所以离开一个场景就可以释放它的资源组。
+ * 第一章与第二章可玩场景：场景名、存档 ID、资源组、下一个场景。
  */
-export type LevelId = 's1' | 's2' | 's3';
-export type LevelSceneName = 's1-ebb-shore' | 's2-keeper-house' | 's3-lighthouse';
+export type LevelId = 's1' | 's2' | 's3' | 'ch2-s1' | 'ch2-s2' | 'ch2-s3';
+export type LevelSceneName =
+  | 's1-ebb-shore'
+  | 's2-keeper-house'
+  | 's3-lighthouse'
+  | 'ch2-harbour'
+  | 'ch2-mirror-alley'
+  | 'ch2-lighthouse';
 
 export interface LevelDef {
   /** 存档里的 sceneId */
@@ -28,15 +33,25 @@ export const LEVELS: Record<LevelId, LevelDef> = {
   s1: { id: 's1', scene: 's1-ebb-shore', group: 's1', next: 's2', defaultEntry: 'start', music: 'mus-s1-ebb-shore' },
   s2: { id: 's2', scene: 's2-keeper-house', group: 's2', next: 's3', defaultEntry: 'from-s1', music: 'mus-s2-keeper-house' },
   s3: { id: 's3', scene: 's3-lighthouse', group: 's3', next: null, defaultEntry: 'from-s2', music: 'mus-s3-lighthouse', musicUpper: 'mus-s3-lighthouse-upper' },
+  'ch2-s1': { id: 'ch2-s1', scene: 'ch2-harbour', group: 'ch2-s1', next: 'ch2-s2', defaultEntry: 'start', music: null },
+  'ch2-s2': { id: 'ch2-s2', scene: 'ch2-mirror-alley', group: 'ch2-s2', next: 'ch2-s3', defaultEntry: 'from-s1', music: null },
+  'ch2-s3': { id: 'ch2-s3', scene: 'ch2-lighthouse', group: 'ch2-s3', next: null, defaultEntry: 'from-s2', music: null },
 };
 
 /** 主菜单曲（033 定稿，menu 组） */
 export const MENU_MUSIC = 'mus-menu';
 
-export const LEVEL_LIST: readonly LevelDef[] = [LEVELS.s1, LEVELS.s2, LEVELS.s3];
+export const LEVEL_LIST: readonly LevelDef[] = [
+  LEVELS.s1,
+  LEVELS.s2,
+  LEVELS.s3,
+  LEVELS['ch2-s1'],
+  LEVELS['ch2-s2'],
+  LEVELS['ch2-s3'],
+];
 
 export function isLevelId(id: string): id is LevelId {
-  return id === 's1' || id === 's2' || id === 's3';
+  return id === 's1' || id === 's2' || id === 's3' || id === 'ch2-s1' || id === 'ch2-s2' || id === 'ch2-s3';
 }
 
 export function levelByScene(scene: string): LevelDef | null {

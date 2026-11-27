@@ -264,6 +264,8 @@ export class SaveSystem {
       p.playTimeSec += this.pendingTime;
       this.pendingTime = 0;
       p.chapterComplete = true;
+    } else if (at.chapterComplete === false) {
+      p.chapterComplete = false;
     }
     const data: SaveData = {
       version: SAVE_VERSION,

@@ -4,14 +4,20 @@ import { t } from '@/content/text';
 import { formatPlayTime } from './format';
 import { cssUrl } from './uiArt';
 
+export type EndChapter = 'ch1' | 'ch2';
+
 /**
- * 章节结束页（v0.1-008，GDD §10）：章节名「第一章 · 归岸」、点亮的灯塔插画（030 R4 ui-illust-chapter1-end.webp，
- * 进结尾时才懒加载；没到 / 失败时是 CSS 渐变占位，`data-art` = loading / ready / fallback）、本章用时、
- * 使用提示次数（只陈述不评分）、「未完待续」、回到主菜单。数值取自存档（结束页场景进入时已写入 chapterComplete）。
+ * 章节结束页（第一章结束后可进入第二章；第二章结束后可查看制作人员或返回主菜单）。
  */
 export class ChapterEnd {
   readonly el: HTMLDivElement;
+  private inner: HTMLDivElement;
   private art: HTMLDivElement;
+  private titleEl: HTMLHeadingElement;
+  private tbcEl: HTMLParagraphElement;
+  private primaryBtn: HTMLButtonElement;
+  private toMenuBtn: HTMLButtonElement;
+  private chapter: EndChapter = 'ch1';
 
   constructor(
     parent: HTMLElement,
@@ -27,29 +33,57 @@ export class ChapterEnd {
         <p class="chapter-end-stat" data-role="playtime"></p>
         <p class="chapter-end-stat" data-role="hints"></p>
         <p class="chapter-end-tbc"></p>
-        <button type="button" class="menu-btn primary" data-act="to-menu"></button>
+        <div class="chapter-end-actions">
+          <button type="button" class="menu-btn primary" data-act="primary"></button>
+          <button type="button" class="menu-btn" data-act="to-menu"></button>
+        </div>
       </div>
     `;
     parent.appendChild(this.el);
-    this.el.querySelector('.chapter-end-title')!.textContent = t('ui.end.chapter');
+    this.inner = this.el.querySelector<HTMLDivElement>('.chapter-end-inner')!;
+    this.titleEl = this.el.querySelector<HTMLHeadingElement>('.chapter-end-title')!;
+    this.tbcEl = this.el.querySelector<HTMLParagraphElement>('.chapter-end-tbc')!;
     const art = (this.art = this.el.querySelector<HTMLDivElement>('.chapter-end-art')!);
     art.setAttribute('aria-label', t('ui.end.illustration'));
     this.el.querySelector('.chapter-end-art-label')!.textContent = t('ui.end.illustration');
-    this.el.querySelector('.chapter-end-tbc')!.textContent = t('ui.end.tbc');
-    const toMenu = this.el.querySelector<HTMLButtonElement>('[data-act="to-menu"]')!;
-    toMenu.textContent = t('ui.end.to_menu');
-    toMenu.addEventListener('click', () => void this.game.flow.toMenu());
+    this.primaryBtn = this.el.querySelector<HTMLButtonElement>('[data-act="primary"]')!;
+    this.toMenuBtn = this.el.querySelector<HTMLButtonElement>('[data-act="to-menu"]')!;
+    this.toMenuBtn.textContent = t('ui.end.to_menu');
+    this.primaryBtn.addEventListener('click', () => this.onPrimary());
+    this.toMenuBtn.addEventListener('click', () => void this.game.flow.toMenu());
   }
 
   get isOpen(): boolean {
     return !this.el.hidden;
   }
 
-  show(stats: { playTimeSec: number; hintsUsed: number }): void {
+  show(stats: { playTimeSec: number; hintsUsed: number; chapter?: EndChapter }): void {
+    this.chapter = stats.chapter ?? 'ch1';
+    this.titleEl.textContent = t(this.chapter === 'ch2' ? 'ui.end.ch2_chapter' : 'ui.end.chapter');
+    this.tbcEl.textContent = t(this.chapter === 'ch2' ? 'ui.end.tbc' : 'ui.end.next_chapter');
+    this.primaryBtn.textContent = t(this.chapter === 'ch2' ? 'ui.end.credits' : 'ui.end.ch1_next');
+    this.primaryBtn.dataset.act = this.chapter === 'ch2' ? 'credits' : 'next-chapter';
     this.el.querySelector('[data-role="playtime"]')!.textContent = t('ui.end.playtime', { time: formatPlayTime(stats.playTimeSec) });
     this.el.querySelector('[data-role="hints"]')!.textContent = t('ui.end.hints', { count: stats.hintsUsed });
+    this.inner.hidden = false;
     this.el.hidden = false;
     this.loadArt();
+  }
+
+  closeCredits(): void {
+    if (!this.game.ui.credits.isOpen) return;
+    this.game.ui.credits.hide();
+    this.inner.hidden = false;
+  }
+
+  private onPrimary(): void {
+    if (this.chapter === 'ch1') {
+      this.game.flow.startChapter2();
+      return;
+    }
+    this.inner.hidden = true;
+    this.game.ui.credits.onBack = () => this.closeCredits();
+    this.game.ui.credits.show();
   }
 
   /** 030 R4：结尾插画懒加载（common 包里登记、lazy，进结尾才下）；同 key 只下一次 */
@@ -63,6 +97,8 @@ export class ChapterEnd {
   }
 
   hide(): void {
+    this.game.ui.credits.hide();
+    this.inner.hidden = false;
     this.el.hidden = true;
   }
 

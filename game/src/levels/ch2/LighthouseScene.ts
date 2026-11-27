@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { manifest } from '@/assets/manifest';
+import { t } from '@/content/text';
 import type { Game } from '@/core/Game';
 import { disposeObject3D } from '@/core/dispose';
 import { createPlayer, type PlayerRig } from '@/entities/createPlayer';
@@ -11,6 +12,7 @@ import { v } from './geometry';
 import { CABLE_FROM, CABLE_TO, STAGES, VIEWS, type Point, type Travel } from './layout';
 import { LighthouseArt } from './lighthouseArt';
 import { BALANCED_LOAD, type CableCar, PRISM_CONTROL, PRISM_DETENTS, type PrismSplitter, WEIGHT_LIMIT, WINCH, type PrismAxis } from './lighthousePuzzles';
+import { Ch2Ending } from './ending';
 import { buildVillage, TOWER_SHELL } from './village';
 
 const stage = STAGES.s3;
@@ -26,7 +28,8 @@ const CAMERAS = {
 type Station = keyof typeof CAMERAS;
 
 export class LighthouseScene extends BaseScene {
-  readonly name = 'ch2-whitebox-s3';
+  readonly name: string;
+  override savePoint: { chapterId: string; sceneId: string; chapterComplete?: boolean } | null;
   private readonly physics = new PhysicsSystem();
   private readonly entities = new EntityManager(this.scene);
   private readonly follow: CameraFollowSystem;
@@ -36,16 +39,27 @@ export class LighthouseScene extends BaseScene {
   private readonly carPosition = v(CABLE_FROM);
   private readonly carPhysicsPosition = v(CABLE_FROM);
   private rig!: PlayerRig;
+  private ending!: Ch2Ending;
   private mode: Station | null = null;
   private axis: PrismAxis = 'yaw';
   private popContext: (() => void) | null = null;
   private recall: Point = stage.spawn;
   private ready = false;
   private leaving = false;
+  private alive = true;
 
-  constructor(game: Game, view: string | null, private readonly cable: CableCar,
-    private readonly prism: PrismSplitter, private readonly travel: Travel) {
+  constructor(
+    game: Game,
+    view: string | null,
+    private readonly cable: CableCar,
+    private readonly prism: PrismSplitter,
+    private readonly travel: Travel,
+    sceneName = 'ch2-lighthouse',
+    savePoint: { chapterId: string; sceneId: string; chapterComplete?: boolean } | null = { chapterId: 'ch2', sceneId: 'ch2-s3', chapterComplete: false },
+  ) {
     super(game);
+    this.name = sceneName;
+    this.savePoint = view ? null : savePoint;
     this.shot = view ? VIEWS.s3[view] : undefined;
     this.follow = new CameraFollowSystem(this.camera, game.input, { physics: this.physics, events: game.events });
     this.follow.yaw = Math.PI;
@@ -73,11 +87,19 @@ export class LighthouseScene extends BaseScene {
     this.physics.killY = -1.4;
     this.physics.onFallOut = () => { void this.rig.controller.teleportTo(v(this.recall)); };
     this.game.ui.hud.show();
-    this.game.ui.hud.setLocation(`裂湾村 · ${stage.title}`);
+    this.game.ui.hud.setLocation(t(stage.titleKey));
     if (!this.shot) for (const [id, volume] of ambient) {
       const buffer = this.game.assets.getAudio(id);
       if (buffer) this.game.audio.startLoop(id, { buffer, volume });
     }
+    this.ending = new Ch2Ending({
+      game: this.game,
+      scene: this.scene,
+      cameraFollow: this.follow,
+      alive: () => this.alive,
+      onComplete: () => this.game.flow.completeChapter2(),
+    });
+    this.alive = true;
     this.ready = true;
     this.follow.snap();
     this.update(0, 0);
@@ -89,10 +111,10 @@ export class LighthouseScene extends BaseScene {
   }
 
   private hint(): void {
-    this.game.ui.hud.toast(this.prism.lit ? '灯已经亮了。可以上外廊看雾里的海面。'
-      : this.cable.side === 'stack' ? '白光经棱镜分成冷暖两束。先把两束转向灯杯，再翻框对准杯口。'
-        : this.cable.released ? '闸已松开。到站台红色缆车旁登车。'
-          : '在绞盘站增减铁坨。指针居中才可以松闸。');
+    this.game.ui.hud.toast(this.prism.lit ? t('ch2.s3.hint.lit')
+      : this.cable.side === 'stack' ? t('ch2.s3.hint.prism')
+        : this.cable.released ? t('ch2.s3.hint.board')
+          : t('ch2.s3.hint.winch'));
   }
 
   private begin(station: Station): void {
@@ -132,22 +154,28 @@ export class LighthouseScene extends BaseScene {
         if (this.cable.release()) {
           this.sound(lever, 0.8);
           this.end();
-          ui.hud.toast('制动闸已松开 · 到红色缆车旁登车');
+          ui.hud.toast(t('ch2.s3.toast.brake_released'));
           return;
         }
-        ui.hud.toast('配重未平 · 制动闸锁住了');
+        ui.hud.toast(t('ch2.s3.toast.brake_locked'));
       }
-      const gauge = this.cable.load === BALANCED_LOAD ? '指针居中' : this.cable.load < BALANCED_LOAD ? '配重偏轻' : '配重偏重';
-      ui.hud.setPrompt(`绞盘制动 · 铁坨 ${this.cable.load} / ${WEIGHT_LIMIT} · ${gauge}`);
-      ui.hud.setPuzzleBar('Q / E 增减配重 · 空格 试闸 · Tab 返回 · R 重置 · H 线索');
+      const gauge = this.cable.load === BALANCED_LOAD ? t('ch2.s3.gauge.balanced') : this.cable.load < BALANCED_LOAD ? t('ch2.s3.gauge.light') : t('ch2.s3.gauge.heavy');
+      ui.hud.setPrompt(t('ch2.s3.winch.prompt', { load: this.cable.load, limit: WEIGHT_LIMIT, gauge }));
+      ui.hud.setPuzzleBar(t('ch2.s3.winch.bar'));
     } else {
       if (reset) this.prism.reset();
       else if (direction) this.prism.adjust(this.axis, direction);
       if (advance) this.axis = this.axis === 'yaw' ? 'roll' : 'yaw';
       const [warm, cool] = this.prism.trace();
-      const ang = this.axis === 'yaw' ? '转盘' : '翻框';
-      ui.hud.setPrompt(this.prism.lit ? '灯已点亮' : `棱镜${ang} · ${this.prism[this.axis] + 1} / ${PRISM_DETENTS} · 暖杯${warm?.aligned ? '亮' : '暗'} / 冷杯${cool?.aligned ? '亮' : '暗'}`);
-      ui.hud.setPuzzleBar(this.prism.lit ? 'Tab 返回外廊' : 'Q / E 调节 · 空格 切换轴 · Tab 返回 · R 重置 · H 线索');
+      const axis = this.axis === 'yaw' ? t('ch2.s3.prism.axis_yaw') : t('ch2.s3.prism.axis_roll');
+      ui.hud.setPrompt(this.prism.lit ? t('ch2.s3.prism.prompt_lit') : t('ch2.s3.prism.prompt', {
+        axis,
+        step: this.prism[this.axis] + 1,
+        total: PRISM_DETENTS,
+        warm: warm?.aligned ? t('ch2.s3.prism.lit') : t('ch2.s3.prism.dark'),
+        cool: cool?.aligned ? t('ch2.s3.prism.lit') : t('ch2.s3.prism.dark'),
+      }));
+      ui.hud.setPuzzleBar(this.prism.lit ? t('ch2.s3.prism.bar_lit') : t('ch2.s3.prism.bar'));
     }
     if (direction) this.sound(click, 0.65);
     if (input.consumePressed('hint')) this.hint();
@@ -161,23 +189,23 @@ export class LighthouseScene extends BaseScene {
       && Math.hypot(pos.x - p[0], pos.z - p[2]) < radius;
     const dock = this.cable.side === 'cliff' ? CABLE_FROM : CABLE_TO;
     if (near(stage.spawn, 1.15)) {
-      ui.hud.setPrompt('E　返回镜巷');
+      ui.hud.setPrompt(t('ch2.s3.prompt.to_s2'));
       if (input.consumePressed('interact')) {
         this.leaving = true;
         this.travel('s2', STAGES.s2.exit);
       }
     } else if (!this.cable.released && near(WINCH, 1.22)) {
-      ui.hud.setPrompt('E\u3000操作绞盘配重');
+      ui.hud.setPrompt(t('ch2.s3.prompt.winch'));
       if (input.consumePressed('interact')) this.begin('cable');
     } else if (near(dock, 1.38)) {
-      ui.hud.setPrompt(this.cable.released ? 'E\u3000登上缆车' : '缆车停闸 · 先去绞盘站配重');
+      ui.hud.setPrompt(this.cable.released ? t('ch2.s3.prompt.board') : t('ch2.s3.prompt.board_locked'));
       if (this.cable.released && this.rig.body.onGround && input.consumePressed('interact') && this.cable.board(this.cable.side)) {
         this.rig.controller.locked = true;
         this.rig.controller.pin(v(dock));
         this.sound(lever, 0.62);
       }
     } else if (near(PRISM_CONTROL, 1.22, 0.62)) {
-      ui.hud.setPrompt(this.prism.lit ? '灯室 · 灯已点亮' : 'E\u3000调节半盏灯的棱镜');
+      ui.hud.setPrompt(this.prism.lit ? t('ch2.s3.prompt.prism_lit') : t('ch2.s3.prompt.prism'));
       if (!this.prism.lit && input.consumePressed('interact')) this.begin('prism');
     } else ui.hud.setPrompt(null);
   }
@@ -188,28 +216,34 @@ export class LighthouseScene extends BaseScene {
     this.cable.step(dt);
     this.cable.sample(body.position);
     if (this.cable.moving) {
-      this.game.ui.hud.setPrompt('沿缆索横渡海峡…');
+      this.game.ui.hud.setPrompt(t('ch2.s3.prompt.riding'));
       return;
     }
     this.recall = this.cable.landing;
     this.rig.controller.pin(v(this.recall));
     this.rig.controller.unpin();
     this.rig.controller.locked = false;
-    this.game.ui.hud.toast(this.cable.side === 'stack' ? '已到礁柱 · 进塔门，沿坡道上灯室' : '已返回崖顶');
+    this.game.ui.hud.toast(this.cable.side === 'stack' ? t('ch2.s3.toast.arrived_stack') : t('ch2.s3.toast.arrived_cliff'));
   }
 
   override fixedUpdate(dt: number): void {
     if (!this.ready || this.shot || this.leaving) return;
-    if (this.cable.moving) this.ride(dt);
-    else if (!this.rig.controller.busy) {
-      if (this.mode) this.adjust(this.mode);
-      else this.explore();
-    }
-    const lit = this.prism.lit;
-    this.prism.step(dt);
-    if (!lit && this.prism.lit) {
-      this.game.ui.hud.toast('两道光合入灯芯 · 礁柱灯塔已亮');
-      this.sound(ignite, 0.9);
+    if (!this.ending.active) {
+      if (this.cable.moving) this.ride(dt);
+      else if (!this.rig.controller.busy) {
+        if (this.mode) this.adjust(this.mode);
+        else this.explore();
+      }
+      const lit = this.prism.lit;
+      this.prism.step(dt);
+      if (!lit && this.prism.lit) {
+        this.end();
+        this.rig.controller.locked = true;
+        this.rig.controller.halt();
+        this.game.ui.hud.toast(t('ch2.s3.toast.ignited'));
+        this.sound(ignite, 0.9);
+        this.ending.start();
+      }
     }
     this.entities.fixedUpdate(dt);
     this.art.setCarPosition(this.cable.sample(this.carPhysicsPosition));
@@ -229,17 +263,20 @@ export class LighthouseScene extends BaseScene {
       this.camera.fov = 59;
       this.camera.updateProjectionMatrix();
     } else {
+      this.ending.update(dt);
       this.follow.update(dt);
-      this.art.cutaway.update(this.camera, this.rig.entity.object3D.position, this.follow.modeName === 'explore');
+      this.art.cutaway.update(this.camera, this.rig.entity.object3D.position, !this.ending.active && this.follow.modeName === 'explore');
     }
   }
 
   override exit(): void {
+    this.alive = false;
+    this.ending?.dispose();
     this.end();
     if (!this.shot) for (const [id] of ambient) this.game.audio.stopLoop(id);
     this.game.ui.hud.setPrompt(null);
     this.game.ui.hud.hide();
-    this.game.ui.fade.set(0);
+    if (!this.leaving && !this.ending?.endedBy) this.game.ui.fade.set(0);
     for (const root of this.entities.clear()) disposeObject3D(root, { keep: this.game.assets.sharedResources() });
     this.physics.clear();
   }

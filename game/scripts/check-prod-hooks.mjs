@@ -14,8 +14,7 @@ if (!existsSync(join(DIST, 'index.html'))) {
   process.exit(1);
 }
 /** 只在钩子代码里出现的字符串（游戏代码自己的属性名如 puzzles 不算） */
-const CH2_HARBOUR_KIT = 'prop-harbour-kit-ch2-s1.glb';
-export const FORBIDDEN = ['__qa', '__game', '__perfSpot', '__testbed', '__s1', '__s2', '__s3', '__lods', 'installQaHooks', 'unparsable', 'ch2-whitebox', '裂湾村白盒', CH2_HARBOUR_KIT];
+export const FORBIDDEN = ['__qa', '__game', '__perfSpot', '__testbed', '__s1', '__s2', '__s3', '__lods', 'installQaHooks', 'unparsable', 'ch2-whitebox', '裂湾村白盒'];
 /**
  * batch26：?debug=1 和 ?scene= 直进场景也只在 dev / 测试构建里（src/config/debug.ts 的 TEST_BUILD 是构建期常量）。
  * 生产构建里不能还有读这两个 URL 参数的代码，也不能还有直进 testbed / sandbox 的分支（压缩后引号可能是 ` ' "）。
@@ -149,7 +148,6 @@ const staticFiles = scan(join(DIST, 'static'), /\.(js|mjs|html|css)$/);
 const assetJs = scan(join(DIST, 'assets'), /\.(js|mjs|cjs)$/);
 const files = [join(DIST, 'index.html'), ...staticFiles, ...assetJs];
 const hits = [];
-if (existsSync(join(DIST, 'assets', 'art', 'models', 'props', CH2_HARBOUR_KIT))) hits.push(`assets/art/models/props/${CH2_HARBOUR_KIT}：第二章鱼港资源只供开发阅览`);
 for (const f of files) {
   const s = readFileSync(f, 'utf8');
   for (const w of FORBIDDEN) {

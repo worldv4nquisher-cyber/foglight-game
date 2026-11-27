@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { manifest } from '@/assets/manifest';
+import { t } from '@/content/text';
 import type { Game } from '@/core/Game';
 import { disposeObject3D } from '@/core/dispose';
 import { createPlayer, type PlayerRig } from '@/entities/createPlayer';
@@ -20,7 +21,7 @@ const ambient = [['amb-waves-near', 0.22], ['amb-wind-soft', 0.25]] as const;
 const click = 'sfx-mirror-click', bell = 'sfx-tide-bell-ring';
 const assets = manifest.filter(({ key }) => key.startsWith('char-xi') || key.startsWith('tex-xi')
   || key === click || key === bell || ambient.some(([id]) => id === key));
-const names = ['东岸 · 晾鱼檐镜', '西岸 · 栈桥檐镜', '东岸 · 熏房定镜', '西岸 · 折梯檐镜'];
+const mirrorNames = () => [t('ch2.s2.mirror.0'), t('ch2.s2.mirror.1'), t('ch2.s2.mirror.2'), t('ch2.s2.mirror.3')] as const;
 const cameras: readonly (readonly [Point, Point])[] = [
   [[5, 24, -69], [3.9, 20.35, -58]],
   [[-8, 20, -31], [-5.9, 17.6, -42.6]],
@@ -29,7 +30,8 @@ const cameras: readonly (readonly [Point, Point])[] = [
 ];
 
 export class MirrorAlleyScene extends BaseScene {
-  readonly name = 'ch2-whitebox-s2';
+  readonly name: string;
+  override savePoint: { chapterId: string; sceneId: string; chapterComplete?: boolean } | null;
   private readonly physics = new PhysicsSystem();
   private readonly entities = new EntityManager(this.scene);
   private readonly follow: CameraFollowSystem;
@@ -43,9 +45,18 @@ export class MirrorAlleyScene extends BaseScene {
   private leaving = false;
   private ready = false;
 
-  constructor(game: Game, view: string | null, private readonly spawn: Point,
-    private readonly relay: MirrorRelay, private readonly travel: Travel) {
+  constructor(
+    game: Game,
+    view: string | null,
+    private readonly spawn: Point,
+    private readonly relay: MirrorRelay,
+    private readonly travel: Travel,
+    sceneName = 'ch2-mirror-alley',
+    savePoint: { chapterId: string; sceneId: string; chapterComplete?: boolean } | null = { chapterId: 'ch2', sceneId: 'ch2-s2', chapterComplete: false },
+  ) {
     super(game);
+    this.name = sceneName;
+    this.savePoint = view ? null : savePoint;
     this.recall = spawn;
     this.shot = view ? VIEWS.s2[view] : undefined;
     this.follow = new CameraFollowSystem(this.camera, game.input, { physics: this.physics, events: game.events });
@@ -75,7 +86,7 @@ export class MirrorAlleyScene extends BaseScene {
     this.physics.onFallOut = () => { void this.rig.controller.teleportTo(v(this.recall)); };
     this.game.ui.hud.show();
     this.game.ui.hud.el.classList.add('ch2-mirror-hud');
-    this.game.ui.hud.setLocation('裂湾村 · 镜巷');
+    this.game.ui.hud.setLocation(t('ch2.loc.s2'));
     if (!this.shot) for (const [id, volume] of ambient) {
       const buffer = this.game.assets.getAudio(id);
       if (buffer) this.game.audio.startLoop(id, { buffer, volume });
@@ -87,10 +98,10 @@ export class MirrorAlleyScene extends BaseScene {
 
   private hint(): void {
     const path = this.relay.trace();
-    const clue = path.received ? '雾号亮了。去西岸折梯，沿崖顶栈道走。'
-      : path.lit === 1 ? '先到东岸晾鱼台。转动檐镜，把光送到对岸栈桥上的铜镜。'
-        : path.lit === 2 ? '西岸栈桥镜接住了光。下一站是东岸熏房的定镜。'
-          : '熏房不用调。到西岸折梯第一处转角，让最后一面镜照亮峡尾雾号。';
+    const clue = path.received ? t('ch2.s2.hint.done')
+      : path.lit === 1 ? t('ch2.s2.hint.m1')
+        : path.lit === 2 ? t('ch2.s2.hint.m2')
+          : t('ch2.s2.hint.m4');
     this.game.ui.hud.toast(clue);
   }
 
@@ -135,13 +146,13 @@ export class MirrorAlleyScene extends BaseScene {
     if (input.consumePressed('hint')) this.hint();
     const path = this.relay.trace();
     if (!wasSolved && path.received) {
-      ui.hud.toast('光抵达峡尾 · 崖顶雾号已亮');
+      ui.hud.toast(t('ch2.s2.toast.solved'));
       const buffer = this.game.assets.getAudio(bell);
       if (buffer) this.game.audio.playBuffer(buffer, 0.8);
     }
-    const status = path.received ? '雾号已亮' : path.lit > index ? '已接光' : '尚未接光';
-    ui.hud.setPrompt(`${names[index]} · 档位 ${this.relay.detent(index) + 1} / 5 · ${status}`);
-    ui.hud.setPuzzleBar('Q / E 转镜 · Tab 返回 · R 重置全线 · H 线索');
+    const status = path.received ? t('ch2.s2.status.received') : path.lit > index ? t('ch2.s2.status.lit') : t('ch2.s2.status.unlit');
+    ui.hud.setPrompt(t('ch2.s2.adjust.prompt', { name: mirrorNames()[index]!, detent: this.relay.detent(index) + 1, status }));
+    ui.hud.setPuzzleBar(t('ch2.s2.adjust.bar'));
   }
 
   private explore(): void {
@@ -149,26 +160,27 @@ export class MirrorAlleyScene extends BaseScene {
     if (input.consumePressed('hint')) this.hint();
     const pos = this.rig.body.position;
     const near = (p: Point, radius: number) => pos.distanceToSquared(v(p)) < radius * radius;
+    const names = mirrorNames();
     for (const [index, mirror] of RELAY.entries()) {
       if (!mirror.control || !near(mirror.control, 1.22)) continue;
-      ui.hud.setPrompt(`E\u3000调整${names[index]}`);
+      ui.hud.setPrompt(t('ch2.s2.prompt.mirror', { name: names[index]! }));
       if (input.consumePressed('interact')) this.begin(index, mirror.control);
       return;
     }
     if (near(RETURN_TO_HARBOUR, 1.05)) {
-      ui.hud.setPrompt('E　返回峡口与船骸');
+      ui.hud.setPrompt(t('ch2.s2.prompt.to_s1'));
       if (input.consumePressed('interact')) {
         this.leaving = true;
         this.travel('s1', STAGES.s1.exit);
       }
     } else if (near(RELAY_BOARD, 1.15)) {
-      ui.hud.setPrompt('E　看甲板上的传光告示');
+      ui.hud.setPrompt(t('ch2.s2.prompt.board'));
       if (input.consumePressed('interact')) {
-        ui.hud.toast('雾里看不见路。灯塔照晾鱼檐，栈桥照熏房，折梯上的铜镜把光送到峡尾。');
+        ui.hud.toast(t('ch2.s2.toast.board'));
       }
     } else if (near(stage.exit, 1.8)) {
       const lit = this.relay.trace().received;
-      ui.hud.setPrompt(lit ? 'E　前往崖顶与礁柱灯塔' : '雾号未亮 · 先接通镜巷的光');
+      ui.hud.setPrompt(lit ? t('ch2.s2.prompt.to_s3') : t('ch2.s2.prompt.to_s3_locked'));
       if (lit && input.consumePressed('interact')) {
         this.leaving = true;
         this.travel('s3');
@@ -205,7 +217,7 @@ export class MirrorAlleyScene extends BaseScene {
     this.game.ui.hud.setPrompt(null);
     this.game.ui.hud.el.classList.remove('ch2-mirror-hud');
     this.game.ui.hud.hide();
-    this.game.ui.fade.set(0);
+    if (!this.leaving) this.game.ui.fade.set(0);
     for (const root of this.entities.clear()) disposeObject3D(root, { keep: this.game.assets.sharedResources() });
     this.physics.clear();
   }

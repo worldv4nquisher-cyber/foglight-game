@@ -30,6 +30,15 @@ import { ShaderLib } from 'three';
 import { OUTRO_CUT_SEC, IGNITE_MONO_DELAY, IGNITE_MONO_SEC } from '@/levels/s3/puzzles';
 import { t as text } from '@/content/text';
 import { OPENING_T, openingBoatDistance, openingOarSplashTimes } from '@/content/cutscenes/opening';
+import {
+  CH2_ENDING_CUE_LIST,
+  CH2_ENDING_SUBTITLES,
+  CH2_ENDING_T,
+  ch2DistantGlowAt,
+  ch2FadeAt,
+  ch2FogOpenAt,
+  ch2RelayProgressAt,
+} from '@/content/cutscenes/ch2Ending';
 import { CameraFollowSystem, CameraTrack } from '@/systems/CameraFollowSystem';
 import { InputManager } from '@/systems/input/InputManager';
 
@@ -507,6 +516,26 @@ function makePlayer(src, extra = {}) {
   for (const k of ['from', 'to']) rot(a[k].position).forEach((x, i) => near(b[k].position[i], x, k + ' 平移旋转不变 #' + i));
   near(Math.hypot(...a.basis.f), 1, 'f 单位');
   out.push('05 过肩机位相对日志 socket + 坐写站位（平移 / 旋转不变，参数可逆读回）✓');
+}
+
+{
+  for (let i = 1; i < CH2_ENDING_CUE_LIST.length; i++) {
+    assert.ok(CH2_ENDING_CUE_LIST[i][1] > CH2_ENDING_CUE_LIST[i - 1][1], '第二章结尾 cue 时间应严格递增');
+  }
+  assert.equal(CH2_ENDING_SUBTITLES.length, 4);
+  for (const cue of CH2_ENDING_SUBTITLES) {
+    assert.ok(text(cue.id).length > 0, `第二章结尾字幕 ${cue.id} 存在`);
+    assert.ok(cue.at + cue.duration <= CH2_ENDING_T.fadeOut + 0.5, `${cue.id} 应在黑场前收尾`);
+  }
+  assert.equal(ch2FogOpenAt(0), 0);
+  assert.equal(ch2FogOpenAt(CH2_ENDING_T.fogOpenFull), 1);
+  assert.equal(ch2RelayProgressAt(CH2_ENDING_T.gorgeRelay), 0);
+  assert.equal(ch2RelayProgressAt(CH2_ENDING_T.gorgeRelayFull), 1);
+  assert.equal(ch2DistantGlowAt(CH2_ENDING_T.distantAnswer), 0);
+  assert.equal(ch2DistantGlowAt(CH2_ENDING_T.distantAnswer + 3), 1);
+  assert.equal(ch2FadeAt(CH2_ENDING_T.fadeOut), 0);
+  assert.equal(ch2FadeAt(CH2_ENDING_T.black), 1);
+  out.push('第二章结尾时间轴：4 句字幕 / 雾散 / 镜巷接力 / 远塔回灯 / 黑场曲线 ✓');
 }
 
 console.log(`verify-cutscene：\n  ${out.join('\n  ')}`);

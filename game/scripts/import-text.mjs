@@ -10,12 +10,14 @@ import { fileURLToPath } from 'node:url';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const jsonPath = resolve(root, '../docs/gdd/text-ch1.json');
+const ch2JsonPath = resolve(root, '../docs/gdd/text-ch2.json');
 const outPath = join(root, 'src/content/text/zh-CN.ts');
 const checkOnly = process.argv.includes('--check');
 
 const json = JSON.parse(readFileSync(jsonPath, 'utf8'));
-const strings = json.strings;
-const entries = json.entries;
+const ch2Json = existsSync(ch2JsonPath) ? JSON.parse(readFileSync(ch2JsonPath, 'utf8')) : { strings: {}, entries: [] };
+const strings = { ...json.strings, ...ch2Json.strings };
+const entries = [...json.entries, ...ch2Json.entries];
 
 /** text-ch1.md §0：「只一次」写在 trigger / note 里 */
 const ONCE = /只一次|只触发一次|仅一次/;
@@ -59,7 +61,7 @@ export function scanIds(dir = join(root, 'src')) {
       if (statSync(p).isDirectory()) walk(p);
       else if (/\.ts$/.test(f) && p !== outPath) {
         const src = readFileSync(p, 'utf8');
-        for (const m of src.matchAll(/['"`]((?:ch1|ui)\.[a-z0-9_]+(?:\.[a-z0-9_]+)+)['"`]/g)) found.push([m[1], relative(root, p)]);
+        for (const m of src.matchAll(/['"`]((?:ch1|ch2|ui)\.[a-z0-9_]+(?:\.[a-z0-9_]+)+)['"`]/g)) found.push([m[1], relative(root, p)]);
       }
     }
   };
@@ -129,13 +131,6 @@ export function hardcodedStory(dir = join(root, 'src')) {
  */
 export const DEV_ONLY = {
   'src/scenes/TestbedScene.ts': '测试场地（?scene=testbed，只在 dev / 测试构建）',
-  'src/levels/ch2/LighthouseScene.ts': '裂湾村灯塔试玩界面（?ch2-whitebox，只在 dev / 测试构建）',
-  'src/levels/ch2/lighthouseArt.ts': '裂湾村灯塔现场标牌（?ch2-whitebox，只在 dev / 测试构建）',
-  'src/levels/ch2/layout.ts': '裂湾村白盒场景名（?ch2-whitebox，只在 dev / 测试构建）',
-  'src/levels/ch2/HarbourScene.ts': '裂湾村鱼港试玩界面（?ch2-whitebox，只在 dev / 测试构建）',
-  'src/levels/ch2/harbourArt.ts': '裂湾村鱼港现场标牌（?ch2-whitebox，只在 dev / 测试构建）',
-  'src/levels/ch2/MirrorAlleyScene.ts': '裂湾村镜巷试玩界面（?ch2-whitebox，只在 dev / 测试构建）',
-  'src/levels/ch2/mirrorAlleyArt.ts': '裂湾村镜巷现场标牌（?ch2-whitebox，只在 dev / 测试构建）',
   'src/ui/DebugPanel.ts': 'F4 调试面板（仅 dev / 测试构建 + ?debug=1）',
   'src/config/atmosphere.ts': '氛围预设内部名，只在代码里区分预设',
   'src/config/atmosphere028.ts': '美术 atmosphere-028.json 原样副本（gen-atmo028 生成），中文只在节点名 / note 里，不上屏',
