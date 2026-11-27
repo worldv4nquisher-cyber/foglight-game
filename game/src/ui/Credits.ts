@@ -28,9 +28,9 @@ export class Credits {
     return !this.el.hidden;
   }
 
-  show(): void {
+  show(chapter: 'ch1' | 'ch2' = 'ch1'): void {
     const roll = this.el.querySelector<HTMLDivElement>('.credits-roll')!;
-    roll.textContent = t('ui.credits.body', { ...credits });
+    roll.textContent = t(chapter === 'ch2' ? 'ui.credits.body.ch2' : 'ui.credits.body', { ...credits });
     // 重新开始滚动动画
     roll.classList.remove('rolling');
     void roll.offsetWidth;

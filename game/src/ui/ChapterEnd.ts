@@ -83,7 +83,7 @@ export class ChapterEnd {
     }
     this.inner.hidden = true;
     this.game.ui.credits.onBack = () => this.closeCredits();
-    this.game.ui.credits.show();
+    this.game.ui.credits.show('ch2');
   }
 
   /** 030 R4：结尾插画懒加载（common 包里登记、lazy，进结尾才下）；同 key 只下一次 */

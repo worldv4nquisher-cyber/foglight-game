@@ -1,5 +1,5 @@
 // 自动生成：node scripts/import-text.mjs（来源 docs/gdd/text-ch1.json），不要手改。
-// 章节 ch1 · zh-CN · v1 · 292 条
+// 章节 ch1 · zh-CN · v1 · 293 条
 
 export const TEXT_ZH_CN = {
   "ch1.common.journal_updated": "日志已更新",
@@ -206,6 +206,7 @@ export const TEXT_ZH_CN = {
   "ui.common.off": "关",
   "ui.common.on": "开",
   "ui.credits.body": "雾灯　第一章 · 归岸\n\n制作人　{producer}\n策划　{designer}\n美术　{artist}\n程序　{programmer}\n音效与配乐　{audio}\n\n字体　思源宋体　思源黑体（SIL OFL 1.1）\n素材来源见 art/CREDITS.md 与 audio/CREDITS.md\n\n谢谢你来过这座岛。",
+  "ui.credits.body.ch2": "雾灯　第二章 · 裂湾村\n\n制作人　{producer}\n策划　{designer}\n美术　{artist}\n程序　{programmer}\n音效与配乐　{audio}\n\n字体　思源宋体　思源黑体（SIL OFL 1.1）\n素材来源见 art/CREDITS.md 与 audio/CREDITS.md\n\n谢谢你点亮裂湾村的灯。",
   "ui.doc_title.ignition_note": "灯室里的纸",
   "ui.doc_title.journal": "父亲的日志",
   "ui.doc_title.logbook": "值班簿",
@@ -510,6 +511,7 @@ export const TEXT_META: Record<keyof typeof TEXT_ZH_CN, TextMeta> = {
   "ui.common.off": {"type":"ui","speaker":"system"},
   "ui.common.on": {"type":"ui","speaker":"system"},
   "ui.credits.body": {"type":"ui","speaker":"system"},
+  "ui.credits.body.ch2": {"type":"ui","speaker":"system"},
   "ui.doc_title.ignition_note": {"type":"ui","speaker":"system"},
   "ui.doc_title.journal": {"type":"ui","speaker":"system"},
   "ui.doc_title.logbook": {"type":"ui","speaker":"system"},

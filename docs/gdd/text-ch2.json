@@ -9,6 +9,7 @@
     { "id": "ui.end.next_chapter", "type": "ui", "speaker": "none" },
     { "id": "ui.end.ch2_chapter", "type": "ui", "speaker": "none" },
     { "id": "ui.end.credits", "type": "ui", "speaker": "none" },
+    { "id": "ui.credits.body.ch2", "type": "ui", "speaker": "system" },
 
     { "id": "ch2.loc.village", "type": "ui", "speaker": "none" },
     { "id": "ch2.loc.s1", "type": "ui", "speaker": "none" },
@@ -131,6 +132,7 @@
     "ui.end.next_chapter": "继续前往第二章",
     "ui.end.ch2_chapter": "第二章 · 裂湾村",
     "ui.end.credits": "制作名单",
+    "ui.credits.body.ch2": "雾灯　第二章 · 裂湾村\n\n制作人　{producer}\n策划　{designer}\n美术　{artist}\n程序　{programmer}\n音效与配乐　{audio}\n\n字体　思源宋体　思源黑体（SIL OFL 1.1）\n素材来源见 art/CREDITS.md 与 audio/CREDITS.md\n\n谢谢你点亮裂湾村的灯。",
 
     "ch2.loc.village": "裂湾村",
     "ch2.loc.s1": "裂湾村 · 峡口与船骸",
