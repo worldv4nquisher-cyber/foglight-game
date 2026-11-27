@@ -166,13 +166,18 @@ test('跨章存档边界：ch1 完成 → 进入 ch2-s1 清除 chapterComplete �
   const s = new SaveSystem(st);
   s.newGame('ch1', 's3');
   s.tick(12);
+  s.addHintUsed();
   s.save({ chapterId: 'ch1', sceneId: 'end', chapterComplete: true });
   assert.equal(s.lastSave.chapterId, 'ch1');
   assert.equal(s.lastSave.chapterComplete, true);
+  assert.equal(s.lastSave.playTimeSec, 12);
+  assert.equal(s.lastSave.hintsUsed, 1);
   s.save({ chapterId: 'ch2', sceneId: 'ch2-s1', chapterComplete: false });
   assert.equal(s.lastSave.chapterId, 'ch2');
   assert.equal(s.lastSave.sceneId, 'ch2-s1');
   assert.equal(s.lastSave.chapterComplete, false);
+  assert.equal(s.lastSave.playTimeSec, 0);
+  assert.equal(s.lastSave.hintsUsed, 0);
   const reloaded = new SaveSystem(st);
   const loaded = reloaded.continueGame();
   assert.equal(loaded.chapterId, 'ch2');
