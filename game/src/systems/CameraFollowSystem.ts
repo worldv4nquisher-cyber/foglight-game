@@ -125,6 +125,15 @@ export class CameraFollowSystem {
   /** 本帧相机距离被限高压短 */
   heightCapped = false;
   private walkNoLook = false;
+  /** 楼梯辅助转向期间锁住的移动朝向：按住同一组方向键时不跟着相机转（不然按 D 会被带进墙里），松键 / 换键 / 动鼠标后回到相机朝向 */
+  private latchedYaw: number | null = null;
+  private lastMoveX = 0;
+  private lastMoveY = 0;
+
+  /** 角色移动用的水平朝向 */
+  get moveYaw(): number {
+    return this.modeName === 'explore' && this.latchedYaw !== null ? this.latchedYaw : this.yaw;
+  }
   /** BUG-028：当前肩后偏移（m，+ = 右肩，− = 左肩；平滑换边后、碰撞夹住前） */
   shoulder: number = cfg.shoulderOffset;
   /** BUG-028：本帧实际偏移（碰撞夹住后，m，同号约定） */
@@ -308,6 +317,9 @@ export class CameraFollowSystem {
     const still = look.x === 0 && look.y === 0 && move.x === 0 && move.y === 0 && zoom === 0;
     this.idle = still ? this.idle + dt : 0;
     this.walkNoLook = look.x === 0 && look.y === 0 && (move.x !== 0 || move.y !== 0);
+    if (!this.walkNoLook || move.x !== this.lastMoveX || move.y !== this.lastMoveY) this.latchedYaw = null;
+    this.lastMoveX = move.x;
+    this.lastMoveY = move.y;
     if (this.recommended && this.opts.autoRecenter?.() && this.idle >= cfg.autoRecenterDelay) {
       const step = cfg.autoRecenterSpeedDeg * DEG * dt;
       const dy = Math.atan2(Math.sin(this.recommended.yaw - this.yaw), Math.cos(this.recommended.yaw - this.yaw));
@@ -500,7 +512,10 @@ export class CameraFollowSystem {
           best = sgn;
         }
       }
-      if (best !== 0) this.yaw += best * Math.min(1.2 * dt, 0.6);
+      if (best !== 0) {
+        this.latchedYaw ??= this.yaw;
+        this.yaw += best * Math.min(1.8 * dt, 0.6);
+      }
     }
     this.live.fov = this.fov.value;
     this.headDistance = this.live.position.distanceTo(head);
@@ -508,14 +523,14 @@ export class CameraFollowSystem {
 
     if (framing > 0) this.frameTarget(head.y, framing);
     // 放在 frameTarget 之后（它按 this.pitch 重写朝向）。窄楼梯井里相机被拉近、枢轴又抬高时，汐可能落到画面下沿外：只往下补俯角（不动 yaw，W 仍是画面正前方），
-    // 补量 = 胸口（脚底 + 0.9 m）低出竖直半视角 60% 的部分（画面下方约 NDC −0.57），从 0 连续增长，不跳变；贴墙仰视（pitch > 0）不管
+    // 补量 = 小腿（脚底 + 0.15 m）低出竖直半视角 80% 的部分（整个人留在画面里），从 0 连续增长，不跳变；贴墙仰视（pitch > 0）不管
     if (this.modeName === 'explore' && this.pitch <= 0 && this.live.position.y > head.y + 0.3) {
       // 相机空间里的竖直角（含过肩偏移，绕本地 X 转 = 改 euler.x）
-      framingDir.set(tp.x, this.pivotY + 0.9, tp.z).sub(this.live.position);
+      framingDir.set(tp.x, this.pivotY + 0.15, tp.z).sub(this.live.position);
       framingDir.applyQuaternion(framingQ.copy(this.live.quaternion).invert());
       euler.setFromQuaternion(this.live.quaternion, 'YXZ');
       const below = -Math.atan2(framingDir.y, Math.max(-framingDir.z, 1e-3));
-      const limit = THREE.MathUtils.degToRad(this.fov.value) * 0.3;
+      const limit = THREE.MathUtils.degToRad(this.fov.value) * 0.4;
       if (below > limit) {
         euler.x -= below - limit;
         this.live.quaternion.setFromEuler(euler);

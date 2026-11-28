@@ -75,7 +75,7 @@ export class LighthouseScene extends BaseScene {
 
   override async enter(): Promise<void> {
     if (!this.shot) await this.game.assets.loadEntries(assets);
-    this.rig = createPlayer(this.game, this.physics, v(stage.spawn), () => this.follow.yaw);
+    this.rig = createPlayer(this.game, this.physics, v(stage.spawn), () => this.follow.moveYaw);
     this.follow.target = this.rig.entity.object3D;
     this.scene.background = new THREE.Color(0x9aaab3);
     this.scene.fog = new THREE.FogExp2(0x9aaab3, 0.0088);

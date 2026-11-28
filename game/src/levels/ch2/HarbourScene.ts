@@ -79,7 +79,7 @@ export class HarbourScene extends BaseScene {
 
   override async enter(): Promise<void> {
     await this.game.assets.loadEntries(HARBOUR_ASSETS);
-    this.rig = createPlayer(this.game, this.physics, v(this.spawn), () => this.follow.yaw);
+    this.rig = createPlayer(this.game, this.physics, v(this.spawn), () => this.follow.moveYaw);
     this.follow.target = this.rig.entity.object3D;
     const a = this.atmosphere;
     this.scene.background = new THREE.Color(a.fogColor);

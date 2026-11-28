@@ -94,7 +94,7 @@ export class TestbedScene extends BaseScene {
     this.liftBaseY = this.course.lift.position.y;
 
     const anchors = this.course.anchors;
-    this.rig = createPlayer(this.game, this.physics, anchors.spawn, () => this.cameraFollow.yaw);
+    this.rig = createPlayer(this.game, this.physics, anchors.spawn, () => this.cameraFollow.moveYaw);
     this.entities.add(this.rig.entity);
     const linkEntity = new Entity('link-gap');
     this.link = linkEntity.add(

@@ -72,7 +72,7 @@ export class MirrorAlleyScene extends BaseScene {
 
   override async enter(): Promise<void> {
     if (!this.shot) await this.game.assets.loadEntries(assets);
-    this.rig = createPlayer(this.game, this.physics, v(this.spawn), () => this.follow.yaw);
+    this.rig = createPlayer(this.game, this.physics, v(this.spawn), () => this.follow.moveYaw);
     this.follow.target = this.rig.entity.object3D;
     this.scene.background = new THREE.Color(0x9aafb3);
     this.scene.fog = new THREE.FogExp2(0x9aafb3, 0.0094);

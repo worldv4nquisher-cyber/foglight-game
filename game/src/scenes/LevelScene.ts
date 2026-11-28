@@ -422,7 +422,7 @@ export abstract class LevelScene extends BaseScene {
   }
 
   private buildPlayer(spawn: SpawnPoint): void {
-    this.rig = createPlayer(this.game, this.physics, spawn.position, () => this.cameraFollow.yaw);
+    this.rig = createPlayer(this.game, this.physics, spawn.position, () => this.cameraFollow.moveYaw);
     this.rig.controller.facing = spawn.yaw + Math.PI;
     this.entities.add(this.rig.entity);
     this.cameraFollow.target = this.rig.entity.object3D;
