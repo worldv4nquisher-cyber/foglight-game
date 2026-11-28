@@ -74,7 +74,12 @@ export class OcclusionCutaway {
   private patch(material: Patchable): void {
     (material as unknown as Record<symbol, boolean>)[PATCHED] = true;
     const prev = material.onBeforeCompile.bind(material);
-    const prevKey = material.customProgramCacheKey.bind(material);
+    // 默认 customProgramCacheKey 读的是 onBeforeCompile.toString()：替换之后就成了这里的包装函数，所有材质同 key，
+    // TowerCutaway 等带自己 onBeforeCompile 的材质会复用普通程序。没自定义 key 时在替换前取下原函数源码
+    const ownKey = Object.prototype.hasOwnProperty.call(material, 'customProgramCacheKey');
+    const prevSrc = material.onBeforeCompile.toString();
+    const boundKey = material.customProgramCacheKey.bind(material);
+    const prevKey = ownKey ? boundKey : () => prevSrc;
     material.onBeforeCompile = (shader, renderer) => {
       prev(shader, renderer);
       shader.uniforms.cutFocus = { value: this.focus };
