@@ -523,23 +523,29 @@ export class CameraFollowSystem {
 
     if (framing > 0) this.frameTarget(head.y, framing);
     // 放在 frameTarget 之后（它按 this.pitch 重写朝向）。窄楼梯井里相机被拉近、枢轴又抬高时，汐可能落到画面下沿外：只往下补俯角（不动 yaw，W 仍是画面正前方），
-    // 补量 = 小腿（脚底 + 0.15 m）低出竖直半视角 80% 的部分（整个人留在画面里），从 0 连续增长，不跳变；贴墙仰视（pitch > 0）不管
-    if (this.modeName === 'explore' && this.pitch <= 0 && this.live.position.y > head.y + 0.3) {
+    // 补量 = 脚底低出竖直半视角 65% 的部分（靴子留在画面里、躲开底部操作栏），从 0 连续增长，不跳变；贴墙仰视（pitch > 0）不管
+    // 室内被挤到 1.2 m 内（灯室下方天花板压着、相机抬不起来）时也补
+    if (this.modeName === 'explore' && this.pitch <= 0 && (this.live.position.y > head.y + 0.3 || (this.indoor && this.currentDistance < 1.2))) {
       // 相机空间里的竖直角（含过肩偏移，绕本地 X 转 = 改 euler.x）
-      framingDir.set(tp.x, this.pivotY + 0.15, tp.z).sub(this.live.position);
+      framingDir.set(tp.x, this.pivotY, tp.z).sub(this.live.position);
       framingDir.applyQuaternion(framingQ.copy(this.live.quaternion).invert());
       euler.setFromQuaternion(this.live.quaternion, 'YXZ');
       const below = -Math.atan2(framingDir.y, Math.max(-framingDir.z, 1e-3));
-      const limit = THREE.MathUtils.degToRad(this.fov.value) * 0.4;
-      if (below > limit) {
-        // 贴得太近、整个人装不下时以头顶为准：下补不能把头顶推出同样的上沿
-        framingDir.copy(head).sub(this.live.position).applyQuaternion(framingQ);
-        const headUp = Math.atan2(framingDir.y, Math.max(-framingDir.z, 1e-3));
-        const tilt = Math.min(below - limit, Math.max(0, limit - headUp));
-        if (tilt > 0) {
-          euler.x -= tilt;
-          this.live.quaternion.setFromEuler(euler);
-        }
+      framingDir.set(tp.x, this.pivotY + 1.65, tp.z).sub(this.live.position).applyQuaternion(framingQ);
+      const headUp = Math.atan2(framingDir.y, Math.max(-framingDir.z, 1e-3));
+      // 贴得太近、整个人（脚底 → 头顶 1.65 m）竖着装不下下沿 65% + 上沿 80% 时，视角连续放宽（最多 +25°）
+      let halfFov = THREE.MathUtils.degToRad(this.fov.value) / 2;
+      const span = below + headUp;
+      if (span > halfFov * 1.45) {
+        halfFov = Math.min(span / 1.45, halfFov + THREE.MathUtils.degToRad(12.5));
+        this.live.fov = THREE.MathUtils.radToDeg(halfFov * 2);
+      }
+      const limit = halfFov * 0.65;
+      // 还装不下时以头顶为准：下补不能把头顶推出上沿 80%
+      const tilt = Math.min(below - limit, Math.max(0, halfFov * 0.8 - headUp));
+      if (tilt > 0) {
+        euler.x -= tilt;
+        this.live.quaternion.setFromEuler(euler);
       }
     }
     if (this.observing) this.updateFocus();
