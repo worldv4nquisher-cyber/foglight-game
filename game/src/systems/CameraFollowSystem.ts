@@ -478,12 +478,12 @@ export class CameraFollowSystem {
 
     this.live.position.copy(pivot).addScaledVector(back, this.currentDistance);
     // 窄楼梯井里相机被拉近、枢轴又抬高时，汐可能落到画面下沿外：只往下补俯角（不动 yaw，W 仍是画面正前方），
-    // 补量 = 头部低出竖直半视角 75% 的部分，从 0 连续增长，不跳变；贴墙仰视（pitch > 0）不管
+    // 补量 = 胸口（脚底 + 0.9 m）低出竖直半视角 80% 的部分，从 0 连续增长，不跳变；贴墙仰视（pitch > 0）不管
     if (this.modeName === 'explore' && this.pitch <= 0 && this.live.position.y > head.y + 0.3) {
-      framingDir.copy(head).sub(this.live.position).normalize();
+      framingDir.set(tp.x, this.pivotY + 0.9, tp.z).sub(this.live.position).normalize();
       euler.setFromQuaternion(this.live.quaternion, 'YXZ');
       const below = euler.x - Math.asin(THREE.MathUtils.clamp(framingDir.y, -1, 1));
-      const limit = THREE.MathUtils.degToRad(this.fov.value) * 0.375;
+      const limit = THREE.MathUtils.degToRad(this.fov.value) * 0.4;
       if (below > limit) {
         euler.x -= below - limit;
         this.live.quaternion.setFromEuler(euler);
