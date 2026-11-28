@@ -423,9 +423,9 @@ export class CameraFollowSystem {
       const centeredRoom = backAt(0);
       side *= 1 - framing * (1 - THREE.MathUtils.smoothstep(centeredRoom, 0.35, cfg.lowSpaceDistance));
     }
-    // 楼梯井里相机被挤近又高过头顶时，过肩偏移按距离收掉：0.5 m 处还偏 0.5 m 会把汐挤到画面左下角（平视贴墙的窄缝不收，偏移是在躲墙）
+    // 楼梯井里相机被挤近又高过头顶（或室内支点已被抬高）时，过肩偏移按距离收掉：0.5 m 处还偏 0.5 m 会把汐挤到画面左下角（平视贴墙的窄缝不收，偏移是在躲墙）
     if (this.initialized) {
-      const above = THREE.MathUtils.smoothstep(this.live.position.y - head.y, 0.6, 1.0);
+      const above = Math.max(THREE.MathUtils.smoothstep(this.live.position.y - head.y, 0.6, 1.0), this.indoor ? THREE.MathUtils.smoothstep(this.lift, 0.2, 0.4) : 0);
       side *= 1 - above * (1 - THREE.MathUtils.smoothstep(this.currentDistance, 0.5, 1.6));
     }
     this.side = side;
