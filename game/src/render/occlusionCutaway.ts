@@ -11,6 +11,13 @@ const DEPTH_MARGIN = 0.45;
 /** 只挖高于汐脚底这么多（m）的片元：前方的地面、台阶面保留，挡住身体的岩石 / 墙 / 台阶侧板挖开 */
 const FEET_CLEARANCE = 0.3;
 
+/** 汐胸口（视空间，z 取正 = 深度；z = 0 关闭） */
+const FOCUS = new THREE.Vector3();
+/** 视空间里的世界向上方向 */
+const UP = new THREE.Vector3();
+/** x, y = 窗口半宽 / 半高，z = 深度余量，w = 脚底到焦点的高度 − 脚底余量 */
+const PARAMS = new THREE.Vector4(HALF_W, HALF_H, DEPTH_MARGIN, CENTER_Y - FEET_CLEARANCE);
+
 type Patchable = THREE.MeshStandardMaterial | THREE.MeshLambertMaterial | THREE.MeshPhongMaterial;
 
 function patchable(m: THREE.Material): m is Patchable {
@@ -24,12 +31,10 @@ function patchable(m: THREE.Material): m is Patchable {
  * 场景每帧 update；新加载的美术材质每 0.5 s 扫一次补上（`userData.noCutaway` 的物体及其子树跳过，如汐本身）。
  */
 export class OcclusionCutaway {
-  /** 汐胸口（视空间，z 取正 = 深度；z = 0 关闭） */
-  private readonly focus = new THREE.Vector3();
-  /** 视空间里的世界向上方向 */
-  private readonly up = new THREE.Vector3();
-  /** x, y = 窗口半宽 / 半高，z = 深度余量，w = 脚底到焦点的高度 − 脚底余量 */
-  private readonly params = new THREE.Vector4(HALF_W, HALF_H, DEPTH_MARGIN, CENTER_Y - FEET_CLEARANCE);
+  // 全局共用：材质可能跨场景缓存（如小屋提灯），patch 过的材质留在下一个场景里也读当前场景写的值
+  private readonly focus = FOCUS;
+  private readonly up = UP;
+  private readonly params = PARAMS;
   private sweep = Infinity;
 
   constructor(private readonly root: THREE.Object3D) {}
