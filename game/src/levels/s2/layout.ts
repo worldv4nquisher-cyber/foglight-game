@@ -31,8 +31,8 @@ export const S2 = {
   platform: { x: [-17.5, 8] as V2, z: [-14, 12] as V2 },
   slope: { x: [8, 25] as V2, dropPerM: 0.0776 },
   seaY: -16,
-  /** 北侧崖径（拨盘铁门之后） */
-  northPath: { x: [1.5, 8.5] as V2, z: [12, 27] as V2, endZ: 25.5 },
+  /** 北侧崖径（拨盘铁门之后）；endZ = 尽头空气墙，与美术崖边（z ≈ 25.05）齐，汐跑到头不会站到看得见的地面外 */
+  northPath: { x: [1.5, 8.5] as V2, z: [12, 27] as V2, endZ: 24.95 },
   exitToS3: [5, 0, 23] as V3,
 
   house: {

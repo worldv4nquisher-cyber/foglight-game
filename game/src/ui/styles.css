@@ -253,7 +253,8 @@ body {
 .hud-toast {
   position: absolute;
   right: 18px;
-  bottom: 14px;
+  /* 在底部按键条（--hud-hint-h，Hud 写）上方，窄窗口里提示折到右边也不压字 */
+  bottom: calc(14px + var(--hud-hint-h, 22px) + 10px);
   max-width: 46ch;
   font-size: 12px;
   line-height: 1.6;
@@ -815,7 +816,8 @@ body {
 .subtitles {
   position: absolute;
   left: 50%;
-  bottom: 9%;
+  /* 至少在底部按键条（操作提示 / 机关按键条）上方 18px：矮窗口下 9% 不够 */
+  bottom: max(9%, calc(14px + var(--hud-hint-h, 22px) + 18px));
   transform: translateX(-50%);
   width: min(80vw, 46em);
   text-align: center;
@@ -1391,9 +1393,13 @@ body {
 
 .chapter-end {
   background: rgba(8, 11, 14, 0.6);
+  /* 矮窗口 / 字体度量偏大（Windows 衬线回退字体）时内容可能比视口高：可滚动，按钮永远够得到，不会被裁 */
+  overflow-y: auto;
 }
 
 .chapter-end-inner {
+  margin: auto;
+  padding: 16px 0;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1411,8 +1417,9 @@ body {
 
 .chapter-end-art {
   /* 030 R4：框宽 840 px（18:31 定），2x 图 1920×1080；进结尾时懒加载 --end-art，没到 / 失败时是渐变占位。
-     矮窗口也要放得下：标题 + 两行统计 + 未完待续 + 按钮 + 间距约 300 px，图高 ≤ 100vh − 300px（1280×633 视口下 592 px 宽；1080p 仍 840） */
-  width: min(840px, 70vw, calc((100vh - 300px) * 16 / 9));
+     矮窗口也要放得下：标题 + 两行统计 + 未完待续 + 按钮 + 间距 + 上下留白约 300 px（字体度量偏大时更多），
+     图高 ≤ 100vh − 380px（1280×633 视口下 448 px 宽；1080p 仍 840） */
+  width: min(840px, 70vw, calc((100vh - 380px) * 16 / 9));
   aspect-ratio: 16 / 9;
   border: 1px solid var(--ui-stroke-soft);
   background:
@@ -1540,9 +1547,9 @@ body {
 
 .hint-lantern {
   position: absolute;
-  /* 「已保存」小字（.hud-toast，右下 bottom 14px）上方 */
+  /* 「已保存」小字（.hud-toast，在底部按键条上方）再上方 */
   right: 20px;
-  bottom: 42px;
+  bottom: calc(14px + var(--hud-hint-h, 22px) + 38px);
   color: var(--ui-dim);
   opacity: 0;
   transition: opacity 1.2s ease, color 0.6s ease;

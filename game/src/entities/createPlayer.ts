@@ -39,6 +39,7 @@ export const XI_SDF_KEY = 'tex-xi-sdf-face';
 export function createPlayer(game: Game, physics: PhysicsSystem, spawn: THREE.Vector3, cameraYaw: () => number): PlayerRig {
   const { height, radius } = gameplay.player;
   const visual = new THREE.Group();
+  visual.userData.noCutaway = true;
   let model: THREE.Object3D | null = null;
   if (game.assets.has(XI_MODEL_KEY)) {
     model = game.assets.getModel(XI_MODEL_KEY);
