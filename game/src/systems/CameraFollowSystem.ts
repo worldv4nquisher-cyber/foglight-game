@@ -17,6 +17,7 @@ const euler = new THREE.Euler(0, 0, 0, 'YXZ');
 const qOff = new THREE.Quaternion();
 const tmpBox = new THREE.Vector3();
 const framingDir = new THREE.Vector3();
+const framingQ = new THREE.Quaternion();
 const left = new THREE.Vector3();
 const UP = new THREE.Vector3(0, 1, 0);
 const lifted = new THREE.Vector3();
@@ -477,23 +478,25 @@ export class CameraFollowSystem {
     this.initialized = true;
 
     this.live.position.copy(pivot).addScaledVector(back, this.currentDistance);
-    // 窄楼梯井里相机被拉近、枢轴又抬高时，汐可能落到画面下沿外：只往下补俯角（不动 yaw，W 仍是画面正前方），
+    this.live.fov = this.fov.value;
+    this.headDistance = this.live.position.distanceTo(head);
+    this.pivotPoint.copy(pivot);
+
+    if (framing > 0) this.frameTarget(head.y, framing);
+    // 放在 frameTarget 之后（它按 this.pitch 重写朝向）。窄楼梯井里相机被拉近、枢轴又抬高时，汐可能落到画面下沿外：只往下补俯角（不动 yaw，W 仍是画面正前方），
     // 补量 = 胸口（脚底 + 0.9 m）低出竖直半视角 80% 的部分，从 0 连续增长，不跳变；贴墙仰视（pitch > 0）不管
     if (this.modeName === 'explore' && this.pitch <= 0 && this.live.position.y > head.y + 0.3) {
-      framingDir.set(tp.x, this.pivotY + 0.9, tp.z).sub(this.live.position).normalize();
+      // 相机空间里的竖直角（含过肩偏移，绕本地 X 转 = 改 euler.x）
+      framingDir.set(tp.x, this.pivotY + 0.9, tp.z).sub(this.live.position);
+      framingDir.applyQuaternion(framingQ.copy(this.live.quaternion).invert());
       euler.setFromQuaternion(this.live.quaternion, 'YXZ');
-      const below = euler.x - Math.asin(THREE.MathUtils.clamp(framingDir.y, -1, 1));
+      const below = -Math.atan2(framingDir.y, Math.max(-framingDir.z, 1e-3));
       const limit = THREE.MathUtils.degToRad(this.fov.value) * 0.4;
       if (below > limit) {
         euler.x -= below - limit;
         this.live.quaternion.setFromEuler(euler);
       }
     }
-    this.live.fov = this.fov.value;
-    this.headDistance = this.live.position.distanceTo(head);
-    this.pivotPoint.copy(pivot);
-
-    if (framing > 0) this.frameTarget(head.y, framing);
     if (this.observing) this.updateFocus();
   }
 
