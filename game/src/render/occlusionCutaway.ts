@@ -6,7 +6,7 @@ const SWEEP_INTERVAL = 0.5;
 const HALF_W = 0.6;
 const HALF_H = 1.05;
 const CENTER_Y = 0.9;
-/** 只挖比汐近这么多（m）的片元，汐脚边的地面不挖 */
+/** 只挖比汐近这么多（m）的片元，汐脚边的地面不挖；相机被推得很近时按焦点深度的 30% 缩小（窄楼梯里贴着相机的台阶底面也挖开） */
 const DEPTH_MARGIN = 0.45;
 /** 只挖高于汐脚底这么多（m）的片元：前方的地面、台阶面保留，挡住身体的岩石 / 墙 / 台阶侧板挖开 */
 const FEET_CLEARANCE = 0.3;
@@ -87,7 +87,7 @@ export class OcclusionCutaway {
       shader.uniforms.cutParams = { value: this.params };
       shader.fragmentShader = 'uniform vec3 cutFocus;\nuniform vec3 cutUp;\nuniform vec4 cutParams;\n' + shader.fragmentShader.replace('#include <clipping_planes_fragment>', `
         #include <clipping_planes_fragment>
-        if (cutFocus.z > 0.3 && vViewPosition.z < cutFocus.z - cutParams.z) {
+        if (cutFocus.z > 0.3 && vViewPosition.z < cutFocus.z - min(cutParams.z, cutFocus.z * 0.3)) {
           vec3 cutP = -vViewPosition;
           vec3 cutF = vec3(cutFocus.xy, -cutFocus.z);
           if (dot(cutP - cutF, cutUp) > -cutParams.w) {
