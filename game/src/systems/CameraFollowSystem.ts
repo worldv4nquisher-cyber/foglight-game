@@ -17,8 +17,6 @@ const euler = new THREE.Euler(0, 0, 0, 'YXZ');
 const qOff = new THREE.Quaternion();
 const tmpBox = new THREE.Vector3();
 const framingDir = new THREE.Vector3();
-const framingFwd = new THREE.Vector3();
-const framingMat = new THREE.Matrix4();
 const left = new THREE.Vector3();
 const UP = new THREE.Vector3(0, 1, 0);
 const lifted = new THREE.Vector3();
@@ -479,13 +477,16 @@ export class CameraFollowSystem {
     this.initialized = true;
 
     this.live.position.copy(pivot).addScaledVector(back, this.currentDistance);
-    // 窄楼梯井里相机被拉近、枢轴又抬高时，汐可能落到画面外：相机高过头部且头部偏离视线超过竖直半视角就改为看向头部（贴墙仰视不受影响）
+    // 窄楼梯井里相机被拉近、枢轴又抬高时，汐可能落到画面下沿外：只往下补俯角（不动 yaw，W 仍是画面正前方），
+    // 补量 = 头部低出竖直半视角 75% 的部分，从 0 连续增长，不跳变；贴墙仰视（pitch > 0）不管
     if (this.modeName === 'explore' && this.pitch <= 0 && this.live.position.y > head.y + 0.3) {
-      framingDir.copy(head).sub(this.live.position);
-      framingFwd.set(0, 0, -1).applyQuaternion(this.live.quaternion);
-      if (framingFwd.angleTo(framingDir) > THREE.MathUtils.degToRad(this.fov.value) * 0.5) {
-        framingMat.lookAt(this.live.position, head, THREE.Object3D.DEFAULT_UP);
-        this.live.quaternion.setFromRotationMatrix(framingMat);
+      framingDir.copy(head).sub(this.live.position).normalize();
+      euler.setFromQuaternion(this.live.quaternion, 'YXZ');
+      const below = euler.x - Math.asin(THREE.MathUtils.clamp(framingDir.y, -1, 1));
+      const limit = THREE.MathUtils.degToRad(this.fov.value) * 0.375;
+      if (below > limit) {
+        euler.x -= below - limit;
+        this.live.quaternion.setFromEuler(euler);
       }
     }
     this.live.fov = this.fov.value;
