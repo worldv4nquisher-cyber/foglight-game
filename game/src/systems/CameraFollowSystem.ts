@@ -16,6 +16,7 @@ const fwd = new THREE.Vector3();
 const euler = new THREE.Euler(0, 0, 0, 'YXZ');
 const qOff = new THREE.Quaternion();
 const tmpBox = new THREE.Vector3();
+const FOV_WIDEN_RATE = 6;
 const framingDir = new THREE.Vector3();
 const whisker = new THREE.Vector3();
 const whiskerQ = new THREE.Quaternion();
@@ -124,6 +125,9 @@ export class CameraFollowSystem {
   heightCaps: CameraHeightCap[] = [];
   /** 本帧相机距离被限高压短 */
   heightCapped = false;
+
+  /** 楼梯井里为装下整个人临时加的竖直半视角（rad），缓动 */
+  private fovWiden = 0;
   private walkNoLook = false;
   /** 楼梯辅助转向期间锁住的移动朝向：按住同一组方向键时不跟着相机转（不然按 D 会被带进墙里），松键 / 换键 / 动鼠标后回到相机朝向 */
   private latchedYaw: number | null = null;
@@ -523,24 +527,41 @@ export class CameraFollowSystem {
 
     if (framing > 0) this.frameTarget(head.y, framing);
     // 放在 frameTarget 之后（它按 this.pitch 重写朝向）。窄楼梯井里相机被拉近、枢轴又抬高时，汐可能落到画面下沿外：只往下补俯角（不动 yaw，W 仍是画面正前方），
-    // 补量 = 小腿（脚底 + 0.15 m）低出竖直半视角 80% 的部分（整个人留在画面里），从 0 连续增长，不跳变；贴墙仰视（pitch > 0）不管
-    if (this.modeName === 'explore' && this.pitch <= 0 && this.live.position.y > head.y + 0.3) {
+    // 补量 = 脚底低出竖直半视角 65% 的部分（靴子留在画面里、躲开底部操作栏），从 0 连续增长，不跳变；贴墙仰视（pitch > 0）不管
+    // 室内被挤到 1.2 m 内（灯室下方天花板压着、相机抬不起来）时也补；两个条件都按权重渐入渐出，跨阈值不跳
+    const overhead = Math.max(
+      THREE.MathUtils.smoothstep(this.live.position.y - head.y, 0.1, 0.3),
+      this.indoor ? 1 - THREE.MathUtils.smoothstep(this.currentDistance, 0.9, 1.2) : 0,
+    );
+    if (this.modeName === 'explore' && this.pitch <= 0 && overhead > 0) {
       // 相机空间里的竖直角（含过肩偏移，绕本地 X 转 = 改 euler.x）
-      framingDir.set(tp.x, this.pivotY + 0.15, tp.z).sub(this.live.position);
+      framingDir.set(tp.x, this.pivotY, tp.z).sub(this.live.position);
       framingDir.applyQuaternion(framingQ.copy(this.live.quaternion).invert());
       euler.setFromQuaternion(this.live.quaternion, 'YXZ');
       const below = -Math.atan2(framingDir.y, Math.max(-framingDir.z, 1e-3));
-      const limit = THREE.MathUtils.degToRad(this.fov.value) * 0.4;
-      if (below > limit) {
-        // 贴得太近、整个人装不下时以头顶为准：下补不能把头顶推出同样的上沿
-        framingDir.copy(head).sub(this.live.position).applyQuaternion(framingQ);
-        const headUp = Math.atan2(framingDir.y, Math.max(-framingDir.z, 1e-3));
-        const tilt = Math.min(below - limit, Math.max(0, limit - headUp));
-        if (tilt > 0) {
-          euler.x -= tilt;
-          this.live.quaternion.setFromEuler(euler);
-        }
+      framingDir.set(tp.x, this.pivotY + 1.65, tp.z).sub(this.live.position).applyQuaternion(framingQ);
+      const headUp = Math.atan2(framingDir.y, Math.max(-framingDir.z, 1e-3));
+      // 贴得太近、整个人（脚底 → 头顶 1.65 m）竖着装不下下沿 65% + 上沿 80% 时，视角连续放宽（最多 +25°）
+      const baseHalf = THREE.MathUtils.degToRad(this.fov.value) / 2;
+      const span = below + headUp;
+      let widen = 0;
+      // 右键观察时保留它的变焦；放宽量缓动，进出观察 / 挤压都不跳
+      if (!this.observing && span > baseHalf * 1.45) {
+        widen = overhead * (Math.min(span / 1.45, baseHalf + THREE.MathUtils.degToRad(12.5)) - baseHalf);
       }
+      this.fovWiden += (widen - this.fovWiden) * (1 - Math.exp(-FOV_WIDEN_RATE * dt));
+      const halfFov = baseHalf + this.fovWiden;
+      this.live.fov = THREE.MathUtils.radToDeg(halfFov * 2);
+      const limit = halfFov * 0.65;
+      // 还装不下时以头顶为准：下补不能把头顶推出上沿 80%
+      const tilt = overhead * Math.min(below - limit, Math.max(0, halfFov * 0.8 - headUp));
+      if (tilt > 0) {
+        euler.x -= tilt;
+        this.live.quaternion.setFromEuler(euler);
+      }
+    } else if (this.fovWiden > 1e-4) {
+      this.fovWiden *= Math.exp(-FOV_WIDEN_RATE * dt);
+      this.live.fov = this.fov.value + THREE.MathUtils.radToDeg(this.fovWiden * 2);
     }
     if (this.observing) this.updateFocus();
   }
