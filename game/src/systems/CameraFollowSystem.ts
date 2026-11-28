@@ -532,8 +532,14 @@ export class CameraFollowSystem {
       const below = -Math.atan2(framingDir.y, Math.max(-framingDir.z, 1e-3));
       const limit = THREE.MathUtils.degToRad(this.fov.value) * 0.4;
       if (below > limit) {
-        euler.x -= below - limit;
-        this.live.quaternion.setFromEuler(euler);
+        // 贴得太近、整个人装不下时以头顶为准：下补不能把头顶推出同样的上沿
+        framingDir.copy(head).sub(this.live.position).applyQuaternion(framingQ);
+        const headUp = Math.atan2(framingDir.y, Math.max(-framingDir.z, 1e-3));
+        const tilt = Math.min(below - limit, Math.max(0, limit - headUp));
+        if (tilt > 0) {
+          euler.x -= tilt;
+          this.live.quaternion.setFromEuler(euler);
+        }
       }
     }
     if (this.observing) this.updateFocus();
