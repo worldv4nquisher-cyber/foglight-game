@@ -16,6 +16,7 @@ const fwd = new THREE.Vector3();
 const euler = new THREE.Euler(0, 0, 0, 'YXZ');
 const qOff = new THREE.Quaternion();
 const tmpBox = new THREE.Vector3();
+const FOV_WIDEN_RATE = 6;
 const framingDir = new THREE.Vector3();
 const whisker = new THREE.Vector3();
 const whiskerQ = new THREE.Quaternion();
@@ -124,6 +125,9 @@ export class CameraFollowSystem {
   heightCaps: CameraHeightCap[] = [];
   /** 本帧相机距离被限高压短 */
   heightCapped = false;
+
+  /** 楼梯井里为装下整个人临时加的竖直半视角（rad），缓动 */
+  private fovWiden = 0;
   private walkNoLook = false;
   /** 楼梯辅助转向期间锁住的移动朝向：按住同一组方向键时不跟着相机转（不然按 D 会被带进墙里），松键 / 换键 / 动鼠标后回到相机朝向 */
   private latchedYaw: number | null = null;
@@ -538,13 +542,16 @@ export class CameraFollowSystem {
       framingDir.set(tp.x, this.pivotY + 1.65, tp.z).sub(this.live.position).applyQuaternion(framingQ);
       const headUp = Math.atan2(framingDir.y, Math.max(-framingDir.z, 1e-3));
       // 贴得太近、整个人（脚底 → 头顶 1.65 m）竖着装不下下沿 65% + 上沿 80% 时，视角连续放宽（最多 +25°）
-      let halfFov = THREE.MathUtils.degToRad(this.fov.value) / 2;
+      const baseHalf = THREE.MathUtils.degToRad(this.fov.value) / 2;
       const span = below + headUp;
-      // 右键观察时保留它的变焦
-      if (!this.observing && span > halfFov * 1.45) {
-        halfFov += overhead * (Math.min(span / 1.45, halfFov + THREE.MathUtils.degToRad(12.5)) - halfFov);
-        this.live.fov = THREE.MathUtils.radToDeg(halfFov * 2);
+      let widen = 0;
+      // 右键观察时保留它的变焦；放宽量缓动，进出观察 / 挤压都不跳
+      if (!this.observing && span > baseHalf * 1.45) {
+        widen = overhead * (Math.min(span / 1.45, baseHalf + THREE.MathUtils.degToRad(12.5)) - baseHalf);
       }
+      this.fovWiden += (widen - this.fovWiden) * (1 - Math.exp(-FOV_WIDEN_RATE * dt));
+      const halfFov = baseHalf + this.fovWiden;
+      this.live.fov = THREE.MathUtils.radToDeg(halfFov * 2);
       const limit = halfFov * 0.65;
       // 还装不下时以头顶为准：下补不能把头顶推出上沿 80%
       const tilt = overhead * Math.min(below - limit, Math.max(0, halfFov * 0.8 - headUp));
@@ -552,6 +559,9 @@ export class CameraFollowSystem {
         euler.x -= tilt;
         this.live.quaternion.setFromEuler(euler);
       }
+    } else if (this.fovWiden > 1e-4) {
+      this.fovWiden *= Math.exp(-FOV_WIDEN_RATE * dt);
+      this.live.fov = this.fov.value + THREE.MathUtils.radToDeg(this.fovWiden * 2);
     }
     if (this.observing) this.updateFocus();
   }
