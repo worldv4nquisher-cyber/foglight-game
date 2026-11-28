@@ -15,6 +15,7 @@ import { LighthouseArt } from './lighthouseArt';
 import { BALANCED_LOAD, type CableCar, PRISM_CONTROL, PRISM_DETENTS, type PrismSplitter, WEIGHT_LIMIT, WINCH, type PrismAxis } from './lighthousePuzzles';
 import { Ch2Ending } from './ending';
 import { buildVillage, TOWER_SHELL } from './village';
+import { OcclusionCutaway } from '@/render/occlusionCutaway';
 
 const stage = STAGES.s3;
 const ambient = [['amb-wind-soft', 0.31], ['amb-waves-near', 0.2]] as const;
@@ -40,6 +41,7 @@ export class LighthouseScene extends BaseScene {
   private readonly carPosition = v(CABLE_FROM);
   private readonly carPhysicsPosition = v(CABLE_FROM);
   private rig!: PlayerRig;
+  private cutaway: OcclusionCutaway | null = null;
   private ending!: Ch2Ending;
   private mode: Station | null = null;
   private axis: PrismAxis = 'yaw';
@@ -73,7 +75,7 @@ export class LighthouseScene extends BaseScene {
 
   override async enter(): Promise<void> {
     if (!this.shot) await this.game.assets.loadEntries(assets);
-    this.rig = createPlayer(this.game, this.physics, v(stage.spawn), () => this.follow.yaw);
+    this.rig = createPlayer(this.game, this.physics, v(stage.spawn), () => this.follow.moveYaw);
     this.follow.target = this.rig.entity.object3D;
     this.scene.background = new THREE.Color(0x9aaab3);
     this.scene.fog = new THREE.FogExp2(0x9aaab3, 0.0088);
@@ -282,7 +284,10 @@ export class LighthouseScene extends BaseScene {
     } else {
       this.ending.update(dt);
       this.follow.update(dt);
-      this.art.cutaway.update(this.camera, this.rig.entity.object3D.position, !this.ending.active && this.follow.modeName === 'explore');
+      const exploring = !this.ending.active && this.follow.modeName === 'explore';
+      this.art.cutaway.update(this.camera, this.rig.entity.object3D.position, exploring);
+      this.cutaway ??= new OcclusionCutaway(this.scene);
+      this.cutaway.update(dt, this.camera, this.rig.entity.object3D.position, exploring && !this.follow.eyeActive);
     }
   }
 

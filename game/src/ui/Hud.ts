@@ -66,12 +66,17 @@ export class Hud implements InteractionHud {
     if (typeof ResizeObserver !== 'undefined') {
       this.hintObserver = new ResizeObserver(() => this.syncHintHeight());
       this.hintObserver.observe(this.hint);
+      this.hintObserver.observe(this.puzzleBar);
     }
   }
 
-  /** 同步 --hud-hint-h（ResizeObserver 是异步的；setHint / show / hide 时立刻再写一次） */
+  /**
+   * 同步 --hud-hint-h（ResizeObserver 是异步的；setHint / setPuzzleBar / show / hide 时立刻再写一次）。
+   * 值 = 底部按键条顶边离 bottom 14px 基线的高度：平时是操作提示，机关模式是机关按键条（bottom 28px），
+   * 字幕 / 右下小字 / 左下短提示都按它摆在按键条上方。
+   */
   private syncHintHeight(): void {
-    const h = this.el.hidden ? 0 : this.hint.offsetHeight;
+    const h = this.el.hidden ? 0 : this.puzzleBar.hidden ? this.hint.offsetHeight : this.puzzleBar.offsetHeight + 14;
     if (h === this.hintH) return;
     this.hintH = h;
     this.root.style.setProperty('--hud-hint-h', `${h}px`);
@@ -154,6 +159,7 @@ export class Hud implements InteractionHud {
     this.puzzleBar.hidden = text === null;
     this.hint.hidden = text !== null;
     if (text !== null) this.puzzleBar.textContent = text;
+    this.syncHintHeight();
   }
 
   /** 右下角小字（「已保存」2.5s 等，text-ch1.md ui.save.*） */

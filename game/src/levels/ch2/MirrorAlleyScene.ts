@@ -15,6 +15,7 @@ import { MirrorAlleyArt, RELAY_BOARD } from './mirrorAlleyArt';
 import { type MirrorRelay, RELAY } from './mirrorRelay';
 import { buildVillage } from './village';
 import './mirrorAlley.css';
+import { OcclusionCutaway } from '@/render/occlusionCutaway';
 
 const stage = STAGES.s2;
 const RETURN_TO_HARBOUR: Point = [5.8, 11, -42.35];
@@ -37,6 +38,7 @@ export class MirrorAlleyScene extends BaseScene {
   private readonly entities = new EntityManager(this.scene);
   private readonly follow: CameraFollowSystem;
   private rig!: PlayerRig;
+  private cutaway: OcclusionCutaway | null = null;
   private readonly art: MirrorAlleyArt;
   private readonly shot;
   private readonly puzzleCamera = new THREE.PerspectiveCamera();
@@ -70,7 +72,7 @@ export class MirrorAlleyScene extends BaseScene {
 
   override async enter(): Promise<void> {
     if (!this.shot) await this.game.assets.loadEntries(assets);
-    this.rig = createPlayer(this.game, this.physics, v(this.spawn), () => this.follow.yaw);
+    this.rig = createPlayer(this.game, this.physics, v(this.spawn), () => this.follow.moveYaw);
     this.follow.target = this.rig.entity.object3D;
     this.scene.background = new THREE.Color(0x9aafb3);
     this.scene.fog = new THREE.FogExp2(0x9aafb3, 0.0094);
@@ -218,7 +220,11 @@ export class MirrorAlleyScene extends BaseScene {
       this.camera.lookAt(v(this.shot[1]));
       this.camera.fov = 59;
       this.camera.updateProjectionMatrix();
-    } else this.follow.update(dt);
+    } else {
+      this.follow.update(dt);
+      this.cutaway ??= new OcclusionCutaway(this.scene);
+      this.cutaway.update(dt, this.camera, this.rig.entity.object3D.position, this.follow.modeName === 'explore' && !this.follow.eyeActive);
+    }
   }
 
   override exit(): void {

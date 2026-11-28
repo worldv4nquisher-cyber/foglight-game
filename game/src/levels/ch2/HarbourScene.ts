@@ -19,6 +19,7 @@ import {
 import { HARBOUR_ASSETS, HarbourArt, MARKET_LINES, NOTICE_LINES } from './harbourArt';
 import { STAGES, VIEWS, type Point, type Travel } from './layout';
 import { buildVillage } from './village';
+import { OcclusionCutaway } from '@/render/occlusionCutaway';
 
 type Mechanism = 'tide' | 'gate' | 'crane';
 const cameras: Record<Mechanism, readonly [Point, Point]> = {
@@ -42,6 +43,7 @@ export class HarbourScene extends BaseScene {
   private readonly entities = new EntityManager(this.scene);
   private readonly follow: CameraFollowSystem;
   private rig!: PlayerRig;
+  private cutaway: OcclusionCutaway | null = null;
   private readonly shot;
   private readonly crate = addHarbourColliders(this.physics);
   private readonly cam = new THREE.PerspectiveCamera();
@@ -77,7 +79,7 @@ export class HarbourScene extends BaseScene {
 
   override async enter(): Promise<void> {
     await this.game.assets.loadEntries(HARBOUR_ASSETS);
-    this.rig = createPlayer(this.game, this.physics, v(this.spawn), () => this.follow.yaw);
+    this.rig = createPlayer(this.game, this.physics, v(this.spawn), () => this.follow.moveYaw);
     this.follow.target = this.rig.entity.object3D;
     const a = this.atmosphere;
     this.scene.background = new THREE.Color(a.fogColor);
@@ -321,7 +323,11 @@ export class HarbourScene extends BaseScene {
       this.camera.lookAt(v(this.shot[1]));
       this.camera.fov = 59;
       this.camera.updateProjectionMatrix();
-    } else this.follow.update(dt);
+    } else {
+      this.follow.update(dt);
+      this.cutaway ??= new OcclusionCutaway(this.scene);
+      this.cutaway.update(dt, this.camera, this.rig.entity.object3D.position, this.follow.modeName === 'explore' && !this.follow.eyeActive);
+    }
     this.art.updateRockLod(this.camera);
     this.rain.update(dt, this.camera);
     this.sky.update(dt);

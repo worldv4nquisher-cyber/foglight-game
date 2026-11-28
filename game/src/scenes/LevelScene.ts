@@ -17,6 +17,7 @@ import { InteractionSystem, actorFromRig } from '@/systems/interaction/Interacti
 import { SkyDome, SKY_CLOUDS_KEY } from '@/world/SkyDome';
 import { PlanarReflection, reflectionOverride, reflectionStrengthOverride } from '@/render/Reflections';
 import { CharacterNearFade, nearFadeAlpha } from '@/render/nearFade';
+import { OcclusionCutaway } from '@/render/occlusionCutaway';
 import { Water, WATER_NORMAL_KEY, RAIN_RIPPLE_KEY } from '@/world/Water';
 import { ATMO028, type Atmo028Tier } from '@/config/atmosphere028';
 import { Rain, RAIN_STREAK_KEY, RAIN_SPLASH_KEY, collectIndoorShapes } from '@/world/Rain';
@@ -72,6 +73,7 @@ export abstract class LevelScene extends BaseScene {
   protected rig!: PlayerRig;
   /** BUG-028：相机贴近头部时汐抖动淡出 */
   private nearFade: CharacterNearFade | null = null;
+  private cutaway: OcclusionCutaway | null = null;
   protected sky = new SkyDome(170);
   protected water: Water | null = null;
   /** 025 水面平面反射（室外场景才有） */
@@ -420,7 +422,7 @@ export abstract class LevelScene extends BaseScene {
   }
 
   private buildPlayer(spawn: SpawnPoint): void {
-    this.rig = createPlayer(this.game, this.physics, spawn.position, () => this.cameraFollow.yaw);
+    this.rig = createPlayer(this.game, this.physics, spawn.position, () => this.cameraFollow.moveYaw);
     this.rig.controller.facing = spawn.yaw + Math.PI;
     this.entities.add(this.rig.entity);
     this.cameraFollow.target = this.rig.entity.object3D;
@@ -565,6 +567,8 @@ export abstract class LevelScene extends BaseScene {
     if (this.level.musicUpper) this.game.audio.setMusicLayerGain(this.level.musicUpper, this.upperLayerLevel());
     this.entities.update(dt, alpha);
     this.cameraFollow.update(dt);
+    this.cutaway ??= new OcclusionCutaway(this.scene);
+    this.cutaway.update(dt, this.camera, this.rig.entity.object3D.position, this.cameraFollow.modeName === 'explore' && !this.cameraFollow.eyeActive);
     this.updateNearFade();
     this.interaction.update(dt);
     if (this.game.ui.debug.visible) {
